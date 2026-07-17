@@ -1,0 +1,12 @@
+# Local, server-specific config + state — never commit
+config.env
+.install.conf
+
+# Runtime artifacts (if anything runs inside the repo)
+*.log
+counter
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
