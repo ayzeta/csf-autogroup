@@ -14,6 +14,9 @@ list nears its limit.
 Works on **any CSF server** (cPanel or not). No dependencies beyond CSF and a
 working `mail` command.
 
+**Version 1.0.0** · bilingual logs & alert emails (English / Türkçe, set
+`MSG_LANG`). The running version is printed on each run's first log line.
+
 ---
 
 ## ⚠️ Read this first
@@ -52,6 +55,18 @@ sudo bash install.sh
 
 The installer asks for the language (`en`/`tr`), alert email, and cron interval,
 writes `config.env`, and installs the root cron job. Re-run it any time.
+
+## Updating
+
+```bash
+cd csf-autogroup
+sudo bash update.sh
+```
+
+`update.sh` pulls **only if the GitHub remote is ahead**, then reinstalls
+non-interactively with your saved settings — no prompts, and your `config.env`
+(thresholds, language, email) is left untouched. Prints "Already up to date"
+when there's nothing new. (Equivalent to `git pull` + `sudo bash install.sh --yes`.)
 
 ### Manual install
 

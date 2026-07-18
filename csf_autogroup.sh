@@ -21,6 +21,8 @@
 # ============================================================================
 set -o pipefail
 
+VERSION="1.0.0"   # sürüm — başlangıç log satırında görünür
+
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
 
@@ -161,7 +163,7 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"; }
 [ -f "$CSF_CONF" ]  || { log "$(m "$M_ERR_NOFILE" "$CSF_CONF")"; exit 1; }
 
 mkdir -p "$(dirname "$SAYAC_FILE")"; touch "$SAYAC_FILE"
-log "$M_START"
+log "$M_START (v$VERSION)"
 
 # ── Permanent deny limit ────────────────────────────────────────────────────
 limit=$(grep "^DENY_IP_LIMIT" "$CSF_CONF" | cut -d'=' -f2 | tr -d ' "')
