@@ -1,15 +1,18 @@
 # CSF Auto-Group
 
-Automatically consolidates attacker IPs into subnet bans for **ConfigServer
-Security & Firewall (CSF)**, so a brute-force flood doesn't overflow your
-`csf.deny` line limit.
+Turns a scatter of single-IP bans into **subnet bans** for **ConfigServer
+Security & Firewall (CSF)** — stopping distributed attacks automatically instead
+of playing whack-a-mole one IP at a time.
 
-When dozens of IPs from the same `/24` hammer your server, blocking them one by
-one fills the deny list fast. This script groups them: several banned singles in
-a `/24` → ban the whole `/24` and drop the singles (freeing slots). Repeat
-offenders escalate from temporary to permanent; `/16` ranges are only flagged
-for review (never auto-banned — too broad). It also emails you when the deny
-list nears its limit.
+Most floods come from the same neighbourhood: when 3–5 already-banned IPs pile
+up in a single `/24`, the rest of that range is almost always the same attacker
+still coming. So the script bans the **whole `/24`** and drops the singles — the
+attack is blocked **before you have to touch anything**. If that range comes back
+later it's escalated to a **permanent** ban. `/16` ranges are only flagged for
+review by email (never auto-banned — too broad).
+
+A useful side effect: folding singles into ranges also keeps `csf.deny` from
+overflowing its line limit, and you get an email when it nears that limit.
 
 Works on **any CSF server** (cPanel or not). No dependencies beyond CSF and a
 working `mail` command.
@@ -31,6 +34,9 @@ a banned `/24`, can lock people out.
 - `/16` is warn-only by design; only `/24` and single IPs are auto-banned.
 
 ## What it does
+
+The escalation ladder — a few bad singles in a range turn into a range ban, and
+a range that comes back turns into a permanent one:
 
 | Trigger | Action |
 |--------|--------|
