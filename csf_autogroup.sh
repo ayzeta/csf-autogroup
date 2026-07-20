@@ -159,6 +159,17 @@ m() { local f="$1"; shift; printf "$f" "$@"; }   # format a message template
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"; }
 
+# /16 uyarı mailinde tekil IP'leri listele: boşlukla ayrılmış IP'ler → dedupe +
+# sıralı + virgülle birleştir, ilk 40; fazlası "(+N)" olarak kısaltılır.
+list_ips() {
+  local all n shown
+  all=$(printf '%s\n' $1 | grep -P '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | sort -Vu)
+  n=$(printf '%s\n' "$all" | grep -c .)
+  shown=$(printf '%s\n' "$all" | head -40 | awk 'NR>1{printf ", "}{printf "%s",$0}')
+  [ "$n" -gt 40 ] && shown="$shown  (+$((n-40)))"
+  printf '   %s' "$shown"
+}
+
 [ -f "$DENY_FILE" ] || { log "$(m "$M_ERR_NOFILE" "$DENY_FILE")"; exit 1; }
 [ -f "$CSF_CONF" ]  || { log "$(m "$M_ERR_NOFILE" "$CSF_CONF")"; exit 1; }
 
@@ -247,12 +258,12 @@ fi
 log "$(m "$M_24_DONE" "$added24")"
 
 # ── /16 grouping (permanent): warn only, once per day ───────────────────────
-declare -A count16 seen_subnets
+declare -A count16 seen_subnets ips16
 while IFS= read -r line; do
     ip=$(echo "$line" | grep -oP '^\d+\.\d+\.\d+\.\d+'); [ -z "$ip" ] && continue
     prefix24=$(echo "$ip" | cut -d. -f1-3); prefix16=$(echo "$ip" | cut -d. -f1-2)
     [ "${count24[$prefix24]:-0}" -ge "$THRESHOLD_24" ] && continue
-    count16[$prefix16]=$((${count16[$prefix16]:-0} + 1)); seen_subnets[$prefix16]+=" $prefix24"
+    count16[$prefix16]=$((${count16[$prefix16]:-0} + 1)); seen_subnets[$prefix16]+=" $prefix24"; ips16[$prefix16]+=" $ip"
 done < <(grep -P '^\d+\.\d+\.\d+\.\d+\s' "$DENY_FILE")
 
 warn16=0; warn_body=""
@@ -264,7 +275,7 @@ for prefix in "${!count16[@]}"; do
                 log "$(m "$M_SKIP16" "$prefix")"; continue
             fi
             log "$(m "$M_WARN16" "$prefix" "${count16[$prefix]}" "$subnet_count")"
-            warn_body+="$(m "$M_WARN16_B" "$prefix" "${count16[$prefix]}" "$subnet_count")\n"
+            warn_body+="$(m "$M_WARN16_B" "$prefix" "${count16[$prefix]}" "$subnet_count")\n$(list_ips "${ips16[$prefix]}")\n"
             warn16=$((warn16 + 1)); echo "WARN16_${prefix} $TODAY" >> "$SAYAC_FILE"
         fi
     fi
@@ -326,7 +337,7 @@ fi
 log "$(m "$M_T24_DONE" "$temp_added24" "$temp_perm_added24")"
 
 # ── Temp /16: warn only, once per day ───────────────────────────────────────
-declare -A temp_count16 temp_seen_subnets
+declare -A temp_count16 temp_seen_subnets temp_ips16
 while IFS= read -r line; do
     ip=$(echo "$line" | grep -oP 'DENY\s+\K[\d.]+'); [ -z "$ip" ] && continue
     echo "$line" | grep -qP 'DENY\s+[\d.]+/\d+' && continue
@@ -336,7 +347,7 @@ while IFS= read -r line; do
     grep -qF "${prefix16}.0.0/16" "$DENY_FILE" && continue
     echo "$TEMP_LIST" | grep -qF "${prefix24}.0/24" && continue
     [ "${temp_count24[$prefix24]:-0}" -ge "$THRESHOLD_TEMP_24" ] && continue
-    temp_count16[$prefix16]=$((${temp_count16[$prefix16]:-0} + 1)); temp_seen_subnets[$prefix16]+=" $prefix24"
+    temp_count16[$prefix16]=$((${temp_count16[$prefix16]:-0} + 1)); temp_seen_subnets[$prefix16]+=" $prefix24"; temp_ips16[$prefix16]+=" $ip"
 done < <(echo "$TEMP_LIST" | grep "^DENY")
 
 temp_warn16=0; temp_warn_body=""
@@ -346,7 +357,7 @@ for prefix in "${!temp_count16[@]}"; do
         if grep -qF "${prefix}.0.0/16" "$DENY_FILE"; then log "$(m "$M_TSKIP16" "$prefix")"; continue; fi
         if grep -qF "WARN_TEMP16_${prefix} $TODAY" "$SAYAC_FILE"; then log "$(m "$M_TSKIP16D" "$prefix")"; continue; fi
         log "$(m "$M_TWARN16" "$prefix" "${temp_count16[$prefix]}" "$subnet_count")"
-        temp_warn_body+="$(m "$M_WARN16_B" "$prefix" "${temp_count16[$prefix]}" "$subnet_count")\n"
+        temp_warn_body+="$(m "$M_WARN16_B" "$prefix" "${temp_count16[$prefix]}" "$subnet_count")\n$(list_ips "${temp_ips16[$prefix]}")\n"
         temp_warn16=$((temp_warn16 + 1)); echo "WARN_TEMP16_${prefix} $TODAY" >> "$SAYAC_FILE"
     fi
 done
