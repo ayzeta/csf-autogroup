@@ -268,7 +268,7 @@ done < <(grep -P '^\d+\.\d+\.\d+\.\d+\s' "$DENY_FILE")
 
 warn16=0; warn_body=""
 for prefix in "${!count16[@]}"; do
-    subnet_count=$(echo "${seen_subnets[$prefix]}" | tr ' ' '\n' | grep -c '\.')
+    subnet_count=$(echo "${seen_subnets[$prefix]}" | tr ' ' '\n' | sort -u | grep -c '\.')
     if [ "${count16[$prefix]}" -ge "$THRESHOLD_16" ] && [ "$subnet_count" -ge 2 ]; then
         if ! grep -qF "${prefix}.0.0/16" "$DENY_FILE"; then
             if grep -qF "WARN16_${prefix} $TODAY" "$SAYAC_FILE"; then
@@ -293,7 +293,7 @@ while IFS= read -r line; do
     ip=$(echo "$line" | grep -oP 'DENY\s+\K[\d.]+'); [ -z "$ip" ] && continue
     echo "$line" | grep -qP 'DENY\s+[\d.]+/\d+' && continue
     prefix24=$(echo "$ip" | cut -d. -f1-3); prefix16=$(echo "$ip" | cut -d. -f1-2)
-    if grep -qF "$ip" "$DENY_FILE" || grep -qF "${prefix24}.0/24" "$DENY_FILE" || grep -qF "${prefix16}.0.0/16" "$DENY_FILE"; then
+    if grep -qE "^${ip//./\\.}([[:space:]]|$)" "$DENY_FILE" || grep -qF "${prefix24}.0/24" "$DENY_FILE" || grep -qF "${prefix16}.0.0/16" "$DENY_FILE"; then
         /sbin/csf -tr "$ip" >> "$LOG_FILE" 2>&1 && log "$(m "$M_TCLEAN" "$ip")"; continue
     fi
     echo "$TEMP_LIST" | grep -qF "${prefix24}.0/24" && continue
@@ -305,7 +305,7 @@ temp_added24=0; temp_added24_body=""; temp_perm_added24=0; temp_perm_added24_bod
 for prefix in "${!temp_count24[@]}"; do
     if [ "${temp_count24[$prefix]}" -ge "$THRESHOLD_TEMP_24" ]; then
         if grep -qF "${prefix}.0/24" "$DENY_FILE"; then log "$(m "$M_TSKIP24" "$prefix")"; continue; fi
-        if grep -qF "$prefix" "$SAYAC_FILE"; then
+        if grep -qE "^${prefix//./\\.} " "$SAYAC_FILE"; then
             if /sbin/csf -d "${prefix}.0/24" "$(m "$M_TC24_PERM" "${temp_count24[$prefix]}")" >> "$LOG_FILE" 2>&1; then
                 log "$(m "$M_TOK24_PERM" "$prefix" "${temp_count24[$prefix]}")"
                 temp_perm_added24=$((temp_perm_added24 + 1))
@@ -342,7 +342,7 @@ while IFS= read -r line; do
     ip=$(echo "$line" | grep -oP 'DENY\s+\K[\d.]+'); [ -z "$ip" ] && continue
     echo "$line" | grep -qP 'DENY\s+[\d.]+/\d+' && continue
     prefix24=$(echo "$ip" | cut -d. -f1-3); prefix16=$(echo "$ip" | cut -d. -f1-2)
-    grep -qF "$ip" "$DENY_FILE" && continue
+    grep -qE "^${ip//./\\.}([[:space:]]|$)" "$DENY_FILE" && continue
     grep -qF "${prefix24}.0/24" "$DENY_FILE" && continue
     grep -qF "${prefix16}.0.0/16" "$DENY_FILE" && continue
     echo "$TEMP_LIST" | grep -qF "${prefix24}.0/24" && continue
@@ -352,7 +352,7 @@ done < <(echo "$TEMP_LIST" | grep "^DENY")
 
 temp_warn16=0; temp_warn_body=""
 for prefix in "${!temp_count16[@]}"; do
-    subnet_count=$(echo "${temp_seen_subnets[$prefix]}" | tr ' ' '\n' | grep -c '\.')
+    subnet_count=$(echo "${temp_seen_subnets[$prefix]}" | tr ' ' '\n' | sort -u | grep -c '\.')
     if [ "${temp_count16[$prefix]}" -ge "$THRESHOLD_TEMP_16" ] && [ "$subnet_count" -ge 2 ]; then
         if grep -qF "${prefix}.0.0/16" "$DENY_FILE"; then log "$(m "$M_TSKIP16" "$prefix")"; continue; fi
         if grep -qF "WARN_TEMP16_${prefix} $TODAY" "$SAYAC_FILE"; then log "$(m "$M_TSKIP16D" "$prefix")"; continue; fi
