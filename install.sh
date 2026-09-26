@@ -15,6 +15,8 @@ case "${1:-}" in -y|--yes) AUTO=1;; esac
 [ "$(id -u)" -eq 0 ] || { echo "ERROR: run as root (needs cron + CSF)."; exit 1; }
 [ -f "$SCRIPT" ] || { echo "ERROR: csf_autogroup.sh not found next to install.sh."; exit 1; }
 command -v csf >/dev/null 2>&1 || [ -x /sbin/csf ] || echo "WARNING: csf not found — this tool requires ConfigServer Security & Firewall."
+command -v dig >/dev/null 2>&1 || command -v host >/dev/null 2>&1 || \
+    echo "NOTE: neither 'dig' nor 'host' found — install bind-utils (dnf install bind-utils) for owner/hostname info in emails and CC_IGNORE/csf.rignore checks."
 
 # Defaults (overridden by a previous run)
 MSG_LANG="en"; ALERT_MAIL="root@localhost"; CRON_MIN="*/10"
