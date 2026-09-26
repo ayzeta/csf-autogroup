@@ -12,7 +12,7 @@
   var UPD = null;               // güncelleme kontrolü sonucu
   var LANG = 'en';
   var CLOCK = 0;                // sunucu saati - istemci saati (sn)
-  var UI = { gf: 'all', gq: '', ef: 'all', open: {}, evLimit: 40, gLimit: 40, commits: false, gs: 'added', gd: -1, gp: 0, pp: 0, hist: {}, menu: null, at: 'atk',
+  var UI = { gf: 'all', gq: '', ef: 'all', open: {}, evLimit: 40, gLimit: 40, commits: false, gs: 'added', gd: -1, gp: 0, pp: 0, hist: {}, cd: 30, menu: null, at: 'atk',
              tab: location.hash === '#settings' ? 'settings' : 'overview' };
   var CFG = null, DRAFT = {}, cfgLoading = false;
   var pollTimer = null, wasRunning = false, busy = false;
@@ -121,7 +121,7 @@
       panel_bad: 'https://sunucu:2087 biçiminde yazın.', auto: 'otomatik', focus_gone: '{0} artık listede değil; güncel durumu gösteriliyor.',
       new_badge: 'Son ziyaretinden beri yeni', actions: 'İşlemler', overdue: 'Tur gecikti · son tur {0} (beklenen aralık {1})',
       since_visit: 'Son ziyaretinden beri ({0}):', sn_add: '{0} grup banı', sn_temp: '{0} geçici grup', sn_warn: '{0} /16 uyarısı',
-      sn_skip: '{0} beyaz liste atlaması', show_new: 'Göster', e_new: 'Son ziyaretten beri', ch_title: 'Son 30 gün', ch_total: '{0} olay',
+      sn_skip: '{0} beyaz liste atlaması', show_new: 'Göster', e_new: 'Son ziyaretten beri', ch_title: 'Son 30 gün', ch_total: '{0} olay', ch_title_n: 'Son {0} gün', ch_d: '{0} gün', sb_ok: 'Koruma çalışıyor', sb_run: 'Tur çalışıyor', sb_late: 'Koruma durdu', sb_every: 'Cron her {0}', sb_24: 'son 24 saatte {0}/{1} tur', sb_none: 'henüz tur yok', sb_last: 'Son tur', sb_dur: 'Tur süresi', sb_avg: 'ort. {0}', sb_next: 'Sıradaki', sb_now: 'şimdi', sb_spark: 'Son {0} turun süresi', sec: '{0} sn', k_week: '▲ {0} bu hafta', lk_recent: 'Son bakılanlar',
       ch_add: 'Grup banı', ch_promote: 'Kalıcıya alındı', ch_temp: 'Geçici', ch_warn: '/16 uyarısı', ch_skip: 'Beyaz liste',
       ch_empty: 'Son 30 günde kayıt yok; grafik olay kaydı biriktikçe dolacak.', ipcard: 'IP kartı', col_block: 'Blok', col_owner: 'Sahip', col_since: 'Başlangıç', col_left: 'Kalan', col_state: 'Durum', left_short: '{0} kaldı', r_hist: 'olay kaydı başlamadan önce · ayrıntı lfd günlüğünden getirilir', h_btn: 'Ayrıntı', h_loading: 'Getiriliyor…', h_none: 'lfd günlüğünde bu bloğa ait kayıt kalmamış', h_src: 'lfd günlüğünden',
       col_singles: 'Tekil', col_added: 'Eklendi', of_n: '{0}–{1} / {2}', s_asn: 'En çok saldıran ağlar',
@@ -213,7 +213,7 @@
       panel_bad: 'Use the form https://server:2087.', auto: 'automatic', focus_gone: '{0} is no longer on the list; showing its current state.',
       new_badge: 'New since your last visit', actions: 'Actions', overdue: 'Run overdue · last run {0} (expected every {1})',
       since_visit: 'Since your last visit ({0}):', sn_add: '{0} group bans', sn_temp: '{0} temp groups', sn_warn: '{0} /16 warnings',
-      sn_skip: '{0} whitelist skips', show_new: 'Show', e_new: 'Since last visit', ch_title: 'Last 30 days', ch_total: '{0} events',
+      sn_skip: '{0} whitelist skips', show_new: 'Show', e_new: 'Since last visit', ch_title: 'Last 30 days', ch_total: '{0} events', ch_title_n: 'Last {0} days', ch_d: '{0} days', sb_ok: 'Protection is running', sb_run: 'A run is in progress', sb_late: 'Protection stopped', sb_every: 'Cron every {0}', sb_24: '{0}/{1} runs in the last 24 h', sb_none: 'no runs yet', sb_last: 'Last run', sb_dur: 'Run time', sb_avg: 'avg {0}', sb_next: 'Next', sb_now: 'now', sb_spark: 'Last {0} run times', sec: '{0} s', k_week: '▲ {0} this week', lk_recent: 'Recently viewed',
       ch_add: 'Group ban', ch_promote: 'Made permanent', ch_temp: 'Temp', ch_warn: '/16 warning', ch_skip: 'Whitelist',
       ch_empty: 'Nothing in the last 30 days; the chart fills as the event log grows.', ipcard: 'IP card', col_block: 'Block', col_owner: 'Owner', col_since: 'Since', col_left: 'Left', col_state: 'State', left_short: '{0} left', r_hist: 'before the event log started · details come from the lfd log', h_btn: 'Details', h_loading: 'Loading…', h_none: 'no records for this block are left in the lfd log', h_src: 'from the lfd log',
       col_singles: 'Singles', col_added: 'Added', of_n: '{0}–{1} of {2}', s_asn: 'Top attacking networks',
@@ -326,21 +326,54 @@
   }
 
   function head() {
-    var lr = S.last_run, run = S.running, late = !run && overdue();
-    var sub = run ? '<span class="ag-dot run"></span>' + t('running')
-      : late ? '<span class="ag-dot bad"></span><span class="ag-late">' + t('overdue', lr ? rel(lr.t) : '?', dur(S.cron_interval)) + '</span>'
-      : '<span class="ag-dot"></span>' + t('idle') + ' · ' + (lr ? t('last_run', rel(lr.t)) : t('no_run'));
+    var run = S.running;
     return '<div class="ag-head"><div class="ag-mark">' + IC.shield + '</div>' +
-      '<div class="ag-title"><h1>CSF Auto-Group</h1><div class="ag-sub">' + sub + '</div></div>' +
+      '<div class="ag-title"><h1>CSF Auto-Group</h1><div class="ag-sub">' + esc(location.hostname) + ' · v' + esc(S.version) + '</div></div>' +
+      '<div class="ag-tabs" role="tablist">' + ['overview', 'settings'].map(function (k) {
+        return '<button class="ag-tab' + (UI.tab === k ? ' on' : '') + '" role="tab" aria-selected="' + (UI.tab === k) + '" data-act="tab" data-tab="' + k + '">' + t('tab_' + k) + '</button>';
+      }).join('') + '</div>' +
       '<div class="ag-head-actions">' +
-      (run || UI.ranOnce ? '<button class="ag-btn ag-btn-ghost" data-act="runlog">' + IC.terminal + t('run_log') + '</button>' : '') +
+      (run || UI.ranOnce ? '<button class="ag-btn" data-act="runlog">' + IC.terminal + t('run_log') + '</button>' : '') +
       '<button class="ag-btn" data-act="dry">' + IC.eye + t('dry') + '</button>' +
       '<button class="ag-btn ag-btn-primary" data-act="run"' + (run ? ' disabled' : '') + '>' + IC.play + t('run') + '</button>' +
-      '</div></div>' +
-      '<div class="ag-tabs" role="tablist">' + ['overview', 'settings'].map(function (k) {
-        return '<button class="ag-tab' + (UI.tab === k ? ' on' : '') + '" role="tab" aria-selected="' + (UI.tab === k) + '" data-act="tab" data-tab="' + k + '">' +
-          (k === 'overview' ? IC.shield : IC.sliders) + t('tab_' + k) + '</button>';
-      }).join('') + '</div>';
+      '</div></div>';
+  }
+
+  /* Durum bandı: koruma çalışıyor mu, son tur, süre, sıradaki tur, son turların süreleri */
+  function sec(s) { s = Math.max(0, Math.round(s || 0)); return s < 60 ? t('sec', s) : dur(s); }
+  function nextIn() {
+    var cm = String(S.cron_min || ''), d = new Date(nowSec() * 1000), m = d.getMinutes(), s = d.getSeconds(), x, left;
+    if ((x = /^\*\/(\d+)$/.exec(cm)) && +x[1] > 0) { var n = +x[1]; left = (Math.min(60, (Math.floor(m / n) + 1) * n) - m) * 60 - s; }
+    else if (/^\d+$/.test(cm)) left = (((+cm - m + 60) % 60) || 60) * 60 - s;
+    else return '';
+    left = Math.max(0, left);
+    return Math.floor(left / 60) + ':' + ('0' + (left % 60)).slice(-2);
+  }
+  function statusBand() {
+    var lr = S.last_run, run = S.running, late = !run && overdue(), iv = S.cron_interval || 0;
+    var R = S.runs || {}, L = R.list || [], ds = L.map(function (x) { return x[1] || 0; });
+    var avg = ds.length ? Math.round(ds.reduce(function (a, b) { return a + b; }, 0) / ds.length) : 0;
+    var exp = iv > 0 && R.first ? Math.max(1, Math.round(Math.min(86400, nowSec() - R.first) / iv)) : 0;
+    exp = Math.max(exp, R.n24 || 0);
+    var st = run ? 'run' : late ? 'bad' : 'ok';
+    var sub = late ? t('overdue', lr ? rel(lr.t) : '?', dur(iv))
+      : !lr ? t('sb_none') : [iv ? t('sb_every', dur(iv)) : '', exp ? t('sb_24', num(R.n24 || 0), num(exp)) : ''].filter(Boolean).join(' · ');
+    var sorted = ds.slice().sort(function (a, b) { return a - b; }), med = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
+    var mx = Math.max.apply(null, ds.concat([1]));
+    var spark = L.map(function (x) {
+      var h = Math.max(12, Math.round((x[1] || 0) * 100 / mx));
+      return '<i' + (med && x[1] > med * 2 ? ' class="l"' : '') + ' style="height:' + h + '%" title="' + esc(stamp(x[0]) + ' · ' + sec(x[1])) + '"></i>';
+    }).join('');
+    function m(label, big, small, id) {
+      return '<div class="ag-band-m"><small>' + label + '</small><b' + (id ? ' id="' + id + '"' : '') + '>' + big + '</b>' + (small ? '<span>' + small + '</span>' : '') + '</div>';
+    }
+    return '<section class="ag-band st-' + st + '"><div class="ag-band-s"><span class="ag-pulse"><i></i></span><div><b>' +
+      t(run ? 'sb_run' : late ? 'sb_late' : 'sb_ok') + '</b><span>' + esc(sub) + '</span></div></div>' +
+      m(t('sb_last'), lr ? esc(rel(lr.t)) : '—') +
+      m(t('sb_dur'), ds.length ? esc(sec(ds[ds.length - 1])) : '—', ds.length > 1 ? esc(t('sb_avg', sec(avg))) : '') +
+      m(t('sb_next'), run ? t('sb_now') : (nextIn() || '—'), '', 'ag-next') +
+      (L.length > 1 ? '<div class="ag-band-g"><small>' + t('sb_spark', L.length) + '</small><div class="ag-spark">' + spark + '</div></div>' : '<div></div>') +
+      '</section>';
   }
 
   function banner() {
@@ -377,57 +410,62 @@
       '<button class="ag-btn ag-btn-sm ag-btn-ghost" data-act="shownew">' + t('show_new') + '</button></div>';
   }
 
-  function usageKpi(label, pair) {
-    var used = pair[0], lim = pair[1], pct = lim > 0 ? Math.round(used * 100 / lim) : 0;
-    var cls = pct >= 90 ? 'bad' : (pct >= 80 ? 'warn' : '');
-    return '<div class="ag-kpi"><div class="ag-kpi-l">' + esc(label) + '</div>' +
-      '<div class="ag-kpi-v">' + (lim > 0 ? '%' + pct : num(used)) + '</div>' +
-      '<div class="ag-kpi-m">' + (lim > 0 ? t('k_lines', num(used), num(lim)) : t('k_nolimit')) + '</div>' +
-      '<div class="ag-bar"><i class="' + cls + '" style="width:' + Math.min(100, pct) + '%"></i></div></div>';
+  function ring(p, cls) {
+    var c = 2 * Math.PI * 15, v = Math.max(0, Math.min(100, p)) * c / 100;
+    return '<svg class="ag-ring ' + cls + '" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15"></circle>' +
+      '<circle cx="18" cy="18" r="15" stroke-dasharray="' + v.toFixed(1) + ' ' + c.toFixed(1) + '" transform="rotate(-90 18 18)"></circle></svg>';
+  }
+  function kpi(icon, tone, label, value, meta, extra) {
+    return '<div class="ag-kpi"><div class="ag-kpi-ic ' + tone + '">' + IC[icon] + '</div><div class="ag-kpi-x"><div class="ag-kpi-l">' + esc(label) + '</div>' +
+      '<div class="ag-kpi-v">' + value + '</div><div class="ag-kpi-m">' + meta + '</div></div>' + (extra || '') + '</div>';
+  }
+  function usageKpi(icon, label, pair) {
+    var used = pair[0], lim = pair[1], p = lim > 0 ? Math.round(used * 100 / lim) : 0;
+    var cls = p >= 90 ? 'bad' : (p >= 80 ? 'warn' : '');
+    return kpi(icon, 'n', label, lim > 0 ? '%' + p : num(used), lim > 0 ? t('k_lines', num(used), num(lim)) : t('k_nolimit'), lim > 0 ? ring(p, cls) : '');
   }
   function kpis() {
-    var dnd = S.groups.filter(function (g) { return g.dnd; }).length, rv = S.review.length;
-    return '<div class="ag-kpis">' + usageKpi(t('k_perm'), S.usage.perm) + usageKpi(t('k_temp'), S.usage.temp) +
-      '<div class="ag-kpi"><div class="ag-kpi-l">' + t('k_groups') + '</div><div class="ag-kpi-v">' + num(S.groups.length) + '</div>' +
-      '<div class="ag-kpi-m">' + t('k_dnd', num(dnd)) + '</div></div>' +
-      '<div class="ag-kpi"><div class="ag-kpi-l">' + t('k_review') + '</div><div class="ag-kpi-v' + (rv ? ' warn' : '') + '">' + num(rv) + '</div>' +
-      '<div class="ag-kpi-m">' + t('k_review_m', S.config.review_days) + '</div></div></div>';
+    var dnd = S.groups.filter(function (g) { return g.dnd; }).length, rv = S.review.length, wk = nowSec() - 7 * 86400;
+    var nw = S.groups.filter(function (g) { return g.added && g.added >= wk; }).length;
+    return '<div class="ag-kpis">' +
+      kpi('ban', 'acc', t('k_groups'), num(S.groups.length) + (nw ? '<span class="ag-kpi-d">' + t('k_week', num(nw)) + '</span>' : ''), t('k_dnd', num(dnd))) +
+      kpi('alert', rv ? 'warn' : 'ok', t('k_review'), '<span' + (rv ? ' class="warn"' : '') + '>' + num(rv) + '</span>', t('k_review_m', S.config.review_days)) +
+      usageKpi('list', t('k_perm'), S.usage.perm) + usageKpi('clock', t('k_temp'), S.usage.temp) + '</div>';
   }
 
-  /* 30 günlük etkinlik: yığılmış çubuklar (grup banı, geçici, terfi, uyarı, atlama) */
+  /* Etkinlik: yığılmış çubuklar; üzerine gelince o günün dökümü, sağda dönem toplamları */
   var SERIES = [['A', 'ch_add', 'var(--ag-accent)'], ['P', 'ch_promote', '#7c3aed'], ['T', 'ch_temp', '#d97706'], ['W', 'ch_warn', '#ea580c'], ['S', 'ch_skip', '#0284c7']];
   function activity() {
-    var D = S.daily || {}, days = 30, max = 0, tot = 0, i, k;
-    for (i = 0; i < days; i++) {
-      var sum = 0;
-      SERIES.forEach(function (s) { sum += (D[s[0]] || [])[i] || 0; });
-      max = Math.max(max, sum); tot += sum;
+    var D = S.daily || {}, days = UI.cd === 7 ? 7 : 30, off = 30 - days, max = 0, tot = 0, sums = {}, cols = [], i;
+    var loc = LANG === 'tr' ? 'tr-TR' : 'en-US', H = 128;
+    SERIES.forEach(function (s) { sums[s[0]] = 0; });
+    for (i = off; i < 30; i++) {
+      var sum = 0, vals = SERIES.map(function (s) { var v = (D[s[0]] || [])[i] || 0; sum += v; sums[s[0]] += v; return v; });
+      max = Math.max(max, sum); tot += sum; cols.push({ i: i, vals: vals, sum: sum });
     }
-    var W = 720, H = 120, pad = 22, bw = (W - pad) / days, top = Math.max(1, max);
-    var bars = '';
-    for (i = 0; i < days; i++) {
-      var y = H, tip = [], day = new Date((D.start + i * 86400) * 1000);
-      SERIES.forEach(function (s) {
-        var v = (D[s[0]] || [])[i] || 0; if (!v) return;
-        var h = Math.max(2, v / top * (H - 8));
-        y -= h;
-        bars += '<rect x="' + (pad + i * bw + 2).toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + Math.max(2, bw - 4).toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2" fill="' + s[2] + '"></rect>';
-        tip.push(t(s[1]) + ': ' + v);
-      });
-      bars += '<rect class="ag-hit" x="' + (pad + i * bw).toFixed(1) + '" y="0" width="' + bw.toFixed(1) + '" height="' + H + '" fill="transparent"><title>' +
-        esc(day.toLocaleDateString(LANG === 'tr' ? 'tr-TR' : 'en-US', { day: 'numeric', month: 'short' }) + (tip.length ? ' — ' + tip.join(', ') : ' — 0')) + '</title></rect>';
+    var top = Math.max(1, max);
+    var bars = cols.map(function (c, j) {
+      var day = new Date((D.start + c.i * 86400) * 1000);
+      var segs = c.vals.map(function (v, k) {
+        return v ? '<i style="height:' + Math.max(3, Math.round(v / top * (H - 8))) + 'px;background:' + SERIES[k][2] + '"></i>' : '';
+      }).join('');
+      var tip = c.sum ? '<div class="ag-tip"><b>' + esc(day.toLocaleDateString(loc, { day: 'numeric', month: 'long', weekday: 'long' })) + '</b>' +
+        c.vals.map(function (v, k) { return v ? '<div><i style="background:' + SERIES[k][2] + '"></i>' + esc(t(SERIES[k][1])) + '<em>' + v + '</em></div>' : ''; }).join('') + '</div>' : '';
+      return '<div class="ag-c' + (j >= days - Math.ceil(days / 6) ? ' r' : '') + (c.sum ? ' has' : '') + '">' + segs + tip + '</div>';
+    }).join('');
+    var step = days === 7 ? 1 : 7, ax = '';
+    for (i = 0; i < days; i += step) {
+      var dd = new Date((D.start + (off + i) * 86400) * 1000);
+      ax += '<span style="left:' + (i * 100 / days).toFixed(2) + '%">' + esc(dd.toLocaleDateString(loc, { day: 'numeric', month: 'short' })) + '</span>';
     }
-    var labels = '';
-    for (k = 0; k < days; k += 7) {
-      var dd = new Date((D.start + k * 86400) * 1000);
-      labels += '<text x="' + (pad + k * bw + 2).toFixed(1) + '" y="' + (H + 14) + '" class="ag-ax">' + esc(dd.toLocaleDateString(LANG === 'tr' ? 'tr-TR' : 'en-US', { day: 'numeric', month: 'short' })) + '</text>';
-    }
-    var grid = '<line x1="' + pad + '" x2="' + W + '" y1="' + (H + .5) + '" y2="' + (H + .5) + '" class="ag-gl"></line>' +
-      '<text x="0" y="10" class="ag-ax">' + top + '</text>';
-    var legend = SERIES.map(function (s) { return '<span><i style="background:' + s[2] + '"></i>' + t(s[1]) + '</span>'; }).join('');
-    return '<section class="ag-card ag-activity"><div class="ag-card-h"><h2>' + IC.chart + t('ch_title') + '</h2><span class="ag-hint">' + t('ch_total', num(tot)) + '</span>' +
-      '<div class="ag-tools ag-legend">' + legend + '</div></div>' +
-      (tot ? '<div class="ag-chart"><svg viewBox="0 0 ' + W + ' ' + (H + 20) + '" preserveAspectRatio="none" role="img" aria-label="' + esc(t('ch_title')) + '">' + grid + bars + labels + '</svg></div>'
+    var totals = SERIES.map(function (s) { return '<div><i style="background:' + s[2] + '"></i>' + esc(t(s[1])) + '<b>' + num(sums[s[0]]) + '</b></div>'; }).join('');
+    var segBtns = '<div class="ag-chips">' + [7, 30].map(function (d) {
+      return '<button class="ag-chip' + (days === d ? ' on' : '') + '" data-act="cd" data-d="' + d + '">' + t('ch_d', d) + '</button>';
+    }).join('') + '</div>';
+    return '<section class="ag-card ag-activity"><div class="ag-card-h"><h2>' + IC.chart + t('ch_title_n', days) + '</h2><span class="ag-count">' + t('ch_total', num(tot)) + '</span>' +
+      '<div class="ag-tools">' + segBtns + '</div></div>' +
+      (tot ? '<div class="ag-chart2"><div class="ag-plot"><div class="ag-bars" style="height:' + H + 'px">' + bars + '</div><div class="ag-axis">' + ax + '</div></div>' +
+        '<div class="ag-totals">' + totals + '</div></div>'
         : '<div class="ag-empty ag-empty-sm">' + t('ch_empty') + '</div>') + '</section>';
   }
 
@@ -586,50 +624,62 @@
     if (e.until) d.push(t('until', e.until));
     return esc(d.join(' · '));
   }
+  var EV_ICON = {
+    add24: ['ban', 'acc'], manual_ban: ['ban', 'bad'], promote: ['lock', 'vio'], temp24: ['clock', 'warn'], warn16: ['alert', 'warn'], warn16t: ['alert', 'warn'],
+    skip_wl: ['check', 'info'], clean_temp: ['x', 'n'], config: ['sliders', 'acc'], test_mail: ['inbox', 'n'], digest: ['inbox', 'n']
+  };
   function events() {
     var all = (S.events || []).slice().reverse();
-    var list = UI.ef === 'all' ? all : UI.ef === 'new' ? all.filter(function (e) { return isNew(e.t) && NEW_TYPES.indexOf(e.type) >= 0; })
-      : all.filter(function (e) { return EV_GROUP[UI.ef].indexOf(e.type) >= 0; });
+    function match(e, f) { return f === 'all' ? true : f === 'new' ? isNew(e.t) && NEW_TYPES.indexOf(e.type) >= 0 : EV_GROUP[f].indexOf(e.type) >= 0; }
+    var list = all.filter(function (e) { return match(e, UI.ef); });
     var shown = list.slice(0, UI.evLimit);
-    var evCount = function (f) {
-      return f === 'all' ? all.length : f === 'new' ? all.filter(function (e) { return isNew(e.t) && NEW_TYPES.indexOf(e.type) >= 0; }).length
-        : all.filter(function (e) { return EV_GROUP[f].indexOf(e.type) >= 0; }).length;
-    };
-    var opts = (SEEN0 > 0 ? ['all', 'new'] : ['all']).concat(['bans', 'warn', 'skip', 'manual', 'clean']).map(function (f) {
-      return '<option value="' + f + '"' + (UI.ef === f ? ' selected' : '') + '>' + t('e_' + f) + ' (' + num(evCount(f)) + ')</option>';
-    }).join('');
+    var chips = '<div class="ag-chips">' + (SEEN0 > 0 ? ['all', 'new'] : ['all']).concat(['bans', 'warn', 'skip', 'manual', 'clean']).map(function (f) {
+      var n = all.filter(function (e) { return match(e, f); }).length;
+      if (!n && f !== 'all' && f !== UI.ef) return '';
+      return '<button class="ag-chip' + (UI.ef === f ? ' on' : '') + '" data-act="ef" data-f="' + f + '">' + t('e_' + f) + '<span class="ag-chip-n">' + num(n) + '</span></button>';
+    }).join('') + '</div>';
     var rows = shown.map(function (e, i) {
       var key = 'e:' + e.t + ':' + e.type + ':' + (e.cidr || i), open = UI.open[key], has = e.ips && e.ips.length;
+      var ic = EV_ICON[e.type] || (/^manual_/.test(e.type) ? ['sliders', 'n'] : ['list', 'n']);
       return '<div class="ag-item"><div class="ag-ev' + (has ? ' clickable" data-act="toggle" data-key="' + esc(key) : '') + '">' +
-        '<div class="ag-ev-time" title="' + esc(new Date(e.t * 1000).toLocaleString()) + '">' + stamp(e.t) + '</div>' +
-        '<div class="ag-ev-b"><div class="ag-ev-t">' + newDot(NEW_TYPES.indexOf(e.type) >= 0 ? e.t : 0) + '<span class="ag-pill ' + (EV_CLASS[e.type] || 'ag-pill-n') + '">' + esc(t('ev_' + e.type)) + '</span>' +
-        (e.cidr ? '<span class="ag-mono" style="font-weight:600">' + esc(e.cidr) + '</span>' : '') + '</div>' +
-        '<div class="ag-ev-d">' + evDetail(e) + '</div></div>' + (has ? '<span class="ag-chev">' + (open ? '−' : '+') + '</span>' : '') + '</div>' + (open ? ipTable(e.ips, e.total) : '') + '</div>';
+        '<div class="ag-ev-ic ' + ic[1] + '">' + IC[ic[0]] + '</div>' +
+        '<div class="ag-ev-b"><div class="ag-ev-t">' + newDot(NEW_TYPES.indexOf(e.type) >= 0 ? e.t : 0) +
+        (e.cidr ? '<span class="ag-cidr">' + esc(e.cidr) + '</span>' : '') + '<span class="ag-pill ' + (EV_CLASS[e.type] || 'ag-pill-n') + '">' + esc(t('ev_' + e.type)) + '</span></div>' +
+        '<div class="ag-ev-d">' + evDetail(e) + '</div></div>' +
+        '<div class="ag-ev-time" title="' + esc(new Date(e.t * 1000).toLocaleString()) + '">' + stamp(e.t) + (has ? '<span class="ag-chev">' + (open ? '−' : '+') + '</span>' : '') + '</div></div>' +
+        (open ? ipTable(e.ips, e.total) : '') + '</div>';
     }).join('');
     var more = list.length > shown.length ? '<div class="ag-card-f"><button class="ag-btn ag-btn-sm ag-btn-ghost" data-act="evmore">' + t('more') + '</button></div>' : '';
     return '<section class="ag-card" id="ag-events"><div class="ag-card-h"><h2>' + IC.list + t('s_events') + '</h2>' +
-      '<div class="ag-tools"><select class="ag-input" id="ag-ef" style="width:170px">' + opts + '</select></div></div>' +
+      '<div class="ag-tools">' + chips + '</div></div>' +
       '<div class="ag-card-b">' + (rows || empty('inbox', all.length ? t('no_match') : t('no_events'))) + '</div>' + more + '</section>';
   }
 
+  function recentGet() { try { var r = JSON.parse(localStorage.getItem('ag-recent') || '[]'); return Array.isArray(r) ? r : []; } catch (e) { return []; } }
+  function recentAdd(ip) {
+    try { var r = recentGet().filter(function (x) { return x !== ip; }); r.unshift(ip); localStorage.setItem('ag-recent', JSON.stringify(r.slice(0, 5))); } catch (e) { /* tarayıcı depolaması kapalı */ }
+  }
   function lookupCard() {
+    var rec = recentGet();
     return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.search + t('s_lookup') + '</h2></div>' +
       '<div class="ag-lookup"><form id="ag-lk"><input class="ag-input ag-mono" id="ag-lk-ip" inputmode="decimal" autocomplete="off" placeholder="' + esc(t('lookup_ph')) + '">' +
-      '<button class="ag-btn ag-btn-primary" type="submit">' + t('lookup_btn') + '</button></form><p>' + t('lookup_hint') + '</p></div></section>';
+      '<button class="ag-btn ag-btn-primary" type="submit">' + t('lookup_btn') + '</button></form>' +
+      (rec.length ? '<div class="ag-recent"><span>' + t('lk_recent') + '</span>' + rec.map(function (ip) { return '<button class="ag-rc" data-ip="' + esc(ip) + '">' + esc(ip) + '</button>'; }).join('') + '</div>'
+        : '<p>' + t('lookup_hint') + '</p>') + '</div></section>';
   }
 
   /* En çok saldıran ağlar: üç sekme — saldıranlar / csf.deny'deki diğer bloklar / Imunify */
-  function asnRow(i, a, w, sub) {
+  function asnRow(i, a, w, sub, w2) {
     var name = String(a.name || '').replace(/,\s*[A-Z]{2}$/, '');
     return '<div class="ag-asn-r"><span class="ag-rank">' + (i + 1) + '</span><div class="ag-asn-m">' +
       '<div class="ag-asn-t">' + flag(a.cc) + '<span class="ag-asn">AS' + esc(a.asn) + '</span><span class="ag-org" title="' + esc(a.name) + '">' + esc(name) + '</span></div>' +
-      '<div class="ag-asn-b"><i style="width:' + w + '%"></i></div><div class="ag-sub">' + sub + '</div></div></div>';
+      '<div class="ag-asn-b"><i style="width:' + w + '%"></i>' + (w2 ? '<i class="o" style="width:' + w2 + '%"></i>' : '') + '</div><div class="ag-sub">' + sub + '</div></div></div>';
   }
   function pct(v, max) { return v ? Math.max(4, Math.round(v * 100 / Math.max(1, max))) : 0; }
   function asnAttack() {        // sıralama: kendi grup banlarımız + tekiller (saldırı kanıtı)
     var list = S.asn_top || [], max = 0;
     function wt(a) { return a.groups * 4 + a.singles; }
-    list.forEach(function (a) { max = Math.max(max, wt(a)); });
+    list.forEach(function (a) { max = Math.max(max, wt(a) + (a.blocks || 0) * 4); });
     return list.map(function (a, i) {
       var name = String(a.name || '').replace(/,\s*[A-Z]{2}$/, ''), parts = [];
       if (a.groups) parts.push(t('p_g', num(a.groups)));
@@ -638,7 +688,7 @@
       // Öneri: en az 5 kendi grup banı (≥15 saldırgan, 5 ayrı blok) ve CC_DENY'de değilse.
       var tail = a.denied ? ' · <span class="ag-pill ag-pill-ok">' + t('asn_denied') + '</span>'
         : a.groups >= 5 ? ' · <button class="ag-link" data-act="asnhint" data-asn="' + esc(a.asn) + '" data-name="' + esc(name) + '" data-g="' + a.groups + '">' + t('asn_hint') + '</button>' : '';
-      return asnRow(i, a, pct(wt(a), max), parts.join(' · ') + tail);
+      return asnRow(i, a, pct(wt(a), max), parts.join(' · ') + tail, a.blocks ? pct(a.blocks * 4, max) : 0);
     }).join('');
   }
   function asnBlocks() {        // csf.deny'deki başka kaynaklı aralıklar
@@ -727,12 +777,12 @@
 
   function config() {
     var c = S.config;
-    function kv(k, v) { return '<div class="ag-kv-r"><dt>' + esc(k) + '</dt><dd>' + esc(v) + '</dd></div>'; }
+    function kv(k, v) { return '<div class="ag-rule"><small>' + esc(k) + '</small><b>' + esc(v) + '</b></div>'; }
     return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.sliders + t('s_config') + '</h2>' +
-      '<div class="ag-tools"><button class="ag-link" data-act="tab" data-tab="settings">' + t('edit') + '</button></div></div><dl class="ag-kv">' +
+      '<div class="ag-tools"><button class="ag-link" data-act="tab" data-tab="settings">' + t('edit') + '</button></div></div><div class="ag-rules">' +
       kv(t('c_t24'), t('c_singles', c.t24)) + kv(t('c_t24p'), t('c_singles', c.t24p)) + kv(t('c_t16'), t('c_singles', c.t16)) +
       kv(t('c_tt24'), t('c_singles', c.tt24)) + kv(t('c_tt16'), t('c_singles', c.tt16)) + kv(t('c_ret'), t('c_days', c.retention)) +
-      kv(t('c_lookup'), c.lookup ? t('c_on') : t('c_off')) + '</dl></section>';
+      kv(t('c_lookup'), c.lookup ? t('c_on') : t('c_off')) + '</div></section>';
   }
 
   /* ── Ayarlar sekmesi ───────────────────────────────────────────── */
@@ -839,7 +889,7 @@
     indexOwners();
     var y = window.scrollY;
     var body = UI.tab === 'settings' ? settingsView()
-      : sinceBar() + kpis() + activity() + '<div class="ag-grid"><div class="ag-col">' + review() + groups() + pending() + events() + '</div>' +
+      : statusBand() + sinceBar() + kpis() + activity() + '<div class="ag-grid"><div class="ag-col">' + review() + groups() + pending() + events() + '</div>' +
         '<div class="ag-col">' + lookupCard() + topAsn() + ignored() + config() + '</div></div>';
     $app.innerHTML = '<div class="ag-wrap">' + head() + banner() + body +
       '<div class="ag-foot">' + esc(t('foot', S.version + (BOOT.commit ? ' (' + BOOT.commit + ')' : ''), BOOT.user || 'root')) + '</div></div>';
@@ -863,6 +913,7 @@
       schedule(60000);
     });
   }
+  setInterval(function () { var el = document.getElementById('ag-next'); if (el && S && !S.running) el.textContent = nextIn() || '—'; }, 1000);
   function schedule(ms) { clearTimeout(pollTimer); pollTimer = setTimeout(refresh, ms); }
 
   /* ── Toast ─────────────────────────────────────────────────────── */
@@ -970,6 +1021,8 @@
     },
     ppage: function (el) { UI.pp = Math.max(0, UI.pp + (+el.getAttribute('data-d'))); render(); },
     at: function (el) { UI.at = el.getAttribute('data-t'); render(); },
+    ef: function (el) { UI.ef = el.getAttribute('data-f'); UI.evLimit = 40; render(); },
+    cd: function (el) { UI.cd = +el.getAttribute('data-d'); render(); },
     menu: function (el) { var k = el.getAttribute('data-key'); UI.menu = UI.menu === k ? null : k; render(); },
     gsort: function (el) { var k = el.getAttribute('data-k'); if (UI.gs === k) UI.gd = -UI.gd; else { UI.gs = k; UI.gd = k === 'added' || k === 'n' ? -1 : 1; } UI.gp = 0; render(); },
     gpage: function (el) { UI.gp = Math.max(0, UI.gp + (+el.getAttribute('data-d'))); render(); },
@@ -1165,6 +1218,7 @@
   function fact(label, value) { return value ? '<div class="ag-fact"><div class="ag-fact-l">' + esc(label) + '</div><div class="ag-fact-v">' + value + '</div></div>' : ''; }
   function openDrawer(ip) {
     if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) { toast(t('bad_ip'), 'bad'); return; }
+    recentAdd(ip);
     var scrim = document.createElement('div'); scrim.className = 'ag-scrim';
     var dr = document.createElement('aside'); dr.className = 'ag-drawer ag-app'; dr.style.cssText = 'margin:0;padding:0;min-height:0;background:#fff';
     dr.innerHTML = '<div class="ag-drawer-h"><div><h3>' + esc(ip) + '</h3><div class="ag-sub" id="ag-dr-sub">&nbsp;</div></div>' +

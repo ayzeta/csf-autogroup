@@ -39,7 +39,7 @@
 # ============================================================================
 set -o pipefail
 
-VERSION="1.6.5"   # sürüm — başlangıç log satırında görünür
+VERSION="1.7.0"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1075,8 +1075,8 @@ do_status() {
     # Günlük etkinlik: olay kaydı + olay kaydı başlamadan önceki günler için csf.deny'deki grup
     # tarihleri ve sayaçtaki tarihli kayıtlar. Aynı olay iki kaynakta da varsa (tür + blok + gün)
     # bir kez sayılır.
-    local dlist="" di dfiles=()
-    for di in $(seq 29 -1 0); do dlist+="${dlist:+,}$(date -d "$di days ago" +%Y-%m-%d)"; done
+    local dlist="" di dd dfiles=()
+    for di in $(seq 29 -1 0); do printf -v dd '%(%Y-%m-%d)T' $(( now - di * 86400 )); dlist+="${dlist:+,}$dd"; done   # printf %T: alt süreç yok
     [ -r "$EVENTS_FILE" ] && dfiles+=("$EVENTS_FILE")
     [ -r "$SAYAC_FILE" ] && dfiles+=("$SAYAC_FILE")
     daily=$(printf '%s' "$ghist" | awk -v s="$dstart" -v dl="$dlist" -v evf="$EVENTS_FILE" -v syf="$SAYAC_FILE" '
@@ -1108,6 +1108,18 @@ do_status() {
                   for (d = 0; d < 30; d++) line = line (d ? "," : "") (C[keys[k], d] + 0)
                   printf "\"%s\":[%s]%s", keys[k], line, (k < 5 ? "," : "") } }' "${dfiles[@]}" -)
     [ -z "$daily" ] && daily='"A":[],"T":[],"P":[],"W":[],"S":[]'
+    # Son turlar (durum bandı): son 36 turun [zaman, süre]'si, son 24 saatteki tur sayısı, ilk tur
+    local runsj='{"n24":0,"first":0,"list":[]}'
+    if [ -r "$EVENTS_FILE" ]; then
+        runsj=$(grep '"type":"run"' "$EVENTS_FILE" | awk -v c=$(( now - 86400 )) '
+            { t = 0; d = 0
+              if (match($0, /"t":[0-9]+/))   t = substr($0, RSTART + 4, RLENGTH - 4) + 0
+              if (match($0, /"dur":[0-9]+/)) d = substr($0, RSTART + 6, RLENGTH - 6) + 0
+              if (NR == 1) f = t; if (t >= c) n++; T[NR] = t; D[NR] = d }
+            END { s = NR > 36 ? NR - 35 : 1; o = ""
+                  for (i = s; i <= NR; i++) o = o (o != "" ? "," : "") "[" T[i] "," D[i] "]"
+                  printf "{\"n24\":%d,\"first\":%d,\"list\":[%s]}", n, f, o }')
+    fi
 
     if [ "$JSON" = 1 ]; then
         local IFS=,
@@ -1117,6 +1129,7 @@ do_status() {
             "$(num "$THRESHOLD_TEMP_16")" "$(num "$SAYAC_RETENTION_DAYS")" "$(num "$REVIEW_DAYS")" "$([ "$LOOK_INIT" = 1 ] && echo true || echo false)"
         printf '"usage":{"perm":[%s,%s],"temp":[%s,%s]},' "$(num "$pc")" "$limit" "$(num "$tc")" "$tlimit"
         printf '"last_run":%s,' "${last:-null}"
+        jstr "$(cron_now)"; printf '"cron_min":%s,"runs":%s,' "$REPLY" "$runsj"
         printf '"cron_interval":%s,"daily":{"start":%s,%s},"owners":{%s},"asn_top":[%s],"blocks_top":[%s],"imunify":%s,' \
             "$(cron_interval)" "$dstart" "$daily" "${owners[*]}" "${tops[*]}" "${btops[*]}" "$imj"
         printf '"groups":[%s],"pending":[%s],"review":[%s],"ignored":[%s],"events":[%s]}\n' \
