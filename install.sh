@@ -63,9 +63,63 @@ CRON_LINE="$CRON_MIN * * * * $SCRIPT >/dev/null 2>&1"
 EXISTING="$(crontab -l 2>/dev/null | grep -vF "$SCRIPT" || true)"
 printf '%s\n%s\n' "$EXISTING" "$CRON_LINE" | crontab -
 
+# ── WHM plugin (cPanel servers only) ────────────────────────────────
+# Page + JSON endpoints under WHM → Plugins. Root / "all"-privileged WHM users only.
+# Files are written next to their target and renamed into place, so a request
+# arriving mid-update never reads a half-written PHP file.
+REGISTER=/usr/local/cpanel/bin/register_appconfig
+CGI=/usr/local/cpanel/whostmgr/docroot/cgi/csf_autogroup
+PLUGIN="skipped (not a cPanel server)"
+if [ -x "$REGISTER" ] && [ -d "$SRC/whm" ]; then
+    PHP=""
+    for c in /usr/local/cpanel/3rdparty/bin/php /usr/local/bin/php /usr/bin/php; do
+        [ -x "$c" ] && { PHP="$c"; break; }
+    done
+    LINT_OK=1
+    if [ -n "$PHP" ]; then
+        for f in "$SRC"/whm/*.php; do
+            if ! "$PHP" -l "$f" >/dev/null 2>&1; then echo "PHP syntax error: $f"; LINT_OK=0; fi
+        done
+    fi
+    if [ -z "$PHP" ]; then
+        PLUGIN="skipped (PHP not found)"
+    elif [ "$LINT_OK" != 1 ]; then
+        PLUGIN="skipped (PHP syntax check failed — the plugin was left as it was)"
+    else
+        put() {   # MODE SOURCE TARGET [SHEBANG-PHP]
+            local tmp="$3.new.$$"
+            install -m "$1" "$2" "$tmp" || return 1
+            if [ -n "${4:-}" ]; then sed -i "1s|^#!.*|#!$4|" "$tmp"; fi
+            mv -f "$tmp" "$3"
+        }
+        install -d -m 0755 "$CGI" "$CGI/assets"
+        install -d -m 0700 /var/cpanel/csf_autogroup
+        put 0600 "$SRC/whm/lib.php" "$CGI/lib.php"                 # library first, entry points last
+        for a in "$SRC"/whm/assets/*; do put 0644 "$a" "$CGI/assets/$(basename "$a")"; done
+        V="$(sed -n 's/^VERSION="\([^"]*\)".*/\1/p' "$SCRIPT")"
+        G="$(git -C "$SRC" rev-parse --short HEAD 2>/dev/null || true)"
+        printf '{"version":"%s","commit":"%s","repo":"%s","installed":"%s"}\n' \
+            "$V" "$G" "$SRC" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$CGI/version.json.new" && mv -f "$CGI/version.json.new" "$CGI/version.json"
+        put 0755 "$SRC/whm/api.php" "$CGI/api.php" "$PHP"
+        put 0755 "$SRC/whm/index.php" "$CGI/index.php" "$PHP"
+        chown -R root:root "$CGI"
+        install -d -m 0755 /var/cpanel/apps
+        install -m 0600 "$SRC/whm/csf_autogroup.conf" /var/cpanel/apps/csf_autogroup.conf
+        for d in /usr/local/cpanel/whostmgr/docroot/addon_plugins /usr/local/cpanel/whostmgr/docroot/themes/x/icons; do
+            if [ -d "$d" ]; then install -m 0644 "$SRC/whm/csf_autogroup.svg" "$d/csf_autogroup.svg"; break; fi
+        done
+        if "$REGISTER" /var/cpanel/apps/csf_autogroup.conf >/dev/null 2>&1; then
+            PLUGIN="WHM → Plugins → CSF Auto-Group"
+        else
+            PLUGIN="files installed, but register_appconfig failed"
+        fi
+    fi
+fi
+
 echo
 echo "── Done ──"
 echo "Installed cron: $CRON_LINE"
+echo "WHM plugin: $PLUGIN"
 echo "Config: $SRC/config.env   ·   Log: /var/log/csf_autogroup.log"
 echo
 echo "⚠️  This auto-bans /24 subnets. Make sure your own IPs are in csf.allow,"

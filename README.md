@@ -17,8 +17,13 @@ overflowing its line limit, and you get an email when it nears that limit.
 Works on **any CSF server** (cPanel or not). No dependencies beyond CSF and a
 working `mail` command (`dig` or `host` for the optional lookups below).
 
-**Version 1.1.0** · bilingual logs & alert emails (English / Türkçe, set
-`MSG_LANG`). The running version is printed on each run's first log line.
+**Version 1.2.0** · bilingual logs, alert emails and WHM plugin (English /
+Türkçe, set `MSG_LANG`). The running version is printed on each run's first log
+line.
+
+On cPanel servers the installer also adds a **WHM plugin** (root only) that
+shows what the script is doing and lets you act on it — see
+[WHM plugin](#whm-plugin).
 
 ---
 
@@ -101,6 +106,55 @@ If a `CC_IGNORE` / `CC_ALLOW` / `csf.rignore` check can't be completed because
 DNS isn't answering, the block is **not** banned on that run and is retried on
 the next one. `/16` warnings mention a whitelisted address inside the range.
 
+## WHM plugin
+
+On a cPanel server, `install.sh` (and therefore `update.sh`) installs a page
+under **WHM → Plugins → CSF Auto-Group**. Only `root` and WHM accounts with the
+`all` privilege can open it. Resellers can't.
+
+What it shows:
+
+- **Overview** — deny-list usage, active group bans, items to review, last run.
+- **To review** — `/16` warnings and whitelist-skipped `/24`s from the last 7
+  days, with every IP's hostname, owner and ban reason.
+- **Pending promotion** — `/24`s that were temp-banned once. If one comes back,
+  it becomes permanent + `do not delete`. Shows how many days its record has
+  left.
+- **Active group bans** — searchable by CIDR, AS number or organisation.
+- **Recent actions** — every ban, promotion, skip, warning and manual change.
+- **IP lookup** — hostname (forward-confirmed), owner (ASN), announced prefix,
+  registry, whether CSF blocks it and which list whitelists it, with links to
+  bgp.he.net and AbuseIPDB.
+
+What you can do from it — each action asks for confirmation, and risky ones
+(banning a `/16`, overriding a whitelist, removing a `do not delete` block) make
+you type the target:
+
+| Button | Does |
+|--------|------|
+| Ban /16 | permanent `/16` ban, added as `do not delete` |
+| Ban anyway | ban a whitelist-skipped `/24` (overrides the whitelist) |
+| Make permanent | promote a pending `/24` right away |
+| Remove record | forget a pending `/24` (next attack counts as the first) |
+| Remove | lift a group ban (`do not delete` blocks too; `csf.deny` is backed up first) |
+| Ignore | hide an item from review for 7/30/90 days (stops `/16` warning emails too) |
+| Dry run | show what a run would do — changes nothing, sends nothing |
+| Run now | run immediately instead of waiting for cron |
+| Update | runs `update.sh` when GitHub has a newer version |
+
+Every manual action is written to the log as `MANUAL (user): …` and shows up in
+the recent actions list.
+
+The page never parses CSF files itself. It calls the script's command-line
+modes, which you can also use over SSH:
+
+```bash
+./csf_autogroup.sh --status          # same data as the plugin page
+./csf_autogroup.sh --dry-run         # what a run would do, changes nothing
+./csf_autogroup.sh --lookup 1.2.3.4  # who is this IP?
+./csf_autogroup.sh --help
+```
+
 ## Install
 
 ```bash
@@ -149,6 +203,10 @@ Run once by hand to see it work: `./csf_autogroup.sh` (watch the log).
 
 ```bash
 crontab -l | grep -v 'csf_autogroup.sh' | crontab -
+# WHM plugin (cPanel):
+/usr/local/cpanel/bin/unregister_appconfig csf_autogroup
+rm -rf /usr/local/cpanel/whostmgr/docroot/cgi/csf_autogroup /var/cpanel/csf_autogroup
+rm -f /var/cpanel/apps/csf_autogroup.conf /usr/local/cpanel/whostmgr/docroot/addon_plugins/csf_autogroup.svg
 # optional:
 rm -f /var/log/csf_autogroup.log
 rm -rf /var/lib/csf_autogroup
