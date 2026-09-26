@@ -167,8 +167,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_MAIL_TEMPFULL_SUBJ="!!! CSF Temp Limit Uyarısı: %%%s doluluk !!!"
   M_MAIL_TEMPFULL_BODY="CSF geçici ban listesi limite yaklaşıyor!"
   M_MAIL_DETAIL="Detay için: tail -100 %s"
-  M_PANEL="   Panelde incele: %s"
-  M_PANEL_GEN="Panel: %s"
+  M_PANEL_GEN="Panel: %s → Eklentiler → CSF Auto-Group"
   M_DRY_ON="KURU ÇALIŞTIRMA — hiçbir şey değiştirilmeyecek, mail gönderilmeyecek"
   M_DRY_MAIL="[gönderilmeyecek mail] Kime: %s — Konu: %s"
   M_IGN16="ATLANDI /16: %s.0.0/16 yoksayılıyor (%s tarihine kadar)"
@@ -287,8 +286,7 @@ else
   M_MAIL_TEMPFULL_SUBJ="!!! CSF temp limit warning: %s%% full !!!"
   M_MAIL_TEMPFULL_BODY="CSF temp ban list is approaching its limit!"
   M_MAIL_DETAIL="Details: tail -100 %s"
-  M_PANEL="   Review in WHM: %s"
-  M_PANEL_GEN="Panel: %s"
+  M_PANEL_GEN="Panel: %s → Plugins → CSF Auto-Group"
   M_DRY_ON="DRY RUN — nothing will be changed, no email will be sent"
   M_DRY_MAIL="[email not sent] To: %s — Subject: %s"
   M_IGN16="SKIPPED /16: %s.0.0/16 is ignored (until %s)"
@@ -414,30 +412,17 @@ if [ ${#SETS[@]} -gt 0 ]; then
     cfg_rules "$THRESHOLD_24" "$THRESHOLD_24_PERMANENT" || { echo "$CFG_ERR" >&2; exit 2; }
 fi
 
-# ── Panel links in emails ───────────────────────────────────────────────────
-# WHM adresindeki oturum parçası (cpsess…) maile konamaz, birkaç saatte geçersizleşir.
-# Bağlantı WHM girişine gider; cPanel'in goto_uri parametresi girişten sonra eklentiyi açar.
+# ── Panel link in emails ────────────────────────────────────────────────────
+# Düz WHM adresi + yol tarifi. WHM adresindeki oturum parçası (cpsess…) maile konamaz
+# (birkaç saatte geçersizleşir); cPanel'in goto_uri parametresi de 2FA'lı form girişinde
+# dikkate alınmadı — sunucuda iki yoldan (/?goto_uri= ve /login/?goto_uri=) denendi (2026-09-26).
 panel_auto() { local h; h=$(hostname -f 2>/dev/null || hostname 2>/dev/null); [ -n "$h" ] && echo "https://$h:2087"; }
-urlenc() {       # dizgi → REPLY (RFC 3986 ayrılmamış karakterler dışında %XX)
-    local s="$1" out="" c i
-    for (( i = 0; i < ${#s}; i++ )); do
-        c="${s:i:1}"
-        case "$c" in [A-Za-z0-9._~-]) out+="$c" ;; *) printf -v c '%%%02X' "'$c"; out+="$c" ;; esac
-    done
-    REPLY="$out"
-}
-PANEL_BASE=""
-panel_init() {   # yalnız eklenti kuruluysa: bağlantı kökü (bir kez)
+PANEL_FOOT=""
+panel_init() {   # yalnız eklenti kuruluysa: maillerin sonuna eklenecek satır (bir kez)
+    local base
     [ -d "$PLUGIN_DIR" ] || return
-    if [ -n "$PANEL_URL" ]; then PANEL_BASE="${PANEL_URL%/}"; else PANEL_BASE="$(panel_auto)"; fi
-}
-panel_line() {   # [CIDR] [ŞABLON] → REPLY = "   Panelde incele: URL\n" ya da boş
-    local path="/cgi/csf_autogroup/index.php"
-    REPLY=""
-    [ -n "$PANEL_BASE" ] || return 0
-    [ -n "$1" ] && path+="?focus=$1"
-    urlenc "$path"
-    REPLY="$(m "${2:-$M_PANEL}" "$PANEL_BASE/?goto_uri=$REPLY")$NL"
+    if [ -n "$PANEL_URL" ]; then base="${PANEL_URL%/}"; else base="$(panel_auto)"; fi
+    [ -n "$base" ] && PANEL_FOOT="$(m "$M_PANEL_GEN" "$base/")$NL"
 }
 
 # ── IPv4 / CIDR helpers ─────────────────────────────────────────────────────
@@ -766,7 +751,6 @@ wl_report() {    # CIDR COUNT PREFIX24 "IPS" KIND — günde bir kez maile ekle
     wl_skipped=$((wl_skipped + 1))
     owner_kv; jstr "$WL_HIT"     # OWN_* yukarıdaki owner_line'dan (ip_lines sahip sorgusu yapmadı)
     ev skip_wl "$1" "n=$2" "wl=$REPLY" "kind=\"$5\"" "${OKV[@]}" "total=$IPS_TOTAL" "ips=$IPS_J"
-    panel_line "$1"; wl_skip_body+="$REPLY"
 }
 
 # ── Read csf.deny: singles (grouping) + CIDRs (coverage) ────────────────────
@@ -1207,7 +1191,7 @@ do_config() {
         test-mail)
             local out rc
             # Panel bağlantısı test mailinde de var: gerçek bir uyarı beklemeden bağlantı denenebilsin.
-            panel_init; panel_line "" "$M_PANEL_GEN"; local plink="$REPLY"
+            panel_init; local plink="$PANEL_FOOT"
             out=$( { m "$M_TM_BODY" "$(hostname 2>/dev/null || echo "$HOSTNAME")" "$AG_BY"; printf '\n\n%s' "$plink"; } | command mail -s "$M_TM_SUBJ" "$ALERT_MAIL" 2>&1 9>&-); rc=$?
             if [ "$rc" -eq 0 ]; then
                 log "$(m "$M_A_LOG" "$AG_BY" "$(m "$M_TM_SENT" "$ALERT_MAIL")")"
@@ -1248,8 +1232,7 @@ if [ -n "$limit" ] && [ "$limit" -gt 0 ] 2>/dev/null; then
     if [ "$percent" -ge 80 ]; then
         log "$(m "$M_PERM_WARN")"
         doluluk_satiri=$(m "$M_PERM_FULL" "$current_count" "$limit" "$percent")
-        panel_line "" "$M_PANEL_GEN"
-        printf '%s\n\n%s\n\n%s%s\n' "$(m "$M_MAIL_PERMFULL_BODY")" "$doluluk_satiri" "$REPLY" "$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
+        printf '%s\n\n%s\n\n%s%s\n' "$(m "$M_MAIL_PERMFULL_BODY")" "$doluluk_satiri" "$PANEL_FOOT" "$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
             mail -s "$(m "$M_MAIL_PERMFULL_SUBJ" "$percent")" "$ALERT_MAIL"
     else
         doluluk_satiri=$(m "$M_PERM_USAGE" "$current_count" "$limit" "$percent")
@@ -1267,8 +1250,7 @@ if [ -n "$temp_limit" ] && [ "$temp_limit" -gt 0 ] 2>/dev/null; then
     if [ "$temp_percent" -ge 80 ]; then
         log "$(m "$M_TEMP_WARN")"
         temp_doluluk_satiri=$(m "$M_TEMP_FULL" "$temp_current" "$temp_limit" "$temp_percent")
-        panel_line "" "$M_PANEL_GEN"
-        printf '%s\n\n%s\n\n%s%s\n' "$(m "$M_MAIL_TEMPFULL_BODY")" "$temp_doluluk_satiri" "$REPLY" "$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
+        printf '%s\n\n%s\n\n%s%s\n' "$(m "$M_MAIL_TEMPFULL_BODY")" "$temp_doluluk_satiri" "$PANEL_FOOT" "$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
             mail -s "$(m "$M_MAIL_TEMPFULL_SUBJ" "$temp_percent")" "$ALERT_MAIL"
     else
         temp_doluluk_satiri=$(m "$M_TEMP_USAGE" "$temp_current" "$temp_limit" "$temp_percent")
@@ -1323,11 +1305,10 @@ for prefix in $(printf '%s\n' "${!count24[@]}" | sort -V); do
         ip_line "$ip" "${SINGLE_NOTE[$ip]}" 0; added24_body+="$REPLY$tag$NL"
         addj+="${addj:+,}${IPJ%\}},\"res\":\"$res\"}"
     done
-    panel_line "${prefix}.0/24"; added24_body+="$REPLY"
     ev add24 "${prefix}.0/24" "n=$n" "dnd=$([ "$n" -ge "$THRESHOLD_24_PERMANENT" ] && echo true || echo false)" "${OKV[@]}" "ips=[$addj]"
 done
 if [ "$added24" -gt 0 ]; then
-    printf '%s\n\n%s\n%s\n%s\n' "$(m "$M_MAIL24_BODY")" "$added24_body" "$doluluk_satiri" "$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
+    printf '%s\n\n%s\n%s\n%s\n' "$(m "$M_MAIL24_BODY")" "$added24_body" "$doluluk_satiri" "$PANEL_FOOT$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
         mail -s "$(m "$M_MAIL24_SUBJ" "$added24")" "$ALERT_MAIL"
 fi
 log "$(m "$M_24_DONE" "$added24")"
@@ -1354,7 +1335,6 @@ for prefix in $(printf '%s\n' "${!count16[@]}" | sort -V); do
             warn_body+="$(m "$M_WARN16_B" "$prefix" "${count16[$prefix]}" "$subnet_count")$NL"
             WL_HIT=""; wl_overlap "$lo" $((lo + 65535)) && warn_body+="$(m "$M_WL_NOTE" "$WL_HIT")$NL"
             ip_lines "${ips16[$prefix]}" perm 1; warn_body+="$REPLY"
-            panel_line "$prefix.0.0/16"; warn_body+="$REPLY"
             warn16=$((warn16 + 1)); cnt_add "WARN16_${prefix} $TODAY"
             jstr "$WL_HIT"
             ev warn16 "$prefix.0.0/16" "n=${count16[$prefix]}" "subnets=$subnet_count" "wl=$REPLY" "total=$IPS_TOTAL" "ips=$IPS_J"
@@ -1362,7 +1342,7 @@ for prefix in $(printf '%s\n' "${!count16[@]}" | sort -V); do
     fi
 done
 if [ "$warn16" -gt 0 ]; then
-    printf '%b\n\n%s\n%s\n%s\n' "$(m "$M_MAIL16_BODY")" "$warn_body" "$doluluk_satiri" "$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
+    printf '%b\n\n%s\n%s\n%s\n' "$(m "$M_MAIL16_BODY")" "$warn_body" "$doluluk_satiri" "$PANEL_FOOT$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
         mail -s "$(m "$M_MAIL16_SUBJ" "$warn16")" "$ALERT_MAIL"
 fi
 log "$(m "$M_16_DONE" "$warn16")"
@@ -1417,7 +1397,6 @@ for prefix in $(printf '%s\n' "${!temp_count24[@]}" | sort -V); do
                 temp_perm_added24_body+="$(m "$M_TB24_PERM" "$prefix" "$n")$NL"
                 owner_line "${temp_ips24[$prefix]# }"; temp_perm_added24_body+="$REPLY"; owner_kv
                 ip_lines "${temp_ips24[$prefix]}" temp 0; temp_perm_added24_body+="$REPLY"
-                panel_line "${prefix}.0/24"; temp_perm_added24_body+="$REPLY"
                 cnt_del_prefix "$prefix"
                 ev promote "${prefix}.0/24" "n=$n" "dnd=true" "${OKV[@]}" "ips=$IPS_J"
             else
@@ -1432,7 +1411,6 @@ for prefix in $(printf '%s\n' "${!temp_count24[@]}" | sort -V); do
                 temp_added24_body+="$(m "$M_TB24" "$prefix" "$n")$NL"
                 owner_line "${temp_ips24[$prefix]# }"; temp_added24_body+="$REPLY"; owner_kv
                 ip_lines "${temp_ips24[$prefix]}" temp 0; temp_added24_body+="$REPLY"
-                panel_line "${prefix}.0/24"; temp_added24_body+="$REPLY"
                 cnt_add "$prefix $(date '+%Y-%m-%d')"
                 ev temp24 "${prefix}.0/24" "n=$n" "ttl=43200" "${OKV[@]}" "ips=$IPS_J"
             else
@@ -1442,11 +1420,11 @@ for prefix in $(printf '%s\n' "${!temp_count24[@]}" | sort -V); do
     fi
 done
 if [ "$temp_added24" -gt 0 ]; then
-    printf '%s\n\n%s\n%s\n%s\n' "$(m "$M_MAILT24_BODY")" "$temp_added24_body" "$temp_doluluk_satiri" "$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
+    printf '%s\n\n%s\n%s\n%s\n' "$(m "$M_MAILT24_BODY")" "$temp_added24_body" "$temp_doluluk_satiri" "$PANEL_FOOT$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
         mail -s "$(m "$M_MAILT24_SUBJ" "$temp_added24")" "$ALERT_MAIL"
 fi
 if [ "$temp_perm_added24" -gt 0 ]; then
-    printf '%s\n\n%s\n%s\n%s\n' "$(m "$M_MAILT24P_BODY")" "$temp_perm_added24_body" "$doluluk_satiri" "$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
+    printf '%s\n\n%s\n%s\n%s\n' "$(m "$M_MAILT24P_BODY")" "$temp_perm_added24_body" "$doluluk_satiri" "$PANEL_FOOT$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
         mail -s "$(m "$M_MAILT24P_SUBJ" "$temp_perm_added24")" "$ALERT_MAIL"
 fi
 log "$(m "$M_T24_DONE" "$temp_added24" "$temp_perm_added24")"
@@ -1471,21 +1449,20 @@ for prefix in $(printf '%s\n' "${!temp_count16[@]}" | sort -V); do
         temp_warn_body+="$(m "$M_WARN16_B" "$prefix" "${temp_count16[$prefix]}" "$subnet_count")$NL"
         WL_HIT=""; wl_overlap "$lo" $((lo + 65535)) && temp_warn_body+="$(m "$M_WL_NOTE" "$WL_HIT")$NL"
         ip_lines "${temp_ips16[$prefix]}" temp 1; temp_warn_body+="$REPLY"
-        panel_line "$prefix.0.0/16"; temp_warn_body+="$REPLY"
         temp_warn16=$((temp_warn16 + 1)); cnt_add "WARN_TEMP16_${prefix} $TODAY"
         jstr "$WL_HIT"
         ev warn16t "$prefix.0.0/16" "n=${temp_count16[$prefix]}" "subnets=$subnet_count" "wl=$REPLY" "total=$IPS_TOTAL" "ips=$IPS_J"
     fi
 done
 if [ "$temp_warn16" -gt 0 ]; then
-    printf '%b\n\n%s\n%s\n%s\n' "$(m "$M_MAILT16_BODY")" "$temp_warn_body" "$temp_doluluk_satiri" "$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
+    printf '%b\n\n%s\n%s\n%s\n' "$(m "$M_MAILT16_BODY")" "$temp_warn_body" "$temp_doluluk_satiri" "$PANEL_FOOT$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
         mail -s "$(m "$M_MAILT16_SUBJ" "$temp_warn16")" "$ALERT_MAIL"
 fi
 log "$(m "$M_T16_DONE" "$temp_warn16")"
 
 # ── Whitelist skips: one email per run (each block once per day) ────────────
 if [ "$wl_skipped" -gt 0 ]; then
-    printf '%b\n\n%s\n%s\n' "$(m "$M_MAILWL_BODY")" "$wl_skip_body" "$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
+    printf '%b\n\n%s\n%s\n' "$(m "$M_MAILWL_BODY")" "$wl_skip_body" "$PANEL_FOOT$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
         mail -s "$(m "$M_MAILWL_SUBJ" "$wl_skipped")" "$ALERT_MAIL"
 fi
 

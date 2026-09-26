@@ -113,7 +113,7 @@
       rule_dnd: 'Do not delete eşiği /24 eşiğinden küçük olamaz.', dirty_n: '{0} değişiklik kaydedilmedi', discard: 'Vazgeç',
       try_save: 'Kaydetmeden önce dene', save: 'Kaydet', m_save_t: 'Ayarlar kaydedilsin mi?', m_save_b: 'Şu değişiklikler config.env\'e yazılacak (önce yedek alınır):',
       m_try_t: 'Yeni eşiklerle kuru çalıştırma', m_try_b: 'Kaydedilmemiş ayarlarla; hiçbir şey değişmez.', show_pending_all: 'Tümünü göster ({0})',
-      st_panel: 'Panel adresi', st_panel_h: 'Maillerdeki "Panelde incele" bağlantısının kökü. Boş bırakırsanız otomatik: {0}',
+      st_panel: 'Panel adresi', st_panel_h: 'Maillerin sonundaki panel bağlantısının adresi. Boş bırakırsanız otomatik: {0}',
       panel_bad: 'https://sunucu:2087 biçiminde yazın.', auto: 'otomatik', focus_gone: '{0} artık listede değil; güncel durumu gösteriliyor.'
     },
     en: {
@@ -186,7 +186,7 @@
       rule_dnd: 'The do not delete threshold can\'t be lower than the /24 threshold.', dirty_n: '{0} unsaved changes', discard: 'Discard',
       try_save: 'Try before saving', save: 'Save', m_save_t: 'Save settings?', m_save_b: 'These changes will be written to config.env (a backup is kept):',
       m_try_t: 'Dry run with the new thresholds', m_try_b: 'Uses the unsaved settings; nothing is changed.', show_pending_all: 'Show all ({0})',
-      st_panel: 'Panel address', st_panel_h: 'Base of the "Review in WHM" link in emails. Leave empty for automatic: {0}',
+      st_panel: 'Panel address', st_panel_h: 'Address of the panel link at the end of each email. Leave empty for automatic: {0}',
       panel_bad: 'Use the form https://server:2087.', auto: 'automatic', focus_gone: '{0} is no longer on the list; showing its current state.'
     }
   };
