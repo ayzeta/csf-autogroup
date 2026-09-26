@@ -26,6 +26,9 @@
 #   csf_autogroup.sh --action NAME TARGET [DAYS] [--force] [--json]
 #        ban16 A.B | ban24 A.B.C | forget A.B.C | unban CIDR
 #        ignore CIDR [DAYS] | unignore CIDR          (used by the WHM plugin)
+#   csf_autogroup.sh --config get|test-mail [--json]
+#   csf_autogroup.sh --config set KEY=VALUE ... [--json]   validated, config.env + cron
+#   csf_autogroup.sh --dry-run --set THRESHOLD_24=4 ...    try settings without saving
 #
 # Config : optional config.env in the same dir (see config.env.example).
 # Cron   : e.g.  */10 * * * * /path/csf_autogroup.sh >/dev/null 2>&1
@@ -35,7 +38,7 @@
 # ============================================================================
 set -o pipefail
 
-VERSION="1.2.0"   # sürüm — başlangıç log satırında görünür
+VERSION="1.3.0"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -68,13 +71,15 @@ TODAY=$(date '+%Y-%m-%d')
 NL=$'\n'
 
 # ── Command line ────────────────────────────────────────────────────────────
-MODE=run; JSON=0; FORCE=0; DRY=0; ACT=""; ARGS=()
+MODE=run; JSON=0; FORCE=0; DRY=0; ACT=""; ARGS=(); SETS=()
 while [ $# -gt 0 ]; do
     case "$1" in
         --dry-run) MODE=run; DRY=1 ;;
         --status)  MODE=status ;;
         --lookup)  MODE=lookup ;;
         --action)  MODE=action; ACT="${2:-}"; shift ;;
+        --config)  MODE=config ;;
+        --set)     SETS+=("${2:-}"); shift ;;
         --json)    JSON=1 ;;
         --force)   FORCE=1 ;;
         --version) echo "$VERSION"; exit 0 ;;
@@ -190,6 +195,23 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_L_HOST="Hostname"; M_L_FWD="ileri yönde doğrulandı"; M_L_NOFWD="ileri yönde doğrulanamadı"
   M_L_OWNER="Sahibi"; M_L_PREFIX="Duyurulan blok"; M_L_REG="Kayıt"; M_L_DENY="csf.deny"
   M_L_TEMP="Geçici liste"; M_L_WL="Beyaz liste"; M_L_PENDING="Terfi bekliyor"; M_L_IGN="Yoksayılıyor"
+  M_CFG_BAD="Geçersiz değer: %s = %s (%s olmalı)"
+  M_CFG_RANGE="%s ile %s arası bir tam sayı"
+  M_CFG_EMAIL="geçerli bir e-posta adresi"
+  M_CFG_ONEOF="şunlardan biri: %s"
+  M_CFG_UNKNOWN="Bu ayar buradan değiştirilemez: %s"
+  M_CFG_RULE="do not delete eşiği (%s), /24 ban eşiğinden (%s) küçük olamaz"
+  M_CFG_SAVED="Ayarlar kaydedildi (%s değişiklik)"
+  M_CFG_NOCHANGE="Değişiklik yok"
+  M_CFG_LOG="AYAR (%s): %s: %s → %s"
+  M_CFG_WFAIL="config.env yazılamadı"
+  M_CFG_CRONFAIL="crontab güncellenemedi"
+  M_DRY_OVR="Denenen ayarlar (kaydedilmedi): %s"
+  M_DRY_NOSET="--set yalnızca --dry-run ile kullanılabilir"
+  M_TM_SUBJ="CSF Auto-Group test maili"
+  M_TM_BODY="Bu bir test mailidir. %s sunucusundaki CSF Auto-Group uyarıları bu adrese gelecek.\nGönderen: %s"
+  M_TM_SENT="Test maili %s adresine gönderildi (mail komutu kabul etti)"
+  M_TM_FAIL="mail komutu hata verdi: %s"
 else
   M_START="--- Started ---";                                       M_END="--- Done ---"
   M_ERR_NOFILE="ERROR: %s not found, exiting."
@@ -291,6 +313,23 @@ else
   M_L_HOST="Hostname"; M_L_FWD="forward-confirmed"; M_L_NOFWD="not forward-confirmed"
   M_L_OWNER="Owner"; M_L_PREFIX="Announced prefix"; M_L_REG="Registry"; M_L_DENY="csf.deny"
   M_L_TEMP="Temp list"; M_L_WL="Whitelist"; M_L_PENDING="Pending promotion"; M_L_IGN="Ignored"
+  M_CFG_BAD="Invalid value: %s = %s (must be %s)"
+  M_CFG_RANGE="a whole number from %s to %s"
+  M_CFG_EMAIL="a valid email address"
+  M_CFG_ONEOF="one of: %s"
+  M_CFG_UNKNOWN="This setting can't be changed here: %s"
+  M_CFG_RULE="the do not delete threshold (%s) can't be lower than the /24 ban threshold (%s)"
+  M_CFG_SAVED="Settings saved (%s changes)"
+  M_CFG_NOCHANGE="Nothing changed"
+  M_CFG_LOG="SETTING (%s): %s: %s → %s"
+  M_CFG_WFAIL="config.env could not be written"
+  M_CFG_CRONFAIL="crontab could not be updated"
+  M_DRY_OVR="Trying settings (not saved): %s"
+  M_DRY_NOSET="--set only works together with --dry-run"
+  M_TM_SUBJ="CSF Auto-Group test email"
+  M_TM_BODY="This is a test email. CSF Auto-Group alerts from %s will arrive at this address.\nSent by: %s"
+  M_TM_SENT="Test email handed to the mail command for %s"
+  M_TM_FAIL="the mail command failed: %s"
 fi
 m() { local f="$1"; shift; printf "$f" "$@"; }   # format a message template
 
@@ -316,6 +355,52 @@ mail() {
     fi
     command mail "$@" 9>&-
 }
+
+# ── Settings: validation (panel + --config set + --dry-run --set) ──────────
+# Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
+CFG_KEYS="MSG_LANG ALERT_MAIL THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES CRON_MIN"
+CFG_TRY_KEYS="THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS"
+cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değer), 1 değil (CFG_ERR)
+    local k="$1" v="$2" lo="" hi="" opts=""
+    CFG_ERR=""; CFG_VAL="$v"
+    case "$k" in
+        MSG_LANG) opts="tr en" ;;
+        LOOKUP) opts="0 1" ;;
+        CRON_MIN) opts="*/5 */10 */15 */30 0" ;;
+        ALERT_MAIL)
+            [[ "$v" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]] && [ ${#v} -le 254 ] && return 0
+            CFG_ERR=$(m "$M_CFG_BAD" "$k" "$v" "$M_CFG_EMAIL"); return 1 ;;
+        THRESHOLD_24|THRESHOLD_TEMP_24) lo=2; hi=50 ;;
+        THRESHOLD_24_PERMANENT) lo=2; hi=100 ;;
+        THRESHOLD_16|THRESHOLD_TEMP_16) lo=2; hi=500 ;;
+        LOOKUP_TIMEOUT) lo=1; hi=10 ;;
+        SAYAC_RETENTION_DAYS) lo=7; hi=730 ;;
+        REVIEW_DAYS) lo=1; hi=90 ;;
+        LOG_MAX_LINES) lo=500; hi=100000 ;;
+        *) CFG_ERR=$(m "$M_CFG_UNKNOWN" "$k"); return 1 ;;
+    esac
+    if [ -n "$opts" ]; then
+        case " $opts " in *" $v "*) return 0 ;; esac
+        CFG_ERR=$(m "$M_CFG_BAD" "$k" "$v" "$(m "$M_CFG_ONEOF" "${opts// /, }")"); return 1
+    fi
+    if [[ "$v" =~ ^[0-9]{1,6}$ ]] && (( 10#$v >= lo && 10#$v <= hi )); then CFG_VAL=$((10#$v)); return 0; fi
+    CFG_ERR=$(m "$M_CFG_BAD" "$k" "$v" "$(m "$M_CFG_RANGE" "$lo" "$hi")"); return 1
+}
+cfg_rules() {    # T24 T24P → çapraz kural
+    CFG_ERR=""
+    if [ "$2" -lt "$1" ]; then CFG_ERR=$(m "$M_CFG_RULE" "$2" "$1"); return 1; fi
+    return 0
+}
+if [ ${#SETS[@]} -gt 0 ]; then
+    if [ "$MODE" != run ] || [ "$DRY" != 1 ]; then echo "$M_DRY_NOSET" >&2; exit 2; fi
+    for kv in "${SETS[@]}"; do
+        k="${kv%%=*}"; v="${kv#*=}"
+        case " $CFG_TRY_KEYS " in *" $k "*) ;; *) m "$M_CFG_UNKNOWN" "$k" >&2; echo >&2; exit 2 ;; esac
+        cfg_check "$k" "$v" || { echo "$CFG_ERR" >&2; exit 2; }
+        printf -v "$k" '%s' "$CFG_VAL"
+    done
+    cfg_rules "$THRESHOLD_24" "$THRESHOLD_24_PERMANENT" || { echo "$CFG_ERR" >&2; exit 2; }
+fi
 
 # ── IPv4 / CIDR helpers ─────────────────────────────────────────────────────
 # Sonuçlar REPLY / R_LO / R_HI ile döner (alt kabuk yok → önbellekler korunur).
@@ -990,6 +1075,109 @@ do_action() {    # NAME TARGET [DAYS]
     esac
 }
 
+# ── --config (WHM eklentisinin Ayarlar sekmesi) ─────────────────────────────
+CFG_FILE="$SELF_DIR/config.env"
+INSTALL_CONF="$SELF_DIR/.install.conf"
+cron_now() { crontab -l 2>/dev/null | grep -F "$SELF_DIR/csf_autogroup.sh" | grep -v '^[[:space:]]*#' | head -1 | awk '{print $1}'; }
+cfg_value() {    # KEY → etkin değer (config.env + varsayılanlar yüklendikten sonra)
+    if [ "$1" = CRON_MIN ]; then cron_now; else printf '%s' "${!1}"; fi
+}
+cfg_write() {    # "KEY=VALUE" satırları (stdin) → config.env: yorumlar korunur, atomik yazılır, yedek alınır
+    local tmp
+    tmp=$(mktemp "$SELF_DIR/.config.env.XXXXXX") || return 1
+    if [ -f "$CFG_FILE" ]; then
+        cp -p "$CFG_FILE" "$CFG_FILE.bak"
+        # Liste ortam değişkeniyle geçer: awk -v çok satırlı değerde bazı sürümlerde hata verir.
+        CFG_LIST="$1" awk '
+            BEGIN { n = split(ENVIRON["CFG_LIST"], a, "\n"); for (i = 1; i <= n; i++) { if (a[i] == "") continue; k = a[i]; sub(/=.*/, "", k); val[k] = a[i]; order[++m] = k } }
+            { line = $0; k = line; sub(/=.*/, "", k)
+              if (line ~ /^[A-Z_0-9]+=/ && (k in val)) { if (!(k in done)) { print val[k]; done[k] = 1 } ; next }
+              print line }
+            END { hdr = 0
+                  for (i = 1; i <= m; i++) { k = order[i]; if (!(k in done)) { if (!hdr) { print ""; print "# Set from the WHM plugin"; hdr = 1 } print val[k] } } }
+        ' "$CFG_FILE" > "$tmp" || { rm -f "$tmp"; return 1; }
+    else
+        { echo "# CSF Auto-Group config — written by the WHM plugin"; printf '%s' "$1"; } > "$tmp"
+    fi
+    chmod 600 "$tmp" && mv -f "$tmp" "$CFG_FILE"
+}
+install_conf_write() {   # .install.conf: update.sh / install.sh --yes buradan okur; panel ayarları ezilmesin
+    printf 'MSG_LANG="%s"; ALERT_MAIL="%s"; CRON_MIN="%s"\n' "$1" "$2" "$3" > "$INSTALL_CONF.tmp" && mv -f "$INSTALL_CONF.tmp" "$INSTALL_CONF"
+}
+cron_write() {   # CRON_MIN → crontab satırı (install.sh ile aynı biçim)
+    # Önce mevcut crontab tamamen okunur, sonra yazılır: aynı boru hattında okuyup yazmak diğer
+    # işleri silebiliyordu (simülasyonda yakalandı). Okuma "crontab yok" dışında bir sebeple
+    # başarısız olursa hiçbir şey yazılmaz — kullanıcının diğer cron işleri riske atılmaz.
+    local cur rc other
+    command -v crontab >/dev/null 2>&1 || return 1
+    cur=$(crontab -l 2>&1); rc=$?
+    if [ "$rc" -ne 0 ]; then
+        [[ "$cur" == *"no crontab"* ]] || return 1
+        cur=""
+    fi
+    other=$(printf '%s\n' "$cur" | grep -vF "$SELF_DIR/csf_autogroup.sh")
+    { [ -n "$other" ] && printf '%s\n' "$other"; echo "$1 * * * * $SELF_DIR/csf_autogroup.sh >/dev/null 2>&1"; } | crontab -
+}
+do_config() {
+    local sub="${ARGS[0]:-get}" k v o i
+    case "$sub" in
+        get)
+            if [ "$JSON" = 1 ]; then
+                o="{\"ok\":true,\"values\":{"
+                i=0
+                for k in $CFG_KEYS; do jstr "$(cfg_value "$k")"; o+="$([ $i -gt 0 ] && echo ,)\"$k\":$REPLY"; i=1; done
+                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"root@localhost\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_MAX_LINES\":\"5000\",\"CRON_MIN\":\"*/10\"}"
+                o+=",\"csf\":{\"deny_limit\":$(num "$(conf_val DENY_IP_LIMIT)"),\"temp_limit\":$(num "$(conf_val DENY_TEMP_IP_LIMIT)")}"
+                o+=",\"dns_tool\":$([ -n "$DIG_BIN$HOST_BIN" ] && echo true || echo false),\"crontab\":$(command -v crontab >/dev/null 2>&1 && echo true || echo false)}"
+                echo "$o"
+            else
+                for k in $CFG_KEYS; do printf '%-24s %s\n' "$k" "$(cfg_value "$k")"; done
+            fi
+            return 0 ;;
+        set)
+            take_lock || { act_out 3 "$M_BUSY"; return 3; }
+            local -A NEW=()
+            for kv in "${ARGS[@]:1}"; do
+                k="${kv%%=*}"; v="${kv#*=}"
+                cfg_check "$k" "$v" || { act_out 2 "$CFG_ERR"; return 2; }
+                NEW[$k]="$CFG_VAL"
+            done
+            cfg_rules "${NEW[THRESHOLD_24]:-$THRESHOLD_24}" "${NEW[THRESHOLD_24_PERMANENT]:-$THRESHOLD_24_PERMANENT}" \
+                || { act_out 2 "$CFG_ERR"; return 2; }
+            local lines="" changes="" n=0 old cron_new="" logs=() msg
+            for k in $CFG_KEYS; do
+                [ -n "${NEW[$k]+x}" ] || continue
+                old="$(cfg_value "$k")"
+                [ "$old" = "${NEW[$k]}" ] && continue
+                n=$((n + 1))
+                if [ "$k" = CRON_MIN ]; then cron_new="${NEW[$k]}"; else lines+="$k=${NEW[$k]}"$'\n'; fi
+                jstr "$old"; o="$REPLY"; jstr "${NEW[$k]}"
+                changes+="${changes:+,}{\"key\":\"$k\",\"from\":$o,\"to\":$REPLY}"
+                logs+=("$(m "$M_CFG_LOG" "$AG_BY" "$k" "${old:--}" "${NEW[$k]}")")
+            done
+            [ "$n" -eq 0 ] && { act_out 0 "$M_CFG_NOCHANGE"; return 0; }
+            # Sıra: önce cron (dışarıya bağımlı adım), sonra config.env. Cron başarısız olursa hiçbir şey
+            # değişmemiş olur; kayıtlar da yalnızca her şey yazıldıktan sonra düşülür.
+            if [ -n "$cron_new" ]; then cron_write "$cron_new" || { act_out 1 "$M_CFG_CRONFAIL"; return 1; }; fi
+            if [ -n "$lines" ]; then cfg_write "$lines" || { act_out 1 "$M_CFG_WFAIL"; return 1; }; fi
+            install_conf_write "${NEW[MSG_LANG]:-$MSG_LANG}" "${NEW[ALERT_MAIL]:-$ALERT_MAIL}" "${cron_new:-$(cron_now)}"
+            for msg in "${logs[@]}"; do log "$msg"; done
+            ev config "" "by=\"$AG_BY\"" "changes=[$changes]"
+            act_out 0 "$(m "$M_CFG_SAVED" "$n")" ;;
+        test-mail)
+            local out rc
+            out=$( { m "$M_TM_BODY" "$(hostname 2>/dev/null || echo "$HOSTNAME")" "$AG_BY"; echo; } | command mail -s "$M_TM_SUBJ" "$ALERT_MAIL" 2>&1 9>&-); rc=$?
+            if [ "$rc" -eq 0 ]; then
+                log "$(m "$M_A_LOG" "$AG_BY" "$(m "$M_TM_SENT" "$ALERT_MAIL")")"
+                jstr "$ALERT_MAIL"; ev test_mail "" "by=\"$AG_BY\"" "to=$REPLY"
+                act_out 0 "$(m "$M_TM_SENT" "$ALERT_MAIL")"
+            else
+                act_out 1 "$(m "$M_TM_FAIL" "${out%%$NL*}")"
+            fi ;;
+        *) act_out 2 "$(m "$M_A_UNKNOWN" "$sub")" ;;
+    esac
+}
+
 [ -f "$DENY_FILE" ] || { log "$(m "$M_ERR_NOFILE" "$DENY_FILE")"; exit 1; }
 [ -f "$CSF_CONF" ]  || { log "$(m "$M_ERR_NOFILE" "$CSF_CONF")"; exit 1; }
 mkdir -p "$(dirname "$SAYAC_FILE")"; touch "$SAYAC_FILE"
@@ -998,11 +1186,13 @@ case "$MODE" in
     status) LOG_MODE=quiet; do_status; exit $? ;;
     lookup) LOG_MODE=quiet; do_lookup "${ARGS[0]}"; exit $? ;;
     action) LOG_MODE=file; do_action "$ACT" "${ARGS[0]}" "${ARGS[1]}"; exit $? ;;
+    config) LOG_MODE=file; do_config; exit $? ;;
 esac
 
 # Tek seferde tek çalışma: cron turu uzarsa ikinci kopya aynı bloğu tekrar eklemesin.
 take_lock || { log "$M_LOCKED"; exit 0; }
 [ "$DRY" = 1 ] && log "$M_DRY_ON"
+[ ${#SETS[@]} -gt 0 ] && log "$(m "$M_DRY_OVR" "${SETS[*]}")"
 RUN_T0=$(date +%s)
 log "$M_START (v$VERSION)"
 

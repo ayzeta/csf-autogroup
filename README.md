@@ -17,7 +17,7 @@ overflowing its line limit, and you get an email when it nears that limit.
 Works on **any CSF server** (cPanel or not). No dependencies beyond CSF and a
 working `mail` command (`dig` or `host` for the optional lookups below).
 
-**Version 1.2.0** · bilingual logs, alert emails and WHM plugin (English /
+**Version 1.3.0** · bilingual logs, alert emails and WHM plugin (English /
 Türkçe, set `MSG_LANG`). The running version is printed on each run's first log
 line.
 
@@ -144,6 +144,30 @@ you type the target:
 
 Every manual action is written to the log as `MANUAL (user): …` and shows up in
 the recent actions list.
+
+### Settings tab
+
+The same settings as `config.env`, with validation:
+
+- **Notifications** — alert email (with a *Send test email* button) and language.
+- **Thresholds** — `/24` ban, `do not delete`, `/16` warning, temp `/24` and
+  temp `/16`. The `do not delete` threshold can't be lower than the `/24` one.
+- **Schedule** — cron every 5 / 10 / 15 / 30 minutes or hourly.
+- **Lookups** — owner/hostname lookups on or off, DNS timeout.
+- **Retention** — promotion record days, review days, log line limit.
+
+*Try before saving* runs a dry run with the unsaved thresholds, so you can see
+which `/24`s would be banned before committing to a change. Saving writes
+`config.env` (comments kept, previous file saved as `config.env.bak`), updates
+the crontab and `.install.conf` so `update.sh` keeps your choices, and logs each
+change as `SETTING (user): KEY: old → new`.
+
+CSF's own list limits (`DENY_IP_LIMIT`, `DENY_TEMP_IP_LIMIT`) are shown
+read-only with a link to CSF. Change them there.
+
+From the command line: `--config get`, `--config set KEY=VALUE …`,
+`--config test-mail`, and `--dry-run --set KEY=VALUE` to try a value without
+saving it.
 
 The page never parses CSF files itself. It calls the script's command-line
 modes, which you can also use over SSH:

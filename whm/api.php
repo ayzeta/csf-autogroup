@@ -79,9 +79,43 @@ switch ($a) {
         ag_json(ag_run_json($args, 90));
 
     case 'dry_run':
-        // Hiçbir şeyi değiştirmez; çıktı olduğu gibi gösterilir.
-        $r = ag_run(['--dry-run'], 240);
+        // Hiçbir şeyi değiştirmez; çıktı olduğu gibi gösterilir. "Kaydetmeden önce dene" için
+        // kaydedilmemiş eşikler --set ile geçer (script yalnız bu anahtarları kabul eder).
+        $args = ['--dry-run'];
+        $try = ['THRESHOLD_24', 'THRESHOLD_24_PERMANENT', 'THRESHOLD_16', 'THRESHOLD_TEMP_24', 'THRESHOLD_TEMP_16',
+                'LOOKUP', 'LOOKUP_TIMEOUT', 'SAYAC_RETENTION_DAYS', 'REVIEW_DAYS'];
+        foreach ((array) ($_POST['set'] ?? []) as $k => $v) {
+            if (in_array($k, $try, true) && preg_match('/^[0-9]{1,6}$/', (string) $v)) {
+                $args[] = '--set';
+                $args[] = $k . '=' . $v;
+            }
+        }
+        $r = ag_run($args, 240);
         ag_json(['ok' => $r['rc'] === 0, 'rc' => $r['rc'], 'output' => $r['out']]);
+
+    case 'config_get':
+        ag_json(ag_run_json(['--config', 'get', '--json'], 30));
+
+    case 'config_set':
+        // Anahtar listesi ve kaba karakter süzgeci burada; asıl doğrulama script'te (cfg_check).
+        $keys = ['MSG_LANG', 'ALERT_MAIL', 'THRESHOLD_24', 'THRESHOLD_24_PERMANENT', 'THRESHOLD_16', 'THRESHOLD_TEMP_24',
+                 'THRESHOLD_TEMP_16', 'LOOKUP', 'LOOKUP_TIMEOUT', 'SAYAC_RETENTION_DAYS', 'REVIEW_DAYS', 'LOG_MAX_LINES', 'CRON_MIN'];
+        $args = ['--config', 'set'];
+        foreach ((array) ($_POST['v'] ?? []) as $k => $v) {
+            $v = trim((string) $v);
+            if (!in_array($k, $keys, true) || !preg_match('/^[A-Za-z0-9@._%+*\/-]{1,254}$/', $v)) {
+                ag_json(['ok' => false, 'code' => 2, 'message' => 'bad_value: ' . $k]);
+            }
+            $args[] = $k . '=' . $v;
+        }
+        if (count($args) === 2) {
+            ag_json(['ok' => false, 'code' => 2, 'message' => 'nothing']);
+        }
+        $args[] = '--json';
+        ag_json(ag_run_json($args, 30));
+
+    case 'config_test_mail':
+        ag_json(ag_run_json(['--config', 'test-mail', '--json'], 30));
 
     case 'run_now':
         $script = ag_script();

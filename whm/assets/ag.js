@@ -12,7 +12,9 @@
   var UPD = null;               // güncelleme kontrolü sonucu
   var LANG = 'en';
   var CLOCK = 0;                // sunucu saati - istemci saati (sn)
-  var UI = { gf: 'all', gq: '', ef: 'all', open: {}, evLimit: 40, gLimit: 40, commits: false };
+  var UI = { gf: 'all', gq: '', ef: 'all', open: {}, evLimit: 40, gLimit: 40, commits: false, pAll: false,
+             tab: location.hash === '#settings' ? 'settings' : 'overview' };
+  var CFG = null, DRAFT = {}, cfgLoading = false;
   var pollTimer = null, wasRunning = false, busy = false;
 
   /* ── Simgeler (çizgi, 24px ızgara) ─────────────────────────────── */
@@ -89,7 +91,28 @@
       l_pending: 'Terfi bekliyor', l_ign: 'Yoksayılıyor', l_notbanned: 'Engelli değil', l_none: 'Yok', l_perm_single: 'Kalıcı (tekil)',
       l_perm_cover: 'Kalıcı (blok)', l_temp: 'Geçici', l_nolookup: 'Sahip ve hostname sorguları kapalı (LOOKUP=0).',
       l_abuse: 'AbuseIPDB', l_bgp: 'bgp.he.net', l_copy: 'Kopyala', bad_ip: 'Geçerli bir IPv4 adresi yazın.',
-      foot: 'CSF Auto-Group v{0} · {1} olarak oturum açıldı'
+      foot: 'CSF Auto-Group v{0} · {1} olarak oturum açıldı',
+      tab_overview: 'Genel bakış', tab_settings: 'Ayarlar', ev_config: 'Ayar değişti', ev_test_mail: 'Test maili',
+      st_notify: 'Bildirim', st_mail: 'Uyarı maili adresi', st_mail_h: 'Gruplama, /16 uyarısı ve limit mailleri buraya gider.',
+      st_lang: 'Dil', st_lang_h: 'Log, mail ve bu panelin dili.', st_test: 'Test maili gönder', st_test_h: 'Kayıtlı adrese gönderilir.',
+      st_test_dirty: 'Önce yeni adresi kaydedin.', st_thr: 'Eşikler', st_thr_h: 'Kaç tekil ban bir işlemi tetikler.',
+      k_THRESHOLD_24: '/24 grup banı', h_THRESHOLD_24: 'Bir /24 içinde bu kadar kalıcı tekil olunca /24 banlanır.',
+      k_THRESHOLD_24_PERMANENT: 'Do not delete eşiği', h_THRESHOLD_24_PERMANENT: 'Bu kadar tekil olunca /24 "do not delete" alır. /24 eşiğinden küçük olamaz.',
+      k_THRESHOLD_16: '/16 uyarısı', h_THRESHOLD_16: 'En az 2 farklı /24\'ten bu kadar tekil olunca mail gelir. Otomatik ban yok.',
+      k_THRESHOLD_TEMP_24: 'Geçici /24', h_THRESHOLD_TEMP_24: 'Bu kadar geçici tekil: ilk sefer 12 saat geçici ban, ikinci sefer kalıcı.',
+      k_THRESHOLD_TEMP_16: 'Geçici /16 uyarısı', h_THRESHOLD_TEMP_16: 'Geçici listedeki /16 yoğunluğu için uyarı eşiği.',
+      st_sched: 'Zamanlama', st_sched_h: 'Script\'in cron ile ne sıklıkla çalışacağı.', cron_5: '5 dk', cron_10: '10 dk', cron_15: '15 dk', cron_30: '30 dk', cron_0: 'Saatte bir',
+      st_lookup: 'Sorgular', k_LOOKUP: 'Sahip ve hostname sorgusu', h_LOOKUP: 'Mailde ve panelde ASN, kurum ve hostname gösterir; CC_IGNORE ve csf.rignore kontrolleri de buna bağlı.',
+      k_LOOKUP_TIMEOUT: 'DNS zaman aşımı (sn)', h_LOOKUP_TIMEOUT: 'Her sorgu için bekleme süresi.', st_nodns: 'Sunucuda dig/host yok; sorgular çalışmaz (dnf install bind-utils).',
+      on: 'Açık', off: 'Kapalı', st_keep: 'Saklama', k_SAYAC_RETENTION_DAYS: 'Terfi kaydı saklama (gün)',
+      h_SAYAC_RETENTION_DAYS: 'Geçici banlanmış /24 bu süre içinde tekrar gelirse kalıcı olur.', k_REVIEW_DAYS: 'Kontrol edilecekler (gün)',
+      h_REVIEW_DAYS: 'Uyarı ve atlamaların listede kaç gün kalacağı.', k_LOG_MAX_LINES: 'Log satır sınırı', h_LOG_MAX_LINES: 'Log bu satır sayısında tutulur.',
+      st_csf: 'CSF liste sınırları', st_csf_h: 'Bunlar CSF\'in kendi ayarları; buradan değil CSF\'ten değiştirilir.',
+      csf_deny: 'Kalıcı liste (DENY_IP_LIMIT)', csf_temp: 'Geçici liste (DENY_TEMP_IP_LIMIT)', csf_open: 'CSF ayarlarını aç',
+      default_v: 'varsayılan {0}', range_v: '{0}–{1} arası bir tam sayı', mail_bad: 'Geçerli bir e-posta adresi yazın.',
+      rule_dnd: 'Do not delete eşiği /24 eşiğinden küçük olamaz.', dirty_n: '{0} değişiklik kaydedilmedi', discard: 'Vazgeç',
+      try_save: 'Kaydetmeden önce dene', save: 'Kaydet', m_save_t: 'Ayarlar kaydedilsin mi?', m_save_b: 'Şu değişiklikler config.env\'e yazılacak (önce yedek alınır):',
+      m_try_t: 'Yeni eşiklerle kuru çalıştırma', m_try_b: 'Kaydedilmemiş ayarlarla; hiçbir şey değişmez.', show_pending_all: 'Tümünü göster ({0})'
     },
     en: {
       subtitle: 'Attacker IP grouping · CSF', running: 'Run in progress', idle: 'Ready', last_run: 'last run {0}',
@@ -139,7 +162,28 @@
       l_pending: 'Pending promotion', l_ign: 'Ignored', l_notbanned: 'Not blocked', l_none: 'None', l_perm_single: 'Permanent (single)',
       l_perm_cover: 'Permanent (block)', l_temp: 'Temp', l_nolookup: 'Owner and hostname lookups are off (LOOKUP=0).',
       l_abuse: 'AbuseIPDB', l_bgp: 'bgp.he.net', l_copy: 'Copy', bad_ip: 'Enter a valid IPv4 address.',
-      foot: 'CSF Auto-Group v{0} · signed in as {1}'
+      foot: 'CSF Auto-Group v{0} · signed in as {1}',
+      tab_overview: 'Overview', tab_settings: 'Settings', ev_config: 'Settings changed', ev_test_mail: 'Test email',
+      st_notify: 'Notifications', st_mail: 'Alert email address', st_mail_h: 'Grouping, /16 warning and limit emails go here.',
+      st_lang: 'Language', st_lang_h: 'Language of the log, emails and this panel.', st_test: 'Send test email', st_test_h: 'Sent to the saved address.',
+      st_test_dirty: 'Save the new address first.', st_thr: 'Thresholds', st_thr_h: 'How many single bans trigger an action.',
+      k_THRESHOLD_24: '/24 group ban', h_THRESHOLD_24: 'A /24 is banned once it holds this many permanent singles.',
+      k_THRESHOLD_24_PERMANENT: 'Do not delete at', h_THRESHOLD_24_PERMANENT: 'At this many singles the /24 also gets "do not delete". Can\'t be lower than the /24 threshold.',
+      k_THRESHOLD_16: '/16 warning', h_THRESHOLD_16: 'Emails when this many singles come from at least 2 distinct /24s. Never auto-bans.',
+      k_THRESHOLD_TEMP_24: 'Temp /24', h_THRESHOLD_TEMP_24: 'This many temp singles: 12-hour temp ban the first time, permanent the second.',
+      k_THRESHOLD_TEMP_16: 'Temp /16 warning', h_THRESHOLD_TEMP_16: 'Warning threshold for /16 density in the temp list.',
+      st_sched: 'Schedule', st_sched_h: 'How often cron runs the script.', cron_5: '5 min', cron_10: '10 min', cron_15: '15 min', cron_30: '30 min', cron_0: 'Hourly',
+      st_lookup: 'Lookups', k_LOOKUP: 'Owner and hostname lookups', h_LOOKUP: 'Shows ASN, organisation and hostname in emails and here; CC_IGNORE and csf.rignore checks rely on it.',
+      k_LOOKUP_TIMEOUT: 'DNS timeout (s)', h_LOOKUP_TIMEOUT: 'How long to wait for each query.', st_nodns: 'Neither dig nor host is installed; lookups won\'t work (dnf install bind-utils).',
+      on: 'On', off: 'Off', st_keep: 'Retention', k_SAYAC_RETENTION_DAYS: 'Promotion record kept (days)',
+      h_SAYAC_RETENTION_DAYS: 'A temp-banned /24 that returns within this time becomes permanent.', k_REVIEW_DAYS: 'To review (days)',
+      h_REVIEW_DAYS: 'How long warnings and skips stay on the list.', k_LOG_MAX_LINES: 'Log line limit', h_LOG_MAX_LINES: 'The log is trimmed to this many lines.',
+      st_csf: 'CSF list limits', st_csf_h: 'These are CSF\'s own settings; change them in CSF, not here.',
+      csf_deny: 'Permanent list (DENY_IP_LIMIT)', csf_temp: 'Temp list (DENY_TEMP_IP_LIMIT)', csf_open: 'Open CSF settings',
+      default_v: 'default {0}', range_v: 'a whole number from {0} to {1}', mail_bad: 'Enter a valid email address.',
+      rule_dnd: 'The do not delete threshold can\'t be lower than the /24 threshold.', dirty_n: '{0} unsaved changes', discard: 'Discard',
+      try_save: 'Try before saving', save: 'Save', m_save_t: 'Save settings?', m_save_b: 'These changes will be written to config.env (a backup is kept):',
+      m_try_t: 'Dry run with the new thresholds', m_try_b: 'Uses the unsaved settings; nothing is changed.', show_pending_all: 'Show all ({0})'
     }
   };
   function t(k) {
@@ -219,7 +263,11 @@
       (run || UI.ranOnce ? '<button class="ag-btn ag-btn-ghost" data-act="runlog">' + IC.terminal + t('run_log') + '</button>' : '') +
       '<button class="ag-btn" data-act="dry">' + IC.eye + t('dry') + '</button>' +
       '<button class="ag-btn ag-btn-primary" data-act="run"' + (run ? ' disabled' : '') + '>' + IC.play + t('run') + '</button>' +
-      '</div></div>';
+      '</div></div>' +
+      '<div class="ag-tabs" role="tablist">' + ['overview', 'settings'].map(function (k) {
+        return '<button class="ag-tab' + (UI.tab === k ? ' on' : '') + '" role="tab" aria-selected="' + (UI.tab === k) + '" data-act="tab" data-tab="' + k + '">' +
+          (k === 'overview' ? IC.shield : IC.sliders) + t('tab_' + k) + '</button>';
+      }).join('') + '</div>';
   }
 
   function banner() {
@@ -342,11 +390,11 @@
   var EV_CLASS = {
     add24: 'ag-pill-ok', promote: 'ag-pill-acc', temp24: 'ag-pill-warn', skip_wl: 'ag-pill-info', warn16: 'ag-pill-warn',
     warn16t: 'ag-pill-warn', clean_temp: 'ag-pill-n', manual_ban: 'ag-pill-bad', manual_unban: 'ag-pill-n',
-    manual_forget: 'ag-pill-n', manual_ignore: 'ag-pill-n', manual_unignore: 'ag-pill-n'
+    manual_forget: 'ag-pill-n', manual_ignore: 'ag-pill-n', manual_unignore: 'ag-pill-n', config: 'ag-pill-acc', test_mail: 'ag-pill-n'
   };
   var EV_GROUP = {
     bans: ['add24', 'promote', 'temp24', 'manual_ban'], warn: ['warn16', 'warn16t'], skip: ['skip_wl'],
-    manual: ['manual_ban', 'manual_unban', 'manual_forget', 'manual_ignore', 'manual_unignore'], clean: ['clean_temp']
+    manual: ['manual_ban', 'manual_unban', 'manual_forget', 'manual_ignore', 'manual_unignore', 'config', 'test_mail'], clean: ['clean_temp']
   };
   function evDetail(e) {
     var d = [];
@@ -358,6 +406,8 @@
     if (e.type === 'skip_wl') { d.push(t('n_ip', num(e.n))); if (e.wl) d.push(t('wl', e.wl)); }
     var owner = e.owner || ownerOfIps(e.ips);
     if (owner) d.push(owner);
+    if (e.changes) e.changes.forEach(function (c) { d.push((DICT[LANG]['k_' + c.key] || c.key) + ': ' + (c.from || '—') + ' → ' + c.to); });
+    if (e.to) d.push(e.to);
     if (e.by) d.push(t('by', e.by));
     if (e.until) d.push(t('until', e.until));
     return esc(d.join(' · '));
@@ -390,7 +440,10 @@
   }
 
   function pending() {
-    var rows = S.pending.map(function (p) {
+    var plist = S.pending.slice().sort(function (a, b) { return a.days_left - b.days_left; });
+    var pmore = !UI.pAll && plist.length > 10 ? plist.length : 0;
+    if (pmore) plist = plist.slice(0, 10);
+    var rows = plist.map(function (p) {
       var cidr = p.prefix + '.0/24', o = OWNERS[cidr] || {}, ev = o.ev;
       var left = Math.max(0, p.days_left), pct = Math.max(0, Math.min(100, left * 100 / (S.config.retention || 180)));
       var first = ev && ev.ips && ev.ips[0] ? ev.ips[0].ip : p.prefix + '.1';
@@ -407,7 +460,8 @@
     }).join('');
     return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.hour + t('s_pending') + '</h2><span class="ag-count">' + S.pending.length + '</span>' +
       '<span class="ag-hint" style="width:100%">' + t('s_pending_h') + '</span></div>' +
-      '<div class="ag-card-b">' + (rows || empty('check', t('no_pending'))) + '</div></section>';
+      '<div class="ag-card-b">' + (rows || empty('check', t('no_pending'))) + '</div>' +
+      (pmore ? '<div class="ag-card-f"><button class="ag-btn ag-btn-sm ag-btn-ghost" data-act="pall">' + t('show_pending_all', num(pmore)) + '</button></div>' : '') + '</section>';
   }
 
   function ignored() {
@@ -430,13 +484,107 @@
       kv(t('c_lookup'), c.lookup ? t('c_on') : t('c_off')) + '</dl></section>';
   }
 
+  /* ── Ayarlar sekmesi ───────────────────────────────────────────── */
+  var RANGES = {
+    THRESHOLD_24: [2, 50], THRESHOLD_24_PERMANENT: [2, 100], THRESHOLD_16: [2, 500], THRESHOLD_TEMP_24: [2, 50],
+    THRESHOLD_TEMP_16: [2, 500], LOOKUP_TIMEOUT: [1, 10], SAYAC_RETENTION_DAYS: [7, 730], REVIEW_DAYS: [1, 90], LOG_MAX_LINES: [500, 100000]
+  };
+  var TRY_KEYS = ['THRESHOLD_24', 'THRESHOLD_24_PERMANENT', 'THRESHOLD_16', 'THRESHOLD_TEMP_24', 'THRESHOLD_TEMP_16', 'LOOKUP', 'LOOKUP_TIMEOUT', 'SAYAC_RETENTION_DAYS', 'REVIEW_DAYS'];
+  function cv(k) { return DRAFT[k] !== undefined ? DRAFT[k] : (CFG ? CFG.values[k] : ''); }
+  function changedKeys() { return Object.keys(DRAFT).filter(function (k) { return String(DRAFT[k]) !== String(CFG.values[k]); }); }
+  function cfgErrors() {
+    var e = {};
+    Object.keys(RANGES).forEach(function (k) {
+      var v = String(cv(k)), r = RANGES[k];
+      if (!/^\d{1,6}$/.test(v) || +v < r[0] || +v > r[1]) e[k] = t('range_v', r[0], r[1]);
+    });
+    if (!/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(String(cv('ALERT_MAIL')))) e.ALERT_MAIL = t('mail_bad');
+    if (!e.THRESHOLD_24 && !e.THRESHOLD_24_PERMANENT && +cv('THRESHOLD_24_PERMANENT') < +cv('THRESHOLD_24')) e.THRESHOLD_24_PERMANENT = t('rule_dnd');
+    return e;
+  }
+  function loadCfg() {
+    if (cfgLoading) return;
+    cfgLoading = true;
+    api('config_get').then(function (d) {
+      cfgLoading = false;
+      if (!d || !d.ok) { toast(t('t_err', (d && (d.message || d.error)) || '?'), 'bad'); return; }
+      CFG = d; DRAFT = {}; render();
+    }).catch(function (e) { cfgLoading = false; toast(t('t_err', e.message), 'bad'); });
+  }
+  function field(k, errs) {
+    var r = RANGES[k], changed = CFG && String(cv(k)) !== String(CFG.values[k]);
+    return '<div class="ag-field' + (errs[k] ? ' bad' : '') + (changed ? ' changed' : '') + '"><div class="ag-field-l"><label for="ag-f-' + k + '">' + t('k_' + k) + '</label>' +
+      '<span class="ag-sub">' + t('default_v', CFG.defaults[k]) + '</span></div>' +
+      '<input class="ag-input ag-num" id="ag-f-' + k + '" data-cfg="' + k + '" type="number" inputmode="numeric" min="' + r[0] + '" max="' + r[1] + '" step="1" value="' + esc(cv(k)) + '">' +
+      '<div class="ag-field-h">' + (errs[k] ? esc(errs[k]) : t('h_' + k)) + '</div></div>';
+  }
+  function seg(k, opts) {
+    return '<div class="ag-chips">' + opts.map(function (o) {
+      return '<button type="button" class="ag-chip' + (String(cv(k)) === String(o[0]) ? ' on' : '') + '" data-act="cfgchip" data-k="' + k + '" data-v="' + esc(o[0]) + '">' + esc(o[1]) + '</button>';
+    }).join('') + '</div>';
+  }
+  function saveBar() {
+    if (!CFG) return '';
+    var ch = changedKeys(), errs = cfgErrors(), bad = Object.keys(errs).length > 0;
+    if (!ch.length) return '';
+    var canTry = ch.some(function (k) { return TRY_KEYS.indexOf(k) >= 0; });
+    return '<div class="ag-savebar"><span>' + t('dirty_n', ch.length) + '</span><div class="ag-grow"></div>' +
+      '<button class="ag-btn" data-act="cfgdiscard">' + t('discard') + '</button>' +
+      (canTry ? '<button class="ag-btn" data-act="cfgtry"' + (bad ? ' disabled' : '') + '>' + IC.eye + t('try_save') + '</button>' : '') +
+      '<button class="ag-btn ag-btn-primary" data-act="cfgsave"' + (bad ? ' disabled' : '') + '>' + t('save') + '</button></div>';
+  }
+  function settingsView() {
+    if (!CFG) { loadCfg(); return '<div class="ag-card" style="padding:40px;text-align:center"><span class="ag-spin"></span></div>'; }
+    var errs = cfgErrors(), mailDirty = String(cv('ALERT_MAIL')) !== String(CFG.values.ALERT_MAIL);
+    function card(icon, title, hint, inner) {
+      return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC[icon] + esc(title) + '</h2>' + (hint ? '<span class="ag-hint">' + esc(hint) + '</span>' : '') + '</div>' +
+        '<div class="ag-form">' + inner + '</div></section>';
+    }
+    var notify = '<div class="ag-field' + (errs.ALERT_MAIL ? ' bad' : '') + (mailDirty ? ' changed' : '') + '"><div class="ag-field-l"><label for="ag-f-mail">' + t('st_mail') + '</label></div>' +
+      '<input class="ag-input" id="ag-f-mail" data-cfg="ALERT_MAIL" type="email" autocomplete="off" value="' + esc(cv('ALERT_MAIL')) + '">' +
+      '<div class="ag-field-h">' + (errs.ALERT_MAIL ? esc(errs.ALERT_MAIL) : t('st_mail_h')) + '</div></div>' +
+      '<div class="ag-field"><div class="ag-field-l"><label>' + t('st_lang') + '</label></div>' + seg('MSG_LANG', [['tr', 'Türkçe'], ['en', 'English']]) +
+      '<div class="ag-field-h">' + t('st_lang_h') + '</div></div>' +
+      '<div class="ag-field"><button class="ag-btn" data-act="cfgtest"' + (mailDirty ? ' disabled' : '') + '>' + IC.inbox + t('st_test') + '</button>' +
+      '<div class="ag-field-h">' + (mailDirty ? t('st_test_dirty') : t('st_test_h') + ' ' + esc(CFG.values.ALERT_MAIL)) + '</div></div>';
+    var thr = ['THRESHOLD_24', 'THRESHOLD_24_PERMANENT', 'THRESHOLD_16', 'THRESHOLD_TEMP_24', 'THRESHOLD_TEMP_16'].map(function (k) { return field(k, errs); }).join('');
+    var cronCur = String(CFG.values.CRON_MIN || '');
+    var sched = '<div class="ag-field"><div class="ag-field-l"><label>' + t('st_sched') + '</label></div>' +
+      seg('CRON_MIN', [['*/5', t('cron_5')], ['*/10', t('cron_10')], ['*/15', t('cron_15')], ['*/30', t('cron_30')], ['0', t('cron_0')]]) +
+      '<div class="ag-field-h">' + t('st_sched_h') + (cronCur && ['*/5', '*/10', '*/15', '*/30', '0'].indexOf(cronCur) < 0 ? ' (' + esc(cronCur) + ')' : '') + '</div></div>';
+    var look = '<div class="ag-field"><div class="ag-field-l"><label>' + t('k_LOOKUP') + '</label></div>' + seg('LOOKUP', [['1', t('on')], ['0', t('off')]]) +
+      '<div class="ag-field-h">' + (CFG.dns_tool ? t('h_LOOKUP') : '<span style="color:var(--ag-warn)">' + t('st_nodns') + '</span>') + '</div></div>' + field('LOOKUP_TIMEOUT', errs);
+    var keep = ['SAYAC_RETENTION_DAYS', 'REVIEW_DAYS', 'LOG_MAX_LINES'].map(function (k) { return field(k, errs); }).join('');
+    var csf = '<dl class="ag-kv" style="padding:0">' +
+      '<dt>' + t('csf_deny') + '</dt><dd>' + (CFG.csf.deny_limit ? num(CFG.csf.deny_limit) : '—') + '</dd>' +
+      '<dt>' + t('csf_temp') + '</dt><dd>' + (CFG.csf.temp_limit ? num(CFG.csf.temp_limit) : '—') + '</dd></dl>' +
+      '<a class="ag-btn ag-btn-sm" href="../configserver/csf.cgi" target="_top">' + IC.ext + t('csf_open') + '</a>';
+    return '<div class="ag-settings"><div class="ag-col">' + card('inbox', t('st_notify'), '', notify) + card('clock', t('st_sched'), '', sched) +
+      card('search', t('st_lookup'), '', look) + '</div><div class="ag-col">' + card('sliders', t('st_thr'), t('st_thr_h'), thr) +
+      card('hour', t('st_keep'), '', keep) + card('shield', t('st_csf'), t('st_csf_h'), csf) + '</div></div>' +
+      '<div id="ag-savebar-slot">' + saveBar() + '</div>';
+  }
+  function refreshSaveBar() {
+    var slot = document.getElementById('ag-savebar-slot'); if (slot) slot.innerHTML = saveBar();
+    // alan hata/değişti işaretleri: yeniden çizmeden güncelle (yazarken odak kaybolmasın)
+    var errs = cfgErrors();
+    document.querySelectorAll('#ag-app [data-cfg]').forEach(function (inp) {
+      var k = inp.getAttribute('data-cfg'), f = inp.closest('.ag-field'); if (!f) return;
+      f.classList.toggle('bad', !!errs[k]);
+      f.classList.toggle('changed', String(cv(k)) !== String(CFG.values[k]));
+      var h = f.querySelector('.ag-field-h');
+      if (h) h.textContent = errs[k] ? errs[k] : (k === 'ALERT_MAIL' ? t('st_mail_h') : t('h_' + k));
+    });
+  }
+
   function render() {
     if (!S) return;
     indexOwners();
     var y = window.scrollY;
-    $app.innerHTML = '<div class="ag-wrap">' + head() + banner() + kpis() +
-      '<div class="ag-grid"><div class="ag-col">' + review() + groups() + events() + '</div>' +
-      '<div class="ag-col">' + lookupCard() + pending() + ignored() + config() + '</div></div>' +
+    var body = UI.tab === 'settings' ? settingsView()
+      : kpis() + '<div class="ag-grid"><div class="ag-col">' + review() + groups() + events() + '</div>' +
+        '<div class="ag-col">' + lookupCard() + pending() + ignored() + config() + '</div></div>';
+    $app.innerHTML = '<div class="ag-wrap">' + head() + banner() + body +
       '<div class="ag-foot">' + esc(t('foot', S.version + (BOOT.commit ? ' (' + BOOT.commit + ')' : ''), BOOT.user || 'root')) + '</div></div>';
     $app.setAttribute('aria-busy', 'false');
     window.scrollTo(0, y);
@@ -451,7 +599,7 @@
       if (wasRunning && !d.running) toast(t('t_done'), 'ok');
       wasRunning = d.running;
       schedule(d.running ? 3000 : 60000);
-      if (!busy) render();
+      if (!busy && !(UI.tab === 'settings' && CFG && changedKeys().length)) render();
     }).catch(function (e) {
       if (!S) $app.innerHTML = '<div class="ag-wrap">' + empty('alert', String(e.message || e)) + '</div>';
       schedule(60000);
@@ -544,6 +692,58 @@
   }
 
   var ACTIONS = {
+    tab: function (el) {
+      var k = el.getAttribute('data-tab');
+      if (k === UI.tab) return;
+      if (UI.tab === 'settings' && CFG && changedKeys().length && !window.confirm(t('dirty_n', changedKeys().length))) return;
+      UI.tab = k; history.replaceState(null, '', k === 'settings' ? '#settings' : '#');
+      if (k === 'settings') { CFG = null; DRAFT = {}; }
+      render(); window.scrollTo(0, 0);
+    },
+    pall: function () { UI.pAll = true; render(); },
+    cfgchip: function (el) { DRAFT[el.getAttribute('data-k')] = el.getAttribute('data-v'); render(); },
+    cfgdiscard: function () { DRAFT = {}; render(); },
+    cfgtest: function (el) {
+      el.disabled = true;
+      api('config_test_mail').then(function (r) {
+        el.disabled = false;
+        toast(r.ok ? r.message : t('t_err', r.message || r.error || '?'), r.ok ? 'ok' : 'bad');
+        if (r.ok) refresh();
+      });
+    },
+    cfgtry: function () {
+      var p = {};
+      changedKeys().forEach(function (k) { if (TRY_KEYS.indexOf(k) >= 0) p['set[' + k + ']'] = String(cv(k)); });
+      modal({
+        icon: 'eye', tone: 'acc', title: t('m_try_t'), wide: true, okText: null, cancelText: t('close'),
+        html: '<p>' + t('m_try_b') + '</p><pre class="ag-out" id="ag-try"><span class="ag-spin ag-spin-sm"></span>  ' + esc(t('m_dry_wait')) + '</pre>',
+        onOpen: function (wrap) {
+          api('dry_run', p).then(function (r) {
+            var pre = wrap.querySelector('#ag-try'); if (!pre) return;
+            var out = r.output || r.message || r.error || '';
+            pre.innerHTML = colorize(out) + (/\[dry-run\]|\[gönderilmeyecek|\[email not sent/.test(out) ? '' : '\n<span class="q">' + esc(t('m_dry_none')) + '</span>');
+          });
+        }
+      });
+    },
+    cfgsave: function () {
+      var ch = changedKeys();
+      var list = '<ul class="ag-changes">' + ch.map(function (k) {
+        var label = k === 'ALERT_MAIL' ? t('st_mail') : k === 'MSG_LANG' ? t('st_lang') : k === 'CRON_MIN' ? t('st_sched') : t('k_' + k);
+        return '<li><b>' + esc(label) + '</b><span class="ag-mono">' + esc(CFG.values[k] || '—') + '</span> → <span class="ag-mono">' + esc(cv(k)) + '</span></li>';
+      }).join('') + '</ul>';
+      modal({ icon: 'sliders', tone: 'acc', title: t('m_save_t'), html: '<p>' + t('m_save_b') + '</p>' + list, okText: t('save') }).then(function (m) {
+        if (!m.ok) return;
+        var p = {};
+        ch.forEach(function (k) { p['v[' + k + ']'] = String(cv(k)); });
+        api('config_set', p).then(function (r) {
+          if (!r.ok) { toast(t('t_err', r.message || r.error || '?'), r.code === 3 ? 'bad' : 'bad'); return; }
+          toast(r.message, 'ok');
+          CFG = null; DRAFT = {};
+          refresh();           // dil değiştiyse panel de yeni dile geçer
+        });
+      });
+    },
     toggle: function (el) { var k = el.getAttribute('data-key'); UI.open[k] = !UI.open[k]; render(); },
     gf: function (el) { UI.gf = el.getAttribute('data-f'); UI.gLimit = 40; render(); },
     gall: function () { UI.gLimit = 1e6; render(); },
@@ -724,6 +924,8 @@
     if (ev.target.id === 'ag-lk') { ev.preventDefault(); openDrawer((document.getElementById('ag-lk-ip').value || '').trim()); }
   });
   $app.addEventListener('input', function (ev) {
+    var ck = ev.target.getAttribute && ev.target.getAttribute('data-cfg');
+    if (ck && CFG) { DRAFT[ck] = ev.target.value.trim(); refreshSaveBar(); return; }
     if (ev.target.id === 'ag-gq') {
       UI.gq = ev.target.value; UI.gLimit = 40;
       var b = document.getElementById('ag-groups-b'); if (b) b.innerHTML = groupRows();
