@@ -39,7 +39,7 @@
 # ============================================================================
 set -o pipefail
 
-VERSION="1.6.3"   # sürüm — başlangıç log satırında görünür
+VERSION="1.6.4"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -634,6 +634,10 @@ deny_prefixes() {   # csf.deny'deki grupların ve tekillerin /24 önekleri (tekr
     for c in "${!SINGLE_NOTE[@]}"; do echo "${c%.*}"; done
     for i in "${!DC_TXT[@]}"; do c="${DC_TXT[i]%/*}"; echo "${c%.*}"; done
 }
+pending_prefixes() { # sayaçta izlenen /24 önekleri → stdout
+    [ -r "$SAYAC_FILE" ] && awk '$1 ~ /^[0-9]+\.[0-9]+\.[0-9]+$/ { print $1 }' "$SAYAC_FILE"
+    return 0
+}
 backfill_owners() { # sahibi bilinmeyen blokları bu turda sorgula (en fazla BACKFILL_MAX)
     local p n=0
     [ "$LOOK_OK" = 1 ] || return 0
@@ -642,6 +646,7 @@ backfill_owners() { # sahibi bilinmeyen blokları bu turda sorgula (en fazla BAC
     # bloklar, en son tekiller. csf.deny'de başka kaynaklı çok sayıda CIDR olabiliyor (sunucuda
     # ölçüldü: 31 grup varken bir ASN'de 36 blok) — onlar grupların önüne geçmesin.
     order=$( { for c in "${AGG[@]}"; do c="${c%/*}"; echo "${c%.*}"; done
+               pending_prefixes
                for i in "${!DC_TXT[@]}"; do c="${DC_TXT[i]%/*}"; echo "${c%.*}"; done
                for c in "${!SINGLE_NOTE[@]}"; do echo "${c%.*}"; done; } | awk '!seen[$0]++')
     for p in $order; do
@@ -930,7 +935,7 @@ do_status() {
     last=$(grep '"type":"run"' "$EVENTS_FILE" 2>/dev/null | tail -1)
 
     # Aktif grup banları (kalıcı + geçici)
-    local groups=() gtext=()
+    local groups=() gtext=() ghist=""
     while IFS= read -r line; do
         tok="${line%%[[:space:]]*}"
         [[ "$tok" =~ $CIDR4_RE && "$tok" == */* ]] || continue
@@ -940,6 +945,7 @@ do_status() {
         n=0; [[ "$line" =~ $re_n ]] && n="${BASH_REMATCH[1]}"
         added=0; [[ "$line" =~ $re_d ]] && added=$(LC_ALL=C date -d "${BASH_REMATCH[1]}" +%s 2>/dev/null || echo 0)
         groups+=("{\"cidr\":\"$tok\",\"kind\":\"$kind\",\"dnd\":$dnd,\"n\":$n,\"added\":$added,\"ttl\":0}")
+        [ "$added" -gt 0 ] && ghist+="$added $kind $tok"$'\n'
         gtext+=("$(printf '%-18s %-9s %s' "$tok" "$kind" "$([ "$dnd" = true ] && echo 'do not delete')")")
     done < "$DENY_FILE"
     for c in "${!TG_TTL[@]}"; do
@@ -976,6 +982,27 @@ do_status() {
             rtext+=("$(printf '%-18s %s · %s' "$c" "$ty" "$(date -d "@$t" '+%d.%m %H:%M')")")
         done < <(tac "$EVENTS_FILE")
     fi
+    # Olay kaydı başlamadan önceki uyarılar ve atlamalar sayaçta tarihiyle duruyor (IP ayrıntısı yok)
+    if [ -r "$SAYAC_FILE" ]; then
+        local rsince k u
+        rsince=$(date -d "$REVIEW_DAYS days ago" +%Y-%m-%d)
+        while read -r k u; do
+            [[ "$u" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || continue
+            [[ "$u" < "$rsince" ]] && continue
+            case "$k" in
+                WARN16_*)      ty=warn16;  c="${k#WARN16_}.0.0/16" ;;
+                WARN_TEMP16_*) ty=warn16t; c="${k#WARN_TEMP16_}.0.0/16" ;;
+                WLSKIP_*)      ty=skip_wl; c="${k#WLSKIP_}.0/24" ;;
+                *) continue ;;
+            esac
+            [[ "$c" =~ $CIDR4_RE ]] || continue
+            [ -n "${seen[$c]}" ] && continue; seen[$c]=1
+            ign_until "$c" && continue
+            cidr_range "$c" && perm_covers "$R_LO" "$R_HI" && continue
+            review+=("{\"t\":$(date -d "$u" +%s),\"type\":\"$ty\",\"cidr\":\"$c\",\"day\":\"$u\",\"hist\":true}")
+            rtext+=("$(printf '%-18s %s · %s' "$c" "$ty" "$(date -d "$u" '+%d.%m')")")
+        done < <(sort -k2,2r "$SAYAC_FILE")        # blok başına en yeni tarih
+    fi
 
     # Yoksayılanlar
     local ignored=() itext=()
@@ -994,7 +1021,7 @@ do_status() {
     # Sahipler (önbellekten), en çok saldıran ağlar, son 30 günün günlük etkinliği
     owners_load
     local owners=() pfx_seen=() dstart daily=""
-    for p in $(deny_prefixes | sort -u); do
+    for p in $( { deny_prefixes; pending_prefixes; } | sort -u); do
         [ -n "${OWN_A[$p]}" ] || continue
         jstr "${OWN_N[$p]}"; owners+=("\"$p\":[\"${OWN_A[$p]}\",\"${OWN_C[$p]}\",$REPLY]")
     done
@@ -1026,19 +1053,41 @@ do_status() {
         unset IFS
     fi
     dstart=$(date -d "$(date -d '29 days ago' +%Y-%m-%d) 00:00" +%s)
-    if [ -r "$EVENTS_FILE" ]; then
-        daily=$(awk -v s="$dstart" '
-            match($0, /"t":[0-9]+/) { t = substr($0, RSTART + 4, RLENGTH - 4) + 0 } t < s { next }
-            match($0, /"type":"[a-z0-9_]+"/) { ty = substr($0, RSTART + 8, RLENGTH - 9); d = int((t - s) / 86400); if (d < 0 || d > 29) next
-                if (ty == "add24" || ty == "manual_ban") A[d]++; else if (ty == "temp24") T[d]++; else if (ty == "promote") P[d]++
-                else if (ty == "warn16" || ty == "warn16t") W[d]++; else if (ty == "skip_wl") S[d]++ }
-            END { split("A T P W S", keys, " ")
-                  for (k = 1; k <= 5; k++) { line = ""; for (d = 0; d < 30; d++) { v = 0
-                      if (keys[k] == "A") v = A[d] + 0; if (keys[k] == "T") v = T[d] + 0; if (keys[k] == "P") v = P[d] + 0
-                      if (keys[k] == "W") v = W[d] + 0; if (keys[k] == "S") v = S[d] + 0
-                      line = line (d ? "," : "") v }
-                    printf "\"%s\":[%s]%s", keys[k], line, (k < 5 ? "," : "") } }' "$EVENTS_FILE")
-    fi
+    # Günlük etkinlik: olay kaydı + olay kaydı başlamadan önceki günler için csf.deny'deki grup
+    # tarihleri ve sayaçtaki tarihli kayıtlar. Aynı olay iki kaynakta da varsa (tür + blok + gün)
+    # bir kez sayılır.
+    local dlist="" di dfiles=()
+    for di in $(seq 29 -1 0); do dlist+="${dlist:+,}$(date -d "$di days ago" +%Y-%m-%d)"; done
+    [ -r "$EVENTS_FILE" ] && dfiles+=("$EVENTS_FILE")
+    [ -r "$SAYAC_FILE" ] && dfiles+=("$SAYAC_FILE")
+    daily=$(printf '%s' "$ghist" | awk -v s="$dstart" -v dl="$dlist" -v evf="$EVENTS_FILE" -v syf="$SAYAC_FILE" '
+        BEGIN { nd = split(dl, D, ","); for (k = 1; k <= nd; k++) DI[D[k]] = k - 1 }
+        function put(L, key, d) {
+            if (d < 0 || d > 29 || ((L, key, d) in U)) return
+            U[L, key, d] = 1; C[substr(L, 1, 1), d]++
+        }
+        FILENAME == evf {
+            if (!match($0, /"t":[0-9]+/)) next; t = substr($0, RSTART + 4, RLENGTH - 4) + 0; if (t < s) next
+            if (!match($0, /"type":"[a-z0-9_]+"/)) next; ty = substr($0, RSTART + 8, RLENGTH - 9)
+            c = ""; if (match($0, /"cidr":"[0-9.\/]+"/)) c = substr($0, RSTART + 8, RLENGTH - 9)
+            L = (ty == "add24" || ty == "manual_ban") ? "A" : ty == "promote" ? "P" : ty == "temp24" ? "T" : \
+                ty == "warn16" ? "W1" : ty == "warn16t" ? "W2" : ty == "skip_wl" ? "S" : ""
+            if (L != "") put(L, c, int((t - s) / 86400))
+            next
+        }
+        FILENAME == syf {
+            if (!($2 in DI)) next; d = DI[$2]
+            if ($1 ~ /^[0-9]+\.[0-9]+\.[0-9]+$/) put("T", $1 ".0/24", d)
+            else if ($1 ~ /^WARN16_/)      put("W1", substr($1, 8) ".0.0/16", d)
+            else if ($1 ~ /^WARN_TEMP16_/) put("W2", substr($1, 13) ".0.0/16", d)
+            else if ($1 ~ /^WLSKIP_/)      put("S", substr($1, 8) ".0/24", d)
+            next
+        }
+        NF == 3 { put($2 == "promoted" ? "P" : "A", $3, int(($1 - s) / 86400)) }   # grup: eklenme tür cidr
+        END { split("A T P W S", keys, " ")
+              for (k = 1; k <= 5; k++) { line = ""
+                  for (d = 0; d < 30; d++) line = line (d ? "," : "") (C[keys[k], d] + 0)
+                  printf "\"%s\":[%s]%s", keys[k], line, (k < 5 ? "," : "") } }' "${dfiles[@]}" -)
     [ -z "$daily" ] && daily='"A":[],"T":[],"P":[],"W":[],"S":[]'
 
     if [ "$JSON" = 1 ]; then

@@ -123,7 +123,7 @@
       since_visit: 'Son ziyaretinden beri ({0}):', sn_add: '{0} grup banı', sn_temp: '{0} geçici grup', sn_warn: '{0} /16 uyarısı',
       sn_skip: '{0} beyaz liste atlaması', show_new: 'Göster', e_new: 'Son ziyaretten beri', ch_title: 'Son 30 gün', ch_total: '{0} olay',
       ch_add: 'Grup banı', ch_promote: 'Kalıcıya alındı', ch_temp: 'Geçici', ch_warn: '/16 uyarısı', ch_skip: 'Beyaz liste',
-      ch_empty: 'Son 30 günde kayıt yok; grafik olay kaydı biriktikçe dolacak.', ipcard: 'IP kartı', col_block: 'Blok', col_owner: 'Sahip', col_since: 'Başlangıç', col_left: 'Kalan',
+      ch_empty: 'Son 30 günde kayıt yok; grafik olay kaydı biriktikçe dolacak.', ipcard: 'IP kartı', col_block: 'Blok', col_owner: 'Sahip', col_since: 'Başlangıç', col_left: 'Kalan', col_state: 'Durum', left_short: '{0} kaldı', r_hist: 'olay kaydı başlamadan önce · IP ayrıntısı yok',
       col_singles: 'Tekil', col_added: 'Eklendi', of_n: '{0}–{1} / {2}', s_asn: 'En çok saldıran ağlar',
       s_asn_h: 'Grup banı ve tekil bana göre sıralı; csf.deny\'deki başka kaynaklı bloklar ayrıca belirtilir · {0} bloğun sahibi biliniyor', p_g: '{0} grup', p_b: '+{0} blok başka kaynaklı', p_t: '{0} tekil', p_bn: '{0} blok',
       at_atk: 'Saldıranlar', at_blk: 'Diğer bloklar', blk_h: 'csf.deny\'de CSF Auto-Group dışından eklenmiş aralıklar (elle ya da başka araçla); zaten engelliler.',
@@ -215,7 +215,7 @@
       since_visit: 'Since your last visit ({0}):', sn_add: '{0} group bans', sn_temp: '{0} temp groups', sn_warn: '{0} /16 warnings',
       sn_skip: '{0} whitelist skips', show_new: 'Show', e_new: 'Since last visit', ch_title: 'Last 30 days', ch_total: '{0} events',
       ch_add: 'Group ban', ch_promote: 'Made permanent', ch_temp: 'Temp', ch_warn: '/16 warning', ch_skip: 'Whitelist',
-      ch_empty: 'Nothing in the last 30 days; the chart fills as the event log grows.', ipcard: 'IP card', col_block: 'Block', col_owner: 'Owner', col_since: 'Since', col_left: 'Left',
+      ch_empty: 'Nothing in the last 30 days; the chart fills as the event log grows.', ipcard: 'IP card', col_block: 'Block', col_owner: 'Owner', col_since: 'Since', col_left: 'Left', col_state: 'State', left_short: '{0} left', r_hist: 'before the event log started · no IP details',
       col_singles: 'Singles', col_added: 'Added', of_n: '{0}–{1} of {2}', s_asn: 'Top attacking networks',
       s_asn_h: 'Ranked by group bans and single bans; other ranges in csf.deny are noted separately · owner known for {0} blocks', p_g: '{0} groups', p_b: '+{0} blocks from other sources', p_t: '{0} singles', p_bn: '{0} blocks',
       at_atk: 'Attackers', at_blk: 'Other blocks', blk_h: 'Ranges in csf.deny added outside CSF Auto-Group (by hand or other tools); already blocked.',
@@ -448,24 +448,25 @@
     if (!S.review.length) {
       return '<div class="ag-okbar">' + IC.check + '<b>' + t('no_review') + '</b><span>' + t('k_review_m', S.config.review_days) + '</span></div>';
     }
-    var items = S.review.map(function (e) {
-      var key = 'r:' + e.cidr, open = UI.open[key], is16 = /\/16$/.test(e.cidr);
+    var items = S.review.slice().sort(function (a, b) { return b.t - a.t; }).map(function (e) {
+      var key = 'r:' + e.cidr, open = UI.open[key], is16 = /\/16$/.test(e.cidr), hasIps = e.ips && e.ips.length;
       var pill = e.type === 'skip_wl' ? '<span class="ag-pill ag-pill-info">' + t('ev_skip_wl') + '</span>'
         : '<span class="ag-pill ag-pill-warn">' + t('ev_' + e.type) + '</span>';
-      var meta = is16 ? [t('n_ip', num(e.n)), t('n_subnets', num(e.subnets))] : [t('n_ip', num(e.n))];
+      var meta = e.hist ? [] : is16 ? [t('n_ip', num(e.n)), t('n_subnets', num(e.subnets))] : [t('n_ip', num(e.n))];
       var owner = e.owner || ownerOfIps(e.ips) || ownerOf(e.cidr).label;
       if (owner) meta.push(esc(owner));
       if (e.wl) meta.push(esc(t('wl', e.wl)));
-      var first = e.ips && e.ips[0] ? e.ips[0].ip : '';
-      var acts = '<button class="ag-btn ag-btn-sm" data-act="toggle" data-key="' + key + '">' + (open ? t('hide') : t('ips')) + '</button>';
+      if (e.hist) meta.push(t('r_hist'));
+      var first = hasIps ? e.ips[0].ip : e.cidr.replace(/\/\d+$/, '').replace(/\.0$/, '.1');
+      var acts = hasIps ? '<button class="ag-btn ag-btn-sm" data-act="toggle" data-key="' + key + '">' + (open ? t('hide') : t('ips')) + '</button>' : '';
       if (is16) acts += '<button class="ag-btn ag-btn-sm ag-btn-danger" data-act="ban16" data-t="' + esc(pfx(e.cidr)) + '">' + t('ban16') + '</button>';
       else acts += '<button class="ag-btn ag-btn-sm ag-btn-danger" data-act="banforce" data-t="' + esc(pfx(e.cidr)) + '" data-wl="' + esc(e.wl || '') + '">' + t('ban_anyway') + '</button>';
       acts += menu('rm:' + e.cidr, [{ act: 'ignore', label: t('ignore'), icon: 'mute', attrs: 'data-c="' + esc(e.cidr) + '"' },
                                     { act: 'ipcard', label: t('ipcard'), icon: 'search', attrs: 'data-ip="' + esc(first) + '"' }]);
       return '<div class="ag-item" data-row="' + esc(e.cidr) + '"><div class="ag-row">' + pill +
-        '<div class="ag-row-main"><div class="ag-row-t">' + newDot(e.t) + '<span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(e.cidr) + '</span></div>' +
+        '<div class="ag-row-main"><div class="ag-row-t">' + newDot(e.hist ? 0 : e.t) + '<span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(e.cidr) + '</span></div>' +
         '<div class="ag-row-s">' + meta.join(' · ') + '</div></div>' +
-        '<div class="ag-row-x">' + rel(e.t) + '</div><div class="ag-row-a">' + acts + '</div></div>' +
+        '<div class="ag-row-x">' + (e.hist ? esc(e.day.slice(8, 10) + '.' + e.day.slice(5, 7)) : rel(e.t)) + '</div><div class="ag-row-a">' + acts + '</div></div>' +
         (open ? ipTable(e.ips, e.total) : '') + '</div>';
     }).join('');
     return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.alert + t('s_review') + '</h2>' +
@@ -476,18 +477,22 @@
 
   /* Aktif grup banları: sıralanabilir, sayfalı tablo */
   var PAGE = 15;
+  function kindMatch(g, f) {
+    if (f === 'perm') return g.kind === 'perm' || g.kind === 'promoted';
+    if (f === 'dnd') return g.dnd;
+    if (f === 'temp') return g.kind === 'temp';
+    if (f === 'manual') return g.kind === 'manual';
+    return true;
+  }
   function groupMatches(g) {
-    var f = UI.gf;
-    if (f === 'perm' && !(g.kind === 'perm' || g.kind === 'promoted')) return false;
-    if (f === 'dnd' && !g.dnd) return false;
-    if (f === 'temp' && g.kind !== 'temp') return false;
-    if (f === 'manual' && g.kind !== 'manual') return false;
+    if (!kindMatch(g, UI.gf)) return false;
     if (UI.gq) {
       var o = ownerOf(g.cidr), hay = (g.cidr + ' ' + (o.label || '') + ' ' + (o.cc || '')).toLowerCase();
       if (hay.indexOf(UI.gq.toLowerCase()) < 0) return false;
     }
     return true;
   }
+  var KIND_ORD = { manual: 1, promoted: 2, perm: 3, temp: 4 };
   function ipNum(c) { var p = String(c).split('/')[0].split('.'); return ((+p[0] * 256 + +p[1]) * 256 + +p[2]) * 256 + +p[3]; }
   function groupSorted() {
     var s = UI.gs, d = UI.gd;
@@ -496,6 +501,7 @@
       if (s === 'cidr') { x = ipNum(a.cidr); y = ipNum(b.cidr); }
       else if (s === 'owner') { x = (ownerOf(a.cidr).label || '~').toLowerCase(); y = (ownerOf(b.cidr).label || '~').toLowerCase(); }
       else if (s === 'n') { x = a.n || 0; y = b.n || 0; }
+      else if (s === 'kind') { x = KIND_ORD[a.kind] || 9; y = KIND_ORD[b.kind] || 9; }
       else { x = a.kind === 'temp' ? 9e12 : (a.added || 0); y = b.kind === 'temp' ? 9e12 : (b.added || 0); }
       return x < y ? -d : x > y ? d : 0;
     });
@@ -515,15 +521,14 @@
       var o = ownerOf(g.cidr), ev = (OWNERS[g.cidr] || {}).ev, key = 'g:' + g.cidr, open = UI.open[key];
       var kindCls = { perm: 'ag-pill-n', promoted: 'ag-pill-acc', temp: 'ag-pill-warn', manual: 'ag-pill-bad' }[g.kind] || 'ag-pill-n';
       var first = ev && ev.ips && ev.ips[0] ? ev.ips[0].ip : g.cidr.replace(/\/\d+$/, '').replace(/\.0$/, '.1');
-      var when = g.kind === 'temp' ? '<span class="ag-pill ag-pill-warn">' + t('ttl_left', dur(g.ttl)) + '</span>' : (g.added ? rel(g.added) : '—');
+      var when = g.kind === 'temp' ? '<span class="ag-t-warn">' + t('left_short', dur(g.ttl)) + '</span>' : (g.added ? rel(g.added) : '—');
       var items = [];
       if (ev && ev.ips && ev.ips.length) items.push({ act: 'toggle', label: open ? t('hide') : t('ips'), icon: 'list', attrs: 'data-key="' + key + '"' });
       items.push({ act: 'ipcard', label: t('ipcard'), icon: 'search', attrs: 'data-ip="' + esc(first) + '"' });
       items.push({ act: 'unban', label: t('unban'), icon: 'x', danger: true, attrs: 'data-c="' + esc(g.cidr) + '" data-dnd="' + (g.dnd ? 1 : 0) + '" data-kind="' + esc(g.kind) + '"' });
       return '<div class="ag-item" data-row="' + esc(g.cidr) + '"><div class="ag-tr">' +
-        '<div class="ag-td ag-td-main">' + newDot(g.added) + '<span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(g.cidr) + '</span>' +
-        '<span class="ag-pill ' + kindCls + '">' + t('kind_' + g.kind) + '</span>' +
-        (g.dnd ? '<span class="ag-lock" title="do not delete">' + IC.lock + '</span>' : '') + '</div>' +
+        '<div class="ag-td ag-td-main">' + newDot(g.added) + '<span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(g.cidr) + '</span></div>' +
+        '<div class="ag-td"><span class="ag-pill ' + kindCls + '"' + (g.dnd ? ' title="do not delete"' : '') + '>' + (g.dnd ? IC.lock : '') + t('kind_' + g.kind) + '</span></div>' +
         '<div class="ag-td ag-td-own" title="' + esc(o.label || '') + '">' + (o.asn ? flag(o.cc) + '<span class="ag-asn">AS' + esc(o.asn) + '</span><span class="ag-org">' + esc(o.name || '') + '</span>' : '<span class="ag-muted">—</span>') + '</div>' +
         '<div class="ag-td ag-num-c">' + (g.n ? num(g.n) : '—') + '</div>' +
         '<div class="ag-td ag-when">' + when + '</div>' +
@@ -533,15 +538,21 @@
     var pager = pages > 1 ? '<div class="ag-pager"><span>' + t('of_n', from + 1, from + shown.length, list.length) + '</span>' +
       '<button class="ag-iconbtn" data-act="gpage" data-d="-1"' + (UI.gp ? '' : ' disabled') + ' aria-label="‹">‹</button>' +
       '<button class="ag-iconbtn" data-act="gpage" data-d="1"' + (UI.gp < pages - 1 ? '' : ' disabled') + ' aria-label="›">›</button></div>' : '';
-    return '<div class="ag-thead">' + th('cidr', t('col_block'), 'ag-td-main') + th('owner', t('col_owner'), 'ag-td-own') +
-      th('n', t('col_singles'), 'ag-num-c') + th('added', t('col_added'), 'ag-when') + '<span></span></div>' + rows + pager;
+    return '<div class="ag-thead">' + th('cidr', t('col_block'), 'ag-td-main') + th('kind', t('col_state')) + th('owner', t('col_owner'), 'ag-td-own') +
+      th('n', t('col_singles'), 'ag-num-c ag-th-r') + th('added', t('col_added'), 'ag-when') + '<span></span></div>' + rows + pager;
+  }
+  function groupCount() {
+    var n = S.groups.filter(groupMatches).length;
+    return n === S.groups.length ? num(n) : num(n) + ' / ' + num(S.groups.length);
   }
   function groups() {
     var chips = ['all', 'perm', 'dnd', 'temp', 'manual'].map(function (f) {
-      return '<button class="ag-chip' + (UI.gf === f ? ' on' : '') + '" data-act="gf" data-f="' + f + '">' + t('f_' + f) + '</button>';
+      var n = S.groups.filter(function (g) { return kindMatch(g, f); }).length;
+      return '<button class="ag-chip' + (UI.gf === f ? ' on' : '') + (n ? '' : ' zero') + '" data-act="gf" data-f="' + f + '">' + t('f_' + f) +
+        '<span class="ag-chip-n">' + num(n) + '</span></button>';
     }).join('');
     return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.ban + t('s_groups') + '</h2>' +
-      '<span class="ag-count">' + S.groups.length + '</span><div class="ag-tools"><div class="ag-chips">' + chips + '</div>' +
+      '<span class="ag-count" id="ag-gcount">' + groupCount() + '</span><div class="ag-tools"><div class="ag-chips">' + chips + '</div>' +
       '<input class="ag-input" id="ag-gq" type="search" placeholder="' + esc(t('g_search')) + '" value="' + esc(UI.gq) + '" style="width:180px"></div></div>' +
       '<div class="ag-card-b ag-tbl" id="ag-groups-b">' + groupRows() + '</div></section>';
   }
@@ -576,8 +587,12 @@
     var list = UI.ef === 'all' ? all : UI.ef === 'new' ? all.filter(function (e) { return isNew(e.t) && NEW_TYPES.indexOf(e.type) >= 0; })
       : all.filter(function (e) { return EV_GROUP[UI.ef].indexOf(e.type) >= 0; });
     var shown = list.slice(0, UI.evLimit);
+    var evCount = function (f) {
+      return f === 'all' ? all.length : f === 'new' ? all.filter(function (e) { return isNew(e.t) && NEW_TYPES.indexOf(e.type) >= 0; }).length
+        : all.filter(function (e) { return EV_GROUP[f].indexOf(e.type) >= 0; }).length;
+    };
     var opts = (SEEN0 > 0 ? ['all', 'new'] : ['all']).concat(['bans', 'warn', 'skip', 'manual', 'clean']).map(function (f) {
-      return '<option value="' + f + '"' + (UI.ef === f ? ' selected' : '') + '>' + t('e_' + f) + '</option>';
+      return '<option value="' + f + '"' + (UI.ef === f ? ' selected' : '') + '>' + t('e_' + f) + ' (' + num(evCount(f)) + ')</option>';
     }).join('');
     var rows = shown.map(function (e, i) {
       var key = 'e:' + e.t + ':' + e.type + ':' + (e.cidr || i), open = UI.open[key], has = e.ips && e.ips.length;
@@ -675,8 +690,8 @@
       var urg = left < 7 ? ' bad' : left < 30 ? ' warn' : '';
       var first = ev && ev.ips && ev.ips[0] ? ev.ips[0].ip : p.prefix + '.1';
       return '<div class="ag-item" data-row="' + esc(cidr) + '"><div class="ag-tr ag-tr-p">' +
-        '<div class="ag-td ag-td-main"><span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(cidr) + '</span>' +
-        (p.temp_ttl > 0 ? '<span class="ag-pill ag-pill-warn">' + t('ttl_left', dur(p.temp_ttl)) + '</span>' : '') + '</div>' +
+        '<div class="ag-td ag-td-stack"><span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(cidr) + '</span>' +
+        (p.temp_ttl > 0 ? '<span class="ag-t-warn">' + t('ttl_left', dur(p.temp_ttl)) + '</span>' : '') + '</div>' +
         '<div class="ag-td ag-td-own" title="' + esc(o.label || '') + '">' + (o.asn ? flag(o.cc) + '<span class="ag-asn">AS' + esc(o.asn) + '</span><span class="ag-org">' + esc(o.name || '') + '</span>' : '<span class="ag-muted">—</span>') + '</div>' +
         '<div class="ag-td ag-when ag-td-since">' + esc(p.since) + '</div>' +
         '<div class="ag-td"><div class="ag-left' + urg + '"><div class="ag-days"><i style="width:' + pct + '%"></i></div><span>' + t('days_left', left) + '</span></div></div>' +
@@ -1203,6 +1218,7 @@
     if (ev.target.id === 'ag-gq') {
       UI.gq = ev.target.value; UI.gLimit = 40; UI.gp = 0;
       var b = document.getElementById('ag-groups-b'); if (b) b.innerHTML = groupRows();
+      var gc = document.getElementById('ag-gcount'); if (gc) gc.textContent = groupCount();
     }
   });
   $app.addEventListener('change', function (ev) {

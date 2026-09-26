@@ -17,7 +17,7 @@ overflowing its line limit, and you get an email when it nears that limit.
 Works on **any CSF server** (cPanel or not). No dependencies beyond CSF and a
 working `mail` command (`dig` or `host` for the optional lookups below).
 
-**Version 1.6.3** · bilingual logs, alert emails and WHM plugin (English /
+**Version 1.6.4** · bilingual logs, alert emails and WHM plugin (English /
 Türkçe, set `MSG_LANG`). The running version is printed on each run's first log
 line.
 
@@ -119,11 +119,14 @@ What it shows:
 - **Since your last visit** — what happened since you last opened the page;
   new rows carry a dot.
 - **Last 30 days** — a daily chart of group bans, blocks made permanent, temp groups,
-  `/16` warnings and whitelist skips.
+  `/16` warnings and whitelist skips. Days before the event log existed are
+  filled from the dated records in the counter file and `csf.deny`.
 - **To review** — `/16` warnings and whitelist-skipped `/24`s from the last 7
-  days, with every IP's hostname, owner and ban reason.
+  days, with every IP's hostname, owner and ban reason (older items recovered
+  from the counter file are listed without IP details).
 - **Active group bans** — a sortable, paged table with each block's owner
   (ASN, organisation, country), searchable by CIDR, AS number or organisation.
+  Each filter shows its count.
   Blocks that became permanent on a second attack are tagged *repeat*.
 - **Watched** — `/24`s that were temp-banned once. If one comes back, it
   becomes permanent + `do not delete`. A paged table under the group bans,
