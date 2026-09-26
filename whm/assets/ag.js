@@ -12,7 +12,7 @@
   var UPD = null;               // güncelleme kontrolü sonucu
   var LANG = 'en';
   var CLOCK = 0;                // sunucu saati - istemci saati (sn)
-  var UI = { gf: 'all', gq: '', ef: 'all', open: {}, evLimit: 40, gLimit: 40, commits: false, pAll: false, gs: 'added', gd: -1, gp: 0, menu: null,
+  var UI = { gf: 'all', gq: '', ef: 'all', open: {}, evLimit: 40, gLimit: 40, commits: false, pAll: false, gs: 'added', gd: -1, gp: 0, menu: null, at: 'atk',
              tab: location.hash === '#settings' ? 'settings' : 'overview' };
   var CFG = null, DRAFT = {}, cfgLoading = false;
   var pollTimer = null, wasRunning = false, busy = false;
@@ -125,7 +125,11 @@
       ch_add: 'Grup banı', ch_promote: 'Terfi', ch_temp: 'Geçici', ch_warn: '/16 uyarısı', ch_skip: 'Beyaz liste',
       ch_empty: 'Son 30 günde kayıt yok; grafik olay kaydı biriktikçe dolacak.', ipcard: 'IP kartı', col_block: 'Blok', col_owner: 'Sahip',
       col_singles: 'Tekil', col_added: 'Eklendi', of_n: '{0}–{1} / {2}', s_asn: 'En çok saldıran ağlar',
-      s_asn_h: 'Grup banı ve tekil bana göre sıralı; csf.deny\'deki başka kaynaklı bloklar ayrıca belirtilir · {0} bloğun sahibi biliniyor', p_g: '{0} grup', p_b: '+{0} blok başka kaynaklı', p_t: '{0} tekil', asn_denied: 'CSF\'de zaten engelli',
+      s_asn_h: 'Grup banı ve tekil bana göre sıralı; csf.deny\'deki başka kaynaklı bloklar ayrıca belirtilir · {0} bloğun sahibi biliniyor', p_g: '{0} grup', p_b: '+{0} blok başka kaynaklı', p_t: '{0} tekil', p_bn: '{0} blok',
+      at_atk: 'Saldıranlar', at_blk: 'Diğer bloklar', blk_h: 'csf.deny\'de CSF Auto-Group dışından eklenmiş aralıklar (elle ya da başka araçla); zaten engelliler.',
+      blk_empty: 'csf.deny\'de başka kaynaklı aralık yok (ya da sahipleri henüz bilinmiyor).',
+      im_h: 'Imunify360\'ın bu sunucuda kendi engellediği IP\'ler (merkezi liste değil) · {0} IP, {1} tanesinin sahibi biliniyor. Yalnızca bilgi; CSF\'ye ban yazılmaz.',
+      im_n: '{0} IP', im_empty: 'Imunify360 yerel kara listesi boş.', asn_denied: 'CSF\'de zaten engelli',
       asn_hint: 'ASN engelleme önerisi', asn_filling: 'Sahip bilgileri toplanıyor; her turda 50 blok sorgulanır.',
       asn_nolookup: 'Sahip sorgusu kapalı (Ayarlar → Sorgular).', m_asn_t: 'AS{0} ağını CSF\'de toptan engellemek',
       m_asn_b: '{1} ağından {0} ayrı /24 grup banı eklendi; her biri aynı blokta en az 3 saldırgan demek. Saldırı sürekli bu ağdan geliyorsa, ağın tamamını CSF\'nin kendi ülke/ASN engeliyle kapatmak daha kalıcı olur.',
@@ -213,7 +217,11 @@
       ch_add: 'Group ban', ch_promote: 'Promoted', ch_temp: 'Temp', ch_warn: '/16 warning', ch_skip: 'Whitelist',
       ch_empty: 'Nothing in the last 30 days; the chart fills as the event log grows.', ipcard: 'IP card', col_block: 'Block', col_owner: 'Owner',
       col_singles: 'Singles', col_added: 'Added', of_n: '{0}–{1} of {2}', s_asn: 'Top attacking networks',
-      s_asn_h: 'Ranked by group bans and single bans; other ranges in csf.deny are noted separately · owner known for {0} blocks', p_g: '{0} groups', p_b: '+{0} blocks from other sources', p_t: '{0} singles', asn_denied: 'Already blocked in CSF',
+      s_asn_h: 'Ranked by group bans and single bans; other ranges in csf.deny are noted separately · owner known for {0} blocks', p_g: '{0} groups', p_b: '+{0} blocks from other sources', p_t: '{0} singles', p_bn: '{0} blocks',
+      at_atk: 'Attackers', at_blk: 'Other blocks', blk_h: 'Ranges in csf.deny added outside CSF Auto-Group (by hand or other tools); already blocked.',
+      blk_empty: 'No ranges from other sources in csf.deny (or their owners aren\'t known yet).',
+      im_h: 'IPs Imunify360 blocked on this server itself (not the cloud list) · {0} IPs, owner known for {1}. Information only; nothing is written to CSF.',
+      im_n: '{0} IPs', im_empty: 'The Imunify360 local blacklist is empty.', asn_denied: 'Already blocked in CSF',
       asn_hint: 'ASN block suggestion', asn_filling: 'Collecting owner info; 50 blocks are looked up per run.',
       asn_nolookup: 'Owner lookups are off (Settings → Lookups).', m_asn_t: 'Block all of AS{0} in CSF',
       m_asn_b: '{0} separate /24 group bans were added for {1}; each means at least 3 attackers in the same block. If attacks keep coming from this network, closing the whole network with CSF\'s own country/ASN block is more durable.',
@@ -591,34 +599,67 @@
       '<button class="ag-btn ag-btn-primary" type="submit">' + t('lookup_btn') + '</button></form><p>' + t('lookup_hint') + '</p></div></section>';
   }
 
-  /* En çok saldıran ağlar: gruplar + tekiller, ASN'e göre */
-  function topAsn() {
-    var list = S.asn_top || [];
-    var known = Object.keys(S.owners || {}).length;
-    if (!list.length) {
-      return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.globe + t('s_asn') + '</h2></div>' +
-        '<div class="ag-empty ag-empty-sm">' + (S.config.lookup ? t('asn_filling') : t('asn_nolookup')) + '</div></section>';
-    }
-    var max = 0;
-    function wt(a) { return a.groups * 4 + a.singles; }   // saldırı kanıtı: kendi gruplarımız + tekiller
+  /* En çok saldıran ağlar: üç sekme — saldıranlar / csf.deny'deki diğer bloklar / Imunify */
+  function asnRow(i, a, w, sub) {
+    var name = String(a.name || '').replace(/,\s*[A-Z]{2}$/, '');
+    return '<div class="ag-asn-r"><span class="ag-rank">' + (i + 1) + '</span><div class="ag-asn-m">' +
+      '<div class="ag-asn-t">' + flag(a.cc) + '<span class="ag-asn">AS' + esc(a.asn) + '</span><span class="ag-org" title="' + esc(a.name) + '">' + esc(name) + '</span></div>' +
+      '<div class="ag-asn-b"><i style="width:' + w + '%"></i></div><div class="ag-sub">' + sub + '</div></div></div>';
+  }
+  function pct(v, max) { return v ? Math.max(4, Math.round(v * 100 / Math.max(1, max))) : 0; }
+  function asnAttack() {        // sıralama: kendi grup banlarımız + tekiller (saldırı kanıtı)
+    var list = S.asn_top || [], max = 0;
+    function wt(a) { return a.groups * 4 + a.singles; }
     list.forEach(function (a) { max = Math.max(max, wt(a)); });
-    var rows = list.map(function (a, i) {
-      var w = Math.max(wt(a) ? 4 : 0, Math.round(wt(a) * 100 / Math.max(1, max)));
-      var parts = [];
+    return list.map(function (a, i) {
+      var name = String(a.name || '').replace(/,\s*[A-Z]{2}$/, ''), parts = [];
       if (a.groups) parts.push(t('p_g', num(a.groups)));
       if (a.singles) parts.push(t('p_t', num(a.singles)));
       if (a.blocks) parts.push('<span class="ag-muted">' + t('p_b', num(a.blocks)) + '</span>');
       // Öneri: en az 5 kendi grup banı (≥15 saldırgan, 5 ayrı blok) ve CC_DENY'de değilse.
       var tail = a.denied ? ' · <span class="ag-pill ag-pill-ok">' + t('asn_denied') + '</span>'
         : a.groups >= 5 ? ' · <button class="ag-link" data-act="asnhint" data-asn="' + esc(a.asn) + '" data-name="' + esc(name) + '" data-g="' + a.groups + '">' + t('asn_hint') + '</button>' : '';
-      var name = String(a.name || '').replace(/,\s*[A-Z]{2}$/, '');
-      return '<div class="ag-asn-r"><span class="ag-rank">' + (i + 1) + '</span><div class="ag-asn-m">' +
-        '<div class="ag-asn-t">' + flag(a.cc) + '<span class="ag-asn">AS' + esc(a.asn) + '</span><span class="ag-org" title="' + esc(a.name) + '">' + esc(name) + '</span></div>' +
-        '<div class="ag-asn-b"><i style="width:' + w + '%"></i></div>' +
-        '<div class="ag-sub">' + parts.join(' · ') + tail + '</div></div></div>';
+      return asnRow(i, a, pct(wt(a), max), parts.join(' · ') + tail);
     }).join('');
-    return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.globe + t('s_asn') + '</h2><span class="ag-hint" style="width:100%">' + t('s_asn_h', num(known)) + '</span></div>' +
-      '<div class="ag-card-b">' + rows + '</div></section>';
+  }
+  function asnBlocks() {        // csf.deny'deki başka kaynaklı aralıklar
+    var list = S.blocks_top || [], max = 0;
+    list.forEach(function (a) { max = Math.max(max, a.blocks); });
+    return list.map(function (a, i) {
+      var parts = [t('p_bn', num(a.blocks))];
+      if (a.groups) parts.push('<span class="ag-muted">' + t('p_g', num(a.groups)) + '</span>');
+      if (a.singles) parts.push('<span class="ag-muted">' + t('p_t', num(a.singles)) + '</span>');
+      return asnRow(i, a, pct(a.blocks, max), parts.join(' · ') + (a.denied ? ' · <span class="ag-pill ag-pill-ok">' + t('asn_denied') + '</span>' : ''));
+    }).join('');
+  }
+  function asnImunify() {       // Imunify360'ın bu sunucudaki kendi kara listesi
+    var im = S.imunify || {}, list = im.top || [], max = 0;
+    list.forEach(function (a) { max = Math.max(max, a.count); });
+    return list.map(function (a, i) {
+      var rs = (a.reasons || []).map(function (r) { return '<span class="ag-reason">' + esc(r[0]) + ' <b>' + num(r[1]) + '</b></span>'; }).join('');
+      return asnRow(i, a, pct(a.count, max), '<b class="ag-imc">' + t('im_n', num(a.count)) + '</b>' + (rs ? '<span class="ag-reasons">' + rs + '</span>' : ''));
+    }).join('');
+  }
+  function topAsn() {
+    var im = S.imunify || {}, tabs = [['atk', t('at_atk')], ['blk', t('at_blk')]];
+    if (im.present) tabs.push(['im', 'Imunify']);
+    if (!tabs.some(function (x) { return x[0] === UI.at; })) UI.at = 'atk';
+    var chips = '<div class="ag-chips ag-chips-full">' + tabs.map(function (x) {
+      return '<button class="ag-chip' + (UI.at === x[0] ? ' on' : '') + '" data-act="at" data-t="' + x[0] + '">' + esc(x[1]) + '</button>';
+    }).join('') + '</div>';
+    var body, hint;
+    if (UI.at === 'blk') {
+      body = asnBlocks(); hint = t('blk_h');
+      if (!body) body = '<div class="ag-empty ag-empty-sm">' + t('blk_empty') + '</div>';
+    } else if (UI.at === 'im') {
+      body = asnImunify(); hint = t('im_h', num(im.total || 0), num(im.known || 0));
+      if (!body) body = '<div class="ag-empty ag-empty-sm">' + (im.total ? t('asn_filling') : t('im_empty')) + '</div>';
+    } else {
+      body = asnAttack(); hint = t('s_asn_h', num(Object.keys(S.owners || {}).length));
+      if (!body) body = '<div class="ag-empty ag-empty-sm">' + (S.config.lookup ? t('asn_filling') : t('asn_nolookup')) + '</div>';
+    }
+    return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.globe + t('s_asn') + '</h2>' + chips +
+      '<span class="ag-hint" style="width:100%">' + hint + '</span></div><div class="ag-card-b">' + body + '</div></section>';
   }
 
   function pending() {
@@ -889,6 +930,7 @@
       render(); window.scrollTo(0, 0);
     },
     pall: function () { UI.pAll = true; render(); },
+    at: function (el) { UI.at = el.getAttribute('data-t'); render(); },
     menu: function (el) { var k = el.getAttribute('data-key'); UI.menu = UI.menu === k ? null : k; render(); },
     gsort: function (el) { var k = el.getAttribute('data-k'); if (UI.gs === k) UI.gd = -UI.gd; else { UI.gs = k; UI.gd = k === 'added' || k === 'n' ? -1 : 1; } UI.gp = 0; render(); },
     gpage: function (el) { UI.gp = Math.max(0, UI.gp + (+el.getAttribute('data-d'))); render(); },

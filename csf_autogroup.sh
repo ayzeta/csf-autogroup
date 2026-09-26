@@ -39,7 +39,7 @@
 # ============================================================================
 set -o pipefail
 
-VERSION="1.5.3"   # sürüm — başlangıç log satırında görünür
+VERSION="1.6.0"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -72,6 +72,9 @@ PLUGIN_DIR="${PLUGIN_DIR:-/usr/local/cpanel/whostmgr/docroot/cgi/csf_autogroup}"
 OWNERS_FILE="${OWNERS_FILE:-$(dirname "$SAYAC_FILE")/owners}"      # /24 → ASN önbelleği (30 gün)
 OWNER_TTL_DAYS="${OWNER_TTL_DAYS:-30}"
 BACKFILL_MAX="${BACKFILL_MAX:-50}"      # her turda en fazla bu kadar /24'ün sahibi sorgulanır
+IMUNIFY_BIN="${IMUNIFY_BIN:-$(command -v imunify360-agent 2>/dev/null)}"   # yoksa Imunify kısmı atlanır
+IMUNIFY_FILE="${IMUNIFY_FILE:-$(dirname "$SAYAC_FILE")/imunify}"         # yerel kara liste önbelleği (her tur)
+IMUNIFY_BACKFILL="${IMUNIFY_BACKFILL:-200}"   # Imunify IP'leri için turda ayrıca bu kadar /24 sorgulanır
 DIGEST="${DIGEST:-1}"                   # 1 = haftalık özet maili
 DIGEST_DAY="${DIGEST_DAY:-1}"           # 1 = pazartesi … 7 = pazar (09:00'dan sonraki ilk tur)
 TODAY=$(date '+%Y-%m-%d')
@@ -234,6 +237,8 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_DG_EXP="14 gün içinde süresi dolacak terfi kayıtları (tekrar gelirlerse kalıcı olurlar):"
   M_DG_EXPL="   %-18s %s gün"
   M_DG_RUNS="Tur sağlığı: son 7 günde %s tur çalıştı (cron aralığına göre beklenen ~%s)"
+  M_DG_IM="Imunify360'ın en çok engellediği ağlar (sunucunun kendi kara listesi, %s IP):"
+  M_DG_IML="   %-9s %-44s %s IP%s"
   M_DG_NONE="   yok"
   M_DG_SENT="Haftalık özet gönderildi: %s"
 else
@@ -367,6 +372,8 @@ else
   M_DG_EXP="Promotion records expiring within 14 days (become permanent if they return):"
   M_DG_EXPL="   %-18s %s days"
   M_DG_RUNS="Run health: %s runs in the last 7 days (about %s expected from the cron interval)"
+  M_DG_IM="Networks Imunify360 blocks most (this server's own blacklist, %s IPs):"
+  M_DG_IML="   %-9s %-44s %s IPs%s"
   M_DG_NONE="   none"
   M_DG_SENT="Weekly summary sent: %s"
 fi
@@ -997,6 +1004,26 @@ do_status() {
             jstr "$nm"; tops+=("{\"asn\":\"$a\",\"name\":$REPLY,\"cc\":\"$cc\",\"groups\":$g,\"blocks\":$bl,\"singles\":$sg,\"denied\":$([ "$den" = 1 ] && echo true || echo false)}")
         done <<< "$ASN_TOP"
     fi
+    asn_top 10 blocks
+    local btops=()
+    if [ -n "$ASN_TOP" ]; then
+        while IFS='|' read -r a nm cc g bl sg den; do
+            jstr "$nm"; btops+=("{\"asn\":\"$a\",\"name\":$REPLY,\"cc\":\"$cc\",\"groups\":$g,\"blocks\":$bl,\"singles\":$sg,\"denied\":$([ "$den" = 1 ] && echo true || echo false)}")
+        done <<< "$ASN_TOP"
+    fi
+    local imj='{"present":false}' itops=() icnt rs r1 rn rj
+    if imunify_top 10; then
+        if [ -n "$IM_TOP" ]; then
+            while IFS='|' read -r a nm cc icnt rs; do
+                rj=""
+                for r1 in ${rs//,/ }; do rn="${r1##*:}"; rj+="${rj:+,}[\"${r1%:*}\",$(num "$rn")]"; done
+                jstr "$nm"; itops+=("{\"asn\":\"$a\",\"name\":$REPLY,\"cc\":\"$cc\",\"count\":$icnt,\"reasons\":[$rj]}")
+            done <<< "$IM_TOP"
+        fi
+        local IFS=,
+        imj="{\"present\":true,\"total\":$IM_TOTAL,\"known\":$IM_KNOWN,\"t\":$IM_T,\"top\":[${itops[*]}]}"
+        unset IFS
+    fi
     dstart=$(date -d "$(date -d '29 days ago' +%Y-%m-%d) 00:00" +%s)
     if [ -r "$EVENTS_FILE" ]; then
         daily=$(awk -v s="$dstart" '
@@ -1021,8 +1048,8 @@ do_status() {
             "$(num "$THRESHOLD_TEMP_16")" "$(num "$SAYAC_RETENTION_DAYS")" "$(num "$REVIEW_DAYS")" "$([ "$LOOK_INIT" = 1 ] && echo true || echo false)"
         printf '"usage":{"perm":[%s,%s],"temp":[%s,%s]},' "$(num "$pc")" "$limit" "$(num "$tc")" "$tlimit"
         printf '"last_run":%s,' "${last:-null}"
-        printf '"cron_interval":%s,"daily":{"start":%s,%s},"owners":{%s},"asn_top":[%s],' \
-            "$(cron_interval)" "$dstart" "$daily" "${owners[*]}" "${tops[*]}"
+        printf '"cron_interval":%s,"daily":{"start":%s,%s},"owners":{%s},"asn_top":[%s],"blocks_top":[%s],"imunify":%s,' \
+            "$(cron_interval)" "$dstart" "$daily" "${owners[*]}" "${tops[*]}" "${btops[*]}" "$imj"
         printf '"groups":[%s],"pending":[%s],"review":[%s],"ignored":[%s],"events":[%s]}\n' \
             "${groups[*]}" "${pending[*]}" "${review[*]}" "${ignored[*]}" "${recent[*]}"
         return 0
@@ -1216,7 +1243,7 @@ do_action() {    # NAME TARGET [DAYS]
 }
 
 # ── Top attacking networks: gruplar + tekiller ASN'e göre ────────────────────
-asn_top() {      # [N] → ASN_TOP satırları: "ASN|KURUM|CC|grup|blok|tekil|cc_deny(0/1)"
+asn_top() {      # [N] [evidence|blocks] → ASN_TOP satırları: "ASN|KURUM|CC|grup|blok|tekil|cc_deny(0/1)"
     # Sıralama saldırı kanıtına göre: kendi grup banlarımız + tekil banlar (lfd'nin yakaladıkları).
     # csf.deny'deki başka kaynaklı bloklar (elle / başka araç) gösterilir ama sıralamaya girmez.
     local -A G=() B=() T=() NM=() CC=() IS_AG=() DEN=()
@@ -1235,7 +1262,67 @@ asn_top() {      # [N] → ASN_TOP satırları: "ASN|KURUM|CC|grup|blok|tekil|cc
     ASN_TOP=$(for a in $(printf '%s\n' "${!G[@]}" "${!B[@]}" "${!T[@]}" | sort -u); do
         printf '%s|%s|%s|%s|%s|%s|%s|%s\n' "$a" "${NM[$a]//|/ }" "${CC[$a]}" "${G[$a]:-0}" "${B[$a]:-0}" "${T[$a]:-0}" \
             "$([ -n "${DEN[AS$a]}" ] && echo 1 || echo 0)" $(( ${G[$a]:-0} * 4 + ${T[$a]:-0} ))
-    done | sort -t'|' -k8,8nr -k5,5nr | cut -d'|' -f1-7 | head -n "${1:-10}")
+    done | if [ "${2:-evidence}" = blocks ]; then awk -F'|' '$5 > 0' | sort -t'|' -k5,5nr; else sort -t'|' -k8,8nr -k5,5nr; fi \
+         | cut -d'|' -f1-7 | head -n "${1:-10}")
+}
+
+# ── Imunify360: sunucunun KENDİ kara listesi (scope local, purpose drop) ────
+# Yalnız okunur; bundan CSF banı üretilmez. "cloud" (merkezi) liste kullanılmaz.
+# Komut ve alanlar sunucuda doğrulandı (Imunify 8.14, 2026-09-27): eski "blacklist ip list"
+# kullanımdan kalkıyor, yerine "ip-list local list --purpose drop".
+imunify_refresh() {
+    local off=0 total=0 out page n tmp
+    [ "$DRY" = 1 ] && return 0
+    if [ -z "$IMUNIFY_BIN" ] || [ ! -x "$IMUNIFY_BIN" ]; then rm -f "$IMUNIFY_FILE"; return 0; fi
+    tmp="$IMUNIFY_FILE.tmp.$$"; : > "$tmp"
+    while :; do
+        out=$(timeout 90 "$IMUNIFY_BIN" ip-list local list --purpose drop --by-type ip --limit 500 --offset "$off" --json 2>/dev/null 9>&-) \
+            || { rm -f "$tmp"; return 0; }       # hata → eski önbellek kalır
+        page=$(printf '%s' "$out" | grep -oE '"max_count": ?[0-9]+|"ip": ?"[^"]*"|"comment": ?(null|"[^"]*")' | awk '
+            /^"max_count"/ { sub(/^[^0-9]*/, ""); print "#total|" $0; next }
+            /^"ip"/        { if (ip != "") print ip "|" r; ip = $0; sub(/^"ip": ?"/, "", ip); sub(/"$/, "", ip); r = "other"; next }
+            /^"comment"/   { if (match($0, /[A-Z][A-Z0-9_]{2,}/)) r = substr($0, RSTART, RLENGTH); next }
+            END            { if (ip != "") print ip "|" r }')
+        [ "$off" -eq 0 ] && total=$(printf '%s\n' "$page" | sed -n 's/^#total|//p' | head -1)
+        n=$(printf '%s\n' "$page" | grep -cE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\|')
+        printf '%s\n' "$page" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\|' >> "$tmp"
+        off=$(( off + 500 ))
+        [ "$n" -eq 0 ] || [ "$off" -ge "$(num "$total")" ] || [ "$off" -ge 20000 ] && break
+    done
+    { echo "#t|$(date +%s)"; echo "#total|$(num "$total")"; cat "$tmp"; } > "$tmp.2" && mv -f "$tmp.2" "$IMUNIFY_FILE"
+    rm -f "$tmp"
+}
+backfill_imunify() { # Imunify IP'lerinin /24'leri için ayrı sorgu bütçesi
+    local p n=0
+    [ "$LOOK_OK" = 1 ] && [ -r "$IMUNIFY_FILE" ] || return 0
+    for p in $(grep -v '^#' "$IMUNIFY_FILE" | cut -d'|' -f1 | sed 's/\.[0-9]*$//' | awk '!seen[$0]++'); do
+        [ -n "${OWN_L[$p]+x}" ] && continue
+        [ "$n" -ge "$IMUNIFY_BACKFILL" ] && break
+        owner_lookup "$p.1"; n=$((n + 1))
+        [ "$LOOK_OK" = 1 ] || break
+    done
+}
+imunify_top() {  # [N] → IM_TOP satırları "ASN|KURUM|CC|IP sayısı|SEBEP:n,SEBEP:n,…"; IM_TOTAL, IM_KNOWN, IM_T
+    local -A CNT=() NM=() CC=() RC=()
+    local ip r p a k line
+    IM_TOP=""; IM_TOTAL=0; IM_KNOWN=0; IM_T=0
+    [ -r "$IMUNIFY_FILE" ] || return 1
+    while IFS='|' read -r ip r; do
+        case "$ip" in
+            "#total") IM_TOTAL="$(num "$r")"; continue ;;
+            "#t")     IM_T="$(num "$r")"; continue ;;
+        esac
+        p="${ip%.*}"; a="${OWN_A[$p]}"; [ -n "$a" ] || continue
+        IM_KNOWN=$((IM_KNOWN + 1))
+        CNT[$a]=$(( ${CNT[$a]:-0} + 1 )); NM[$a]="${OWN_N[$p]}"; CC[$a]="${OWN_C[$p]}"
+        RC[$a|$r]=$(( ${RC[$a|$r]:-0} + 1 ))
+    done < "$IMUNIFY_FILE"
+    for a in $(for k in "${!CNT[@]}"; do echo "${CNT[$k]} $k"; done | sort -rn | head -n "${1:-10}" | awk '{print $2}'); do
+        line=$(for k in "${!RC[@]}"; do [ "${k%%|*}" = "$a" ] && echo "${RC[$k]} ${k#*|}"; done | sort -rn | head -3 | awk '{printf "%s%s:%s", (NR>1?",":""), $2, $1}')
+        IM_TOP+="$a|${NM[$a]//|/ }|${CC[$a]}|${CNT[$a]}|$line"$'\n'
+    done
+    IM_TOP="${IM_TOP%$'\n'}"
+    return 0
 }
 asn_parts() {    # grup blok tekil → "8 grup · 3 tekil · +2 blok başka kaynaklı" (sıfırlar atlanır)
     local out=""
@@ -1297,6 +1384,14 @@ digest_build() { # → DG_SUBJ, DG_BODY
             DG_BODY+="$(m "$M_DG_TOPL" "AS$a" "${owner:0:44}" "$(asn_parts "$b" "$bl" "$line")")$NL"   # kurum adı ülkeyle bitiyor
         done <<< "$ASN_TOP"
     else DG_BODY+="$M_DG_NONE$NL"; fi
+    # Imunify360: sunucunun kendi kara listesi
+    if imunify_top 5 && [ -n "$IM_TOP" ]; then
+        DG_BODY+="$NL$(m "$M_DG_IM" "$IM_TOTAL")$NL"
+        while IFS='|' read -r a owner k b line; do
+            line="${line//:/ }"; line="${line//,/, }"          # "CAPTCHA_DOS_ALERT 900, WAF 12"
+            DG_BODY+="$(m "$M_DG_IML" "AS$a" "${owner:0:44}" "$b" "${line:+ ($line)}")$NL"
+        done <<< "$IM_TOP"
+    fi
     # süresi dolacak terfi kayıtları
     DG_BODY+="$NL$M_DG_EXP$NL"
     while read -r p u; do
@@ -1722,6 +1817,8 @@ if [ "$DRY" != 1 ] && [ -f "$EVENTS_FILE" ] && [ "$(wc -l < "$EVENTS_FILE")" -gt
     tail -n "$EVENTS_MAX" "$EVENTS_FILE" > "${EVENTS_FILE}.tmp" && mv "${EVENTS_FILE}.tmp" "$EVENTS_FILE"
 fi
 backfill_owners
+imunify_refresh
+backfill_imunify
 owners_save
 digest_maybe
 log "$M_END"

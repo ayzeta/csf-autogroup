@@ -320,6 +320,13 @@
 .ag-asn-b { height: 4px; border-radius: 2px; background: var(--ag-neutral-soft); margin: 6px 0 5px; overflow: hidden; }
 .ag-asn-b i { display: block; height: 100%; border-radius: 2px; background: linear-gradient(90deg, #6366f1, #4338ca); }
 
+.ag-chips-full { width: 100%; display: flex; }
+.ag-chips-full .ag-chip { flex: 1; }
+.ag-imc { font-weight: 650; color: var(--ag-text); margin-right: 6px; font-variant-numeric: tabular-nums; }
+.ag-reasons { display: inline-flex; flex-wrap: wrap; gap: 4px; vertical-align: middle; }
+.ag-reason { font-family: var(--ag-mono); font-size: 10.5px; padding: 1px 6px; border-radius: 5px; background: var(--ag-neutral-soft); color: var(--ag-text-2); }
+.ag-reason b { font-weight: 650; color: var(--ag-text); }
+
 /* Maildeki bağlantıyla gelinen satır */
 .ag-flash { animation: ag-flash 2.4s ease-out; }
 @keyframes ag-flash { 0%, 35% { background: #fef9c3; box-shadow: inset 3px 0 0 #eab308; } 100% { background: transparent; box-shadow: inset 3px 0 0 transparent; } }

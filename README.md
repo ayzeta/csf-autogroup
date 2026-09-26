@@ -17,7 +17,7 @@ overflowing its line limit, and you get an email when it nears that limit.
 Works on **any CSF server** (cPanel or not). No dependencies beyond CSF and a
 working `mail` command (`dig` or `host` for the optional lookups below).
 
-**Version 1.5.3** · bilingual logs, alert emails and WHM plugin (English /
+**Version 1.6.0** · bilingual logs, alert emails and WHM plugin (English /
 Türkçe, set `MSG_LANG`). The running version is printed on each run's first log
 line.
 
@@ -127,13 +127,19 @@ What it shows:
   expire are highlighted.
 - **Active group bans** — a sortable, paged table with each block's owner
   (ASN, organisation, country), searchable by CIDR, AS number or organisation.
-- **Top attacking networks** — ranked by attack evidence: *groups* (bans CSF
-  Auto-Group added) and *singles* (IPs lfd caught). Other ranges in `csf.deny`
-  (added by hand or by other tools) are shown as a note but don't affect the
-  ranking. A network with 5+ group bans — at least 15 attackers in 5 separate
-  `/24`s — gets a suggestion explaining how to block the whole ASN with CSF's own
-  `CC_DENY`; networks already in `CC_DENY` are marked instead. The plugin never
-  edits `csf.conf`.
+- **Top attacking networks** — three tabs:
+  - *Attackers* — ranked by attack evidence: *groups* (bans CSF Auto-Group
+    added) and *singles* (IPs lfd caught). A network with 5+ group bans — at
+    least 15 attackers in 5 separate `/24`s — gets a suggestion explaining how
+    to block the whole ASN with CSF's own `CC_DENY`; networks already in
+    `CC_DENY` are marked instead. The plugin never edits `csf.conf`.
+  - *Other blocks* — ranges in `csf.deny` added outside CSF Auto-Group (by hand
+    or by other tools), per network.
+  - *Imunify* (only when Imunify360 is installed) — networks in Imunify360's
+    **own** blacklist on this server (`ip-list local list --purpose drop`; the
+    cloud list is not used), with the block reasons (e.g. `CAPTCHA_DOS_ALERT`).
+    Read-only: nothing from Imunify is turned into a CSF ban. Imunify IPs get
+    their own lookup budget (200 per run), so owners fill in within a few runs.
 - **Recent actions** — every ban, promotion, skip, warning and manual change.
 
 Owner info comes from a cache (`/var/lib/csf_autogroup/owners`, 30 days). Each
