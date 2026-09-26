@@ -422,7 +422,7 @@
   function usageKpi(icon, label, pair) {
     var used = pair[0], lim = pair[1], p = lim > 0 ? Math.round(used * 100 / lim) : 0;
     var cls = p >= 90 ? 'bad' : (p >= 80 ? 'warn' : '');
-    return kpi(icon, 'n', label, lim > 0 ? '%' + p : num(used), lim > 0 ? t('k_lines', num(used), num(lim)) : t('k_nolimit'), lim > 0 ? ring(p, cls) : '');
+    return kpi(icon, 'n', label, lim > 0 ? (LANG === 'tr' ? '%' + p : p + '%') : num(used), lim > 0 ? t('k_lines', num(used), num(lim)) : t('k_nolimit'), lim > 0 ? ring(p, cls) : '');
   }
   function kpis() {
     var dnd = S.groups.filter(function (g) { return g.dnd; }).length, rv = S.review.length, wk = nowSec() - 7 * 86400;
