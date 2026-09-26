@@ -89,7 +89,7 @@
       m_dry_t: 'Kuru çalıştırma', m_dry_wait: 'Tur hiçbir şeyi değiştirmeden simüle ediliyor…', m_dry_none: 'Bu tur hiçbir değişiklik yapmazdı.',
       m_upd_t: 'v{0} sürümüne güncellensin mi?', m_upd_b: 'update.sh çalıştırılır; config.env ve kayıtlar korunur. Birkaç saniye sürer.',
       m_upd_run: 'Güncelleniyor…', m_upd_ok: 'Güncelleme tamamlandı.', m_upd_fail: 'Güncelleme tamamlanamadı; çıktıya bakın.',
-      t_started: 'Tur başlatıldı.', t_done: 'Tur tamamlandı.', t_busy: 'Başka bir tur çalışıyor, birazdan tekrar deneyin.',
+      t_started: 'Tur başlatıldı.', t_done: 'Tur tamamlandı.', t_busy: 'Başka bir tur çalışıyor, birazdan tekrar deneyin.', t_cron_busy: 'Bir tur zaten çalışıyor (büyük olasılıkla cron); bitince sonuçlar burada görünecek.',
       t_err: 'İşlem tamamlanamadı: {0}', session: 'Oturum süresi doldu. Sayfayı yenileyin.', t_copied: 'Kopyalandı.',
       l_host: 'Hostname', l_fwd: 'ileri yönde doğrulandı', l_nofwd: 'ileri yönde doğrulanamadı', l_noptr: 'Ters DNS kaydı yok',
       l_owner: 'Sahip', l_prefix: 'Duyurulan blok', l_reg: 'Kayıt', l_fw: 'Güvenlik duvarı', l_wl: 'Beyaz liste',
@@ -181,7 +181,7 @@
       m_dry_t: 'Dry run', m_dry_wait: 'Simulating a run without changing anything…', m_dry_none: 'This run would not change anything.',
       m_upd_t: 'Update to v{0}?', m_upd_b: 'Runs update.sh; config.env and records are kept. Takes a few seconds.',
       m_upd_run: 'Updating…', m_upd_ok: 'Update complete.', m_upd_fail: 'The update did not complete; see the output.',
-      t_started: 'Run started.', t_done: 'Run finished.', t_busy: 'Another run is in progress, try again shortly.',
+      t_started: 'Run started.', t_done: 'Run finished.', t_busy: 'Another run is in progress, try again shortly.', t_cron_busy: 'A run is already in progress (most likely cron); results will show up here when it finishes.',
       t_err: 'Could not complete: {0}', session: 'Session expired. Reload the page.', t_copied: 'Copied.',
       l_host: 'Hostname', l_fwd: 'forward-confirmed', l_nofwd: 'not forward-confirmed', l_noptr: 'No reverse DNS',
       l_owner: 'Owner', l_prefix: 'Announced prefix', l_reg: 'Registry', l_fw: 'Firewall', l_wl: 'Whitelist',
@@ -1044,6 +1044,7 @@
       modal({ icon: 'play', tone: 'acc', title: t('m_run_t'), html: '<p>' + t('m_run_b') + '</p>', okText: t('run') }).then(function (m) {
         if (!m.ok) return;
         api('run_now').then(function (r) {
+          if (!r.ok && r.error === 'busy') { wasRunning = true; toast(t('t_cron_busy'), 'ok'); refresh(); return; }
           if (!r.ok) { toast(t('t_err', r.error || '?'), 'bad'); return; }
           UI.ranOnce = true; wasRunning = true; toast(t('t_started'), 'ok');
           setTimeout(refresh, 1200);

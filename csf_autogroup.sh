@@ -39,7 +39,7 @@
 # ============================================================================
 set -o pipefail
 
-VERSION="1.6.1"   # sürüm — başlangıç log satırında görünür
+VERSION="1.6.2"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -91,6 +91,7 @@ while [ $# -gt 0 ]; do
         --config)  MODE=config ;;
         --set)     SETS+=("${2:-}"); shift ;;
         --digest)  MODE=digest ;;
+        --busy)    MODE=busy ;;
         --send)    SEND=1 ;;
         --json)    JSON=1 ;;
         --force)   FORCE=1 ;;
@@ -1539,6 +1540,7 @@ case "$MODE" in
     lookup) LOG_MODE=quiet; do_lookup "${ARGS[0]}"; exit $? ;;
     action) LOG_MODE=file; do_action "$ACT" "${ARGS[0]}" "${ARGS[1]}"; exit $? ;;
     config) LOG_MODE=file; do_config; exit $? ;;
+    busy)   if lock_busy; then echo busy; else echo idle; fi; exit 0 ;;   # eklenti "Şimdi çalıştır"dan önce sorar
     digest) LOG_MODE=file; owners_load; parse_deny "$DENY_FILE" 1; panel_init; digest_build
             if [ "$SEND" = 1 ]; then printf '%s\n' "$DG_BODY" | mail -s "$DG_SUBJ" "$ALERT_MAIL"; log "$(m "$M_DG_SENT" "$ALERT_MAIL")"; ev digest "" "by=\"$AG_BY\""
             else printf '%s\n\n%s\n' "$DG_SUBJ" "$DG_BODY"; fi

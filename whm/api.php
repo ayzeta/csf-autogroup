@@ -134,6 +134,11 @@ switch ($a) {
         if ($script === null) {
             ag_json(['ok' => false, 'error' => 'no_script']);
         }
+        // Bir tur (çoğunlukla cron) zaten çalışıyorsa başlatma: ikinci kopya kilide takılıp yalnız
+        // "atlandı" yazardı, kullanıcıya da tur çalışmamış gibi görünürdü.
+        if (trim(ag_run(['--busy'], 10)['out']) === 'busy') {
+            ag_json(['ok' => false, 'error' => 'busy']);
+        }
         @file_put_contents(AG_RUN_LOG, sprintf("[%s] %s: run now\n", date('Y-m-d H:i:s'), ag_user()));
         @chmod(AG_RUN_LOG, 0600);
         ag_spawn('/bin/bash ' . escapeshellarg($script), AG_RUN_LOG);
