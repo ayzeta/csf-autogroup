@@ -125,7 +125,7 @@
       ch_add: 'Grup banı', ch_promote: 'Terfi', ch_temp: 'Geçici', ch_warn: '/16 uyarısı', ch_skip: 'Beyaz liste',
       ch_empty: 'Son 30 günde kayıt yok; grafik olay kaydı biriktikçe dolacak.', ipcard: 'IP kartı', col_block: 'Blok', col_owner: 'Sahip',
       col_singles: 'Tekil', col_added: 'Eklendi', of_n: '{0}–{1} / {2}', s_asn: 'En çok saldıran ağlar',
-      s_asn_h: 'Banlı /24 grupları ve tekil banlar, sahibine göre · {0} bloğun sahibi biliniyor', asn_counts: '{0} grup · {1} tekil',
+      s_asn_h: 'Grup = CSF Auto-Group banı, blok = csf.deny\'deki diğer aralıklar, tekil = tek IP banı · {0} bloğun sahibi biliniyor', p_g: '{0} grup', p_b: '{0} blok', p_t: '{0} tekil',
       asn_hint: 'ASN engelleme önerisi', asn_filling: 'Sahip bilgileri toplanıyor; her turda 50 blok sorgulanır.',
       asn_nolookup: 'Sahip sorgusu kapalı (Ayarlar → Sorgular).', m_asn_t: 'AS{0} ağını CSF\'de toptan engellemek',
       m_asn_b: '{1} ağından {0} ayrı /24 blok banlandı. Saldırı sürekli bu ağdan geliyorsa, ağın tamamını CSF\'nin kendi ülke/ASN engeliyle kapatmak daha kalıcı olur.',
@@ -213,7 +213,7 @@
       ch_add: 'Group ban', ch_promote: 'Promoted', ch_temp: 'Temp', ch_warn: '/16 warning', ch_skip: 'Whitelist',
       ch_empty: 'Nothing in the last 30 days; the chart fills as the event log grows.', ipcard: 'IP card', col_block: 'Block', col_owner: 'Owner',
       col_singles: 'Singles', col_added: 'Added', of_n: '{0}–{1} of {2}', s_asn: 'Top attacking networks',
-      s_asn_h: 'Banned /24 groups and single bans by owner · owner known for {0} blocks', asn_counts: '{0} groups · {1} singles',
+      s_asn_h: 'Group = CSF Auto-Group ban, block = other ranges in csf.deny, single = one-IP ban · owner known for {0} blocks', p_g: '{0} groups', p_b: '{0} blocks', p_t: '{0} singles',
       asn_hint: 'ASN block suggestion', asn_filling: 'Collecting owner info; 50 blocks are looked up per run.',
       asn_nolookup: 'Owner lookups are off (Settings → Lookups).', m_asn_t: 'Block all of AS{0} in CSF',
       m_asn_b: '{0} separate /24 blocks from {1} have been banned. If attacks keep coming from this network, closing the whole network with CSF\'s own country/ASN block is more durable.',
@@ -600,15 +600,20 @@
         '<div class="ag-empty ag-empty-sm">' + (S.config.lookup ? t('asn_filling') : t('asn_nolookup')) + '</div></section>';
     }
     var max = 0;
-    list.forEach(function (a) { max = Math.max(max, a.groups * 4 + a.singles); });
+    function wt(a) { return (a.groups + (a.blocks || 0)) * 4 + a.singles; }
+    list.forEach(function (a) { max = Math.max(max, wt(a)); });
     var rows = list.map(function (a, i) {
-      var w = Math.max(4, Math.round((a.groups * 4 + a.singles) * 100 / Math.max(1, max)));
+      var w = Math.max(4, Math.round(wt(a) * 100 / Math.max(1, max))), gb = a.groups + (a.blocks || 0);
+      var parts = [];
+      if (a.groups) parts.push(t('p_g', num(a.groups)));
+      if (a.blocks) parts.push(t('p_b', num(a.blocks)));
+      if (a.singles) parts.push(t('p_t', num(a.singles)));
       var name = String(a.name || '').replace(/,\s*[A-Z]{2}$/, '');
       return '<div class="ag-asn-r"><span class="ag-rank">' + (i + 1) + '</span><div class="ag-asn-m">' +
         '<div class="ag-asn-t">' + flag(a.cc) + '<span class="ag-asn">AS' + esc(a.asn) + '</span><span class="ag-org" title="' + esc(a.name) + '">' + esc(name) + '</span></div>' +
         '<div class="ag-asn-b"><i style="width:' + w + '%"></i></div>' +
-        '<div class="ag-sub">' + t('asn_counts', num(a.groups), num(a.singles)) +
-        (a.groups >= 3 ? ' · <button class="ag-link" data-act="asnhint" data-asn="' + esc(a.asn) + '" data-name="' + esc(name) + '" data-g="' + a.groups + '">' + t('asn_hint') + '</button>' : '') + '</div></div></div>';
+        '<div class="ag-sub">' + parts.join(' · ') +
+        (gb >= 3 ? ' · <button class="ag-link" data-act="asnhint" data-asn="' + esc(a.asn) + '" data-name="' + esc(name) + '" data-g="' + gb + '">' + t('asn_hint') + '</button>' : '') + '</div></div></div>';
     }).join('');
     return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.globe + t('s_asn') + '</h2><span class="ag-hint" style="width:100%">' + t('s_asn_h', num(known)) + '</span></div>' +
       '<div class="ag-card-b">' + rows + '</div></section>';
