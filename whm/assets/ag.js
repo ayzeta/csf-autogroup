@@ -112,7 +112,9 @@
       default_v: 'varsayılan {0}', range_v: '{0}–{1} arası bir tam sayı', mail_bad: 'Geçerli bir e-posta adresi yazın.',
       rule_dnd: 'Do not delete eşiği /24 eşiğinden küçük olamaz.', dirty_n: '{0} değişiklik kaydedilmedi', discard: 'Vazgeç',
       try_save: 'Kaydetmeden önce dene', save: 'Kaydet', m_save_t: 'Ayarlar kaydedilsin mi?', m_save_b: 'Şu değişiklikler config.env\'e yazılacak (önce yedek alınır):',
-      m_try_t: 'Yeni eşiklerle kuru çalıştırma', m_try_b: 'Kaydedilmemiş ayarlarla; hiçbir şey değişmez.', show_pending_all: 'Tümünü göster ({0})'
+      m_try_t: 'Yeni eşiklerle kuru çalıştırma', m_try_b: 'Kaydedilmemiş ayarlarla; hiçbir şey değişmez.', show_pending_all: 'Tümünü göster ({0})',
+      st_panel: 'Panel adresi', st_panel_h: 'Maillerdeki "Panelde incele" bağlantısının kökü. Boş bırakırsanız otomatik: {0}',
+      panel_bad: 'https://sunucu:2087 biçiminde yazın.', auto: 'otomatik', focus_gone: '{0} artık listede değil; güncel durumu gösteriliyor.'
     },
     en: {
       subtitle: 'Attacker IP grouping · CSF', running: 'Run in progress', idle: 'Ready', last_run: 'last run {0}',
@@ -183,7 +185,9 @@
       default_v: 'default {0}', range_v: 'a whole number from {0} to {1}', mail_bad: 'Enter a valid email address.',
       rule_dnd: 'The do not delete threshold can\'t be lower than the /24 threshold.', dirty_n: '{0} unsaved changes', discard: 'Discard',
       try_save: 'Try before saving', save: 'Save', m_save_t: 'Save settings?', m_save_b: 'These changes will be written to config.env (a backup is kept):',
-      m_try_t: 'Dry run with the new thresholds', m_try_b: 'Uses the unsaved settings; nothing is changed.', show_pending_all: 'Show all ({0})'
+      m_try_t: 'Dry run with the new thresholds', m_try_b: 'Uses the unsaved settings; nothing is changed.', show_pending_all: 'Show all ({0})',
+      st_panel: 'Panel address', st_panel_h: 'Base of the "Review in WHM" link in emails. Leave empty for automatic: {0}',
+      panel_bad: 'Use the form https://server:2087.', auto: 'automatic', focus_gone: '{0} is no longer on the list; showing its current state.'
     }
   };
   function t(k) {
@@ -328,7 +332,7 @@
       if (is16) acts += '<button class="ag-btn ag-btn-sm ag-btn-danger" data-act="ban16" data-t="' + esc(pfx(e.cidr)) + '">' + t('ban16') + '</button>';
       else acts += '<button class="ag-btn ag-btn-sm ag-btn-danger" data-act="banforce" data-t="' + esc(pfx(e.cidr)) + '" data-wl="' + esc(e.wl || '') + '">' + t('ban_anyway') + '</button>';
       acts += '<button class="ag-btn ag-btn-sm ag-btn-ghost" data-act="ignore" data-c="' + esc(e.cidr) + '">' + IC.mute + t('ignore') + '</button>';
-      return '<div class="ag-item"><div class="ag-row">' + pill +
+      return '<div class="ag-item" data-row="' + esc(e.cidr) + '"><div class="ag-row">' + pill +
         '<div class="ag-row-main"><div class="ag-row-t"><span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(e.cidr) + '</span></div>' +
         '<div class="ag-row-s">' + meta.join(' · ') + '</div></div>' +
         '<div class="ag-row-x">' + rel(e.t) + '</div><div class="ag-row-a">' + acts + '</div></div>' +
@@ -367,7 +371,7 @@
       var first = ev && ev.ips && ev.ips[0] ? ev.ips[0].ip : g.cidr.replace(/\/\d+$/, '').replace(/\.0$/, '.1');
       var acts = (ev && ev.ips && ev.ips.length ? '<button class="ag-btn ag-btn-sm" data-act="toggle" data-key="' + key + '">' + (open ? t('hide') : t('ips')) + '</button>' : '') +
         '<button class="ag-btn ag-btn-sm ag-btn-danger" data-act="unban" data-c="' + esc(g.cidr) + '" data-dnd="' + (g.dnd ? 1 : 0) + '" data-kind="' + esc(g.kind) + '">' + t('unban') + '</button>';
-      return '<div class="ag-item"><div class="ag-row"><div class="ag-row-main"><div class="ag-row-t">' +
+      return '<div class="ag-item" data-row="' + esc(g.cidr) + '"><div class="ag-row"><div class="ag-row-main"><div class="ag-row-t">' +
         '<span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(g.cidr) + '</span>' +
         '<span class="ag-pill ' + kindCls + '">' + t('kind_' + g.kind) + '</span>' +
         (g.dnd ? '<span class="ag-pill ag-pill-bad">do not delete</span>' : '') + '</div>' +
@@ -450,7 +454,7 @@
       var meta = [];
       if (o.owner) meta.push(esc(o.owner));
       meta.push(t('since', esc(p.since)));
-      return '<div class="ag-row"><div class="ag-row-main"><div class="ag-row-t"><span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(cidr) + '</span>' +
+      return '<div class="ag-row" data-row="' + esc(cidr) + '"><div class="ag-row-main"><div class="ag-row-t"><span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(cidr) + '</span>' +
         (p.temp_ttl > 0 ? '<span class="ag-pill ag-pill-warn">' + t('ttl_left', dur(p.temp_ttl)) + '</span>' : '') + '</div>' +
         '<div class="ag-row-s">' + meta.join(' · ') + '</div>' +
         '<div class="ag-sub" style="margin-top:4px;display:flex;gap:8px;align-items:center"><div class="ag-days"><i style="width:' + pct + '%"></i></div>' + t('days_left', left) + '</div></div>' +
@@ -500,6 +504,8 @@
     });
     // Yerel adresler de geçerli ("root", "root@localhost"); kural script'teki cfg_check ile aynı.
     if (!/^[A-Za-z0-9._%+-]+(@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*)?$/.test(String(cv('ALERT_MAIL')))) e.ALERT_MAIL = t('mail_bad');
+    var pu = String(cv('PANEL_URL') || '');
+    if (pu && !/^https?:\/\/[A-Za-z0-9.-]+(:\d{1,5})?\/?$/.test(pu)) e.PANEL_URL = t('panel_bad');
     if (!e.THRESHOLD_24 && !e.THRESHOLD_24_PERMANENT && +cv('THRESHOLD_24_PERMANENT') < +cv('THRESHOLD_24')) e.THRESHOLD_24_PERMANENT = t('rule_dnd');
     return e;
   }
@@ -544,6 +550,9 @@
     var notify = '<div class="ag-field' + (errs.ALERT_MAIL ? ' bad' : '') + (mailDirty ? ' changed' : '') + '"><div class="ag-field-l"><label for="ag-f-mail">' + t('st_mail') + '</label></div>' +
       '<input class="ag-input" id="ag-f-mail" data-cfg="ALERT_MAIL" type="email" autocomplete="off" value="' + esc(cv('ALERT_MAIL')) + '">' +
       '<div class="ag-field-h">' + (errs.ALERT_MAIL ? esc(errs.ALERT_MAIL) : t('st_mail_h')) + '</div></div>' +
+      '<div class="ag-field' + (errs.PANEL_URL ? ' bad' : '') + (String(cv('PANEL_URL') || '') !== String(CFG.values.PANEL_URL || '') ? ' changed' : '') + '"><div class="ag-field-l"><label for="ag-f-panel">' + t('st_panel') + '</label></div>' +
+      '<input class="ag-input" id="ag-f-panel" data-cfg="PANEL_URL" type="url" autocomplete="off" placeholder="' + esc(CFG.panel_auto || 'https://server:2087') + '" value="' + esc(cv('PANEL_URL') || '') + '">' +
+      '<div class="ag-field-h">' + (errs.PANEL_URL ? esc(errs.PANEL_URL) : esc(t('st_panel_h', CFG.panel_auto || '—'))) + '</div></div>' +
       '<div class="ag-field"><div class="ag-field-l"><label>' + t('st_lang') + '</label></div>' + seg('MSG_LANG', [['tr', 'Türkçe'], ['en', 'English']]) +
       '<div class="ag-field-h">' + t('st_lang_h') + '</div></div>' +
       '<div class="ag-field"><button class="ag-btn" data-act="cfgtest"' + (mailDirty ? ' disabled' : '') + '>' + IC.inbox + t('st_test') + '</button>' +
@@ -574,7 +583,7 @@
       f.classList.toggle('bad', !!errs[k]);
       f.classList.toggle('changed', String(cv(k)) !== String(CFG.values[k]));
       var h = f.querySelector('.ag-field-h');
-      if (h) h.textContent = errs[k] ? errs[k] : (k === 'ALERT_MAIL' ? t('st_mail_h') : t('h_' + k));
+      if (h) h.textContent = errs[k] ? errs[k] : (k === 'ALERT_MAIL' ? t('st_mail_h') : k === 'PANEL_URL' ? t('st_panel_h', CFG.panel_auto || '—') : t('h_' + k));
     });
   }
 
@@ -730,8 +739,8 @@
     cfgsave: function () {
       var ch = changedKeys();
       var list = '<ul class="ag-changes">' + ch.map(function (k) {
-        var label = k === 'ALERT_MAIL' ? t('st_mail') : k === 'MSG_LANG' ? t('st_lang') : k === 'CRON_MIN' ? t('st_sched') : t('k_' + k);
-        return '<li><b>' + esc(label) + '</b><span class="ag-mono">' + esc(CFG.values[k] || '—') + '</span> → <span class="ag-mono">' + esc(cv(k)) + '</span></li>';
+        var label = k === 'ALERT_MAIL' ? t('st_mail') : k === 'MSG_LANG' ? t('st_lang') : k === 'CRON_MIN' ? t('st_sched') : k === 'PANEL_URL' ? t('st_panel') : t('k_' + k);
+        return '<li><b>' + esc(label) + '</b><span class="ag-mono">' + esc(CFG.values[k] || '—') + '</span> → <span class="ag-mono">' + esc(cv(k) || t('auto')) + '</span></li>';
       }).join('') + '</ul>';
       modal({ icon: 'sliders', tone: 'acc', title: t('m_save_t'), html: '<p>' + t('m_save_b') + '</p>' + list, okText: t('save') }).then(function (m) {
         if (!m.ok) return;
@@ -936,8 +945,34 @@
     if (ev.target.id === 'ag-ef') { UI.ef = ev.target.value; UI.evLimit = 40; render(); }
   });
 
+  /* ── Maildeki bağlantı: ?focus=CIDR → o satıra kay, aç, vurgula ─── */
+  function applyFocus() {
+    var q = new URLSearchParams(location.search), f = q.get('focus') || '', ip = q.get('ip') || '';
+    if (!f && !ip) return;
+    history.replaceState(null, '', location.pathname + location.hash);   // yenilemede tekrar kaymasın
+    if (ip && /^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) { openDrawer(ip); return; }
+    if (!/^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/.test(f)) return;
+    UI.tab = 'overview';
+    var inReview = S.review.some(function (e) { return e.cidr === f; });
+    var inGroups = S.groups.some(function (g) { return g.cidr === f; });
+    if (inReview) UI.open['r:' + f] = true;
+    else if (inGroups) { UI.open['g:' + f] = true; UI.gLimit = 1e6; UI.gf = 'all'; UI.gq = ''; }
+    else if (S.pending.some(function (p) { return p.prefix + '.0/24' === f; })) UI.pAll = true;
+    render();
+    var el = document.querySelector('#ag-app [data-row="' + f + '"]');
+    if (el) {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      el.classList.add('ag-flash');
+      setTimeout(function () { el.classList.remove('ag-flash'); }, 2600);
+    } else {
+      toast(t('focus_gone', f), 'ok');
+      openDrawer(f.replace(/\/\d+$/, '').replace(/\.0$/, '.1'));
+    }
+  }
+
   /* ── Başlangıç ─────────────────────────────────────────────────── */
   refresh().then(function () {
+    if (S) applyFocus();
     api('update_check').then(function (u) { UPD = u; if (u && u.ok && !u.uptodate) render(); }).catch(function () {});
   });
 })();

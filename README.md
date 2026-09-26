@@ -17,7 +17,7 @@ overflowing its line limit, and you get an email when it nears that limit.
 Works on **any CSF server** (cPanel or not). No dependencies beyond CSF and a
 working `mail` command (`dig` or `host` for the optional lookups below).
 
-**Version 1.3.0** · bilingual logs, alert emails and WHM plugin (English /
+**Version 1.4.0** · bilingual logs, alert emails and WHM plugin (English /
 Türkçe, set `MSG_LANG`). The running version is printed on each run's first log
 line.
 
@@ -144,6 +144,13 @@ you type the target:
 
 Every manual action is written to the log as `MANUAL (user): …` and shows up in
 the recent actions list.
+
+Alert emails end each block with a **Review in WHM** link. It goes through the
+WHM login (WHM session URLs expire, so they can't be emailed) and then opens
+the plugin scrolled to that block, expanded and highlighted. If the block is no
+longer on the list, the plugin shows its current state in the IP card. The link
+uses `https://$(hostname -f):2087` unless you set a panel address in Settings
+(`PANEL_URL`). Servers without the plugin get no link.
 
 ### Settings tab
 

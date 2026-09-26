@@ -38,7 +38,7 @@
 # ============================================================================
 set -o pipefail
 
-VERSION="1.3.1"   # sürüm — başlangıç log satırında görünür
+VERSION="1.4.0"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -67,6 +67,8 @@ EVENTS_FILE="${EVENTS_FILE:-$(dirname "$SAYAC_FILE")/events.jsonl}"   # WHM ekle
 EVENTS_MAX="${EVENTS_MAX:-5000}"
 IGNORE_FILE="${IGNORE_FILE:-$(dirname "$SAYAC_FILE")/ignored}"       # "yoksay" denen /16 ve /24'ler
 REVIEW_DAYS="${REVIEW_DAYS:-7}"                                        # "kontrol edilecekler" kaç gün geriye bakar
+PANEL_URL="${PANEL_URL:-}"            # maillerdeki panel bağlantısının kökü; boşsa https://$(hostname -f):2087
+PLUGIN_DIR="${PLUGIN_DIR:-/usr/local/cpanel/whostmgr/docroot/cgi/csf_autogroup}"   # eklenti kurulu mu?
 TODAY=$(date '+%Y-%m-%d')
 NL=$'\n'
 
@@ -165,6 +167,8 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_MAIL_TEMPFULL_SUBJ="!!! CSF Temp Limit Uyarısı: %%%s doluluk !!!"
   M_MAIL_TEMPFULL_BODY="CSF geçici ban listesi limite yaklaşıyor!"
   M_MAIL_DETAIL="Detay için: tail -100 %s"
+  M_PANEL="   Panelde incele: %s"
+  M_PANEL_GEN="Panel: %s"
   M_DRY_ON="KURU ÇALIŞTIRMA — hiçbir şey değiştirilmeyecek, mail gönderilmeyecek"
   M_DRY_MAIL="[gönderilmeyecek mail] Kime: %s — Konu: %s"
   M_IGN16="ATLANDI /16: %s.0.0/16 yoksayılıyor (%s tarihine kadar)"
@@ -283,6 +287,8 @@ else
   M_MAIL_TEMPFULL_SUBJ="!!! CSF temp limit warning: %s%% full !!!"
   M_MAIL_TEMPFULL_BODY="CSF temp ban list is approaching its limit!"
   M_MAIL_DETAIL="Details: tail -100 %s"
+  M_PANEL="   Review in WHM: %s"
+  M_PANEL_GEN="Panel: %s"
   M_DRY_ON="DRY RUN — nothing will be changed, no email will be sent"
   M_DRY_MAIL="[email not sent] To: %s — Subject: %s"
   M_IGN16="SKIPPED /16: %s.0.0/16 is ignored (until %s)"
@@ -358,7 +364,7 @@ mail() {
 
 # ── Settings: validation (panel + --config set + --dry-run --set) ──────────
 # Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
-CFG_KEYS="MSG_LANG ALERT_MAIL THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES CRON_MIN"
+CFG_KEYS="MSG_LANG ALERT_MAIL PANEL_URL THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES CRON_MIN"
 CFG_TRY_KEYS="THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS"
 cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değer), 1 değil (CFG_ERR)
     local k="$1" v="$2" lo="" hi="" opts=""
@@ -379,6 +385,10 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
         SAYAC_RETENTION_DAYS) lo=7; hi=730 ;;
         REVIEW_DAYS) lo=1; hi=90 ;;
         LOG_MAX_LINES) lo=500; hi=100000 ;;
+        PANEL_URL)    # boş = otomatik (sunucu adı)
+            [ -z "$v" ] && return 0
+            [[ "$v" =~ ^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?/?$ ]] && { CFG_VAL="${v%/}"; return 0; }
+            CFG_ERR=$(m "$M_CFG_BAD" "$k" "$v" "https://host:2087"); return 1 ;;
         *) CFG_ERR=$(m "$M_CFG_UNKNOWN" "$k"); return 1 ;;
     esac
     if [ -n "$opts" ]; then
@@ -403,6 +413,32 @@ if [ ${#SETS[@]} -gt 0 ]; then
     done
     cfg_rules "$THRESHOLD_24" "$THRESHOLD_24_PERMANENT" || { echo "$CFG_ERR" >&2; exit 2; }
 fi
+
+# ── Panel links in emails ───────────────────────────────────────────────────
+# WHM adresindeki oturum parçası (cpsess…) maile konamaz, birkaç saatte geçersizleşir.
+# Bağlantı WHM girişine gider; cPanel'in goto_uri parametresi girişten sonra eklentiyi açar.
+panel_auto() { local h; h=$(hostname -f 2>/dev/null || hostname 2>/dev/null); [ -n "$h" ] && echo "https://$h:2087"; }
+urlenc() {       # dizgi → REPLY (RFC 3986 ayrılmamış karakterler dışında %XX)
+    local s="$1" out="" c i
+    for (( i = 0; i < ${#s}; i++ )); do
+        c="${s:i:1}"
+        case "$c" in [A-Za-z0-9._~-]) out+="$c" ;; *) printf -v c '%%%02X' "'$c"; out+="$c" ;; esac
+    done
+    REPLY="$out"
+}
+PANEL_BASE=""
+panel_init() {   # yalnız eklenti kuruluysa: bağlantı kökü (bir kez)
+    [ -d "$PLUGIN_DIR" ] || return
+    if [ -n "$PANEL_URL" ]; then PANEL_BASE="${PANEL_URL%/}"; else PANEL_BASE="$(panel_auto)"; fi
+}
+panel_line() {   # [CIDR] [ŞABLON] → REPLY = "   Panelde incele: URL\n" ya da boş
+    local path="/cgi/csf_autogroup/index.php"
+    REPLY=""
+    [ -n "$PANEL_BASE" ] || return 0
+    [ -n "$1" ] && path+="?focus=$1"
+    urlenc "$path"
+    REPLY="$(m "${2:-$M_PANEL}" "$PANEL_BASE/?goto_uri=$REPLY")$NL"
+}
 
 # ── IPv4 / CIDR helpers ─────────────────────────────────────────────────────
 # Sonuçlar REPLY / R_LO / R_HI ile döner (alt kabuk yok → önbellekler korunur).
@@ -730,6 +766,7 @@ wl_report() {    # CIDR COUNT PREFIX24 "IPS" KIND — günde bir kez maile ekle
     wl_skipped=$((wl_skipped + 1))
     owner_kv; jstr "$WL_HIT"     # OWN_* yukarıdaki owner_line'dan (ip_lines sahip sorgusu yapmadı)
     ev skip_wl "$1" "n=$2" "wl=$REPLY" "kind=\"$5\"" "${OKV[@]}" "total=$IPS_TOTAL" "ips=$IPS_J"
+    panel_line "$1"; wl_skip_body+="$REPLY"
 }
 
 # ── Read csf.deny: singles (grouping) + CIDRs (coverage) ────────────────────
@@ -1128,8 +1165,9 @@ do_config() {
                 o="{\"ok\":true,\"values\":{"
                 i=0
                 for k in $CFG_KEYS; do jstr "$(cfg_value "$k")"; o+="$([ $i -gt 0 ] && echo ,)\"$k\":$REPLY"; i=1; done
-                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"root@localhost\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_MAX_LINES\":\"5000\",\"CRON_MIN\":\"*/10\"}"
+                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"root@localhost\",\"PANEL_URL\":\"\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_MAX_LINES\":\"5000\",\"CRON_MIN\":\"*/10\"}"
                 o+=",\"csf\":{\"deny_limit\":$(num "$(conf_val DENY_IP_LIMIT)"),\"temp_limit\":$(num "$(conf_val DENY_TEMP_IP_LIMIT)")}"
+                jstr "$(panel_auto)"; o+=",\"panel_auto\":$REPLY,\"plugin\":$([ -d "$PLUGIN_DIR" ] && echo true || echo false)"
                 o+=",\"dns_tool\":$([ -n "$DIG_BIN$HOST_BIN" ] && echo true || echo false),\"crontab\":$(command -v crontab >/dev/null 2>&1 && echo true || echo false)}"
                 echo "$o"
             else
@@ -1168,7 +1206,9 @@ do_config() {
             act_out 0 "$(m "$M_CFG_SAVED" "$n")" ;;
         test-mail)
             local out rc
-            out=$( { m "$M_TM_BODY" "$(hostname 2>/dev/null || echo "$HOSTNAME")" "$AG_BY"; echo; } | command mail -s "$M_TM_SUBJ" "$ALERT_MAIL" 2>&1 9>&-); rc=$?
+            # Panel bağlantısı test mailinde de var: gerçek bir uyarı beklemeden bağlantı denenebilsin.
+            panel_init; panel_line "" "$M_PANEL_GEN"; local plink="$REPLY"
+            out=$( { m "$M_TM_BODY" "$(hostname 2>/dev/null || echo "$HOSTNAME")" "$AG_BY"; printf '\n\n%s' "$plink"; } | command mail -s "$M_TM_SUBJ" "$ALERT_MAIL" 2>&1 9>&-); rc=$?
             if [ "$rc" -eq 0 ]; then
                 log "$(m "$M_A_LOG" "$AG_BY" "$(m "$M_TM_SENT" "$ALERT_MAIL")")"
                 jstr "$ALERT_MAIL"; ev test_mail "" "by=\"$AG_BY\"" "to=$REPLY"
@@ -1196,6 +1236,7 @@ take_lock || { log "$M_LOCKED"; exit 0; }
 [ "$DRY" = 1 ] && log "$M_DRY_ON"
 [ ${#SETS[@]} -gt 0 ] && log "$(m "$M_DRY_OVR" "${SETS[*]}")"
 RUN_T0=$(date +%s)
+panel_init
 log "$M_START (v$VERSION)"
 
 # ── Permanent deny limit ────────────────────────────────────────────────────
@@ -1207,7 +1248,8 @@ if [ -n "$limit" ] && [ "$limit" -gt 0 ] 2>/dev/null; then
     if [ "$percent" -ge 80 ]; then
         log "$(m "$M_PERM_WARN")"
         doluluk_satiri=$(m "$M_PERM_FULL" "$current_count" "$limit" "$percent")
-        printf '%s\n\n%s\n\n%s\n' "$(m "$M_MAIL_PERMFULL_BODY")" "$doluluk_satiri" "$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
+        panel_line "" "$M_PANEL_GEN"
+        printf '%s\n\n%s\n\n%s%s\n' "$(m "$M_MAIL_PERMFULL_BODY")" "$doluluk_satiri" "$REPLY" "$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
             mail -s "$(m "$M_MAIL_PERMFULL_SUBJ" "$percent")" "$ALERT_MAIL"
     else
         doluluk_satiri=$(m "$M_PERM_USAGE" "$current_count" "$limit" "$percent")
@@ -1225,7 +1267,8 @@ if [ -n "$temp_limit" ] && [ "$temp_limit" -gt 0 ] 2>/dev/null; then
     if [ "$temp_percent" -ge 80 ]; then
         log "$(m "$M_TEMP_WARN")"
         temp_doluluk_satiri=$(m "$M_TEMP_FULL" "$temp_current" "$temp_limit" "$temp_percent")
-        printf '%s\n\n%s\n\n%s\n' "$(m "$M_MAIL_TEMPFULL_BODY")" "$temp_doluluk_satiri" "$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
+        panel_line "" "$M_PANEL_GEN"
+        printf '%s\n\n%s\n\n%s%s\n' "$(m "$M_MAIL_TEMPFULL_BODY")" "$temp_doluluk_satiri" "$REPLY" "$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
             mail -s "$(m "$M_MAIL_TEMPFULL_SUBJ" "$temp_percent")" "$ALERT_MAIL"
     else
         temp_doluluk_satiri=$(m "$M_TEMP_USAGE" "$temp_current" "$temp_limit" "$temp_percent")
@@ -1280,6 +1323,7 @@ for prefix in $(printf '%s\n' "${!count24[@]}" | sort -V); do
         ip_line "$ip" "${SINGLE_NOTE[$ip]}" 0; added24_body+="$REPLY$tag$NL"
         addj+="${addj:+,}${IPJ%\}},\"res\":\"$res\"}"
     done
+    panel_line "${prefix}.0/24"; added24_body+="$REPLY"
     ev add24 "${prefix}.0/24" "n=$n" "dnd=$([ "$n" -ge "$THRESHOLD_24_PERMANENT" ] && echo true || echo false)" "${OKV[@]}" "ips=[$addj]"
 done
 if [ "$added24" -gt 0 ]; then
@@ -1310,6 +1354,7 @@ for prefix in $(printf '%s\n' "${!count16[@]}" | sort -V); do
             warn_body+="$(m "$M_WARN16_B" "$prefix" "${count16[$prefix]}" "$subnet_count")$NL"
             WL_HIT=""; wl_overlap "$lo" $((lo + 65535)) && warn_body+="$(m "$M_WL_NOTE" "$WL_HIT")$NL"
             ip_lines "${ips16[$prefix]}" perm 1; warn_body+="$REPLY"
+            panel_line "$prefix.0.0/16"; warn_body+="$REPLY"
             warn16=$((warn16 + 1)); cnt_add "WARN16_${prefix} $TODAY"
             jstr "$WL_HIT"
             ev warn16 "$prefix.0.0/16" "n=${count16[$prefix]}" "subnets=$subnet_count" "wl=$REPLY" "total=$IPS_TOTAL" "ips=$IPS_J"
@@ -1372,6 +1417,7 @@ for prefix in $(printf '%s\n' "${!temp_count24[@]}" | sort -V); do
                 temp_perm_added24_body+="$(m "$M_TB24_PERM" "$prefix" "$n")$NL"
                 owner_line "${temp_ips24[$prefix]# }"; temp_perm_added24_body+="$REPLY"; owner_kv
                 ip_lines "${temp_ips24[$prefix]}" temp 0; temp_perm_added24_body+="$REPLY"
+                panel_line "${prefix}.0/24"; temp_perm_added24_body+="$REPLY"
                 cnt_del_prefix "$prefix"
                 ev promote "${prefix}.0/24" "n=$n" "dnd=true" "${OKV[@]}" "ips=$IPS_J"
             else
@@ -1386,6 +1432,7 @@ for prefix in $(printf '%s\n' "${!temp_count24[@]}" | sort -V); do
                 temp_added24_body+="$(m "$M_TB24" "$prefix" "$n")$NL"
                 owner_line "${temp_ips24[$prefix]# }"; temp_added24_body+="$REPLY"; owner_kv
                 ip_lines "${temp_ips24[$prefix]}" temp 0; temp_added24_body+="$REPLY"
+                panel_line "${prefix}.0/24"; temp_added24_body+="$REPLY"
                 cnt_add "$prefix $(date '+%Y-%m-%d')"
                 ev temp24 "${prefix}.0/24" "n=$n" "ttl=43200" "${OKV[@]}" "ips=$IPS_J"
             else
@@ -1424,6 +1471,7 @@ for prefix in $(printf '%s\n' "${!temp_count16[@]}" | sort -V); do
         temp_warn_body+="$(m "$M_WARN16_B" "$prefix" "${temp_count16[$prefix]}" "$subnet_count")$NL"
         WL_HIT=""; wl_overlap "$lo" $((lo + 65535)) && temp_warn_body+="$(m "$M_WL_NOTE" "$WL_HIT")$NL"
         ip_lines "${temp_ips16[$prefix]}" temp 1; temp_warn_body+="$REPLY"
+        panel_line "$prefix.0.0/16"; temp_warn_body+="$REPLY"
         temp_warn16=$((temp_warn16 + 1)); cnt_add "WARN_TEMP16_${prefix} $TODAY"
         jstr "$WL_HIT"
         ev warn16t "$prefix.0.0/16" "n=${temp_count16[$prefix]}" "subnets=$subnet_count" "wl=$REPLY" "total=$IPS_TOTAL" "ips=$IPS_J"
