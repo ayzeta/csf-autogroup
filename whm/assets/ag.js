@@ -12,7 +12,7 @@
   var UPD = null;               // güncelleme kontrolü sonucu
   var LANG = 'en';
   var CLOCK = 0;                // sunucu saati - istemci saati (sn)
-  var UI = { gf: 'all', gq: '', ef: 'all', open: {}, evLimit: 40, gLimit: 40, commits: false, pAll: false, gs: 'added', gd: -1, gp: 0, menu: null, at: 'atk',
+  var UI = { gf: 'all', gq: '', ef: 'all', open: {}, evLimit: 40, gLimit: 40, commits: false, gs: 'added', gd: -1, gp: 0, pp: 0, menu: null, at: 'atk',
              tab: location.hash === '#settings' ? 'settings' : 'overview' };
   var CFG = null, DRAFT = {}, cfgLoading = false;
   var pollTimer = null, wasRunning = false, busy = false;
@@ -57,30 +57,30 @@
       k_perm: 'Kalıcı liste', k_temp: 'Geçici liste', k_groups: 'Aktif grup banı', k_review: 'Kontrol edilecek',
       k_lines: '{0} / {1} satır', k_nolimit: 'limit tanımsız', k_dnd: '{0} tanesi do not delete', k_review_m: 'son {0} gün',
       s_review: 'Kontrol edilecekler', s_review_h: 'Otomatik banlanmayan, göz atılması gerekenler',
-      s_groups: 'Aktif grup banları', s_events: 'Son işlemler', s_lookup: 'IP sorgula', s_pending: 'Terfi bekleyenler',
-      s_pending_h: 'Bir kez geçici banlandı; tekrar gelirse kalıcı + do not delete', s_ignored: 'Yoksayılanlar', s_config: 'Kurallar',
+      s_groups: 'Aktif grup banları', s_events: 'Son işlemler', s_lookup: 'IP sorgula', s_pending: 'İzlenenler',
+      s_pending_h: 'Bir kez geçici banlandı; bu blok tekrar gelirse kalıcı + do not delete olur', s_ignored: 'Yoksayılanlar', s_config: 'Kurallar',
       lookup_ph: '185.220.101.12', lookup_btn: 'Sorgula', lookup_hint: 'Hostname, sahip (ASN), duyurulan blok, kayıt ve CSF listelerindeki durumu.',
       f_all: 'Tümü', f_perm: 'Kalıcı', f_dnd: 'Do not delete', f_temp: 'Geçici', f_manual: 'Elle', g_search: 'CIDR, AS ya da kurum',
       e_all: 'Tümü', e_bans: 'Banlar', e_warn: 'Uyarılar', e_skip: 'Atlananlar', e_manual: 'Elle işlemler', e_clean: 'Temizlik',
-      ev_add24: 'Grup banı', ev_promote: 'Kalıcıya terfi', ev_temp24: 'Geçici grup', ev_skip_wl: 'Beyaz liste', ev_warn16: '/16 uyarısı',
+      ev_add24: 'Grup banı', ev_promote: 'Kalıcıya alındı', ev_temp24: 'Geçici grup', ev_skip_wl: 'Beyaz liste', ev_warn16: '/16 uyarısı',
       ev_warn16t: '/16 geçici', ev_clean_temp: 'Temizlendi', ev_manual_ban: 'Elle ban', ev_manual_unban: 'Kaldırıldı',
-      ev_manual_forget: 'Kayıt silindi', ev_manual_ignore: 'Yoksayıldı', ev_manual_unignore: 'Yoksayma kalktı',
-      kind_perm: 'kalıcı', kind_promoted: 'terfi', kind_temp: 'geçici', kind_manual: 'elle',
+      ev_manual_forget: 'İzlemeden çıkarıldı', ev_manual_ignore: 'Yoksayıldı', ev_manual_unignore: 'Yoksayma kalktı',
+      kind_perm: 'kalıcı', kind_promoted: 'tekrar eden', kind_temp: 'geçici', kind_manual: 'elle',
       ips: 'IP\'ler', hide: 'Gizle', ban16: '/16 banla', ban_anyway: 'Yine de banla', ignore: 'Yoksay', unban: 'Kaldır',
-      promote: 'Kalıcı yap', forget: 'Kaydı sil', unignore: 'Kaldır', show_all: 'Tümünü göster ({0})', more: 'Daha fazla',
+      promote: 'Kalıcı yap', forget: 'İzlemeden çıkar', unignore: 'Kaldır', show_all: 'Tümünü göster ({0})', more: 'Daha fazla',
       n_ip: '{0} IP', n_subnets: '{0} farklı /24', n_singles: '{0} tekilden', since: '{0} tarihinden beri', days_left: '{0} gün kaldı',
       ttl_left: 'geçici ban {0}', until: '{0} tarihine kadar', by: '{0} tarafından', wl: 'beyaz liste: {0}', and_more: '+{0} IP daha',
-      no_review: 'Göz atılacak bir şey yok.', no_groups: 'Aktif grup banı yok.', no_pending: 'Terfi bekleyen blok yok.',
+      no_review: 'Göz atılacak bir şey yok.', no_groups: 'Aktif grup banı yok.', no_pending: 'İzlenen blok yok.',
       no_events: 'Henüz kayıt yok. İlk turdan sonra burada görünecek.', no_match: 'Eşleşen kayıt yok.',
       c_t24: '/24 grup banı', c_t24p: 'do not delete eşiği', c_t16: '/16 uyarısı', c_tt24: 'Geçici /24', c_tt16: 'Geçici /16',
-      c_ret: 'Terfi kaydı saklama', c_lookup: 'Sahip / hostname sorgusu', c_on: 'açık', c_off: 'kapalı', c_days: '{0} gün', c_singles: '≥ {0} tekil',
+      c_ret: 'İzleme süresi', c_lookup: 'Sahip / hostname sorgusu', c_on: 'açık', c_off: 'kapalı', c_days: '{0} gün', c_singles: '≥ {0} tekil',
       now: 'az önce', min_ago: '{0} dk önce', h_ago: '{0} sa önce', d_ago: '{0} gün önce', dur_h: '{0} sa {1} dk', dur_m: '{0} dk',
       cancel: 'Vazgeç', confirm: 'Onayla', close: 'Kapat', reload: 'Sayfayı yenile', type_to_confirm: 'Onaylamak için {0} yazın',
       m_ban16_t: '{0} kalıcı olarak banlansın mı?', m_ban16_b: 'Bu, 65.536 adresin tamamını engeller. Blok "do not delete" olarak eklenir; limit dolduğunda da silinmez.',
       m_force_t: 'Beyaz listeye rağmen banlansın mı?', m_force_b: 'Bu blok CSF beyaz listelerinden biriyle çakışıyor:',
       m_force_n: 'csf.allow adresleri ban içinden geçmeye devam eder; csf.ignore ve diğerleri ise ENGELLENİR.',
-      m_promote_t: '{0} şimdi kalıcı yapılsın mı?', m_promote_b: 'Blok "do not delete" olarak kalıcı listeye eklenir ve terfi kaydı silinir.',
-      m_forget_t: '{0} için terfi kaydı silinsin mi?', m_forget_b: 'Bu bloktan bir sonraki grup saldırısı yine "ilk kez" sayılır ve 12 saatlik geçici ban alır.',
+      m_promote_t: '{0} şimdi kalıcı yapılsın mı?', m_promote_b: 'Blok "do not delete" olarak kalıcı listeye eklenir ve izlemeden çıkarılır.',
+      m_forget_t: '{0} izlemeden çıkarılsın mı?', m_forget_b: 'Bu bloktan bir sonraki grup saldırısı yine "ilk kez" sayılır ve 12 saatlik geçici ban alır.',
       m_unban_t: '{0} kaldırılsın mı?', m_unban_b: 'Grup banı kaldırılır. Gruplanırken silinen tekil banlar geri gelmez; bu adresler tamamen açılır.',
       m_unban_dnd: 'Bu blok "do not delete" işaretli. Kaldırmak için csf.deny\'deki işaret önce silinir (dosyanın yedeği alınır).',
       m_ignore_t: '{0} yoksayılsın mı?', m_ignore_b: 'Bu blok "Kontrol edilecekler" listesinden gizlenir; /16 ise uyarı maili de gelmez.', m_ignore_d: 'Süre',
@@ -93,7 +93,7 @@
       t_err: 'İşlem tamamlanamadı: {0}', session: 'Oturum süresi doldu. Sayfayı yenileyin.', t_copied: 'Kopyalandı.',
       l_host: 'Hostname', l_fwd: 'ileri yönde doğrulandı', l_nofwd: 'ileri yönde doğrulanamadı', l_noptr: 'Ters DNS kaydı yok',
       l_owner: 'Sahip', l_prefix: 'Duyurulan blok', l_reg: 'Kayıt', l_fw: 'Güvenlik duvarı', l_wl: 'Beyaz liste',
-      l_pending: 'Terfi bekliyor', l_ign: 'Yoksayılıyor', l_notbanned: 'Engelli değil', l_none: 'Yok', l_perm_single: 'Kalıcı (tekil)',
+      l_pending: 'İzleniyor', l_ign: 'Yoksayılıyor', l_notbanned: 'Engelli değil', l_none: 'Yok', l_perm_single: 'Kalıcı (tekil)',
       l_perm_cover: 'Kalıcı (blok)', l_temp: 'Geçici', l_nolookup: 'Sahip ve hostname sorguları kapalı (LOOKUP=0).',
       l_abuse: 'AbuseIPDB', l_bgp: 'bgp.he.net', l_copy: 'Kopyala', bad_ip: 'Geçerli bir IPv4 adresi yazın.',
       foot: 'CSF Auto-Group v{0} · {1} olarak oturum açıldı',
@@ -109,7 +109,7 @@
       st_sched: 'Zamanlama', st_sched_h: 'Script\'in cron ile ne sıklıkla çalışacağı.', cron_5: '5 dk', cron_10: '10 dk', cron_15: '15 dk', cron_30: '30 dk', cron_0: 'Saatte bir',
       st_lookup: 'Sorgular', k_LOOKUP: 'Sahip ve hostname sorgusu', h_LOOKUP: 'Mailde ve panelde ASN, kurum ve hostname gösterir; CC_IGNORE ve csf.rignore kontrolleri de buna bağlı.',
       k_LOOKUP_TIMEOUT: 'DNS zaman aşımı (sn)', h_LOOKUP_TIMEOUT: 'Her sorgu için bekleme süresi.', st_nodns: 'Sunucuda dig/host yok; sorgular çalışmaz (dnf install bind-utils).',
-      on: 'Açık', off: 'Kapalı', st_keep: 'Saklama', k_SAYAC_RETENTION_DAYS: 'Terfi kaydı saklama (gün)',
+      on: 'Açık', off: 'Kapalı', st_keep: 'Saklama', k_SAYAC_RETENTION_DAYS: 'İzleme süresi (gün)',
       h_SAYAC_RETENTION_DAYS: 'Geçici banlanmış /24 bu süre içinde tekrar gelirse kalıcı olur.', k_REVIEW_DAYS: 'Kontrol edilecekler (gün)',
       h_REVIEW_DAYS: 'Uyarı ve atlamaların listede kaç gün kalacağı.', k_LOG_MAX_LINES: 'Log satır sınırı', h_LOG_MAX_LINES: 'Log bu satır sayısında tutulur.',
       st_csf: 'CSF liste sınırları', st_csf_h: 'Bunlar CSF\'in kendi ayarları; buradan değil CSF\'ten değiştirilir.',
@@ -122,8 +122,8 @@
       new_badge: 'Son ziyaretinden beri yeni', actions: 'İşlemler', overdue: 'Tur gecikti · son tur {0} (beklenen aralık {1})',
       since_visit: 'Son ziyaretinden beri ({0}):', sn_add: '{0} grup banı', sn_temp: '{0} geçici grup', sn_warn: '{0} /16 uyarısı',
       sn_skip: '{0} beyaz liste atlaması', show_new: 'Göster', e_new: 'Son ziyaretten beri', ch_title: 'Son 30 gün', ch_total: '{0} olay',
-      ch_add: 'Grup banı', ch_promote: 'Terfi', ch_temp: 'Geçici', ch_warn: '/16 uyarısı', ch_skip: 'Beyaz liste',
-      ch_empty: 'Son 30 günde kayıt yok; grafik olay kaydı biriktikçe dolacak.', ipcard: 'IP kartı', col_block: 'Blok', col_owner: 'Sahip',
+      ch_add: 'Grup banı', ch_promote: 'Kalıcıya alındı', ch_temp: 'Geçici', ch_warn: '/16 uyarısı', ch_skip: 'Beyaz liste',
+      ch_empty: 'Son 30 günde kayıt yok; grafik olay kaydı biriktikçe dolacak.', ipcard: 'IP kartı', col_block: 'Blok', col_owner: 'Sahip', col_since: 'Başlangıç', col_left: 'Kalan',
       col_singles: 'Tekil', col_added: 'Eklendi', of_n: '{0}–{1} / {2}', s_asn: 'En çok saldıran ağlar',
       s_asn_h: 'Grup banı ve tekil bana göre sıralı; csf.deny\'deki başka kaynaklı bloklar ayrıca belirtilir · {0} bloğun sahibi biliniyor', p_g: '{0} grup', p_b: '+{0} blok başka kaynaklı', p_t: '{0} tekil', p_bn: '{0} blok',
       at_atk: 'Saldıranlar', at_blk: 'Diğer bloklar', blk_h: 'csf.deny\'de CSF Auto-Group dışından eklenmiş aralıklar (elle ya da başka araçla); zaten engelliler.',
@@ -136,7 +136,7 @@
       m_asn_w: 'Bu, o ağdaki meşru kullanıcıları da (ör. o sağlayıcıda sunucusu olan müşterileri) engeller. Büyük bulut sağlayıcılarında dikkatli olun.',
       m_asn_s: 'Nasıl: CSF → Firewall Configuration → CC_DENY alanına {0} ekleyin (virgülle ayırarak), kaydedip csf ve lfd\'yi yeniden başlatın. Bu eklenti csf.conf\'u değiştirmez.',
       copy_asn: '{0} kopyala', csf_open2: 'CSF\'yi aç', edit: 'Düzenle', st_digest: 'Haftalık özet',
-      st_digest_h: 'Seçilen gün 09:00\'dan sonraki ilk turda gönderilir: yeni gruplar, en çok saldıran ağlar, süresi dolacak terfi kayıtları.',
+      st_digest_h: 'Seçilen gün 09:00\'dan sonraki ilk turda gönderilir: yeni gruplar, en çok saldıran ağlar, izlemesi bitecek bloklar.',
       st_digest_day: 'Gönderim günü', d1: 'Pzt', d2: 'Sal', d3: 'Çar', d4: 'Per', d5: 'Cum', d6: 'Cmt', d7: 'Paz',
       digest_prev: 'Özeti önizle', m_digest_t: 'Haftalık özet önizlemesi', ev_digest: 'Haftalık özet'
     },
@@ -149,30 +149,30 @@
       k_perm: 'Permanent list', k_temp: 'Temp list', k_groups: 'Active group bans', k_review: 'To review',
       k_lines: '{0} / {1} lines', k_nolimit: 'no limit set', k_dnd: '{0} marked do not delete', k_review_m: 'last {0} days',
       s_review: 'To review', s_review_h: 'Not banned automatically — worth a look',
-      s_groups: 'Active group bans', s_events: 'Recent actions', s_lookup: 'Look up an IP', s_pending: 'Pending promotion',
-      s_pending_h: 'Temp-banned once; back again means permanent + do not delete', s_ignored: 'Ignored', s_config: 'Rules',
+      s_groups: 'Active group bans', s_events: 'Recent actions', s_lookup: 'Look up an IP', s_pending: 'Watched',
+      s_pending_h: 'Temp-banned once; if this block comes back it becomes permanent + do not delete', s_ignored: 'Ignored', s_config: 'Rules',
       lookup_ph: '185.220.101.12', lookup_btn: 'Look up', lookup_hint: 'Hostname, owner (ASN), announced prefix, registry and CSF list status.',
       f_all: 'All', f_perm: 'Permanent', f_dnd: 'Do not delete', f_temp: 'Temp', f_manual: 'Manual', g_search: 'CIDR, AS or org',
       e_all: 'All', e_bans: 'Bans', e_warn: 'Warnings', e_skip: 'Skipped', e_manual: 'Manual', e_clean: 'Cleanup',
-      ev_add24: 'Group ban', ev_promote: 'Promoted', ev_temp24: 'Temp group', ev_skip_wl: 'Whitelist', ev_warn16: '/16 warning',
+      ev_add24: 'Group ban', ev_promote: 'Made permanent', ev_temp24: 'Temp group', ev_skip_wl: 'Whitelist', ev_warn16: '/16 warning',
       ev_warn16t: '/16 temp', ev_clean_temp: 'Cleaned', ev_manual_ban: 'Manual ban', ev_manual_unban: 'Removed',
-      ev_manual_forget: 'Record removed', ev_manual_ignore: 'Ignored', ev_manual_unignore: 'Unignored',
-      kind_perm: 'permanent', kind_promoted: 'promoted', kind_temp: 'temp', kind_manual: 'manual',
+      ev_manual_forget: 'Unwatched', ev_manual_ignore: 'Ignored', ev_manual_unignore: 'Unignored',
+      kind_perm: 'permanent', kind_promoted: 'repeat', kind_temp: 'temp', kind_manual: 'manual',
       ips: 'IPs', hide: 'Hide', ban16: 'Ban /16', ban_anyway: 'Ban anyway', ignore: 'Ignore', unban: 'Remove',
-      promote: 'Make permanent', forget: 'Remove record', unignore: 'Remove', show_all: 'Show all ({0})', more: 'Show more',
+      promote: 'Make permanent', forget: 'Stop watching', unignore: 'Remove', show_all: 'Show all ({0})', more: 'Show more',
       n_ip: '{0} IPs', n_subnets: '{0} distinct /24s', n_singles: 'from {0} singles', since: 'since {0}', days_left: '{0} days left',
       ttl_left: 'temp ban {0}', until: 'until {0}', by: 'by {0}', wl: 'whitelist: {0}', and_more: '+{0} more IPs',
-      no_review: 'Nothing to review.', no_groups: 'No active group bans.', no_pending: 'No blocks pending promotion.',
+      no_review: 'Nothing to review.', no_groups: 'No active group bans.', no_pending: 'No watched blocks.',
       no_events: 'Nothing recorded yet. Runs will show up here.', no_match: 'No matching entries.',
       c_t24: '/24 group ban', c_t24p: 'do not delete at', c_t16: '/16 warning', c_tt24: 'Temp /24', c_tt16: 'Temp /16',
-      c_ret: 'Promotion record kept', c_lookup: 'Owner / hostname lookups', c_on: 'on', c_off: 'off', c_days: '{0} days', c_singles: '≥ {0} singles',
+      c_ret: 'Watch period', c_lookup: 'Owner / hostname lookups', c_on: 'on', c_off: 'off', c_days: '{0} days', c_singles: '≥ {0} singles',
       now: 'just now', min_ago: '{0} min ago', h_ago: '{0} h ago', d_ago: '{0} d ago', dur_h: '{0} h {1} min', dur_m: '{0} min',
       cancel: 'Cancel', confirm: 'Confirm', close: 'Close', reload: 'Reload page', type_to_confirm: 'Type {0} to confirm',
       m_ban16_t: 'Permanently ban {0}?', m_ban16_b: 'This blocks all 65,536 addresses. The block is added as "do not delete", so the deny limit never rotates it out.',
       m_force_t: 'Ban despite the whitelist?', m_force_b: 'This block overlaps a CSF whitelist entry:',
       m_force_n: 'csf.allow addresses still get through a ban; csf.ignore and the others WILL be blocked.',
-      m_promote_t: 'Make {0} permanent now?', m_promote_b: 'The block is added to the permanent list as "do not delete" and its promotion record is removed.',
-      m_forget_t: 'Remove the promotion record for {0}?', m_forget_b: 'The next group attack from this block counts as a "first time" again and gets a 12-hour temp ban.',
+      m_promote_t: 'Make {0} permanent now?', m_promote_b: 'The block is added to the permanent list as "do not delete" and is no longer watched.',
+      m_forget_t: 'Stop watching {0}?', m_forget_b: 'The next group attack from this block counts as a "first time" again and gets a 12-hour temp ban.',
       m_unban_t: 'Remove {0}?', m_unban_b: 'The group ban is removed. The single bans deleted when it was grouped do not come back — these addresses are fully unblocked.',
       m_unban_dnd: 'This block is marked "do not delete". The marker is removed from csf.deny first (a backup is kept).',
       m_ignore_t: 'Ignore {0}?', m_ignore_b: 'The block is hidden from "To review"; for a /16 its warning emails stop too.', m_ignore_d: 'For',
@@ -185,7 +185,7 @@
       t_err: 'Could not complete: {0}', session: 'Session expired. Reload the page.', t_copied: 'Copied.',
       l_host: 'Hostname', l_fwd: 'forward-confirmed', l_nofwd: 'not forward-confirmed', l_noptr: 'No reverse DNS',
       l_owner: 'Owner', l_prefix: 'Announced prefix', l_reg: 'Registry', l_fw: 'Firewall', l_wl: 'Whitelist',
-      l_pending: 'Pending promotion', l_ign: 'Ignored', l_notbanned: 'Not blocked', l_none: 'None', l_perm_single: 'Permanent (single)',
+      l_pending: 'Watched', l_ign: 'Ignored', l_notbanned: 'Not blocked', l_none: 'None', l_perm_single: 'Permanent (single)',
       l_perm_cover: 'Permanent (block)', l_temp: 'Temp', l_nolookup: 'Owner and hostname lookups are off (LOOKUP=0).',
       l_abuse: 'AbuseIPDB', l_bgp: 'bgp.he.net', l_copy: 'Copy', bad_ip: 'Enter a valid IPv4 address.',
       foot: 'CSF Auto-Group v{0} · signed in as {1}',
@@ -201,7 +201,7 @@
       st_sched: 'Schedule', st_sched_h: 'How often cron runs the script.', cron_5: '5 min', cron_10: '10 min', cron_15: '15 min', cron_30: '30 min', cron_0: 'Hourly',
       st_lookup: 'Lookups', k_LOOKUP: 'Owner and hostname lookups', h_LOOKUP: 'Shows ASN, organisation and hostname in emails and here; CC_IGNORE and csf.rignore checks rely on it.',
       k_LOOKUP_TIMEOUT: 'DNS timeout (s)', h_LOOKUP_TIMEOUT: 'How long to wait for each query.', st_nodns: 'Neither dig nor host is installed; lookups won\'t work (dnf install bind-utils).',
-      on: 'On', off: 'Off', st_keep: 'Retention', k_SAYAC_RETENTION_DAYS: 'Promotion record kept (days)',
+      on: 'On', off: 'Off', st_keep: 'Retention', k_SAYAC_RETENTION_DAYS: 'Watch period (days)',
       h_SAYAC_RETENTION_DAYS: 'A temp-banned /24 that returns within this time becomes permanent.', k_REVIEW_DAYS: 'To review (days)',
       h_REVIEW_DAYS: 'How long warnings and skips stay on the list.', k_LOG_MAX_LINES: 'Log line limit', h_LOG_MAX_LINES: 'The log is trimmed to this many lines.',
       st_csf: 'CSF list limits', st_csf_h: 'These are CSF\'s own settings; change them in CSF, not here.',
@@ -214,8 +214,8 @@
       new_badge: 'New since your last visit', actions: 'Actions', overdue: 'Run overdue · last run {0} (expected every {1})',
       since_visit: 'Since your last visit ({0}):', sn_add: '{0} group bans', sn_temp: '{0} temp groups', sn_warn: '{0} /16 warnings',
       sn_skip: '{0} whitelist skips', show_new: 'Show', e_new: 'Since last visit', ch_title: 'Last 30 days', ch_total: '{0} events',
-      ch_add: 'Group ban', ch_promote: 'Promoted', ch_temp: 'Temp', ch_warn: '/16 warning', ch_skip: 'Whitelist',
-      ch_empty: 'Nothing in the last 30 days; the chart fills as the event log grows.', ipcard: 'IP card', col_block: 'Block', col_owner: 'Owner',
+      ch_add: 'Group ban', ch_promote: 'Made permanent', ch_temp: 'Temp', ch_warn: '/16 warning', ch_skip: 'Whitelist',
+      ch_empty: 'Nothing in the last 30 days; the chart fills as the event log grows.', ipcard: 'IP card', col_block: 'Block', col_owner: 'Owner', col_since: 'Since', col_left: 'Left',
       col_singles: 'Singles', col_added: 'Added', of_n: '{0}–{1} of {2}', s_asn: 'Top attacking networks',
       s_asn_h: 'Ranked by group bans and single bans; other ranges in csf.deny are noted separately · owner known for {0} blocks', p_g: '{0} groups', p_b: '+{0} blocks from other sources', p_t: '{0} singles', p_bn: '{0} blocks',
       at_atk: 'Attackers', at_blk: 'Other blocks', blk_h: 'Ranges in csf.deny added outside CSF Auto-Group (by hand or other tools); already blocked.',
@@ -228,7 +228,7 @@
       m_asn_w: 'This also blocks legitimate users of that network (e.g. customers hosted there). Be careful with large cloud providers.',
       m_asn_s: 'How: CSF → Firewall Configuration → add {0} to CC_DENY (comma separated), save and restart csf and lfd. This plugin never changes csf.conf.',
       copy_asn: 'Copy {0}', csf_open2: 'Open CSF', edit: 'Edit', st_digest: 'Weekly summary',
-      st_digest_h: 'Sent with the first run after 09:00 on the chosen day: new groups, top attacking networks, promotion records about to expire.',
+      st_digest_h: 'Sent with the first run after 09:00 on the chosen day: new groups, top attacking networks, watched blocks about to expire.',
       st_digest_day: 'Day', d1: 'Mon', d2: 'Tue', d3: 'Wed', d4: 'Thu', d5: 'Fri', d6: 'Sat', d7: 'Sun',
       digest_prev: 'Preview summary', m_digest_t: 'Weekly summary preview', ev_digest: 'Weekly summary'
     }
@@ -662,27 +662,37 @@
       '<span class="ag-hint" style="width:100%">' + hint + '</span></div><div class="ag-card-b">' + body + '</div></section>';
   }
 
+  /* İzlenenler: bir kez geçici banlanmış /24'ler; grup tablosuyla aynı biçimde, sayfalı */
+  var PPAGE = 8;
+  function pendingSorted() { return S.pending.slice().sort(function (a, b) { return a.days_left - b.days_left; }); }
   function pending() {
-    var plist = S.pending.slice().sort(function (a, b) { return a.days_left - b.days_left; });
-    var pmore = !UI.pAll && plist.length > 8 ? plist.length : 0;
-    if (pmore) plist = plist.slice(0, 8);
-    var rows = plist.map(function (p) {
+    var list = pendingSorted(), pages = Math.max(1, Math.ceil(list.length / PPAGE));
+    if (UI.pp >= pages) UI.pp = pages - 1;
+    var from = UI.pp * PPAGE, shown = list.slice(from, from + PPAGE);
+    var rows = shown.map(function (p) {
       var cidr = p.prefix + '.0/24', o = ownerOf(cidr), ev = (OWNERS[cidr] || {}).ev;
       var left = Math.max(0, p.days_left), ret = S.config.retention || 180, pct = Math.max(0, Math.min(100, left * 100 / ret));
       var urg = left < 7 ? ' bad' : left < 30 ? ' warn' : '';
       var first = ev && ev.ips && ev.ips[0] ? ev.ips[0].ip : p.prefix + '.1';
-      return '<div class="ag-prow" data-row="' + esc(cidr) + '"><div class="ag-row-main"><div class="ag-row-t"><span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(cidr) + '</span>' +
+      return '<div class="ag-item" data-row="' + esc(cidr) + '"><div class="ag-tr ag-tr-p">' +
+        '<div class="ag-td ag-td-main"><span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(cidr) + '</span>' +
         (p.temp_ttl > 0 ? '<span class="ag-pill ag-pill-warn">' + t('ttl_left', dur(p.temp_ttl)) + '</span>' : '') + '</div>' +
-        '<div class="ag-row-s">' + (o.label ? flag(o.cc) + ' ' + esc(o.label) : t('since', esc(p.since))) + '</div></div>' +
-        '<div class="ag-left' + urg + '"><div class="ag-days"><i style="width:' + pct + '%"></i></div><span>' + t('days_left', left) + '</span></div>' +
-        menu('pm:' + p.prefix, [{ act: 'promote', label: t('promote'), icon: 'ban', attrs: 'data-t="' + esc(p.prefix) + '"' },
+        '<div class="ag-td ag-td-own" title="' + esc(o.label || '') + '">' + (o.asn ? flag(o.cc) + '<span class="ag-asn">AS' + esc(o.asn) + '</span><span class="ag-org">' + esc(o.name || '') + '</span>' : '<span class="ag-muted">—</span>') + '</div>' +
+        '<div class="ag-td ag-when ag-td-since">' + esc(p.since) + '</div>' +
+        '<div class="ag-td"><div class="ag-left' + urg + '"><div class="ag-days"><i style="width:' + pct + '%"></i></div><span>' + t('days_left', left) + '</span></div></div>' +
+        '<div class="ag-td ag-td-act">' + menu('pm:' + p.prefix, [{ act: 'promote', label: t('promote'), icon: 'ban', attrs: 'data-t="' + esc(p.prefix) + '"' },
                                 { act: 'forget', label: t('forget'), icon: 'x', attrs: 'data-t="' + esc(p.prefix) + '"' },
-                                { act: 'ipcard', label: t('ipcard'), icon: 'search', attrs: 'data-ip="' + esc(first) + '"' }]) + '</div>';
+                                { act: 'ipcard', label: t('ipcard'), icon: 'search', attrs: 'data-ip="' + esc(first) + '"' }]) + '</div></div></div>';
     }).join('');
+    var pager = pages > 1 ? '<div class="ag-pager"><span>' + t('of_n', from + 1, from + shown.length, list.length) + '</span>' +
+      '<button class="ag-iconbtn" data-act="ppage" data-d="-1"' + (UI.pp ? '' : ' disabled') + ' aria-label="‹">‹</button>' +
+      '<button class="ag-iconbtn" data-act="ppage" data-d="1"' + (UI.pp < pages - 1 ? '' : ' disabled') + ' aria-label="›">›</button></div>' : '';
+    var body = list.length ? '<div class="ag-thead ag-tr-p"><span class="ag-th">' + t('col_block') + '</span><span class="ag-th">' + t('col_owner') + '</span>' +
+      '<span class="ag-th ag-td-since">' + t('col_since') + '</span><span class="ag-th ag-th-r">' + t('col_left') + '</span><span></span></div>' + rows + pager
+      : empty('check', t('no_pending'));
     return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.hour + t('s_pending') + '</h2><span class="ag-count">' + S.pending.length + '</span>' +
       '<span class="ag-hint" style="width:100%">' + t('s_pending_h') + '</span></div>' +
-      '<div class="ag-card-b">' + (rows || empty('check', t('no_pending'))) + '</div>' +
-      (pmore ? '<div class="ag-card-f"><button class="ag-btn ag-btn-sm ag-btn-ghost" data-act="pall">' + t('show_pending_all', num(pmore)) + '</button></div>' : '') + '</section>';
+      '<div class="ag-card-b ag-tbl">' + body + '</div></section>';
   }
 
   function ignored() {
@@ -810,8 +820,8 @@
     indexOwners();
     var y = window.scrollY;
     var body = UI.tab === 'settings' ? settingsView()
-      : sinceBar() + kpis() + activity() + '<div class="ag-grid"><div class="ag-col">' + review() + groups() + events() + '</div>' +
-        '<div class="ag-col">' + lookupCard() + topAsn() + pending() + ignored() + config() + '</div></div>';
+      : sinceBar() + kpis() + activity() + '<div class="ag-grid"><div class="ag-col">' + review() + groups() + pending() + events() + '</div>' +
+        '<div class="ag-col">' + lookupCard() + topAsn() + ignored() + config() + '</div></div>';
     $app.innerHTML = '<div class="ag-wrap">' + head() + banner() + body +
       '<div class="ag-foot">' + esc(t('foot', S.version + (BOOT.commit ? ' (' + BOOT.commit + ')' : ''), BOOT.user || 'root')) + '</div></div>';
     $app.setAttribute('aria-busy', 'false');
@@ -929,7 +939,7 @@
       if (k === 'settings') { CFG = null; DRAFT = {}; }
       render(); window.scrollTo(0, 0);
     },
-    pall: function () { UI.pAll = true; render(); },
+    ppage: function (el) { UI.pp = Math.max(0, UI.pp + (+el.getAttribute('data-d'))); render(); },
     at: function (el) { UI.at = el.getAttribute('data-t'); render(); },
     menu: function (el) { var k = el.getAttribute('data-key'); UI.menu = UI.menu === k ? null : k; render(); },
     gsort: function (el) { var k = el.getAttribute('data-k'); if (UI.gs === k) UI.gd = -UI.gd; else { UI.gs = k; UI.gd = k === 'added' || k === 'n' ? -1 : 1; } UI.gp = 0; render(); },
@@ -1211,7 +1221,7 @@
     var inGroups = S.groups.some(function (g) { return g.cidr === f; });
     if (inReview) UI.open['r:' + f] = true;
     else if (inGroups) { UI.open['g:' + f] = true; UI.gLimit = 1e6; UI.gf = 'all'; UI.gq = ''; }
-    else if (S.pending.some(function (p) { return p.prefix + '.0/24' === f; })) UI.pAll = true;
+    else { var pi = pendingSorted().findIndex(function (p) { return p.prefix + '.0/24' === f; }); if (pi >= 0) UI.pp = Math.floor(pi / PPAGE); }
     render();
     var el = document.querySelector('#ag-app [data-row="' + f + '"]');
     if (el) {

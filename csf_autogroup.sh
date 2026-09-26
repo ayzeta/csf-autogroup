@@ -21,7 +21,7 @@
 # Usage:
 #   csf_autogroup.sh                      normal run (what cron does)
 #   csf_autogroup.sh --dry-run            show what a run WOULD do; changes nothing
-#   csf_autogroup.sh --status [--json]    groups, pending promotions, items to review
+#   csf_autogroup.sh --status [--json]    groups, watched blocks, items to review
 #   csf_autogroup.sh --lookup IP [--json] who is this IP? (owner, hostname, lists)
 #   csf_autogroup.sh --action NAME TARGET [DAYS] [--force] [--json]
 #        ban16 A.B | ban24 A.B.C | forget A.B.C | unban CIDR
@@ -39,7 +39,7 @@
 # ============================================================================
 set -o pipefail
 
-VERSION="1.6.2"   # sürüm — başlangıç log satırında görünür
+VERSION="1.6.3"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -192,8 +192,8 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_A_BANNED="%s kalıcı banlandı (do not delete)"
   M_A_BANFAIL="%s eklenemedi: %s"
   M_A_COMMENT="csf_autogroup: elle /%s ban (%s) - do not delete"
-  M_A_FORGOT="%s için terfi kaydı silindi"
-  M_A_NOREC="%s için terfi kaydı yok"
+  M_A_FORGOT="%s izlemeden çıkarıldı"
+  M_A_NOREC="%s izlenmiyor"
   M_A_UNBANNED="%s kaldırıldı"
   M_A_UNBANFAIL="%s kaldırılamadı: %s"
   M_A_NOTFOUND="%s ne csf.deny'de ne geçici listede birebir bulunamadı"
@@ -203,12 +203,12 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_S_TITLE="CSF Auto-Group %s — durum"
   M_S_LAST="Son çalışma"; M_S_NEVER="henüz yok"; M_S_RUNNING="şu an çalışıyor"
   M_S_USAGE="Doluluk"; M_S_PERM="kalıcı"; M_S_TEMP="geçici"
-  M_S_REVIEW="Kontrol edilecekler (%s gün)"; M_S_PENDING="Terfi bekleyenler"
+  M_S_REVIEW="Kontrol edilecekler (%s gün)"; M_S_PENDING="İzlenenler"
   M_S_GROUPS="Aktif grup banları"; M_S_IGNORED="Yoksayılanlar"; M_S_RECENT="Son işlemler"
   M_S_NONE="yok"; M_S_DAYSLEFT="%s gün kaldı"; M_S_TTL="geçici ban %s kaldı"
   M_L_HOST="Hostname"; M_L_FWD="ileri yönde doğrulandı"; M_L_NOFWD="ileri yönde doğrulanamadı"
   M_L_OWNER="Sahibi"; M_L_PREFIX="Duyurulan blok"; M_L_REG="Kayıt"; M_L_DENY="csf.deny"
-  M_L_TEMP="Geçici liste"; M_L_WL="Beyaz liste"; M_L_PENDING="Terfi bekliyor"; M_L_IGN="Yoksayılıyor"
+  M_L_TEMP="Geçici liste"; M_L_WL="Beyaz liste"; M_L_PENDING="İzleniyor"; M_L_IGN="Yoksayılıyor"
   M_CFG_BAD="Geçersiz değer: %s = %s (%s olmalı)"
   M_CFG_RANGE="%s ile %s arası bir tam sayı"
   M_CFG_EMAIL="geçerli bir e-posta adresi"
@@ -228,14 +228,14 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_TM_FAIL="mail komutu hata verdi: %s"
   M_DG_SUBJ="CSF Auto-Group haftalık özet (%s)"
   M_DG_HEAD="Son 7 gün: %s – %s"
-  M_DG_COUNTS="%s grup banı · %s geçici grup · %s kalıcıya terfi · %s /16 uyarısı · %s beyaz liste atlaması · %s elle işlem"
+  M_DG_COUNTS="%s grup banı · %s geçici grup · %s kalıcıya alındı · %s /16 uyarısı · %s beyaz liste atlaması · %s elle işlem"
   M_DG_USAGE="Kalıcı liste: %s / %s satır (%%%s) · 7 gün önce: %s"
   M_DG_TUSAGE="Geçici liste: %s / %s satır"
   M_DG_NEW="Yeni grup banları:"
   M_DG_TOP="En çok saldıran ağlar (CSF Auto-Group grup banları ve tekil banlara göre):"
   M_DG_TOPL="   %-9s %-44s %s"
   M_DG_PG="%s grup"; M_DG_PB="+%s blok başka kaynaklı"; M_DG_PT="%s tekil"
-  M_DG_EXP="14 gün içinde süresi dolacak terfi kayıtları (tekrar gelirlerse kalıcı olurlar):"
+  M_DG_EXP="14 gün içinde izlemesi bitecek bloklar (tekrar gelirlerse kalıcı olurlar):"
   M_DG_EXPL="   %-18s %s gün"
   M_DG_RUNS="Tur sağlığı: son 7 günde %s tur çalıştı (cron aralığına göre beklenen ~%s)"
   M_DG_IM="Imunify360'ın en çok engellediği ağlar (sunucunun kendi kara listesi, %s IP):"
@@ -327,8 +327,8 @@ else
   M_A_BANNED="%s permanently banned (do not delete)"
   M_A_BANFAIL="%s could not be added: %s"
   M_A_COMMENT="csf_autogroup: manual /%s ban (%s) - do not delete"
-  M_A_FORGOT="Promotion record for %s removed"
-  M_A_NOREC="No promotion record for %s"
+  M_A_FORGOT="%s is no longer watched"
+  M_A_NOREC="%s is not watched"
   M_A_UNBANNED="%s removed"
   M_A_UNBANFAIL="%s could not be removed: %s"
   M_A_NOTFOUND="%s is not in csf.deny or the temp list (exact match)"
@@ -338,12 +338,12 @@ else
   M_S_TITLE="CSF Auto-Group %s — status"
   M_S_LAST="Last run"; M_S_NEVER="none yet"; M_S_RUNNING="running now"
   M_S_USAGE="Usage"; M_S_PERM="permanent"; M_S_TEMP="temp"
-  M_S_REVIEW="To review (%s days)"; M_S_PENDING="Pending promotion"
+  M_S_REVIEW="To review (%s days)"; M_S_PENDING="Watched"
   M_S_GROUPS="Active group bans"; M_S_IGNORED="Ignored"; M_S_RECENT="Recent actions"
   M_S_NONE="none"; M_S_DAYSLEFT="%s days left"; M_S_TTL="temp ban %s left"
   M_L_HOST="Hostname"; M_L_FWD="forward-confirmed"; M_L_NOFWD="not forward-confirmed"
   M_L_OWNER="Owner"; M_L_PREFIX="Announced prefix"; M_L_REG="Registry"; M_L_DENY="csf.deny"
-  M_L_TEMP="Temp list"; M_L_WL="Whitelist"; M_L_PENDING="Pending promotion"; M_L_IGN="Ignored"
+  M_L_TEMP="Temp list"; M_L_WL="Whitelist"; M_L_PENDING="Watched"; M_L_IGN="Ignored"
   M_CFG_BAD="Invalid value: %s = %s (must be %s)"
   M_CFG_RANGE="a whole number from %s to %s"
   M_CFG_EMAIL="a valid email address"
@@ -363,14 +363,14 @@ else
   M_TM_FAIL="the mail command failed: %s"
   M_DG_SUBJ="CSF Auto-Group weekly summary (%s)"
   M_DG_HEAD="Last 7 days: %s – %s"
-  M_DG_COUNTS="%s group bans · %s temp groups · %s promoted · %s /16 warnings · %s whitelist skips · %s manual actions"
+  M_DG_COUNTS="%s group bans · %s temp groups · %s made permanent · %s /16 warnings · %s whitelist skips · %s manual actions"
   M_DG_USAGE="Permanent list: %s / %s lines (%s%%) · 7 days ago: %s"
   M_DG_TUSAGE="Temp list: %s / %s lines"
   M_DG_NEW="New group bans:"
   M_DG_TOP="Top attacking networks (by CSF Auto-Group group bans and single bans):"
   M_DG_TOPL="   %-9s %-44s %s"
   M_DG_PG="%s groups"; M_DG_PB="+%s blocks from other sources"; M_DG_PT="%s singles"
-  M_DG_EXP="Promotion records expiring within 14 days (become permanent if they return):"
+  M_DG_EXP="Watched blocks expiring within 14 days (become permanent if they return):"
   M_DG_EXPL="   %-18s %s days"
   M_DG_RUNS="Run health: %s runs in the last 7 days (about %s expected from the cron interval)"
   M_DG_IM="Networks Imunify360 blocks most (this server's own blacklist, %s IPs):"

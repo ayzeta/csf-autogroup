@@ -17,7 +17,7 @@ overflowing its line limit, and you get an email when it nears that limit.
 Works on **any CSF server** (cPanel or not). No dependencies beyond CSF and a
 working `mail` command (`dig` or `host` for the optional lookups below).
 
-**Version 1.6.1** · bilingual logs, alert emails and WHM plugin (English /
+**Version 1.6.3** · bilingual logs, alert emails and WHM plugin (English /
 Türkçe, set `MSG_LANG`). The running version is printed on each run's first log
 line.
 
@@ -118,15 +118,16 @@ What it shows:
   The header turns red when the last run is much older than the cron interval.
 - **Since your last visit** — what happened since you last opened the page;
   new rows carry a dot.
-- **Last 30 days** — a daily chart of group bans, promotions, temp groups,
+- **Last 30 days** — a daily chart of group bans, blocks made permanent, temp groups,
   `/16` warnings and whitelist skips.
 - **To review** — `/16` warnings and whitelist-skipped `/24`s from the last 7
   days, with every IP's hostname, owner and ban reason.
-- **Pending promotion** — `/24`s that were temp-banned once. If one comes back,
-  it becomes permanent + `do not delete`. Sorted by days left; ones about to
-  expire are highlighted.
 - **Active group bans** — a sortable, paged table with each block's owner
   (ASN, organisation, country), searchable by CIDR, AS number or organisation.
+  Blocks that became permanent on a second attack are tagged *repeat*.
+- **Watched** — `/24`s that were temp-banned once. If one comes back, it
+  becomes permanent + `do not delete`. A paged table under the group bans,
+  sorted by days left; ones about to expire are highlighted.
 - **Top attacking networks** — three tabs:
   - *Attackers* — ranked by attack evidence: *groups* (bans CSF Auto-Group
     added) and *singles* (IPs lfd caught). A network with 5+ group bans — at
@@ -157,8 +158,8 @@ you type the target:
 |--------|------|
 | Ban /16 | permanent `/16` ban, added as `do not delete` |
 | Ban anyway | ban a whitelist-skipped `/24` (overrides the whitelist) |
-| Make permanent | promote a pending `/24` right away |
-| Remove record | forget a pending `/24` (next attack counts as the first) |
+| Make permanent | make a watched `/24` permanent right away |
+| Stop watching | forget a watched `/24` (next attack counts as the first) |
 | Remove | lift a group ban (`do not delete` blocks too; `csf.deny` is backed up first) |
 | Ignore | hide an item from review for 7/30/90 days (stops `/16` warning emails too) |
 | Dry run | show what a run would do — changes nothing, sends nothing |
@@ -181,13 +182,13 @@ The same settings as `config.env`, with validation:
 - **Notifications** — alert email (with a *Send test email* button), language,
   and the **weekly summary**: sent with the first run after
   09:00 on the chosen day (default Monday) — new groups, top attacking
-  networks, promotion records about to expire, list usage and run count. Can be
+  networks, watched blocks about to expire, list usage and run count. Can be
   previewed from the page or with `--digest` (`--digest --send` emails it now).
 - **Thresholds** — `/24` ban, `do not delete`, `/16` warning, temp `/24` and
   temp `/16`. The `do not delete` threshold can't be lower than the `/24` one.
 - **Schedule** — cron every 5 / 10 / 15 / 30 minutes or hourly.
 - **Lookups** — owner/hostname lookups on or off, DNS timeout.
-- **Retention** — promotion record days, review days, log line limit.
+- **Retention** — watch period, review days, log line limit.
 
 *Try before saving* runs a dry run with the unsaved thresholds, so you can see
 which `/24`s would be banned before committing to a change. Saving writes
