@@ -38,7 +38,7 @@
 # ============================================================================
 set -o pipefail
 
-VERSION="1.3.0"   # sürüm — başlangıç log satırında görünür
+VERSION="1.3.1"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -368,7 +368,9 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
         LOOKUP) opts="0 1" ;;
         CRON_MIN) opts="*/5 */10 */15 */30 0" ;;
         ALERT_MAIL)
-            [[ "$v" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]] && [ ${#v} -le 254 ] && return 0
+            # Yerel adresler de geçerli: "root", "root@localhost" (cPanel root'un postasını
+            # sunucunun iletişim adresine yönlendirir; script'in varsayılanı da budur).
+            [[ "$v" =~ ^[A-Za-z0-9._%+-]+(@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*)?$ ]] && [ ${#v} -le 254 ] && return 0
             CFG_ERR=$(m "$M_CFG_BAD" "$k" "$v" "$M_CFG_EMAIL"); return 1 ;;
         THRESHOLD_24|THRESHOLD_TEMP_24) lo=2; hi=50 ;;
         THRESHOLD_24_PERMANENT) lo=2; hi=100 ;;

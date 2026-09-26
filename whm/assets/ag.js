@@ -93,7 +93,7 @@
       l_abuse: 'AbuseIPDB', l_bgp: 'bgp.he.net', l_copy: 'Kopyala', bad_ip: 'Geçerli bir IPv4 adresi yazın.',
       foot: 'CSF Auto-Group v{0} · {1} olarak oturum açıldı',
       tab_overview: 'Genel bakış', tab_settings: 'Ayarlar', ev_config: 'Ayar değişti', ev_test_mail: 'Test maili',
-      st_notify: 'Bildirim', st_mail: 'Uyarı maili adresi', st_mail_h: 'Gruplama, /16 uyarısı ve limit mailleri buraya gider.',
+      st_notify: 'Bildirim', st_mail: 'Uyarı maili adresi', st_mail_h: 'Gruplama, /16 uyarısı ve limit mailleri buraya gider. root@localhost, cPanel\'de sunucunun iletişim adresine yönlenir.',
       st_lang: 'Dil', st_lang_h: 'Log, mail ve bu panelin dili.', st_test: 'Test maili gönder', st_test_h: 'Kayıtlı adrese gönderilir.',
       st_test_dirty: 'Önce yeni adresi kaydedin.', st_thr: 'Eşikler', st_thr_h: 'Kaç tekil ban bir işlemi tetikler.',
       k_THRESHOLD_24: '/24 grup banı', h_THRESHOLD_24: 'Bir /24 içinde bu kadar kalıcı tekil olunca /24 banlanır.',
@@ -164,7 +164,7 @@
       l_abuse: 'AbuseIPDB', l_bgp: 'bgp.he.net', l_copy: 'Copy', bad_ip: 'Enter a valid IPv4 address.',
       foot: 'CSF Auto-Group v{0} · signed in as {1}',
       tab_overview: 'Overview', tab_settings: 'Settings', ev_config: 'Settings changed', ev_test_mail: 'Test email',
-      st_notify: 'Notifications', st_mail: 'Alert email address', st_mail_h: 'Grouping, /16 warning and limit emails go here.',
+      st_notify: 'Notifications', st_mail: 'Alert email address', st_mail_h: 'Grouping, /16 warning and limit emails go here. On cPanel, root@localhost is forwarded to the server contact address.',
       st_lang: 'Language', st_lang_h: 'Language of the log, emails and this panel.', st_test: 'Send test email', st_test_h: 'Sent to the saved address.',
       st_test_dirty: 'Save the new address first.', st_thr: 'Thresholds', st_thr_h: 'How many single bans trigger an action.',
       k_THRESHOLD_24: '/24 group ban', h_THRESHOLD_24: 'A /24 is banned once it holds this many permanent singles.',
@@ -498,7 +498,8 @@
       var v = String(cv(k)), r = RANGES[k];
       if (!/^\d{1,6}$/.test(v) || +v < r[0] || +v > r[1]) e[k] = t('range_v', r[0], r[1]);
     });
-    if (!/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(String(cv('ALERT_MAIL')))) e.ALERT_MAIL = t('mail_bad');
+    // Yerel adresler de geçerli ("root", "root@localhost"); kural script'teki cfg_check ile aynı.
+    if (!/^[A-Za-z0-9._%+-]+(@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*)?$/.test(String(cv('ALERT_MAIL')))) e.ALERT_MAIL = t('mail_bad');
     if (!e.THRESHOLD_24 && !e.THRESHOLD_24_PERMANENT && +cv('THRESHOLD_24_PERMANENT') < +cv('THRESHOLD_24')) e.THRESHOLD_24_PERMANENT = t('rule_dnd');
     return e;
   }
