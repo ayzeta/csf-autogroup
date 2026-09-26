@@ -39,7 +39,7 @@
 # ============================================================================
 set -o pipefail
 
-VERSION="1.6.0"   # sürüm — başlangıç log satırında görünür
+VERSION="1.6.1"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1263,7 +1263,7 @@ asn_top() {      # [N] [evidence|blocks] → ASN_TOP satırları: "ASN|KURUM|CC|
         printf '%s|%s|%s|%s|%s|%s|%s|%s\n' "$a" "${NM[$a]//|/ }" "${CC[$a]}" "${G[$a]:-0}" "${B[$a]:-0}" "${T[$a]:-0}" \
             "$([ -n "${DEN[AS$a]}" ] && echo 1 || echo 0)" $(( ${G[$a]:-0} * 4 + ${T[$a]:-0} ))
     done | if [ "${2:-evidence}" = blocks ]; then awk -F'|' '$5 > 0' | sort -t'|' -k5,5nr; else sort -t'|' -k8,8nr -k5,5nr; fi \
-         | cut -d'|' -f1-7 | head -n "${1:-10}")
+         | cut -d'|' -f1-7 | awk -v n="${1:-10}" 'NR <= n')   # head değil: bkz. SIGPIPE notu
 }
 
 # ── Imunify360: sunucunun KENDİ kara listesi (scope local, purpose drop) ────
@@ -1283,7 +1283,7 @@ imunify_refresh() {
             /^"ip"/        { if (ip != "") print ip "|" r; ip = $0; sub(/^"ip": ?"/, "", ip); sub(/"$/, "", ip); r = "other"; next }
             /^"comment"/   { if (match($0, /[A-Z][A-Z0-9_]{2,}/)) r = substr($0, RSTART, RLENGTH); next }
             END            { if (ip != "") print ip "|" r }')
-        [ "$off" -eq 0 ] && total=$(printf '%s\n' "$page" | sed -n 's/^#total|//p' | head -1)
+        [ "$off" -eq 0 ] && total=$(printf '%s\n' "$page" | sed -n 's/^#total|//p' | awk 'NR == 1')
         n=$(printf '%s\n' "$page" | grep -cE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\|')
         printf '%s\n' "$page" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\|' >> "$tmp"
         off=$(( off + 500 ))
@@ -1317,8 +1317,8 @@ imunify_top() {  # [N] → IM_TOP satırları "ASN|KURUM|CC|IP sayısı|SEBEP:n,
         CNT[$a]=$(( ${CNT[$a]:-0} + 1 )); NM[$a]="${OWN_N[$p]}"; CC[$a]="${OWN_C[$p]}"
         RC[$a|$r]=$(( ${RC[$a|$r]:-0} + 1 ))
     done < "$IMUNIFY_FILE"
-    for a in $(for k in "${!CNT[@]}"; do echo "${CNT[$k]} $k"; done | sort -rn | head -n "${1:-10}" | awk '{print $2}'); do
-        line=$(for k in "${!RC[@]}"; do [ "${k%%|*}" = "$a" ] && echo "${RC[$k]} ${k#*|}"; done | sort -rn | head -3 | awk '{printf "%s%s:%s", (NR>1?",":""), $2, $1}')
+    for a in $(for k in "${!CNT[@]}"; do echo "${CNT[$k]} $k"; done | sort -rn | awk -v n="${1:-10}" 'NR <= n {print $2}'); do
+        line=$(for k in "${!RC[@]}"; do [ "${k%%|*}" = "$a" ] && echo "${RC[$k]} ${k#*|}"; done | sort -rn | awk 'NR <= 3 {printf "%s%s:%s", (NR>1?",":""), $2, $1}')
         IM_TOP+="$a|${NM[$a]//|/ }|${CC[$a]}|${CNT[$a]}|$line"$'\n'
     done
     IM_TOP="${IM_TOP%$'\n'}"
@@ -1428,7 +1428,7 @@ digest_maybe() { # çalışma sonunda: seçilen gün, 09:00'dan sonra, haftada b
 # ── --config (WHM eklentisinin Ayarlar sekmesi) ─────────────────────────────
 CFG_FILE="$SELF_DIR/config.env"
 INSTALL_CONF="$SELF_DIR/.install.conf"
-cron_now() { crontab -l 2>/dev/null | grep -F "$SELF_DIR/csf_autogroup.sh" | grep -v '^[[:space:]]*#' | head -1 | awk '{print $1}'; }
+cron_now() { crontab -l 2>/dev/null | grep -F "$SELF_DIR/csf_autogroup.sh" | grep -v '^[[:space:]]*#' | awk 'NR == 1 {print $1}'; }
 cfg_value() {    # KEY → etkin değer (config.env + varsayılanlar yüklendikten sonra)
     if [ "$1" = CRON_MIN ]; then cron_now; else printf '%s' "${!1}"; fi
 }

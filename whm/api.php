@@ -56,7 +56,7 @@ switch ($a) {
 
     case 'digest_preview':
         $r = ag_run(['--digest'], 60);
-        ag_json(['ok' => $r['rc'] === 0, 'output' => $r['out']]);
+        ag_json(['ok' => $r['rc'] === 0, 'output' => trim($r['out'] . "\n" . $r['err'])]);
 
     case 'lookup':
         $ip = trim((string) ($_POST['ip'] ?? ''));
@@ -103,7 +103,7 @@ switch ($a) {
             }
         }
         $r = ag_run($args, 240);
-        ag_json(['ok' => $r['rc'] === 0, 'rc' => $r['rc'], 'output' => $r['out']]);
+        ag_json(['ok' => $r['rc'] === 0, 'rc' => $r['rc'], 'output' => trim($r['out'] . "\n" . $r['err'])]);
 
     case 'config_get':
         ag_json(ag_run_json(['--config', 'get', '--json'], 30));

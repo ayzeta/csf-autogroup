@@ -268,7 +268,7 @@ function ag_run(array $args, int $timeout = 60): array
 {
     $script = ag_script();
     if ($script === null) {
-        return ['rc' => 127, 'out' => 'csf_autogroup.sh not found — re-run install.sh.'];
+        return ['rc' => 127, 'out' => '', 'err' => 'csf_autogroup.sh not found — re-run install.sh.'];
     }
     $cmd = '';
     $to = ag_which('timeout');
@@ -279,10 +279,25 @@ function ag_run(array $args, int $timeout = 60): array
     foreach ($args as $a) {
         $cmd .= ' ' . escapeshellarg((string) $a);
     }
-    $out = [];
-    $rc = 0;
-    @exec($cmd . ' 2>&1', $out, $rc);
-    return ['rc' => (int) $rc, 'out' => implode("\n", $out)];
+    // stdout ve stderr AYRI okunur: JSON yalnız stdout'tan çözülür, bir aracın basacağı zararsız
+    // bir uyarı (ör. "cut: write error: Broken pipe" — WHM'in PHP'si SIGPIPE'ı yok saydığı için
+    // görülüyordu, 2026-09-27) sayfayı düşüremez. stderr bir dosyaya gider: iki boruyu aynı anda
+    // okumaya gerek kalmaz, dolan tampon yüzünden kilitlenme ihtimali de olmaz.
+    $errf = @tempnam(AG_STATE, 'run.');
+    if ($errf === false) {
+        $errf = '/dev/null';
+    }
+    $p = @proc_open($cmd, [1 => ['pipe', 'w'], 2 => ['file', $errf, 'w']], $pipes);
+    if (!is_resource($p)) {
+        if ($errf !== '/dev/null') { @unlink($errf); }
+        return ['rc' => 126, 'out' => '', 'err' => 'proc_open failed'];
+    }
+    $out = (string) stream_get_contents($pipes[1]);
+    fclose($pipes[1]);
+    $rc = proc_close($p);
+    $err = $errf !== '/dev/null' ? (string) @file_get_contents($errf) : '';
+    if ($errf !== '/dev/null') { @unlink($errf); }
+    return ['rc' => (int) $rc, 'out' => rtrim($out, "\n"), 'err' => rtrim($err, "\n")];
 }
 
 /** Script'in JSON çıktısını çözer; çözülemezse ham çıktıyla birlikte hata döner. */
@@ -292,7 +307,8 @@ function ag_run_json(array $args, int $timeout = 60): array
     // Bir ban yorumundaki bozuk tek bir UTF-8 baytı bütün sayfayı düşürmesin: yerine � konur.
     $d = json_decode($r['out'], true, 512, JSON_INVALID_UTF8_SUBSTITUTE);
     if (!is_array($d)) {
-        return ['ok' => false, 'code' => $r['rc'], 'message' => trim(substr($r['out'], 0, 600)) ?: 'no output'];
+        $msg = trim(substr(trim($r['out'] . "\n" . $r['err']), 0, 600));
+        return ['ok' => false, 'code' => $r['rc'], 'message' => $msg !== '' ? $msg : 'no output'];
     }
     return $d;
 }
