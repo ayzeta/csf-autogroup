@@ -41,7 +41,7 @@ CSF_DIR="${CSF_DIR:-$(dirname "$CSF_CONF")}"     # csf.allow / csf.ignore / csf.
 CSF_VAR="${CSF_VAR:-/var/lib/csf}"               # csf.tempban / csf.tempallow / csf.g*
 LOG_FILE="${LOG_FILE:-/var/log/csf_autogroup.log}"
 SAYAC_FILE="${SAYAC_FILE:-/var/lib/csf_autogroup/counter}"
-LOCK_FILE="${LOCK_FILE:-$(dirname "$SAYAC_FILE")/lock}"
+LOCK_FILE="${LOCK_FILE:-${SAYAC_FILE}.lock}"
 THRESHOLD_24="${THRESHOLD_24:-3}"
 THRESHOLD_24_PERMANENT="${THRESHOLD_24_PERMANENT:-5}"
 THRESHOLD_16="${THRESHOLD_16:-5}"
@@ -200,6 +200,8 @@ fi
 m() { local f="$1"; shift; printf "$f" "$@"; }   # format a message template
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"; }
+# Kilit (fd 9) alt süreçlere geçmesin: arka planda teslimat yapan bir MTA kilidi tutup sonraki turları engellemesin.
+mail() { command mail "$@" 9>&-; }
 
 # ── IPv4 / CIDR helpers ─────────────────────────────────────────────────────
 # Sonuçlar REPLY / R_LO / R_HI ile döner (alt kabuk yok → önbellekler korunur).
@@ -228,8 +230,14 @@ temp_covers() {  # LO HI → aktif bir geçici CIDR ban bu aralığı kapsıyor 
     for i in "${!TC_LO[@]}"; do (( TC_LO[i] <= $1 && TC_HI[i] >= $2 )) && return 0; done
     return 1
 }
+temp_added() {   # CIDR → csf -td gerçekten tuttu mu? Sayaç kaydı buna bağlı, kaybolmasın diye iki yoldan bakılır.
+    [[ "$CSF_OUT" =~ (not\ a\ valid|failed|servers\ addresses) ]] && return 1
+    [ -r "$CSF_VAR/csf.tempban" ] && grep -qF "|$1|" "$CSF_VAR/csf.tempban" && return 0
+    [[ "$CSF_OUT" == *blocked* ]] && return 0      # "... blocked on port" / "already temporarily blocked"
+    [ ! -r "$CSF_VAR/csf.tempban" ]
+}
 csf_run() {      # csf'i çalıştır, çıktıyı log'a yaz, CSF_OUT'ta sakla (csf hata durumunda da 0 döner)
-    CSF_OUT=$("$CSF_BIN" "$@" 2>&1)
+    CSF_OUT=$("$CSF_BIN" "$@" 2>&1 9>&-)
     [ -n "$CSF_OUT" ] && printf '%s\n' "$CSF_OUT" >> "$LOG_FILE"
 }
 
@@ -510,7 +518,7 @@ fi
 
 # ── Temp deny limit ─────────────────────────────────────────────────────────
 temp_limit=$(grep "^DENY_TEMP_IP_LIMIT" "$CSF_CONF" | cut -d'=' -f2 | tr -d ' "')
-temp_current=$("$CSF_BIN" -t 2>/dev/null | grep -c "^DENY" || true)
+temp_current=$("$CSF_BIN" -t 2>/dev/null 9>&- | grep -c "^DENY" || true)
 if [ -n "$temp_limit" ] && [ "$temp_limit" -gt 0 ] 2>/dev/null; then
     temp_percent=$((temp_current * 100 / temp_limit))
     log "$(m "$M_TEMP_USAGE" "$temp_current" "$temp_limit" "$temp_percent")"
@@ -639,7 +647,7 @@ log "$(m "$M_16_DONE" "$warn16")"
 # IPv6 satırları (ör. "2001:db8::1") IPv4 sayılmasın diye adres tam eşleşmeli.
 declare -A temp_count24 temp_ips24 TSEEN TNOTE
 TC_LO=(); TC_HI=(); temp_order=(); temp_alive=()
-TEMP_LIST=$("$CSF_BIN" -t 2>/dev/null)
+TEMP_LIST=$("$CSF_BIN" -t 2>/dev/null 9>&-)
 while read -r kind addr _; do
     [ "$kind" = "DENY" ] || continue
     if [[ "$addr" =~ $IPV4_RE ]]; then
@@ -656,7 +664,7 @@ fi
 for ip in "${temp_order[@]}"; do
     ip2int "$ip"; n=$REPLY
     if [ -n "${DENY_IP[$ip]+x}" ] || perm_covers "$n" "$n"; then
-        "$CSF_BIN" -tr "$ip" >> "$LOG_FILE" 2>&1 && log "$(m "$M_TCLEAN" "$ip")"; continue
+        "$CSF_BIN" -tr "$ip" >> "$LOG_FILE" 2>&1 9>&- && log "$(m "$M_TCLEAN" "$ip")"; continue
     fi
     temp_covers "$n" "$n" && continue
     prefix24="${ip%.*}"
@@ -689,7 +697,7 @@ for prefix in $(printf '%s\n' "${!temp_count24[@]}" | sort -V); do
             fi
         else
             csf_run -td "${prefix}.0/24" 43200
-            if [ ! -r "$CSF_VAR/csf.tempban" ] || grep -qF "|${prefix}.0/24|" "$CSF_VAR/csf.tempban"; then
+            if temp_added "${prefix}.0/24"; then
                 TC_LO+=("$lo"); TC_HI+=($((lo + 255)))
                 log "$(m "$M_TOK24" "$prefix" "$n")"
                 temp_added24=$((temp_added24 + 1))
