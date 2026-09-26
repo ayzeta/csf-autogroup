@@ -17,7 +17,7 @@ overflowing its line limit, and you get an email when it nears that limit.
 Works on **any CSF server** (cPanel or not). No dependencies beyond CSF and a
 working `mail` command (`dig` or `host` for the optional lookups below).
 
-**Version 1.5.2** · bilingual logs, alert emails and WHM plugin (English /
+**Version 1.5.3** · bilingual logs, alert emails and WHM plugin (English /
 Türkçe, set `MSG_LANG`). The running version is printed on each run's first log
 line.
 
@@ -127,10 +127,13 @@ What it shows:
   expire are highlighted.
 - **Active group bans** — a sortable, paged table with each block's owner
   (ASN, organisation, country), searchable by CIDR, AS number or organisation.
-- **Top attacking networks** — per network: *groups* (bans CSF Auto-Group
-  added), *blocks* (other ranges in `csf.deny`, e.g. added by hand) and
-  *singles*. When one network has 3+ banned ranges, it explains how to block
-  the whole ASN with CSF's own `CC_DENY` (the plugin never edits `csf.conf`).
+- **Top attacking networks** — ranked by attack evidence: *groups* (bans CSF
+  Auto-Group added) and *singles* (IPs lfd caught). Other ranges in `csf.deny`
+  (added by hand or by other tools) are shown as a note but don't affect the
+  ranking. A network with 5+ group bans — at least 15 attackers in 5 separate
+  `/24`s — gets a suggestion explaining how to block the whole ASN with CSF's own
+  `CC_DENY`; networks already in `CC_DENY` are marked instead. The plugin never
+  edits `csf.conf`.
 - **Recent actions** — every ban, promotion, skip, warning and manual change.
 
 Owner info comes from a cache (`/var/lib/csf_autogroup/owners`, 30 days). Each

@@ -39,7 +39,7 @@
 # ============================================================================
 set -o pipefail
 
-VERSION="1.5.2"   # sürüm — başlangıç log satırında görünür
+VERSION="1.5.3"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -228,9 +228,9 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_DG_USAGE="Kalıcı liste: %s / %s satır (%%%s) · 7 gün önce: %s"
   M_DG_TUSAGE="Geçici liste: %s / %s satır"
   M_DG_NEW="Yeni grup banları:"
-  M_DG_TOP="En çok saldıran ağlar (grup = CSF Auto-Group banı, blok = csf.deny'deki diğer aralıklar):"
+  M_DG_TOP="En çok saldıran ağlar (CSF Auto-Group grup banları ve tekil banlara göre):"
   M_DG_TOPL="   %-9s %-44s %s"
-  M_DG_PG="%s grup"; M_DG_PB="%s blok"; M_DG_PT="%s tekil"
+  M_DG_PG="%s grup"; M_DG_PB="+%s blok başka kaynaklı"; M_DG_PT="%s tekil"
   M_DG_EXP="14 gün içinde süresi dolacak terfi kayıtları (tekrar gelirlerse kalıcı olurlar):"
   M_DG_EXPL="   %-18s %s gün"
   M_DG_RUNS="Tur sağlığı: son 7 günde %s tur çalıştı (cron aralığına göre beklenen ~%s)"
@@ -361,9 +361,9 @@ else
   M_DG_USAGE="Permanent list: %s / %s lines (%s%%) · 7 days ago: %s"
   M_DG_TUSAGE="Temp list: %s / %s lines"
   M_DG_NEW="New group bans:"
-  M_DG_TOP="Top attacking networks (group = CSF Auto-Group ban, block = other ranges in csf.deny):"
+  M_DG_TOP="Top attacking networks (by CSF Auto-Group group bans and single bans):"
   M_DG_TOPL="   %-9s %-44s %s"
-  M_DG_PG="%s groups"; M_DG_PB="%s blocks"; M_DG_PT="%s singles"
+  M_DG_PG="%s groups"; M_DG_PB="+%s blocks from other sources"; M_DG_PT="%s singles"
   M_DG_EXP="Promotion records expiring within 14 days (become permanent if they return):"
   M_DG_EXPL="   %-18s %s days"
   M_DG_RUNS="Run health: %s runs in the last 7 days (about %s expected from the cron interval)"
@@ -991,10 +991,10 @@ do_status() {
         jstr "${OWN_N[$p]}"; owners+=("\"$p\":[\"${OWN_A[$p]}\",\"${OWN_C[$p]}\",$REPLY]")
     done
     asn_top 10
-    local tops=() a nm cc g bl sg
+    local tops=() a nm cc g bl sg den
     if [ -n "$ASN_TOP" ]; then
-        while IFS='|' read -r a nm cc g bl sg; do
-            jstr "$nm"; tops+=("{\"asn\":\"$a\",\"name\":$REPLY,\"cc\":\"$cc\",\"groups\":$g,\"blocks\":$bl,\"singles\":$sg}")
+        while IFS='|' read -r a nm cc g bl sg den; do
+            jstr "$nm"; tops+=("{\"asn\":\"$a\",\"name\":$REPLY,\"cc\":\"$cc\",\"groups\":$g,\"blocks\":$bl,\"singles\":$sg,\"denied\":$([ "$den" = 1 ] && echo true || echo false)}")
         done <<< "$ASN_TOP"
     fi
     dstart=$(date -d "$(date -d '29 days ago' +%Y-%m-%d) 00:00" +%s)
@@ -1216,10 +1216,13 @@ do_action() {    # NAME TARGET [DAYS]
 }
 
 # ── Top attacking networks: gruplar + tekiller ASN'e göre ────────────────────
-asn_top() {      # [N] → ASN_TOP satırları: "ASN|KURUM|CC|grup|blok|tekil" (grup+blok, sonra tekil azalan)
-    local -A G=() B=() T=() NM=() CC=() IS_AG=()
+asn_top() {      # [N] → ASN_TOP satırları: "ASN|KURUM|CC|grup|blok|tekil|cc_deny(0/1)"
+    # Sıralama saldırı kanıtına göre: kendi grup banlarımız + tekil banlar (lfd'nin yakaladıkları).
+    # csf.deny'deki başka kaynaklı bloklar (elle / başka araç) gösterilir ama sıralamaya girmez.
+    local -A G=() B=() T=() NM=() CC=() IS_AG=() DEN=()
     local c i p a
     for c in "${AGG[@]}"; do IS_AG[$c]=1; done
+    for c in $(conf_val CC_DENY | LC_ALL=C tr '[:lower:],' '[:upper:] '); do DEN[$c]=1; done
     for c in "${!SINGLE_NOTE[@]}"; do
         p="${c%.*}"; a="${OWN_A[$p]}"; [ -n "$a" ] || continue
         T[$a]=$(( ${T[$a]:-0} + 1 )); NM[$a]="${OWN_N[$p]}"; CC[$a]="${OWN_C[$p]}"
@@ -1230,14 +1233,15 @@ asn_top() {      # [N] → ASN_TOP satırları: "ASN|KURUM|CC|grup|blok|tekil" (
         NM[$a]="${OWN_N[$p]}"; CC[$a]="${OWN_C[$p]}"
     done
     ASN_TOP=$(for a in $(printf '%s\n' "${!G[@]}" "${!B[@]}" "${!T[@]}" | sort -u); do
-        printf '%s|%s|%s|%s|%s|%s|%s\n' "$a" "${NM[$a]//|/ }" "${CC[$a]}" "${G[$a]:-0}" "${B[$a]:-0}" "${T[$a]:-0}" $(( ${G[$a]:-0} + ${B[$a]:-0} ))
-    done | sort -t'|' -k7,7nr -k6,6nr | cut -d'|' -f1-6 | head -n "${1:-10}")
+        printf '%s|%s|%s|%s|%s|%s|%s|%s\n' "$a" "${NM[$a]//|/ }" "${CC[$a]}" "${G[$a]:-0}" "${B[$a]:-0}" "${T[$a]:-0}" \
+            "$([ -n "${DEN[AS$a]}" ] && echo 1 || echo 0)" $(( ${G[$a]:-0} * 4 + ${T[$a]:-0} ))
+    done | sort -t'|' -k8,8nr -k5,5nr | cut -d'|' -f1-7 | head -n "${1:-10}")
 }
-asn_parts() {    # grup blok tekil → "2 grup · 34 blok · 3 tekil" (sıfırlar atlanır)
+asn_parts() {    # grup blok tekil → "8 grup · 3 tekil · +2 blok başka kaynaklı" (sıfırlar atlanır)
     local out=""
     [ "$1" -gt 0 ] && out+="$(m "$M_DG_PG" "$1")"
-    [ "$2" -gt 0 ] && out+="${out:+ · }$(m "$M_DG_PB" "$2")"
     [ "$3" -gt 0 ] && out+="${out:+ · }$(m "$M_DG_PT" "$3")"
+    [ "$2" -gt 0 ] && out+="${out:+ · }$(m "$M_DG_PB" "$2")"
     printf '%s' "$out"
 }
 cron_interval() { # crontab'daki dakika alanı → saniye (bilinmiyorsa 0)
@@ -1289,7 +1293,7 @@ digest_build() { # → DG_SUBJ, DG_BODY
     DG_BODY+="$NL$M_DG_TOP$NL"
     asn_top 5
     if [ -n "$ASN_TOP" ]; then
-        while IFS='|' read -r a owner k b bl line; do
+        while IFS='|' read -r a owner k b bl line den; do
             DG_BODY+="$(m "$M_DG_TOPL" "AS$a" "${owner:0:44}" "$(asn_parts "$b" "$bl" "$line")")$NL"   # kurum adı ülkeyle bitiyor
         done <<< "$ASN_TOP"
     else DG_BODY+="$M_DG_NONE$NL"; fi
