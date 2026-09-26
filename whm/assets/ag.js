@@ -12,7 +12,7 @@
   var UPD = null;               // güncelleme kontrolü sonucu
   var LANG = 'en';
   var CLOCK = 0;                // sunucu saati - istemci saati (sn)
-  var UI = { gf: 'all', gq: '', ef: 'all', open: {}, evLimit: 40, gLimit: 40, commits: false, gs: 'added', gd: -1, gp: 0, pp: 0, menu: null, at: 'atk',
+  var UI = { gf: 'all', gq: '', ef: 'all', open: {}, evLimit: 40, gLimit: 40, commits: false, gs: 'added', gd: -1, gp: 0, pp: 0, hist: {}, menu: null, at: 'atk',
              tab: location.hash === '#settings' ? 'settings' : 'overview' };
   var CFG = null, DRAFT = {}, cfgLoading = false;
   var pollTimer = null, wasRunning = false, busy = false;
@@ -123,7 +123,7 @@
       since_visit: 'Son ziyaretinden beri ({0}):', sn_add: '{0} grup banı', sn_temp: '{0} geçici grup', sn_warn: '{0} /16 uyarısı',
       sn_skip: '{0} beyaz liste atlaması', show_new: 'Göster', e_new: 'Son ziyaretten beri', ch_title: 'Son 30 gün', ch_total: '{0} olay',
       ch_add: 'Grup banı', ch_promote: 'Kalıcıya alındı', ch_temp: 'Geçici', ch_warn: '/16 uyarısı', ch_skip: 'Beyaz liste',
-      ch_empty: 'Son 30 günde kayıt yok; grafik olay kaydı biriktikçe dolacak.', ipcard: 'IP kartı', col_block: 'Blok', col_owner: 'Sahip', col_since: 'Başlangıç', col_left: 'Kalan', col_state: 'Durum', left_short: '{0} kaldı', r_hist: 'olay kaydı başlamadan önce · IP ayrıntısı yok',
+      ch_empty: 'Son 30 günde kayıt yok; grafik olay kaydı biriktikçe dolacak.', ipcard: 'IP kartı', col_block: 'Blok', col_owner: 'Sahip', col_since: 'Başlangıç', col_left: 'Kalan', col_state: 'Durum', left_short: '{0} kaldı', r_hist: 'olay kaydı başlamadan önce · ayrıntı lfd günlüğünden getirilir', h_btn: 'Ayrıntı', h_loading: 'Getiriliyor…', h_none: 'lfd günlüğünde bu bloğa ait kayıt kalmamış', h_src: 'lfd günlüğünden',
       col_singles: 'Tekil', col_added: 'Eklendi', of_n: '{0}–{1} / {2}', s_asn: 'En çok saldıran ağlar',
       s_asn_h: 'Grup banı ve tekil bana göre sıralı; csf.deny\'deki başka kaynaklı bloklar ayrıca belirtilir · {0} bloğun sahibi biliniyor', p_g: '{0} grup', p_b: '+{0} blok başka kaynaklı', p_t: '{0} tekil', p_bn: '{0} blok',
       at_atk: 'Saldıranlar', at_blk: 'Diğer bloklar', blk_h: 'csf.deny\'de CSF Auto-Group dışından eklenmiş aralıklar (elle ya da başka araçla); zaten engelliler.',
@@ -215,7 +215,7 @@
       since_visit: 'Since your last visit ({0}):', sn_add: '{0} group bans', sn_temp: '{0} temp groups', sn_warn: '{0} /16 warnings',
       sn_skip: '{0} whitelist skips', show_new: 'Show', e_new: 'Since last visit', ch_title: 'Last 30 days', ch_total: '{0} events',
       ch_add: 'Group ban', ch_promote: 'Made permanent', ch_temp: 'Temp', ch_warn: '/16 warning', ch_skip: 'Whitelist',
-      ch_empty: 'Nothing in the last 30 days; the chart fills as the event log grows.', ipcard: 'IP card', col_block: 'Block', col_owner: 'Owner', col_since: 'Since', col_left: 'Left', col_state: 'State', left_short: '{0} left', r_hist: 'before the event log started · no IP details',
+      ch_empty: 'Nothing in the last 30 days; the chart fills as the event log grows.', ipcard: 'IP card', col_block: 'Block', col_owner: 'Owner', col_since: 'Since', col_left: 'Left', col_state: 'State', left_short: '{0} left', r_hist: 'before the event log started · details come from the lfd log', h_btn: 'Details', h_loading: 'Loading…', h_none: 'no records for this block are left in the lfd log', h_src: 'from the lfd log',
       col_singles: 'Singles', col_added: 'Added', of_n: '{0}–{1} of {2}', s_asn: 'Top attacking networks',
       s_asn_h: 'Ranked by group bans and single bans; other ranges in csf.deny are noted separately · owner known for {0} blocks', p_g: '{0} groups', p_b: '+{0} blocks from other sources', p_t: '{0} singles', p_bn: '{0} blocks',
       at_atk: 'Attackers', at_blk: 'Other blocks', blk_h: 'Ranges in csf.deny added outside CSF Auto-Group (by hand or other tools); already blocked.',
@@ -452,13 +452,17 @@
       var key = 'r:' + e.cidr, open = UI.open[key], is16 = /\/16$/.test(e.cidr), hasIps = e.ips && e.ips.length;
       var pill = e.type === 'skip_wl' ? '<span class="ag-pill ag-pill-info">' + t('ev_skip_wl') + '</span>'
         : '<span class="ag-pill ag-pill-warn">' + t('ev_' + e.type) + '</span>';
-      var meta = e.hist ? [] : is16 ? [t('n_ip', num(e.n)), t('n_subnets', num(e.subnets))] : [t('n_ip', num(e.n))];
+      var H = e.hist ? UI.hist[e.cidr] : null, hd = H && H.ok ? H : null;
+      var meta = e.hist ? (hd ? (hd.total ? (is16 ? [t('n_ip', num(hd.total)), t('n_subnets', num(hd.subnets))] : [t('n_ip', num(hd.total))]).concat([t('h_src')]) : [t('h_none')]) : [])
+        : is16 ? [t('n_ip', num(e.n)), t('n_subnets', num(e.subnets))] : [t('n_ip', num(e.n))];
       var owner = e.owner || ownerOfIps(e.ips) || ownerOf(e.cidr).label;
       if (owner) meta.push(esc(owner));
       if (e.wl) meta.push(esc(t('wl', e.wl)));
-      if (e.hist) meta.push(t('r_hist'));
+      if (e.hist && !hd) meta.push(t('r_hist'));
+      if (hd && hd.ips.length) { e = Object.assign({}, e, { ips: hd.ips, total: hd.total }); hasIps = true; }
       var first = hasIps ? e.ips[0].ip : e.cidr.replace(/\/\d+$/, '').replace(/\.0$/, '.1');
-      var acts = hasIps ? '<button class="ag-btn ag-btn-sm" data-act="toggle" data-key="' + key + '">' + (open ? t('hide') : t('ips')) + '</button>' : '';
+      var acts = hasIps ? '<button class="ag-btn ag-btn-sm" data-act="toggle" data-key="' + key + '">' + (open ? t('hide') : t('ips')) + '</button>'
+        : e.hist && !hd ? '<button class="ag-btn ag-btn-sm" data-act="hist" data-c="' + esc(e.cidr) + '" data-d="' + esc(e.day) + '"' + (H === 'loading' ? ' disabled' : '') + '>' + (H === 'loading' ? t('h_loading') : t('h_btn')) + '</button>' : '';
       if (is16) acts += '<button class="ag-btn ag-btn-sm ag-btn-danger" data-act="ban16" data-t="' + esc(pfx(e.cidr)) + '">' + t('ban16') + '</button>';
       else acts += '<button class="ag-btn ag-btn-sm ag-btn-danger" data-act="banforce" data-t="' + esc(pfx(e.cidr)) + '" data-wl="' + esc(e.wl || '') + '">' + t('ban_anyway') + '</button>';
       acts += menu('rm:' + e.cidr, [{ act: 'ignore', label: t('ignore'), icon: 'mute', attrs: 'data-c="' + esc(e.cidr) + '"' },
@@ -723,7 +727,7 @@
 
   function config() {
     var c = S.config;
-    function kv(k, v) { return '<dt>' + esc(k) + '</dt><dd>' + esc(v) + '</dd>'; }
+    function kv(k, v) { return '<div class="ag-kv-r"><dt>' + esc(k) + '</dt><dd>' + esc(v) + '</dd></div>'; }
     return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.sliders + t('s_config') + '</h2>' +
       '<div class="ag-tools"><button class="ag-link" data-act="tab" data-tab="settings">' + t('edit') + '</button></div></div><dl class="ag-kv">' +
       kv(t('c_t24'), t('c_singles', c.t24)) + kv(t('c_t24p'), t('c_singles', c.t24p)) + kv(t('c_t16'), t('c_singles', c.t16)) +
@@ -953,6 +957,16 @@
       UI.tab = k; history.replaceState(null, '', k === 'settings' ? '#settings' : '#');
       if (k === 'settings') { CFG = null; DRAFT = {}; }
       render(); window.scrollTo(0, 0);
+    },
+    hist: function (el) {
+      var c = el.getAttribute('data-c'), d = el.getAttribute('data-d');
+      UI.hist[c] = 'loading'; render();
+      api('history', { cidr: c, day: d }).then(function (r) {
+        UI.hist[c] = r && r.ok ? r : null;
+        if (r && r.ok && r.ips.length) UI.open['r:' + c] = true;
+        if (!r || !r.ok) toast(t('t_err', (r && r.error) || '?'), 'bad');
+        render();
+      }).catch(function () { UI.hist[c] = null; render(); });
     },
     ppage: function (el) { UI.pp = Math.max(0, UI.pp + (+el.getAttribute('data-d'))); render(); },
     at: function (el) { UI.at = el.getAttribute('data-t'); render(); },

@@ -171,6 +171,9 @@
 
 /* ── Config summary ─────────────────────────────────────────────── */
 .ag-kv { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; padding: 14px 18px; font-size: 12.5px; }
+.ag-kv:has(> .ag-kv-r) { display: block; padding: 6px 0; margin: 0; }
+.ag-kv-r { display: flex; justify-content: space-between; gap: 12px; padding: 8px 18px; }
+.ag-kv-r:nth-child(even) { background: var(--ag-zebra); }
 .ag-kv dt { color: var(--ag-text-3); margin: 0; }
 .ag-kv dd { margin: 0; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 
@@ -178,7 +181,9 @@
 .ag-ev { display: flex; gap: 12px; padding: 10px 18px; border-top: 1px solid var(--ag-line-soft); align-items: flex-start; cursor: default; }
 .ag-ev:first-child { border-top: 0; }
 .ag-ev.clickable { cursor: pointer; }
-.ag-ev.clickable:hover { background: #fafafb; }
+.ag-ev.clickable:hover { background: var(--ag-row-hover); }
+/* liste kartlarında da zebra: son işlemler, kontrol edilecekler */
+.ag-card-b > .ag-item:nth-child(even) > .ag-ev, .ag-card-b > .ag-item:nth-child(even) > .ag-row { background: var(--ag-zebra); }
 .ag-ev-time { width: 86px; flex: none; font-size: 12px; color: var(--ag-text-3); font-variant-numeric: tabular-nums; padding-top: 2px; }
 .ag-ev-b { flex: 1; min-width: 0; }
 .ag-ev-t { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }

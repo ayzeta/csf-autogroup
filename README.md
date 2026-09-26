@@ -123,7 +123,8 @@ What it shows:
   filled from the dated records in the counter file and `csf.deny`.
 - **To review** — `/16` warnings and whitelist-skipped `/24`s from the last 7
   days, with every IP's hostname, owner and ban reason (older items recovered
-  from the counter file are listed without IP details).
+  from the counter file get a *Details* button that pulls that day's IPs and
+  ban reasons from the lfd log).
 - **Active group bans** — a sortable, paged table with each block's owner
   (ASN, organisation, country), searchable by CIDR, AS number or organisation.
   Each filter shows its count.

@@ -39,7 +39,7 @@
 # ============================================================================
 set -o pipefail
 
-VERSION="1.6.4"   # sürüm — başlangıç log satırında görünür
+VERSION="1.6.5"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -73,7 +73,9 @@ OWNERS_FILE="${OWNERS_FILE:-$(dirname "$SAYAC_FILE")/owners}"      # /24 → ASN
 OWNER_TTL_DAYS="${OWNER_TTL_DAYS:-30}"
 BACKFILL_MAX="${BACKFILL_MAX:-50}"      # her turda en fazla bu kadar /24'ün sahibi sorgulanır
 IMUNIFY_BIN="${IMUNIFY_BIN:-$(command -v imunify360-agent 2>/dev/null)}"   # yoksa Imunify kısmı atlanır
-IMUNIFY_FILE="${IMUNIFY_FILE:-$(dirname "$SAYAC_FILE")/imunify}"         # yerel kara liste önbelleği (her tur)
+IMUNIFY_FILE="${IMUNIFY_FILE:-$(dirname "$SAYAC_FILE")/imunify}"         # yerel kara liste önbelleği
+LFD_LOG="${LFD_LOG:-/var/log/lfd.log}"         # eski uyarıların ayrıntısı için okunur (lfd.log, .1, .gz)
+IMUNIFY_REFRESH_MIN="${IMUNIFY_REFRESH_MIN:-60}"   # liste en çok bu kadar dakikada bir yeniden alınır (yalnız panelde gösterilir)
 IMUNIFY_BACKFILL="${IMUNIFY_BACKFILL:-200}"   # Imunify IP'leri için turda ayrıca bu kadar /24 sorgulanır
 DIGEST="${DIGEST:-1}"                   # 1 = haftalık özet maili
 DIGEST_DAY="${DIGEST_DAY:-1}"           # 1 = pazartesi … 7 = pazar (09:00'dan sonraki ilk tur)
@@ -92,6 +94,7 @@ while [ $# -gt 0 ]; do
         --set)     SETS+=("${2:-}"); shift ;;
         --digest)  MODE=digest ;;
         --busy)    MODE=busy ;;
+        --history) MODE=history ;;
         --send)    SEND=1 ;;
         --json)    JSON=1 ;;
         --force)   FORCE=1 ;;
@@ -109,6 +112,12 @@ AG_BY="${AG_BY:-root}"; [[ "$AG_BY" =~ ^[A-Za-z0-9._-]{1,32}$ ]] || AG_BY="root"
 if [ "$MSG_LANG" = "tr" ]; then
   export LANG=tr_TR.UTF-8 LC_ALL=tr_TR.UTF-8
   M_START="--- Başladı ---";                                       M_END="--- Bitti ---"
+  M_END_T="--- Bitti (toplam %s sn) ---"
+  M_STEP_OWN="Sahip sorgusu: %s blok, %s sn"
+  M_STEP_IM="Imunify listesi yenilendi: %s IP, %s sn"
+  M_STEP_IMFRESH="Imunify listesi güncel (%s dk önce alındı, %s dk'da bir yenilenir)"
+  M_STEP_IMFAIL="Imunify listesi alınamadı (%s sn); önceki liste kullanılıyor"
+  M_STEP_IMOWN="Imunify IP'lerinin sahip sorgusu: %s blok, %s sn"
   M_ERR_NOFILE="HATA: %s bulunamadı, çıkılıyor."
   M_LOCKED="ATLANDI: önceki çalışma hâlâ sürüyor"
   M_PERM_USAGE="Kalıcı Doluluk: %s / %s satır (%%%s)"
@@ -209,6 +218,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_L_HOST="Hostname"; M_L_FWD="ileri yönde doğrulandı"; M_L_NOFWD="ileri yönde doğrulanamadı"
   M_L_OWNER="Sahibi"; M_L_PREFIX="Duyurulan blok"; M_L_REG="Kayıt"; M_L_DENY="csf.deny"
   M_L_TEMP="Geçici liste"; M_L_WL="Beyaz liste"; M_L_PENDING="İzleniyor"; M_L_IGN="Yoksayılıyor"
+  M_H_NOREASON="geçici ban (günlükte sebep yok)"
   M_CFG_BAD="Geçersiz değer: %s = %s (%s olmalı)"
   M_CFG_RANGE="%s ile %s arası bir tam sayı"
   M_CFG_EMAIL="geçerli bir e-posta adresi"
@@ -244,6 +254,12 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_DG_SENT="Haftalık özet gönderildi: %s"
 else
   M_START="--- Started ---";                                       M_END="--- Done ---"
+  M_END_T="--- Done (%s s total) ---"
+  M_STEP_OWN="Owner lookups: %s blocks, %s s"
+  M_STEP_IM="Imunify list refreshed: %s IPs, %s s"
+  M_STEP_IMFRESH="Imunify list is current (fetched %s min ago, refreshed every %s min)"
+  M_STEP_IMFAIL="Could not fetch the Imunify list (%s s); keeping the previous one"
+  M_STEP_IMOWN="Owner lookups for Imunify IPs: %s blocks, %s s"
   M_ERR_NOFILE="ERROR: %s not found, exiting."
   M_LOCKED="SKIPPED: previous run still in progress"
   M_PERM_USAGE="Permanent deny usage: %s / %s lines (%s%%)"
@@ -344,6 +360,7 @@ else
   M_L_HOST="Hostname"; M_L_FWD="forward-confirmed"; M_L_NOFWD="not forward-confirmed"
   M_L_OWNER="Owner"; M_L_PREFIX="Announced prefix"; M_L_REG="Registry"; M_L_DENY="csf.deny"
   M_L_TEMP="Temp list"; M_L_WL="Whitelist"; M_L_PENDING="Watched"; M_L_IGN="Ignored"
+  M_H_NOREASON="temp ban (no reason in the log)"
   M_CFG_BAD="Invalid value: %s = %s (must be %s)"
   M_CFG_RANGE="a whole number from %s to %s"
   M_CFG_EMAIL="a valid email address"
@@ -378,7 +395,7 @@ else
   M_DG_NONE="   none"
   M_DG_SENT="Weekly summary sent: %s"
 fi
-m() { local f="$1"; shift; printf "$f" "$@"; }   # format a message template
+m() { local f="$1"; shift; printf -- "$f" "$@"; }   # "--" : "--- Bitti …" gibi şablonlar seçenek sanılmasın
 
 # LOG_MODE: tee = ekrana + dosyaya (normal çalışma) · file = yalnız dosyaya (--action, çıktı JSON'a
 # karışmasın) · quiet = hiçbir yere (--status/--lookup salt okur) · kuru çalıştırmada yalnız ekrana.
@@ -640,6 +657,7 @@ pending_prefixes() { # sayaçta izlenen /24 önekleri → stdout
 }
 backfill_owners() { # sahibi bilinmeyen blokları bu turda sorgula (en fazla BACKFILL_MAX)
     local p n=0
+    BF_N=0
     [ "$LOOK_OK" = 1 ] || return 0
     local i c order
     # Önce CSF Auto-Group'un kendi grupları (tabloda görünenler), sonra csf.deny'deki diğer
@@ -655,6 +673,7 @@ backfill_owners() { # sahibi bilinmeyen blokları bu turda sorgula (en fazla BAC
         owner_lookup "$p.1"; n=$((n + 1))
         [ "$LOOK_OK" = 1 ] || break
     done
+    BF_N=$n
 }
 resolve_a() {    # HOSTNAME → REPLY = IPv4 adresleri (satır satır)
     if [ "$LOOK_OK" = 1 ]; then
@@ -1129,6 +1148,75 @@ do_status() {
 }
 
 # ── --lookup IP ─────────────────────────────────────────────────────────────
+# Olay kaydı başlamadan önceki bir uyarının ayrıntısı: o gün ve bir önceki gün lfd günlüğünde bu
+# bloktan geçen IP'ler (ban satırındaki sebeple), şu an csf.deny ve geçici listede olanlarla birlikte.
+do_history() {   # CIDR GÜN(YYYY-MM-DD) → JSON
+    local cidr="$1" day="$2" re d0 d1 f ip t why src n=0 total subnets js="" p
+    local -A HT=() HW=() HS=()
+    if ! [[ "$cidr" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.0/24$|^([0-9]{1,3})\.([0-9]{1,3})\.0\.0/16$ ]] || \
+       ! [[ "$day" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || ! date -d "$day" >/dev/null 2>&1; then
+        echo '{"ok":false,"error":"bad_input"}'; return 2
+    fi
+    if [[ "$cidr" == */24 ]]; then re="${cidr%.0/24}."; else re="${cidr%.0.0/16}."; fi
+    d1=$(LC_ALL=C date -d "$day" '+%b %e'); d0=$(LC_ALL=C date -d "$day -1 day" '+%b %e')
+    # lfd satırı: "Sep 26 04:00:10 lin lfd[123]: (sshd) Failed SSH login from 34.47.1.2 (US/..): 5 in the
+    # last 3600 secs - *Blocked in csf* for 3600 secs [LF_SSHD]" ya da "Incoming IP 34.47.1.2 temporary block removed"
+    while IFS='|' read -r ip t why; do
+        [ -n "$ip" ] || continue
+        [ -z "${HT[$ip]}" ] && HT[$ip]="$t"
+        [ -n "$why" ] && [ -z "${HW[$ip]}" ] && HW[$ip]="$why"
+        HS[$ip]=lfd
+    done < <( { for f in "$LFD_LOG" "$LFD_LOG.1"; do [ -r "$f" ] && cat "$f"; done
+                for f in "$LFD_LOG".*.gz "$LFD_LOG"-*.gz; do [ -r "$f" ] && zcat "$f"; done; } 2>/dev/null |
+        awk -v d0="$d0" -v d1="$d1" -v pre="$re" '
+            substr($0, 1, 6) != d0 && substr($0, 1, 6) != d1 { next }
+            {
+                msg = $0; sub(/^[A-Z][a-z][a-z] +[0-9]+ [0-9:]+ [^ ]+ [^:]+: /, "", msg)
+                rest = msg
+                while (match(rest, /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/)) {
+                    ip = substr(rest, RSTART, RLENGTH); rest = substr(rest, RSTART + RLENGTH)
+                    if (index(ip, pre) != 1) continue
+                    why = ""
+                    if (msg ~ /Blocked in csf/) {
+                        why = msg; i = index(why, ip); if (i > 1) why = substr(why, 1, i - 1)
+                        sub(/ +(from|IP|by|for)? *$/, "", why); sub(/[ :-]+$/, "", why)
+                        if (match(msg, /\[[A-Z0-9_]+\] *$/)) { tag = substr(msg, RSTART + 1, RLENGTH - 2); sub(/\] *$/, "", tag); why = why (why != "" ? " · " : "") tag }
+                    }
+                    print ip "|" substr($0, 1, 15) "|" why
+                }
+            }')
+    # şu an csf.deny'de (kalıcı tekil) ve geçici listede olanlar
+    parse_deny "$DENY_FILE" 1
+    for ip in "${!SINGLE_NOTE[@]}"; do
+        [[ "$ip" == "$re"* ]] || continue
+        HS[$ip]=deny; short_reason "${SINGLE_NOTE[$ip]}" "$ip"; [ -n "$REPLY" ] && HW[$ip]="$REPLY"
+    done
+    if [ -r "$CSF_VAR/csf.tempban" ]; then
+        local tt tip port dir to note
+        while IFS='|' read -r tt tip port dir to note; do
+            [[ "$tip" == "$re"* ]] || continue
+            [ -z "${HS[$tip]}" ] && HS[$tip]=temp
+            short_reason "$note" "$tip"; [ -n "$REPLY" ] && [ -z "${HW[$tip]}" ] && HW[$tip]="$REPLY"
+        done < "$CSF_VAR/csf.tempban"
+    fi
+    total=${#HS[@]}
+    subnets=$(for ip in "${!HS[@]}"; do echo "${ip%.*}"; done | sort -u | grep -c .)
+    owners_load
+    local looked=0
+    for ip in $(printf '%s\n' "${!HS[@]}" | sort -V); do
+        [ "$n" -ge 40 ] && break; n=$((n + 1))
+        p="${ip%.*}"
+        if [ -z "${OWN_L[$p]+x}" ] && [ "$looked" -lt 10 ]; then owner_lookup "$ip"; looked=$((looked + 1)); fi
+        REPLY=""; [ "$n" -le 20 ] && ptr_lookup "$ip"
+        local jh jw jo jt
+        jstr "$REPLY"; jh="$REPLY"
+        why="${HW[$ip]}"; [ -z "$why" ] && why="$M_H_NOREASON"
+        jstr "$why"; jw="$REPLY"; jstr "${OWN_L[$p]}"; jo="$REPLY"; jstr "${HT[$ip]}"; jt="$REPLY"
+        js+="${js:+,}{\"ip\":\"$ip\",\"host\":$jh,\"why\":$jw,\"owner\":$jo,\"src\":\"${HS[$ip]}\",\"when\":$jt}"
+    done
+    owners_save 2>/dev/null
+    echo "{\"ok\":true,\"cidr\":\"$cidr\",\"day\":\"$day\",\"total\":$total,\"subnets\":$(num "$subnets"),\"ips\":[$js]}"
+}
 do_lookup() {
     local ip="$1" n host="" fwd=false txt asn="" pfx="" cc="" reg="" alloc="" asname="" a b c d i
     local deny="" cover="" temp="" wl="" rig="" pend="" ign="" line t tip port dir to note now
@@ -1321,9 +1409,17 @@ asn_top() {      # [N] [evidence|blocks] → ASN_TOP satırları: "ASN|KURUM|CC|
 # Komut ve alanlar sunucuda doğrulandı (Imunify 8.14, 2026-09-27): eski "blacklist ip list"
 # kullanımdan kalkıyor, yerine "ip-list local list --purpose drop".
 imunify_refresh() {
-    local off=0 total=0 out page n tmp
+    local off=0 total=0 out page n tmp last
+    IM_R=none; IM_N=0; IM_AGE=0
     [ "$DRY" = 1 ] && return 0
     if [ -z "$IMUNIFY_BIN" ] || [ ! -x "$IMUNIFY_BIN" ]; then rm -f "$IMUNIFY_FILE"; return 0; fi
+    # Liste yalnız panelde gösteriliyor, ban kararına girmiyor; imunify360-agent her çağrıda yavaş
+    # açıldığı için her turda değil IMUNIFY_REFRESH_MIN dakikada bir alınır.
+    last=$(sed -n 's/^#t|//p' "$IMUNIFY_FILE" 2>/dev/null | awk 'NR == 1')
+    if [[ "$last" =~ ^[0-9]+$ ]] && [ $(( $(date +%s) - last )) -lt $(( IMUNIFY_REFRESH_MIN * 60 )) ]; then
+        IM_R=fresh; IM_AGE=$(( ($(date +%s) - last) / 60 )); return 0
+    fi
+    IM_R=fail
     tmp="$IMUNIFY_FILE.tmp.$$"; : > "$tmp"
     while :; do
         out=$(timeout 90 "$IMUNIFY_BIN" ip-list local list --purpose drop --by-type ip --limit 500 --offset "$off" --json 2>/dev/null 9>&-) \
@@ -1339,11 +1435,13 @@ imunify_refresh() {
         off=$(( off + 500 ))
         [ "$n" -eq 0 ] || [ "$off" -ge "$(num "$total")" ] || [ "$off" -ge 20000 ] && break
     done
-    { echo "#t|$(date +%s)"; echo "#total|$(num "$total")"; cat "$tmp"; } > "$tmp.2" && mv -f "$tmp.2" "$IMUNIFY_FILE"
+    IM_N=$(grep -c . "$tmp")
+    { echo "#t|$(date +%s)"; echo "#total|$(num "$total")"; cat "$tmp"; } > "$tmp.2" && mv -f "$tmp.2" "$IMUNIFY_FILE" && IM_R=ok
     rm -f "$tmp"
 }
 backfill_imunify() { # Imunify IP'lerinin /24'leri için ayrı sorgu bütçesi
     local p n=0
+    BF_N=0
     [ "$LOOK_OK" = 1 ] && [ -r "$IMUNIFY_FILE" ] || return 0
     for p in $(grep -v '^#' "$IMUNIFY_FILE" | cut -d'|' -f1 | sed 's/\.[0-9]*$//' | awk '!seen[$0]++'); do
         [ -n "${OWN_L[$p]+x}" ] && continue
@@ -1351,6 +1449,7 @@ backfill_imunify() { # Imunify IP'lerinin /24'leri için ayrı sorgu bütçesi
         owner_lookup "$p.1"; n=$((n + 1))
         [ "$LOOK_OK" = 1 ] || break
     done
+    BF_N=$n
 }
 imunify_top() {  # [N] → IM_TOP satırları "ASN|KURUM|CC|IP sayısı|SEBEP:n,SEBEP:n,…"; IM_TOTAL, IM_KNOWN, IM_T
     local -A CNT=() NM=() CC=() RC=()
@@ -1589,7 +1688,8 @@ case "$MODE" in
     lookup) LOG_MODE=quiet; do_lookup "${ARGS[0]}"; exit $? ;;
     action) LOG_MODE=file; do_action "$ACT" "${ARGS[0]}" "${ARGS[1]}"; exit $? ;;
     config) LOG_MODE=file; do_config; exit $? ;;
-    busy)   if lock_busy; then echo busy; else echo idle; fi; exit 0 ;;   # eklenti "Şimdi çalıştır"dan önce sorar
+    busy)   if lock_busy; then echo busy; else echo idle; fi; exit 0 ;;
+    history) LOG_MODE=quiet; do_history "${ARGS[0]}" "${ARGS[1]}"; exit $? ;;   # eklenti "Şimdi çalıştır"dan önce sorar
     digest) LOG_MODE=file; owners_load; parse_deny "$DENY_FILE" 1; panel_init; digest_build
             if [ "$SEND" = 1 ]; then printf '%s\n' "$DG_BODY" | mail -s "$DG_SUBJ" "$ALERT_MAIL"; log "$(m "$M_DG_SENT" "$ALERT_MAIL")"; ev digest "" "by=\"$AG_BY\""
             else printf '%s\n\n%s\n' "$DG_SUBJ" "$DG_BODY"; fi
@@ -1861,15 +1961,23 @@ if [ "$DRY" != 1 ] && [ -f "$LOG_FILE" ]; then
         log "$(m "$M_LOGTRIM" "$LOG_MAX_LINES" "$line_count")"
     fi
 fi
+# Adım süreleri günlüğe: tur uzun sürdüğünde nerede geçtiği görünsün
+st=$(date +%s); backfill_owners
+[ "$BF_N" -gt 0 ] && log "$(m "$M_STEP_OWN" "$BF_N" "$(( $(date +%s) - st ))")"
+st=$(date +%s); imunify_refresh
+case "$IM_R" in
+    ok)    log "$(m "$M_STEP_IM" "$IM_N" "$(( $(date +%s) - st ))")" ;;
+    fresh) log "$(m "$M_STEP_IMFRESH" "$IM_AGE" "$IMUNIFY_REFRESH_MIN")" ;;
+    fail)  log "$(m "$M_STEP_IMFAIL" "$(( $(date +%s) - st ))")" ;;
+esac
+st=$(date +%s); backfill_imunify
+[ "$BF_N" -gt 0 ] && log "$(m "$M_STEP_IMOWN" "$BF_N" "$(( $(date +%s) - st ))")"
+owners_save
 ev run "" "v=\"$VERSION\"" "dur=$(( $(date +%s) - RUN_T0 ))" "added=$added24" "warn16=$warn16" \
     "temp_added=$temp_added24" "promoted=$temp_perm_added24" "temp_warn16=$temp_warn16" "wl_skipped=$wl_skipped" \
     "perm_used=$(num "$current_count")" "perm_limit=$(num "$limit")" "temp_used=$(num "$temp_current")" "temp_limit=$(num "$temp_limit")"
 if [ "$DRY" != 1 ] && [ -f "$EVENTS_FILE" ] && [ "$(wc -l < "$EVENTS_FILE")" -gt "$EVENTS_MAX" ]; then
     tail -n "$EVENTS_MAX" "$EVENTS_FILE" > "${EVENTS_FILE}.tmp" && mv "${EVENTS_FILE}.tmp" "$EVENTS_FILE"
 fi
-backfill_owners
-imunify_refresh
-backfill_imunify
-owners_save
 digest_maybe
-log "$M_END"
+log "$(m "$M_END_T" "$(( $(date +%s) - RUN_T0 ))")"
