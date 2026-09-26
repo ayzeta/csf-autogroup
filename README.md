@@ -17,7 +17,7 @@ overflowing its line limit, and you get an email when it nears that limit.
 Works on **any CSF server** (cPanel or not). No dependencies beyond CSF and a
 working `mail` command (`dig` or `host` for the optional lookups below).
 
-**Version 1.5.0** · bilingual logs, alert emails and WHM plugin (English /
+**Version 1.5.1** · bilingual logs, alert emails and WHM plugin (English /
 Türkçe, set `MSG_LANG`). The running version is printed on each run's first log
 line.
 
@@ -161,16 +161,15 @@ the recent actions list.
 Alert emails end with a panel line — `Panel: https://server:2087/ → Plugins →
 CSF Auto-Group`. It is a plain WHM link: WHM session URLs expire, so they can't
 be emailed, and WHM's login form ignores redirect parameters when two-factor
-authentication is on. The link uses `https://$(hostname -f):2087` unless you set
-a panel address in Settings (`PANEL_URL`). Servers without the plugin get no
-link.
+authentication is on. The address is detected automatically
+(`https://$(hostname -f):2087`). Servers without the plugin get no link.
 
 ### Settings tab
 
 The same settings as `config.env`, with validation:
 
 - **Notifications** — alert email (with a *Send test email* button), language,
-  panel address, and the **weekly summary**: sent with the first run after
+  and the **weekly summary**: sent with the first run after
   09:00 on the chosen day (default Monday) — new groups, top attacking
   networks, promotion records about to expire, list usage and run count. Can be
   previewed from the page or with `--digest` (`--digest --send` emails it now).

@@ -118,7 +118,6 @@
       rule_dnd: 'Do not delete eşiği /24 eşiğinden küçük olamaz.', dirty_n: '{0} değişiklik kaydedilmedi', discard: 'Vazgeç',
       try_save: 'Kaydetmeden önce dene', save: 'Kaydet', m_save_t: 'Ayarlar kaydedilsin mi?', m_save_b: 'Şu değişiklikler config.env\'e yazılacak (önce yedek alınır):',
       m_try_t: 'Yeni eşiklerle kuru çalıştırma', m_try_b: 'Kaydedilmemiş ayarlarla; hiçbir şey değişmez.', show_pending_all: 'Tümünü göster ({0})',
-      st_panel: 'Panel adresi', st_panel_h: 'Maillerin sonundaki panel bağlantısının adresi. Boş bırakırsanız otomatik: {0}',
       panel_bad: 'https://sunucu:2087 biçiminde yazın.', auto: 'otomatik', focus_gone: '{0} artık listede değil; güncel durumu gösteriliyor.',
       new_badge: 'Son ziyaretinden beri yeni', actions: 'İşlemler', overdue: 'Tur gecikti · son tur {0} (beklenen aralık {1})',
       since_visit: 'Son ziyaretinden beri ({0}):', sn_add: '{0} grup banı', sn_temp: '{0} geçici grup', sn_warn: '{0} /16 uyarısı',
@@ -207,7 +206,6 @@
       rule_dnd: 'The do not delete threshold can\'t be lower than the /24 threshold.', dirty_n: '{0} unsaved changes', discard: 'Discard',
       try_save: 'Try before saving', save: 'Save', m_save_t: 'Save settings?', m_save_b: 'These changes will be written to config.env (a backup is kept):',
       m_try_t: 'Dry run with the new thresholds', m_try_b: 'Uses the unsaved settings; nothing is changed.', show_pending_all: 'Show all ({0})',
-      st_panel: 'Panel address', st_panel_h: 'Address of the panel link at the end of each email. Leave empty for automatic: {0}',
       panel_bad: 'Use the form https://server:2087.', auto: 'automatic', focus_gone: '{0} is no longer on the list; showing its current state.',
       new_badge: 'New since your last visit', actions: 'Actions', overdue: 'Run overdue · last run {0} (expected every {1})',
       since_visit: 'Since your last visit ({0}):', sn_add: '{0} group bans', sn_temp: '{0} temp groups', sn_warn: '{0} /16 warnings',
@@ -676,8 +674,6 @@
     });
     // Yerel adresler de geçerli ("root", "root@localhost"); kural script'teki cfg_check ile aynı.
     if (!/^[A-Za-z0-9._%+-]+(@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*)?$/.test(String(cv('ALERT_MAIL')))) e.ALERT_MAIL = t('mail_bad');
-    var pu = String(cv('PANEL_URL') || '');
-    if (pu && !/^https?:\/\/[A-Za-z0-9.-]+(:\d{1,5})?\/?$/.test(pu)) e.PANEL_URL = t('panel_bad');
     if (!e.THRESHOLD_24 && !e.THRESHOLD_24_PERMANENT && +cv('THRESHOLD_24_PERMANENT') < +cv('THRESHOLD_24')) e.THRESHOLD_24_PERMANENT = t('rule_dnd');
     return e;
   }
@@ -722,9 +718,6 @@
     var notify = '<div class="ag-field' + (errs.ALERT_MAIL ? ' bad' : '') + (mailDirty ? ' changed' : '') + '"><div class="ag-field-l"><label for="ag-f-mail">' + t('st_mail') + '</label></div>' +
       '<input class="ag-input" id="ag-f-mail" data-cfg="ALERT_MAIL" type="email" autocomplete="off" value="' + esc(cv('ALERT_MAIL')) + '">' +
       '<div class="ag-field-h">' + (errs.ALERT_MAIL ? esc(errs.ALERT_MAIL) : t('st_mail_h')) + '</div></div>' +
-      '<div class="ag-field' + (errs.PANEL_URL ? ' bad' : '') + (String(cv('PANEL_URL') || '') !== String(CFG.values.PANEL_URL || '') ? ' changed' : '') + '"><div class="ag-field-l"><label for="ag-f-panel">' + t('st_panel') + '</label></div>' +
-      '<input class="ag-input" id="ag-f-panel" data-cfg="PANEL_URL" type="url" autocomplete="off" placeholder="' + esc(CFG.panel_auto || 'https://server:2087') + '" value="' + esc(cv('PANEL_URL') || '') + '">' +
-      '<div class="ag-field-h">' + (errs.PANEL_URL ? esc(errs.PANEL_URL) : esc(t('st_panel_h', CFG.panel_auto || '—'))) + '</div></div>' +
       '<div class="ag-field"><div class="ag-field-l"><label>' + t('st_lang') + '</label></div>' + seg('MSG_LANG', [['tr', 'Türkçe'], ['en', 'English']]) +
       '<div class="ag-field-h">' + t('st_lang_h') + '</div></div>' +
       '<div class="ag-field"><div class="ag-field-l"><label>' + t('st_digest') + '</label>' +
@@ -760,7 +753,7 @@
       f.classList.toggle('bad', !!errs[k]);
       f.classList.toggle('changed', String(cv(k)) !== String(CFG.values[k]));
       var h = f.querySelector('.ag-field-h');
-      if (h) h.textContent = errs[k] ? errs[k] : (k === 'ALERT_MAIL' ? t('st_mail_h') : k === 'PANEL_URL' ? t('st_panel_h', CFG.panel_auto || '—') : t('h_' + k));
+      if (h) h.textContent = errs[k] ? errs[k] : (k === 'ALERT_MAIL' ? t('st_mail_h') : t('h_' + k));
     });
   }
 
@@ -943,7 +936,7 @@
     cfgsave: function () {
       var ch = changedKeys();
       var list = '<ul class="ag-changes">' + ch.map(function (k) {
-        var label = k === 'ALERT_MAIL' ? t('st_mail') : k === 'MSG_LANG' ? t('st_lang') : k === 'CRON_MIN' ? t('st_sched') : k === 'PANEL_URL' ? t('st_panel') : k === 'DIGEST' ? t('st_digest') : k === 'DIGEST_DAY' ? t('st_digest_day') : t('k_' + k);
+        var label = k === 'ALERT_MAIL' ? t('st_mail') : k === 'MSG_LANG' ? t('st_lang') : k === 'CRON_MIN' ? t('st_sched') : k === 'DIGEST' ? t('st_digest') : k === 'DIGEST_DAY' ? t('st_digest_day') : t('k_' + k);
         return '<li><b>' + esc(label) + '</b><span class="ag-mono">' + esc(CFG.values[k] || '—') + '</span> → <span class="ag-mono">' + esc(cv(k) || t('auto')) + '</span></li>';
       }).join('') + '</ul>';
       modal({ icon: 'sliders', tone: 'acc', title: t('m_save_t'), html: '<p>' + t('m_save_b') + '</p>' + list, okText: t('save') }).then(function (m) {

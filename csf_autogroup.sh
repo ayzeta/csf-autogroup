@@ -39,7 +39,7 @@
 # ============================================================================
 set -o pipefail
 
-VERSION="1.5.0"   # sürüm — başlangıç log satırında görünür
+VERSION="1.5.1"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -68,7 +68,6 @@ EVENTS_FILE="${EVENTS_FILE:-$(dirname "$SAYAC_FILE")/events.jsonl}"   # WHM ekle
 EVENTS_MAX="${EVENTS_MAX:-5000}"
 IGNORE_FILE="${IGNORE_FILE:-$(dirname "$SAYAC_FILE")/ignored}"       # "yoksay" denen /16 ve /24'ler
 REVIEW_DAYS="${REVIEW_DAYS:-7}"                                        # "kontrol edilecekler" kaç gün geriye bakar
-PANEL_URL="${PANEL_URL:-}"            # maillerdeki panel bağlantısının kökü; boşsa https://$(hostname -f):2087
 PLUGIN_DIR="${PLUGIN_DIR:-/usr/local/cpanel/whostmgr/docroot/cgi/csf_autogroup}"   # eklenti kurulu mu?
 OWNERS_FILE="${OWNERS_FILE:-$(dirname "$SAYAC_FILE")/owners}"      # /24 → ASN önbelleği (30 gün)
 OWNER_TTL_DAYS="${OWNER_TTL_DAYS:-30}"
@@ -396,7 +395,7 @@ mail() {
 
 # ── Settings: validation (panel + --config set + --dry-run --set) ──────────
 # Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
-CFG_KEYS="MSG_LANG ALERT_MAIL PANEL_URL DIGEST DIGEST_DAY THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES CRON_MIN"
+CFG_KEYS="MSG_LANG ALERT_MAIL DIGEST DIGEST_DAY THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES CRON_MIN"
 CFG_TRY_KEYS="THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS"
 cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değer), 1 değil (CFG_ERR)
     local k="$1" v="$2" lo="" hi="" opts=""
@@ -419,10 +418,6 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
         SAYAC_RETENTION_DAYS) lo=7; hi=730 ;;
         REVIEW_DAYS) lo=1; hi=90 ;;
         LOG_MAX_LINES) lo=500; hi=100000 ;;
-        PANEL_URL)    # boş = otomatik (sunucu adı)
-            [ -z "$v" ] && return 0
-            [[ "$v" =~ ^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?/?$ ]] && { CFG_VAL="${v%/}"; return 0; }
-            CFG_ERR=$(m "$M_CFG_BAD" "$k" "$v" "https://host:2087"); return 1 ;;
         *) CFG_ERR=$(m "$M_CFG_UNKNOWN" "$k"); return 1 ;;
     esac
     if [ -n "$opts" ]; then
@@ -457,7 +452,7 @@ PANEL_FOOT=""
 panel_init() {   # yalnız eklenti kuruluysa: maillerin sonuna eklenecek satır (bir kez)
     local base
     [ -d "$PLUGIN_DIR" ] || return
-    if [ -n "$PANEL_URL" ]; then base="${PANEL_URL%/}"; else base="$(panel_auto)"; fi
+    base="$(panel_auto)"      # sunucu adından otomatik: https://$(hostname -f):2087
     [ -n "$base" ] && PANEL_FOOT="$(m "$M_PANEL_GEN" "$base/")$NL"
 }
 
@@ -632,7 +627,11 @@ deny_prefixes() {   # csf.deny'deki grupların ve tekillerin /24 önekleri (tekr
 backfill_owners() { # sahibi bilinmeyen blokları bu turda sorgula (en fazla BACKFILL_MAX)
     local p n=0
     [ "$LOOK_OK" = 1 ] || return 0
-    for p in $(deny_prefixes | sort -u); do
+    local i c order
+    # Önce grup banları (tabloda görünenler), sonra tekiller.
+    order=$( { for i in "${!DC_TXT[@]}"; do c="${DC_TXT[i]%/*}"; echo "${c%.*}"; done
+               for c in "${!SINGLE_NOTE[@]}"; do echo "${c%.*}"; done; } | awk '!seen[$0]++')
+    for p in $order; do
         [ -n "${OWN_L[$p]+x}" ] && continue
         [ "$n" -ge "$BACKFILL_MAX" ] && break
         owner_lookup "$p.1"; n=$((n + 1))
@@ -1363,9 +1362,8 @@ do_config() {
                 o="{\"ok\":true,\"values\":{"
                 i=0
                 for k in $CFG_KEYS; do jstr "$(cfg_value "$k")"; o+="$([ $i -gt 0 ] && echo ,)\"$k\":$REPLY"; i=1; done
-                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"root@localhost\",\"PANEL_URL\":\"\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_MAX_LINES\":\"5000\",\"CRON_MIN\":\"*/10\"}"
+                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"root@localhost\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_MAX_LINES\":\"5000\",\"CRON_MIN\":\"*/10\"}"
                 o+=",\"csf\":{\"deny_limit\":$(num "$(conf_val DENY_IP_LIMIT)"),\"temp_limit\":$(num "$(conf_val DENY_TEMP_IP_LIMIT)")}"
-                jstr "$(panel_auto)"; o+=",\"panel_auto\":$REPLY,\"plugin\":$([ -d "$PLUGIN_DIR" ] && echo true || echo false)"
                 o+=",\"dns_tool\":$([ -n "$DIG_BIN$HOST_BIN" ] && echo true || echo false),\"crontab\":$(command -v crontab >/dev/null 2>&1 && echo true || echo false)}"
                 echo "$o"
             else

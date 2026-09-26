@@ -110,12 +110,11 @@ switch ($a) {
 
     case 'config_set':
         // Anahtar listesi ve kaba karakter süzgeci burada; asıl doğrulama script'te (cfg_check).
-        $keys = ['MSG_LANG', 'ALERT_MAIL', 'PANEL_URL', 'DIGEST', 'DIGEST_DAY', 'THRESHOLD_24', 'THRESHOLD_24_PERMANENT', 'THRESHOLD_16', 'THRESHOLD_TEMP_24',
+        $keys = ['MSG_LANG', 'ALERT_MAIL', 'DIGEST', 'DIGEST_DAY', 'THRESHOLD_24', 'THRESHOLD_24_PERMANENT', 'THRESHOLD_16', 'THRESHOLD_TEMP_24',
                  'THRESHOLD_TEMP_16', 'LOOKUP', 'LOOKUP_TIMEOUT', 'SAYAC_RETENTION_DAYS', 'REVIEW_DAYS', 'LOG_MAX_LINES', 'CRON_MIN'];
         $args = ['--config', 'set'];
         foreach ((array) ($_POST['v'] ?? []) as $k => $v) {
             $v = trim((string) $v);
-            // Boş değer yalnız PANEL_URL için anlamlı (= otomatik); script diğerlerini reddeder.
             if (!in_array($k, $keys, true) || !preg_match('/^[A-Za-z0-9@._%+*\/:-]{0,254}$/', $v)) {
                 ag_json(['ok' => false, 'code' => 2, 'message' => 'bad_value: ' . $k]);
             }
