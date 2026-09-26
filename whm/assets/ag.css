@@ -237,6 +237,89 @@
 
 .ag-foot { margin-top: 24px; text-align: center; font-size: 12px; color: var(--ag-text-3); }
 
+/* ── Durum / son ziyaret / boş kontrol listesi ─────────────────── */
+.ag-dot.bad { background: var(--ag-bad); box-shadow: 0 0 0 3px var(--ag-bad-soft); }
+.ag-late { color: var(--ag-bad); font-weight: 600; }
+.ag-since { display: flex; align-items: center; gap: 10px; padding: 10px 14px; margin-bottom: 16px; border-radius: var(--ag-radius); background: #fff; border: 1px solid var(--ag-accent-line); box-shadow: var(--ag-shadow); font-size: 13px; color: var(--ag-text-2); }
+.ag-since svg { width: 17px; height: 17px; color: var(--ag-accent); flex: none; }
+.ag-since span { flex: 1; }
+.ag-since b { color: var(--ag-text); font-weight: 600; margin-right: 4px; }
+.ag-newdot { width: 7px; height: 7px; border-radius: 50%; background: var(--ag-accent); box-shadow: 0 0 0 3px var(--ag-accent-soft); display: inline-block; flex: none; }
+.ag-okbar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: var(--ag-radius); background: var(--ag-ok-soft); border: 1px solid var(--ag-ok-line); color: var(--ag-ok); font-size: 13px; }
+.ag-okbar svg { width: 17px; height: 17px; flex: none; }
+.ag-okbar b { font-weight: 600; }
+.ag-okbar span { margin-left: auto; opacity: .8; font-size: 12.5px; }
+.ag-link { background: none; border: 0; padding: 0; color: var(--ag-accent); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.ag-link:hover { text-decoration: underline; }
+
+/* ── Etkinlik grafiği ───────────────────────────────────────────── */
+.ag-activity { margin-bottom: 20px; }
+.ag-chart { padding: 12px 18px 10px; }
+.ag-chart svg { width: 100%; height: 150px; display: block; overflow: visible; }
+.ag-chart .ag-hit:hover { fill: rgba(67, 56, 202, .06); }
+.ag-ax { font-size: 10px; fill: var(--ag-text-3); font-family: inherit; }
+.ag-gl { stroke: var(--ag-line); stroke-width: 1; }
+.ag-legend { gap: 12px !important; font-size: 12px; color: var(--ag-text-3); }
+.ag-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.ag-legend i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+.ag-empty-sm { padding: 18px; font-size: 12.5px; }
+
+/* ── Tablo (aktif grup banları) ─────────────────────────────────── */
+.ag-tbl { padding: 0; }
+.ag-thead, .ag-tr { display: grid; grid-template-columns: minmax(200px, 1.25fr) minmax(0, 2fr) 64px 118px 44px; align-items: center; gap: 12px; padding: 0 12px 0 18px; }
+.ag-thead { height: 36px; background: #fafafb; border-bottom: 1px solid var(--ag-line-soft); }
+.ag-th { background: none; border: 0; padding: 0; text-align: left; font-size: 11.5px; font-weight: 650; color: var(--ag-text-3); text-transform: uppercase; letter-spacing: .04em; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; }
+.ag-th:hover, .ag-th.on { color: var(--ag-text); }
+.ag-sort { font-size: 11px; width: 8px; }
+.ag-tr { min-height: 50px; border-top: 1px solid var(--ag-line-soft); transition: background .1s; }
+.ag-item:first-of-type > .ag-tr { border-top: 0; }
+.ag-tr:hover { background: #fafafb; }
+.ag-td { min-width: 0; font-size: 13px; }
+.ag-td-main { display: flex; align-items: center; gap: 8px; }
+.ag-td-own { display: flex; align-items: center; gap: 7px; overflow: hidden; white-space: nowrap; }
+.ag-asn { font-family: var(--ag-mono); font-size: 12px; color: var(--ag-text-2); flex: none; }
+.ag-org { overflow: hidden; text-overflow: ellipsis; color: var(--ag-text); }
+.ag-num-c { text-align: right; font-variant-numeric: tabular-nums; color: var(--ag-text-2); justify-content: flex-end; }
+.ag-when { font-size: 12.5px; color: var(--ag-text-3); white-space: nowrap; }
+.ag-td-act { display: flex; justify-content: flex-end; }
+.ag-lock { color: var(--ag-bad); display: inline-flex; }
+.ag-lock svg { width: 14px; height: 14px; }
+.ag-pager { display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding: 10px 14px; border-top: 1px solid var(--ag-line-soft); font-size: 12.5px; color: var(--ag-text-3); }
+.ag-pager span { margin-right: 6px; font-variant-numeric: tabular-nums; }
+
+/* ── "⋯" menüsü ─────────────────────────────────────────────────── */
+.ag-menu-wrap { position: relative; }
+.ag-iconbtn { width: 30px; height: 30px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--ag-text-3); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1; }
+.ag-iconbtn:hover, .ag-iconbtn.on { background: var(--ag-neutral-soft); color: var(--ag-text); }
+.ag-iconbtn:disabled { opacity: .35; cursor: default; background: transparent; }
+.ag-iconbtn svg { width: 18px; height: 18px; }
+.ag-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 50; min-width: 184px; background: #fff; border: 1px solid var(--ag-line); border-radius: 10px; box-shadow: 0 12px 32px rgba(16, 24, 40, .14), 0 2px 6px rgba(16, 24, 40, .06); padding: 4px; animation: ag-pop .12s ease-out; }
+.ag-menu-i { display: flex; align-items: center; gap: 9px; width: 100%; padding: 8px 10px; border: 0; background: none; border-radius: 7px; font-size: 13px; color: var(--ag-text); cursor: pointer; text-align: left; white-space: nowrap; }
+.ag-menu-i svg { width: 15px; height: 15px; color: var(--ag-text-3); }
+.ag-menu-i:hover { background: var(--ag-neutral-soft); }
+.ag-menu-i.bad, .ag-menu-i.bad svg { color: var(--ag-bad); }
+.ag-menu-i.bad:hover { background: var(--ag-bad-soft); }
+.ag-chev { color: var(--ag-text-3); font-size: 15px; width: 16px; text-align: center; align-self: center; }
+
+/* ── Terfi bekleyenler (sıkı satır) ─────────────────────────────── */
+.ag-prow { display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 18px; border-top: 1px solid var(--ag-line-soft); }
+.ag-card-b > .ag-prow:first-child { border-top: 0; }
+.ag-left { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: 11.5px; color: var(--ag-text-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ag-left .ag-days { margin-top: 0; width: 64px; }
+.ag-left.warn span { color: var(--ag-warn); font-weight: 600; }
+.ag-left.warn .ag-days i { background: #d97706; }
+.ag-left.bad span { color: var(--ag-bad); font-weight: 600; }
+.ag-left.bad .ag-days i { background: #dc2626; }
+
+/* ── En çok saldıran ağlar ──────────────────────────────────────── */
+.ag-asn-r { display: flex; gap: 12px; padding: 10px 18px; border-top: 1px solid var(--ag-line-soft); align-items: flex-start; }
+.ag-card-b > .ag-asn-r:first-child { border-top: 0; }
+.ag-rank { width: 18px; flex: none; font-size: 12px; font-weight: 650; color: var(--ag-text-3); text-align: right; padding-top: 1px; font-variant-numeric: tabular-nums; }
+.ag-asn-m { flex: 1; min-width: 0; }
+.ag-asn-t { display: flex; gap: 7px; align-items: center; white-space: nowrap; overflow: hidden; font-size: 13px; }
+.ag-asn-b { height: 4px; border-radius: 2px; background: var(--ag-neutral-soft); margin: 6px 0 5px; overflow: hidden; }
+.ag-asn-b i { display: block; height: 100%; border-radius: 2px; background: linear-gradient(90deg, #6366f1, #4338ca); }
+
 /* Maildeki bağlantıyla gelinen satır */
 .ag-flash { animation: ag-flash 2.4s ease-out; }
 @keyframes ag-flash { 0%, 35% { background: #fef9c3; box-shadow: inset 3px 0 0 #eab308; } 100% { background: transparent; box-shadow: inset 3px 0 0 transparent; } }
@@ -281,6 +364,10 @@
   .ag-row { flex-wrap: wrap; }
   .ag-row-a { width: 100%; justify-content: flex-start; }
   .ag-ip { grid-template-columns: 110px minmax(0, 1fr); }
+  .ag-thead { display: none; }
+  .ag-tr { grid-template-columns: minmax(0, 1fr) 44px; padding: 8px 12px 8px 16px; }
+  .ag-tr .ag-td-own, .ag-tr .ag-num-c, .ag-tr .ag-when { display: none; }
+  .ag-legend { display: none !important; }
   .ag-ip > :nth-child(n+3) { display: none; }
   .ag-modal-b { padding-left: 22px; }
 }

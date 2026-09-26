@@ -12,7 +12,7 @@
   var UPD = null;               // güncelleme kontrolü sonucu
   var LANG = 'en';
   var CLOCK = 0;                // sunucu saati - istemci saati (sn)
-  var UI = { gf: 'all', gq: '', ef: 'all', open: {}, evLimit: 40, gLimit: 40, commits: false, pAll: false,
+  var UI = { gf: 'all', gq: '', ef: 'all', open: {}, evLimit: 40, gLimit: 40, commits: false, pAll: false, gs: 'added', gd: -1, gp: 0, menu: null,
              tab: location.hash === '#settings' ? 'settings' : 'overview' };
   var CFG = null, DRAFT = {}, cfgLoading = false;
   var pollTimer = null, wasRunning = false, busy = false;
@@ -38,7 +38,12 @@
     sliders: svg('<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>'),
     inbox: svg('<path d="M3 13l3-8h12l3 8v6H3z"/><path d="M3 13h5l1 2h6l1-2h5"/>'),
     hour: svg('<path d="M6 3h12M6 21h12"/><path d="M7 3c0 5 10 5 10 9s-10 4-10 9"/><path d="M17 3c0 5-10 5-10 9"/>'),
-    terminal: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/>')
+    terminal: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/>'),
+    dots: svg('<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>'),
+    lock: svg('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),
+    bell: svg('<path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15L6 16z"/><path d="M10 20a2 2 0 0 0 4 0"/>'),
+    chart: svg('<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'),
+    globe: svg('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/>')
   };
 
   /* ── Diller ────────────────────────────────────────────────────── */
@@ -114,7 +119,23 @@
       try_save: 'Kaydetmeden önce dene', save: 'Kaydet', m_save_t: 'Ayarlar kaydedilsin mi?', m_save_b: 'Şu değişiklikler config.env\'e yazılacak (önce yedek alınır):',
       m_try_t: 'Yeni eşiklerle kuru çalıştırma', m_try_b: 'Kaydedilmemiş ayarlarla; hiçbir şey değişmez.', show_pending_all: 'Tümünü göster ({0})',
       st_panel: 'Panel adresi', st_panel_h: 'Maillerin sonundaki panel bağlantısının adresi. Boş bırakırsanız otomatik: {0}',
-      panel_bad: 'https://sunucu:2087 biçiminde yazın.', auto: 'otomatik', focus_gone: '{0} artık listede değil; güncel durumu gösteriliyor.'
+      panel_bad: 'https://sunucu:2087 biçiminde yazın.', auto: 'otomatik', focus_gone: '{0} artık listede değil; güncel durumu gösteriliyor.',
+      new_badge: 'Son ziyaretinden beri yeni', actions: 'İşlemler', overdue: 'Tur gecikti · son tur {0} (beklenen aralık {1})',
+      since_visit: 'Son ziyaretinden beri ({0}):', sn_add: '{0} grup banı', sn_temp: '{0} geçici grup', sn_warn: '{0} /16 uyarısı',
+      sn_skip: '{0} beyaz liste atlaması', show_new: 'Göster', e_new: 'Son ziyaretten beri', ch_title: 'Son 30 gün', ch_total: '{0} olay',
+      ch_add: 'Grup banı', ch_promote: 'Terfi', ch_temp: 'Geçici', ch_warn: '/16 uyarısı', ch_skip: 'Beyaz liste',
+      ch_empty: 'Son 30 günde kayıt yok; grafik olay kaydı biriktikçe dolacak.', ipcard: 'IP kartı', col_block: 'Blok', col_owner: 'Sahip',
+      col_singles: 'Tekil', col_added: 'Eklendi', of_n: '{0}–{1} / {2}', s_asn: 'En çok saldıran ağlar',
+      s_asn_h: 'Banlı /24 grupları ve tekil banlar, sahibine göre · {0} bloğun sahibi biliniyor', asn_counts: '{0} grup · {1} tekil',
+      asn_hint: 'ASN engelleme önerisi', asn_filling: 'Sahip bilgileri toplanıyor; her turda 50 blok sorgulanır.',
+      asn_nolookup: 'Sahip sorgusu kapalı (Ayarlar → Sorgular).', m_asn_t: 'AS{0} ağını CSF\'de toptan engellemek',
+      m_asn_b: '{1} ağından {0} ayrı /24 blok banlandı. Saldırı sürekli bu ağdan geliyorsa, ağın tamamını CSF\'nin kendi ülke/ASN engeliyle kapatmak daha kalıcı olur.',
+      m_asn_w: 'Bu, o ağdaki meşru kullanıcıları da (ör. o sağlayıcıda sunucusu olan müşterileri) engeller. Büyük bulut sağlayıcılarında dikkatli olun.',
+      m_asn_s: 'Nasıl: CSF → Firewall Configuration → CC_DENY alanına {0} ekleyin (virgülle ayırarak), kaydedip csf ve lfd\'yi yeniden başlatın. Bu eklenti csf.conf\'u değiştirmez.',
+      copy_asn: '{0} kopyala', csf_open2: 'CSF\'yi aç', edit: 'Düzenle', st_digest: 'Haftalık özet',
+      st_digest_h: 'Seçilen gün 09:00\'dan sonraki ilk turda gönderilir: yeni gruplar, en çok saldıran ağlar, süresi dolacak terfi kayıtları.',
+      st_digest_day: 'Gönderim günü', d1: 'Pzt', d2: 'Sal', d3: 'Çar', d4: 'Per', d5: 'Cum', d6: 'Cmt', d7: 'Paz',
+      digest_prev: 'Özeti önizle', m_digest_t: 'Haftalık özet önizlemesi', ev_digest: 'Haftalık özet'
     },
     en: {
       subtitle: 'Attacker IP grouping · CSF', running: 'Run in progress', idle: 'Ready', last_run: 'last run {0}',
@@ -187,7 +208,23 @@
       try_save: 'Try before saving', save: 'Save', m_save_t: 'Save settings?', m_save_b: 'These changes will be written to config.env (a backup is kept):',
       m_try_t: 'Dry run with the new thresholds', m_try_b: 'Uses the unsaved settings; nothing is changed.', show_pending_all: 'Show all ({0})',
       st_panel: 'Panel address', st_panel_h: 'Address of the panel link at the end of each email. Leave empty for automatic: {0}',
-      panel_bad: 'Use the form https://server:2087.', auto: 'automatic', focus_gone: '{0} is no longer on the list; showing its current state.'
+      panel_bad: 'Use the form https://server:2087.', auto: 'automatic', focus_gone: '{0} is no longer on the list; showing its current state.',
+      new_badge: 'New since your last visit', actions: 'Actions', overdue: 'Run overdue · last run {0} (expected every {1})',
+      since_visit: 'Since your last visit ({0}):', sn_add: '{0} group bans', sn_temp: '{0} temp groups', sn_warn: '{0} /16 warnings',
+      sn_skip: '{0} whitelist skips', show_new: 'Show', e_new: 'Since last visit', ch_title: 'Last 30 days', ch_total: '{0} events',
+      ch_add: 'Group ban', ch_promote: 'Promoted', ch_temp: 'Temp', ch_warn: '/16 warning', ch_skip: 'Whitelist',
+      ch_empty: 'Nothing in the last 30 days; the chart fills as the event log grows.', ipcard: 'IP card', col_block: 'Block', col_owner: 'Owner',
+      col_singles: 'Singles', col_added: 'Added', of_n: '{0}–{1} of {2}', s_asn: 'Top attacking networks',
+      s_asn_h: 'Banned /24 groups and single bans by owner · owner known for {0} blocks', asn_counts: '{0} groups · {1} singles',
+      asn_hint: 'ASN block suggestion', asn_filling: 'Collecting owner info; 50 blocks are looked up per run.',
+      asn_nolookup: 'Owner lookups are off (Settings → Lookups).', m_asn_t: 'Block all of AS{0} in CSF',
+      m_asn_b: '{0} separate /24 blocks from {1} have been banned. If attacks keep coming from this network, closing the whole network with CSF\'s own country/ASN block is more durable.',
+      m_asn_w: 'This also blocks legitimate users of that network (e.g. customers hosted there). Be careful with large cloud providers.',
+      m_asn_s: 'How: CSF → Firewall Configuration → add {0} to CC_DENY (comma separated), save and restart csf and lfd. This plugin never changes csf.conf.',
+      copy_asn: 'Copy {0}', csf_open2: 'Open CSF', edit: 'Edit', st_digest: 'Weekly summary',
+      st_digest_h: 'Sent with the first run after 09:00 on the chosen day: new groups, top attacking networks, promotion records about to expire.',
+      st_digest_day: 'Day', d1: 'Mon', d2: 'Tue', d3: 'Wed', d4: 'Thu', d5: 'Fri', d6: 'Sat', d7: 'Sun',
+      digest_prev: 'Preview summary', m_digest_t: 'Weekly summary preview', ev_digest: 'Weekly summary'
     }
   };
   function t(k) {
@@ -237,15 +274,24 @@
     });
   }
 
-  /* ── Sahip bilgisi: olay kaydından, blok başına en yeni ───────── */
+  /* ── Sahip bilgisi: script'in önbelleği (S.owners) + olay kaydı ─── */
   var OWNERS = {};
   function indexOwners() {
     OWNERS = {};
     (S.events || []).forEach(function (e) {
-      if (e.cidr && e.owner) OWNERS[e.cidr] = { owner: e.owner, asn: e.asn, cc: e.cc, ev: e };
-      if (e.cidr && e.ips && !OWNERS[e.cidr]) OWNERS[e.cidr] = { owner: '', ev: e };
-      else if (e.cidr && e.ips && OWNERS[e.cidr]) OWNERS[e.cidr].ev = e;
+      if (!e.cidr) return;
+      var o = OWNERS[e.cidr] || (OWNERS[e.cidr] = {});
+      if (e.owner) { o.owner = e.owner; o.asn = e.asn; o.cc = e.cc; }
+      if (e.ips && e.ips.length) o.ev = e;
     });
+  }
+  function prefixOf(cidr) { var p = String(cidr).split('/')[0].split('.'); return p[0] + '.' + p[1] + '.' + p[2]; }
+  function ownerOf(cidr) {         // → {asn, cc, name, label} ya da {}
+    var c = (S.owners || {})[prefixOf(cidr)], o = OWNERS[cidr] || {};
+    // Cymru kurum adı ülkeyle bitiyor ("OVH, FR"); bayrak zaten gösterildiği için tabloda atılır.
+    if (c) return { asn: c[0], cc: c[1], name: String(c[2] || '').replace(/,\s*[A-Z]{2}$/, ''), label: 'AS' + c[0] + ' ' + (c[2] || '') };
+    if (o.owner) return { asn: o.asn, cc: o.cc, name: String(o.owner).replace(/^AS\d+\s*/, ''), label: o.owner };
+    return {};
   }
   function ownerOfIps(ips) {       // /16 uyarısı: IP'lerin çoğunluk sahibi
     var c = {}, best = null;
@@ -253,13 +299,30 @@
     var n = Object.keys(c).length;
     return best ? best + (n > 1 ? ' +' + (n - 1) : '') : '';
   }
+  var SEEN0 = null;                // bu oturumun "son ziyaret" zamanı (sayfa açıkken sabit kalır)
+  function isNew(ts) { return SEEN0 > 0 && ts > SEEN0; }
+  var NEW_TYPES = ['add24', 'promote', 'temp24', 'warn16', 'warn16t', 'skip_wl', 'manual_ban'];
+  function overdue() {
+    if (!S.last_run || !(S.cron_interval > 0)) return false;
+    return nowSec() - S.last_run.t > Math.max(3 * S.cron_interval, 2700);
+  }
 
   /* ── Parçalar ──────────────────────────────────────────────────── */
   function empty(icon, text) { return '<div class="ag-empty">' + (IC[icon] || '') + esc(text) + '</div>'; }
+  function flag(cc) { return cc ? '<span class="ag-flag">' + esc(cc) + '</span>' : ''; }
+  function newDot(ts) { return isNew(ts) ? '<span class="ag-newdot" title="' + esc(t('new_badge')) + '"></span>' : ''; }
+  function menu(key, items) {      // "⋯" menüsü; items: [{act, label, attrs, danger}]
+    var open = UI.menu === key;
+    return '<div class="ag-menu-wrap"><button class="ag-iconbtn' + (open ? ' on' : '') + '" data-act="menu" data-key="' + esc(key) + '" aria-label="' + esc(t('actions')) + '" aria-expanded="' + open + '">' + IC.dots + '</button>' +
+      (open ? '<div class="ag-menu" role="menu">' + items.map(function (it) {
+        return '<button role="menuitem" class="ag-menu-i' + (it.danger ? ' bad' : '') + '" data-act="' + it.act + '" ' + (it.attrs || '') + '>' + (it.icon ? IC[it.icon] : '') + esc(it.label) + '</button>';
+      }).join('') + '</div>' : '') + '</div>';
+  }
 
   function head() {
-    var lr = S.last_run, run = S.running;
+    var lr = S.last_run, run = S.running, late = !run && overdue();
     var sub = run ? '<span class="ag-dot run"></span>' + t('running')
+      : late ? '<span class="ag-dot bad"></span><span class="ag-late">' + t('overdue', lr ? rel(lr.t) : '?', dur(S.cron_interval)) + '</span>'
       : '<span class="ag-dot"></span>' + t('idle') + ' · ' + (lr ? t('last_run', rel(lr.t)) : t('no_run'));
     return '<div class="ag-head"><div class="ag-mark">' + IC.shield + '</div>' +
       '<div class="ag-title"><h1>CSF Auto-Group</h1><div class="ag-sub">' + sub + '</div></div>' +
@@ -288,6 +351,26 @@
       list + '</div>';
   }
 
+  function sinceBar() {
+    if (!(SEEN0 > 0)) return '';
+    var c = { add: 0, warn: 0, skip: 0, temp: 0 };
+    (S.events || []).forEach(function (e) {
+      if (!isNew(e.t) || NEW_TYPES.indexOf(e.type) < 0) return;
+      if (e.type === 'add24' || e.type === 'promote' || e.type === 'manual_ban') c.add++;
+      else if (e.type === 'temp24') c.temp++;
+      else if (e.type === 'skip_wl') c.skip++;
+      else c.warn++;
+    });
+    var parts = [];
+    if (c.add) parts.push(t('sn_add', c.add));
+    if (c.temp) parts.push(t('sn_temp', c.temp));
+    if (c.warn) parts.push(t('sn_warn', c.warn));
+    if (c.skip) parts.push(t('sn_skip', c.skip));
+    if (!parts.length) return '';
+    return '<div class="ag-since">' + IC.bell + '<span><b>' + t('since_visit', rel(SEEN0)) + '</b> ' + parts.join(' · ') + '</span>' +
+      '<button class="ag-btn ag-btn-sm ag-btn-ghost" data-act="shownew">' + t('show_new') + '</button></div>';
+  }
+
   function usageKpi(label, pair) {
     var used = pair[0], lim = pair[1], pct = lim > 0 ? Math.round(used * 100 / lim) : 0;
     var cls = pct >= 90 ? 'bad' : (pct >= 80 ? 'warn' : '');
@@ -305,6 +388,43 @@
       '<div class="ag-kpi-m">' + t('k_review_m', S.config.review_days) + '</div></div></div>';
   }
 
+  /* 30 günlük etkinlik: yığılmış çubuklar (grup banı, geçici, terfi, uyarı, atlama) */
+  var SERIES = [['A', 'ch_add', 'var(--ag-accent)'], ['P', 'ch_promote', '#7c3aed'], ['T', 'ch_temp', '#d97706'], ['W', 'ch_warn', '#ea580c'], ['S', 'ch_skip', '#0284c7']];
+  function activity() {
+    var D = S.daily || {}, days = 30, max = 0, tot = 0, i, k;
+    for (i = 0; i < days; i++) {
+      var sum = 0;
+      SERIES.forEach(function (s) { sum += (D[s[0]] || [])[i] || 0; });
+      max = Math.max(max, sum); tot += sum;
+    }
+    var W = 720, H = 120, pad = 22, bw = (W - pad) / days, top = Math.max(1, max);
+    var bars = '';
+    for (i = 0; i < days; i++) {
+      var y = H, tip = [], day = new Date((D.start + i * 86400) * 1000);
+      SERIES.forEach(function (s) {
+        var v = (D[s[0]] || [])[i] || 0; if (!v) return;
+        var h = Math.max(2, v / top * (H - 8));
+        y -= h;
+        bars += '<rect x="' + (pad + i * bw + 2).toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + Math.max(2, bw - 4).toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2" fill="' + s[2] + '"></rect>';
+        tip.push(t(s[1]) + ': ' + v);
+      });
+      bars += '<rect class="ag-hit" x="' + (pad + i * bw).toFixed(1) + '" y="0" width="' + bw.toFixed(1) + '" height="' + H + '" fill="transparent"><title>' +
+        esc(day.toLocaleDateString(LANG === 'tr' ? 'tr-TR' : 'en-US', { day: 'numeric', month: 'short' }) + (tip.length ? ' — ' + tip.join(', ') : ' — 0')) + '</title></rect>';
+    }
+    var labels = '';
+    for (k = 0; k < days; k += 7) {
+      var dd = new Date((D.start + k * 86400) * 1000);
+      labels += '<text x="' + (pad + k * bw + 2).toFixed(1) + '" y="' + (H + 14) + '" class="ag-ax">' + esc(dd.toLocaleDateString(LANG === 'tr' ? 'tr-TR' : 'en-US', { day: 'numeric', month: 'short' })) + '</text>';
+    }
+    var grid = '<line x1="' + pad + '" x2="' + W + '" y1="' + (H + .5) + '" y2="' + (H + .5) + '" class="ag-gl"></line>' +
+      '<text x="0" y="10" class="ag-ax">' + top + '</text>';
+    var legend = SERIES.map(function (s) { return '<span><i style="background:' + s[2] + '"></i>' + t(s[1]) + '</span>'; }).join('');
+    return '<section class="ag-card ag-activity"><div class="ag-card-h"><h2>' + IC.chart + t('ch_title') + '</h2><span class="ag-hint">' + t('ch_total', num(tot)) + '</span>' +
+      '<div class="ag-tools ag-legend">' + legend + '</div></div>' +
+      (tot ? '<div class="ag-chart"><svg viewBox="0 0 ' + W + ' ' + (H + 20) + '" preserveAspectRatio="none" role="img" aria-label="' + esc(t('ch_title')) + '">' + grid + bars + labels + '</svg></div>'
+        : '<div class="ag-empty ag-empty-sm">' + t('ch_empty') + '</div>') + '</section>';
+  }
+
   function ipTable(ips, total) {
     if (!ips || !ips.length) return '';
     var rows = ips.map(function (i) {
@@ -319,31 +439,37 @@
   }
 
   function review() {
+    if (!S.review.length) {
+      return '<div class="ag-okbar">' + IC.check + '<b>' + t('no_review') + '</b><span>' + t('k_review_m', S.config.review_days) + '</span></div>';
+    }
     var items = S.review.map(function (e) {
       var key = 'r:' + e.cidr, open = UI.open[key], is16 = /\/16$/.test(e.cidr);
       var pill = e.type === 'skip_wl' ? '<span class="ag-pill ag-pill-info">' + t('ev_skip_wl') + '</span>'
         : '<span class="ag-pill ag-pill-warn">' + t('ev_' + e.type) + '</span>';
       var meta = is16 ? [t('n_ip', num(e.n)), t('n_subnets', num(e.subnets))] : [t('n_ip', num(e.n))];
-      var owner = e.owner || ownerOfIps(e.ips);
+      var owner = e.owner || ownerOfIps(e.ips) || ownerOf(e.cidr).label;
       if (owner) meta.push(esc(owner));
       if (e.wl) meta.push(esc(t('wl', e.wl)));
       var first = e.ips && e.ips[0] ? e.ips[0].ip : '';
       var acts = '<button class="ag-btn ag-btn-sm" data-act="toggle" data-key="' + key + '">' + (open ? t('hide') : t('ips')) + '</button>';
       if (is16) acts += '<button class="ag-btn ag-btn-sm ag-btn-danger" data-act="ban16" data-t="' + esc(pfx(e.cidr)) + '">' + t('ban16') + '</button>';
       else acts += '<button class="ag-btn ag-btn-sm ag-btn-danger" data-act="banforce" data-t="' + esc(pfx(e.cidr)) + '" data-wl="' + esc(e.wl || '') + '">' + t('ban_anyway') + '</button>';
-      acts += '<button class="ag-btn ag-btn-sm ag-btn-ghost" data-act="ignore" data-c="' + esc(e.cidr) + '">' + IC.mute + t('ignore') + '</button>';
+      acts += menu('rm:' + e.cidr, [{ act: 'ignore', label: t('ignore'), icon: 'mute', attrs: 'data-c="' + esc(e.cidr) + '"' },
+                                    { act: 'ipcard', label: t('ipcard'), icon: 'search', attrs: 'data-ip="' + esc(first) + '"' }]);
       return '<div class="ag-item" data-row="' + esc(e.cidr) + '"><div class="ag-row">' + pill +
-        '<div class="ag-row-main"><div class="ag-row-t"><span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(e.cidr) + '</span></div>' +
+        '<div class="ag-row-main"><div class="ag-row-t">' + newDot(e.t) + '<span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(e.cidr) + '</span></div>' +
         '<div class="ag-row-s">' + meta.join(' · ') + '</div></div>' +
         '<div class="ag-row-x">' + rel(e.t) + '</div><div class="ag-row-a">' + acts + '</div></div>' +
         (open ? ipTable(e.ips, e.total) : '') + '</div>';
     }).join('');
     return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.alert + t('s_review') + '</h2>' +
-      '<span class="ag-count' + (S.review.length ? ' warn' : '') + '">' + S.review.length + '</span>' +
+      '<span class="ag-count warn">' + S.review.length + '</span>' +
       '<span class="ag-hint">' + t('s_review_h') + '</span></div>' +
-      '<div class="ag-card-b">' + (items || empty('check', t('no_review'))) + '</div></section>';
+      '<div class="ag-card-b">' + items + '</div></section>';
   }
 
+  /* Aktif grup banları: sıralanabilir, sayfalı tablo */
+  var PAGE = 15;
   function groupMatches(g) {
     var f = UI.gf;
     if (f === 'perm' && !(g.kind === 'perm' || g.kind === 'promoted')) return false;
@@ -351,35 +477,58 @@
     if (f === 'temp' && g.kind !== 'temp') return false;
     if (f === 'manual' && g.kind !== 'manual') return false;
     if (UI.gq) {
-      var o = OWNERS[g.cidr] || {}, hay = (g.cidr + ' ' + (o.owner || '') + ' AS' + (o.asn || '')).toLowerCase();
+      var o = ownerOf(g.cidr), hay = (g.cidr + ' ' + (o.label || '') + ' ' + (o.cc || '')).toLowerCase();
       if (hay.indexOf(UI.gq.toLowerCase()) < 0) return false;
     }
     return true;
   }
+  function ipNum(c) { var p = String(c).split('/')[0].split('.'); return ((+p[0] * 256 + +p[1]) * 256 + +p[2]) * 256 + +p[3]; }
+  function groupSorted() {
+    var s = UI.gs, d = UI.gd;
+    return S.groups.filter(groupMatches).sort(function (a, b) {
+      var x, y;
+      if (s === 'cidr') { x = ipNum(a.cidr); y = ipNum(b.cidr); }
+      else if (s === 'owner') { x = (ownerOf(a.cidr).label || '~').toLowerCase(); y = (ownerOf(b.cidr).label || '~').toLowerCase(); }
+      else if (s === 'n') { x = a.n || 0; y = b.n || 0; }
+      else { x = a.kind === 'temp' ? 9e12 : (a.added || 0); y = b.kind === 'temp' ? 9e12 : (b.added || 0); }
+      return x < y ? -d : x > y ? d : 0;
+    });
+  }
+  function th(key, label, cls) {
+    var on = UI.gs === key;
+    return '<button class="ag-th' + (on ? ' on' : '') + (cls ? ' ' + cls : '') + '" data-act="gsort" data-k="' + key + '">' + esc(label) +
+      '<span class="ag-sort">' + (on ? (UI.gd > 0 ? '↑' : '↓') : '') + '</span></button>';
+  }
   function groupRows() {
-    var list = S.groups.slice().sort(function (a, b) { return (b.added || 0) - (a.added || 0); }).filter(groupMatches);
+    var list = groupSorted();
     if (!list.length) return empty('inbox', S.groups.length ? t('no_match') : t('no_groups'));
-    var shown = list.slice(0, UI.gLimit);
-    var html = shown.map(function (g) {
-      var o = OWNERS[g.cidr] || {}, key = 'g:' + g.cidr, open = UI.open[key], ev = o.ev;
+    var pages = Math.max(1, Math.ceil(list.length / PAGE));
+    if (UI.gp >= pages) UI.gp = pages - 1;
+    var from = UI.gp * PAGE, shown = list.slice(from, from + PAGE);
+    var rows = shown.map(function (g) {
+      var o = ownerOf(g.cidr), ev = (OWNERS[g.cidr] || {}).ev, key = 'g:' + g.cidr, open = UI.open[key];
       var kindCls = { perm: 'ag-pill-n', promoted: 'ag-pill-acc', temp: 'ag-pill-warn', manual: 'ag-pill-bad' }[g.kind] || 'ag-pill-n';
-      var meta = [];
-      if (o.owner) meta.push(esc(o.owner));
-      if (g.n) meta.push(t('n_singles', num(g.n)));
-      if (g.kind === 'temp') meta.push(t('ttl_left', dur(g.ttl)));
-      else if (g.added) meta.push(rel(g.added));
       var first = ev && ev.ips && ev.ips[0] ? ev.ips[0].ip : g.cidr.replace(/\/\d+$/, '').replace(/\.0$/, '.1');
-      var acts = (ev && ev.ips && ev.ips.length ? '<button class="ag-btn ag-btn-sm" data-act="toggle" data-key="' + key + '">' + (open ? t('hide') : t('ips')) + '</button>' : '') +
-        '<button class="ag-btn ag-btn-sm ag-btn-danger" data-act="unban" data-c="' + esc(g.cidr) + '" data-dnd="' + (g.dnd ? 1 : 0) + '" data-kind="' + esc(g.kind) + '">' + t('unban') + '</button>';
-      return '<div class="ag-item" data-row="' + esc(g.cidr) + '"><div class="ag-row"><div class="ag-row-main"><div class="ag-row-t">' +
-        '<span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(g.cidr) + '</span>' +
+      var when = g.kind === 'temp' ? '<span class="ag-pill ag-pill-warn">' + t('ttl_left', dur(g.ttl)) + '</span>' : (g.added ? rel(g.added) : '—');
+      var items = [];
+      if (ev && ev.ips && ev.ips.length) items.push({ act: 'toggle', label: open ? t('hide') : t('ips'), icon: 'list', attrs: 'data-key="' + key + '"' });
+      items.push({ act: 'ipcard', label: t('ipcard'), icon: 'search', attrs: 'data-ip="' + esc(first) + '"' });
+      items.push({ act: 'unban', label: t('unban'), icon: 'x', danger: true, attrs: 'data-c="' + esc(g.cidr) + '" data-dnd="' + (g.dnd ? 1 : 0) + '" data-kind="' + esc(g.kind) + '"' });
+      return '<div class="ag-item" data-row="' + esc(g.cidr) + '"><div class="ag-tr">' +
+        '<div class="ag-td ag-td-main">' + newDot(g.added) + '<span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(g.cidr) + '</span>' +
         '<span class="ag-pill ' + kindCls + '">' + t('kind_' + g.kind) + '</span>' +
-        (g.dnd ? '<span class="ag-pill ag-pill-bad">do not delete</span>' : '') + '</div>' +
-        '<div class="ag-row-s">' + meta.join(' · ') + '</div></div><div class="ag-row-a">' + acts + '</div></div>' +
+        (g.dnd ? '<span class="ag-lock" title="do not delete">' + IC.lock + '</span>' : '') + '</div>' +
+        '<div class="ag-td ag-td-own" title="' + esc(o.label || '') + '">' + (o.asn ? flag(o.cc) + '<span class="ag-asn">AS' + esc(o.asn) + '</span><span class="ag-org">' + esc(o.name || '') + '</span>' : '<span class="ag-muted">—</span>') + '</div>' +
+        '<div class="ag-td ag-num-c">' + (g.n ? num(g.n) : '—') + '</div>' +
+        '<div class="ag-td ag-when">' + when + '</div>' +
+        '<div class="ag-td ag-td-act">' + menu('gm:' + g.cidr, items) + '</div></div>' +
         (open && ev ? ipTable(ev.ips, ev.total) : '') + '</div>';
     }).join('');
-    if (list.length > shown.length) html += '<div class="ag-card-f"><button class="ag-btn ag-btn-sm ag-btn-ghost" data-act="gall">' + t('show_all', num(list.length)) + '</button></div>';
-    return html;
+    var pager = pages > 1 ? '<div class="ag-pager"><span>' + t('of_n', from + 1, from + shown.length, list.length) + '</span>' +
+      '<button class="ag-iconbtn" data-act="gpage" data-d="-1"' + (UI.gp ? '' : ' disabled') + ' aria-label="‹">‹</button>' +
+      '<button class="ag-iconbtn" data-act="gpage" data-d="1"' + (UI.gp < pages - 1 ? '' : ' disabled') + ' aria-label="›">›</button></div>' : '';
+    return '<div class="ag-thead">' + th('cidr', t('col_block'), 'ag-td-main') + th('owner', t('col_owner'), 'ag-td-own') +
+      th('n', t('col_singles'), 'ag-num-c') + th('added', t('col_added'), 'ag-when') + '<span></span></div>' + rows + pager;
   }
   function groups() {
     var chips = ['all', 'perm', 'dnd', 'temp', 'manual'].map(function (f) {
@@ -387,18 +536,18 @@
     }).join('');
     return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.ban + t('s_groups') + '</h2>' +
       '<span class="ag-count">' + S.groups.length + '</span><div class="ag-tools"><div class="ag-chips">' + chips + '</div>' +
-      '<input class="ag-input" id="ag-gq" type="search" placeholder="' + esc(t('g_search')) + '" value="' + esc(UI.gq) + '" style="width:190px"></div></div>' +
-      '<div class="ag-card-b" id="ag-groups-b">' + groupRows() + '</div></section>';
+      '<input class="ag-input" id="ag-gq" type="search" placeholder="' + esc(t('g_search')) + '" value="' + esc(UI.gq) + '" style="width:180px"></div></div>' +
+      '<div class="ag-card-b ag-tbl" id="ag-groups-b">' + groupRows() + '</div></section>';
   }
 
   var EV_CLASS = {
     add24: 'ag-pill-ok', promote: 'ag-pill-acc', temp24: 'ag-pill-warn', skip_wl: 'ag-pill-info', warn16: 'ag-pill-warn',
     warn16t: 'ag-pill-warn', clean_temp: 'ag-pill-n', manual_ban: 'ag-pill-bad', manual_unban: 'ag-pill-n',
-    manual_forget: 'ag-pill-n', manual_ignore: 'ag-pill-n', manual_unignore: 'ag-pill-n', config: 'ag-pill-acc', test_mail: 'ag-pill-n'
+    manual_forget: 'ag-pill-n', manual_ignore: 'ag-pill-n', manual_unignore: 'ag-pill-n', config: 'ag-pill-acc', test_mail: 'ag-pill-n', digest: 'ag-pill-n'
   };
   var EV_GROUP = {
     bans: ['add24', 'promote', 'temp24', 'manual_ban'], warn: ['warn16', 'warn16t'], skip: ['skip_wl'],
-    manual: ['manual_ban', 'manual_unban', 'manual_forget', 'manual_ignore', 'manual_unignore', 'config', 'test_mail'], clean: ['clean_temp']
+    manual: ['manual_ban', 'manual_unban', 'manual_forget', 'manual_ignore', 'manual_unignore', 'config', 'test_mail', 'digest'], clean: ['clean_temp']
   };
   function evDetail(e) {
     var d = [];
@@ -410,7 +559,7 @@
     if (e.type === 'skip_wl') { d.push(t('n_ip', num(e.n))); if (e.wl) d.push(t('wl', e.wl)); }
     var owner = e.owner || ownerOfIps(e.ips);
     if (owner) d.push(owner);
-    if (e.changes) e.changes.forEach(function (c) { d.push((DICT[LANG]['k_' + c.key] || c.key) + ': ' + (c.from || '—') + ' → ' + c.to); });
+    if (e.changes) e.changes.forEach(function (c) { d.push((DICT[LANG]['k_' + c.key] || c.key) + ': ' + (c.from || '—') + ' → ' + (c.to || '—')); });
     if (e.to) d.push(e.to);
     if (e.by) d.push(t('by', e.by));
     if (e.until) d.push(t('until', e.until));
@@ -418,22 +567,23 @@
   }
   function events() {
     var all = (S.events || []).slice().reverse();
-    var list = UI.ef === 'all' ? all : all.filter(function (e) { return EV_GROUP[UI.ef].indexOf(e.type) >= 0; });
+    var list = UI.ef === 'all' ? all : UI.ef === 'new' ? all.filter(function (e) { return isNew(e.t) && NEW_TYPES.indexOf(e.type) >= 0; })
+      : all.filter(function (e) { return EV_GROUP[UI.ef].indexOf(e.type) >= 0; });
     var shown = list.slice(0, UI.evLimit);
-    var opts = ['all', 'bans', 'warn', 'skip', 'manual', 'clean'].map(function (f) {
+    var opts = (SEEN0 > 0 ? ['all', 'new'] : ['all']).concat(['bans', 'warn', 'skip', 'manual', 'clean']).map(function (f) {
       return '<option value="' + f + '"' + (UI.ef === f ? ' selected' : '') + '>' + t('e_' + f) + '</option>';
     }).join('');
     var rows = shown.map(function (e, i) {
       var key = 'e:' + e.t + ':' + e.type + ':' + (e.cidr || i), open = UI.open[key], has = e.ips && e.ips.length;
       return '<div class="ag-item"><div class="ag-ev' + (has ? ' clickable" data-act="toggle" data-key="' + esc(key) : '') + '">' +
         '<div class="ag-ev-time" title="' + esc(new Date(e.t * 1000).toLocaleString()) + '">' + stamp(e.t) + '</div>' +
-        '<div class="ag-ev-b"><div class="ag-ev-t"><span class="ag-pill ' + (EV_CLASS[e.type] || 'ag-pill-n') + '">' + esc(t('ev_' + e.type)) + '</span>' +
+        '<div class="ag-ev-b"><div class="ag-ev-t">' + newDot(NEW_TYPES.indexOf(e.type) >= 0 ? e.t : 0) + '<span class="ag-pill ' + (EV_CLASS[e.type] || 'ag-pill-n') + '">' + esc(t('ev_' + e.type)) + '</span>' +
         (e.cidr ? '<span class="ag-mono" style="font-weight:600">' + esc(e.cidr) + '</span>' : '') + '</div>' +
-        '<div class="ag-ev-d">' + evDetail(e) + '</div></div></div>' + (open ? ipTable(e.ips, e.total) : '') + '</div>';
+        '<div class="ag-ev-d">' + evDetail(e) + '</div></div>' + (has ? '<span class="ag-chev">' + (open ? '−' : '+') + '</span>' : '') + '</div>' + (open ? ipTable(e.ips, e.total) : '') + '</div>';
     }).join('');
     var more = list.length > shown.length ? '<div class="ag-card-f"><button class="ag-btn ag-btn-sm ag-btn-ghost" data-act="evmore">' + t('more') + '</button></div>' : '';
-    return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.list + t('s_events') + '</h2>' +
-      '<div class="ag-tools"><select class="ag-input" id="ag-ef" style="width:160px">' + opts + '</select></div></div>' +
+    return '<section class="ag-card" id="ag-events"><div class="ag-card-h"><h2>' + IC.list + t('s_events') + '</h2>' +
+      '<div class="ag-tools"><select class="ag-input" id="ag-ef" style="width:170px">' + opts + '</select></div></div>' +
       '<div class="ag-card-b">' + (rows || empty('inbox', all.length ? t('no_match') : t('no_events'))) + '</div>' + more + '</section>';
   }
 
@@ -443,24 +593,45 @@
       '<button class="ag-btn ag-btn-primary" type="submit">' + t('lookup_btn') + '</button></form><p>' + t('lookup_hint') + '</p></div></section>';
   }
 
+  /* En çok saldıran ağlar: gruplar + tekiller, ASN'e göre */
+  function topAsn() {
+    var list = S.asn_top || [];
+    var known = Object.keys(S.owners || {}).length;
+    if (!list.length) {
+      return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.globe + t('s_asn') + '</h2></div>' +
+        '<div class="ag-empty ag-empty-sm">' + (S.config.lookup ? t('asn_filling') : t('asn_nolookup')) + '</div></section>';
+    }
+    var max = 0;
+    list.forEach(function (a) { max = Math.max(max, a.groups * 4 + a.singles); });
+    var rows = list.map(function (a, i) {
+      var w = Math.max(4, Math.round((a.groups * 4 + a.singles) * 100 / Math.max(1, max)));
+      var name = String(a.name || '').replace(/,\s*[A-Z]{2}$/, '');
+      return '<div class="ag-asn-r"><span class="ag-rank">' + (i + 1) + '</span><div class="ag-asn-m">' +
+        '<div class="ag-asn-t">' + flag(a.cc) + '<span class="ag-asn">AS' + esc(a.asn) + '</span><span class="ag-org" title="' + esc(a.name) + '">' + esc(name) + '</span></div>' +
+        '<div class="ag-asn-b"><i style="width:' + w + '%"></i></div>' +
+        '<div class="ag-sub">' + t('asn_counts', num(a.groups), num(a.singles)) +
+        (a.groups >= 3 ? ' · <button class="ag-link" data-act="asnhint" data-asn="' + esc(a.asn) + '" data-name="' + esc(name) + '" data-g="' + a.groups + '">' + t('asn_hint') + '</button>' : '') + '</div></div></div>';
+    }).join('');
+    return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.globe + t('s_asn') + '</h2><span class="ag-hint" style="width:100%">' + t('s_asn_h', num(known)) + '</span></div>' +
+      '<div class="ag-card-b">' + rows + '</div></section>';
+  }
+
   function pending() {
     var plist = S.pending.slice().sort(function (a, b) { return a.days_left - b.days_left; });
-    var pmore = !UI.pAll && plist.length > 10 ? plist.length : 0;
-    if (pmore) plist = plist.slice(0, 10);
+    var pmore = !UI.pAll && plist.length > 8 ? plist.length : 0;
+    if (pmore) plist = plist.slice(0, 8);
     var rows = plist.map(function (p) {
-      var cidr = p.prefix + '.0/24', o = OWNERS[cidr] || {}, ev = o.ev;
-      var left = Math.max(0, p.days_left), pct = Math.max(0, Math.min(100, left * 100 / (S.config.retention || 180)));
+      var cidr = p.prefix + '.0/24', o = ownerOf(cidr), ev = (OWNERS[cidr] || {}).ev;
+      var left = Math.max(0, p.days_left), ret = S.config.retention || 180, pct = Math.max(0, Math.min(100, left * 100 / ret));
+      var urg = left < 7 ? ' bad' : left < 30 ? ' warn' : '';
       var first = ev && ev.ips && ev.ips[0] ? ev.ips[0].ip : p.prefix + '.1';
-      var meta = [];
-      if (o.owner) meta.push(esc(o.owner));
-      meta.push(t('since', esc(p.since)));
-      return '<div class="ag-row" data-row="' + esc(cidr) + '"><div class="ag-row-main"><div class="ag-row-t"><span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(cidr) + '</span>' +
+      return '<div class="ag-prow" data-row="' + esc(cidr) + '"><div class="ag-row-main"><div class="ag-row-t"><span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(cidr) + '</span>' +
         (p.temp_ttl > 0 ? '<span class="ag-pill ag-pill-warn">' + t('ttl_left', dur(p.temp_ttl)) + '</span>' : '') + '</div>' +
-        '<div class="ag-row-s">' + meta.join(' · ') + '</div>' +
-        '<div class="ag-sub" style="margin-top:4px;display:flex;gap:8px;align-items:center"><div class="ag-days"><i style="width:' + pct + '%"></i></div>' + t('days_left', left) + '</div></div>' +
-        '<div class="ag-row-a" style="flex-direction:column;align-items:stretch">' +
-        '<button class="ag-btn ag-btn-sm ag-btn-danger" data-act="promote" data-t="' + esc(p.prefix) + '">' + t('promote') + '</button>' +
-        '<button class="ag-btn ag-btn-sm ag-btn-ghost" data-act="forget" data-t="' + esc(p.prefix) + '">' + t('forget') + '</button></div></div>';
+        '<div class="ag-row-s">' + (o.label ? flag(o.cc) + ' ' + esc(o.label) : t('since', esc(p.since))) + '</div></div>' +
+        '<div class="ag-left' + urg + '"><div class="ag-days"><i style="width:' + pct + '%"></i></div><span>' + t('days_left', left) + '</span></div>' +
+        menu('pm:' + p.prefix, [{ act: 'promote', label: t('promote'), icon: 'ban', attrs: 'data-t="' + esc(p.prefix) + '"' },
+                                { act: 'forget', label: t('forget'), icon: 'x', attrs: 'data-t="' + esc(p.prefix) + '"' },
+                                { act: 'ipcard', label: t('ipcard'), icon: 'search', attrs: 'data-ip="' + esc(first) + '"' }]) + '</div>';
     }).join('');
     return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.hour + t('s_pending') + '</h2><span class="ag-count">' + S.pending.length + '</span>' +
       '<span class="ag-hint" style="width:100%">' + t('s_pending_h') + '</span></div>' +
@@ -482,7 +653,8 @@
   function config() {
     var c = S.config;
     function kv(k, v) { return '<dt>' + esc(k) + '</dt><dd>' + esc(v) + '</dd>'; }
-    return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.sliders + t('s_config') + '</h2></div><dl class="ag-kv">' +
+    return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.sliders + t('s_config') + '</h2>' +
+      '<div class="ag-tools"><button class="ag-link" data-act="tab" data-tab="settings">' + t('edit') + '</button></div></div><dl class="ag-kv">' +
       kv(t('c_t24'), t('c_singles', c.t24)) + kv(t('c_t24p'), t('c_singles', c.t24p)) + kv(t('c_t16'), t('c_singles', c.t16)) +
       kv(t('c_tt24'), t('c_singles', c.tt24)) + kv(t('c_tt16'), t('c_singles', c.tt16)) + kv(t('c_ret'), t('c_days', c.retention)) +
       kv(t('c_lookup'), c.lookup ? t('c_on') : t('c_off')) + '</dl></section>';
@@ -555,6 +727,11 @@
       '<div class="ag-field-h">' + (errs.PANEL_URL ? esc(errs.PANEL_URL) : esc(t('st_panel_h', CFG.panel_auto || '—'))) + '</div></div>' +
       '<div class="ag-field"><div class="ag-field-l"><label>' + t('st_lang') + '</label></div>' + seg('MSG_LANG', [['tr', 'Türkçe'], ['en', 'English']]) +
       '<div class="ag-field-h">' + t('st_lang_h') + '</div></div>' +
+      '<div class="ag-field"><div class="ag-field-l"><label>' + t('st_digest') + '</label>' +
+      '<button class="ag-link" data-act="digestprev">' + t('digest_prev') + '</button></div>' +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap">' + seg('DIGEST', [['1', t('on')], ['0', t('off')]]) +
+      (String(cv('DIGEST')) === '1' ? seg('DIGEST_DAY', [1, 2, 3, 4, 5, 6, 7].map(function (d) { return [String(d), t('d' + d)]; })) : '') + '</div>' +
+      '<div class="ag-field-h">' + t('st_digest_h') + '</div></div>' +
       '<div class="ag-field"><button class="ag-btn" data-act="cfgtest"' + (mailDirty ? ' disabled' : '') + '>' + IC.inbox + t('st_test') + '</button>' +
       '<div class="ag-field-h">' + (mailDirty ? t('st_test_dirty') : t('st_test_h') + ' ' + esc(CFG.values.ALERT_MAIL)) + '</div></div>';
     var thr = ['THRESHOLD_24', 'THRESHOLD_24_PERMANENT', 'THRESHOLD_16', 'THRESHOLD_TEMP_24', 'THRESHOLD_TEMP_16'].map(function (k) { return field(k, errs); }).join('');
@@ -592,8 +769,8 @@
     indexOwners();
     var y = window.scrollY;
     var body = UI.tab === 'settings' ? settingsView()
-      : kpis() + '<div class="ag-grid"><div class="ag-col">' + review() + groups() + events() + '</div>' +
-        '<div class="ag-col">' + lookupCard() + pending() + ignored() + config() + '</div></div>';
+      : sinceBar() + kpis() + activity() + '<div class="ag-grid"><div class="ag-col">' + review() + groups() + events() + '</div>' +
+        '<div class="ag-col">' + lookupCard() + topAsn() + pending() + ignored() + config() + '</div></div>';
     $app.innerHTML = '<div class="ag-wrap">' + head() + banner() + body +
       '<div class="ag-foot">' + esc(t('foot', S.version + (BOOT.commit ? ' (' + BOOT.commit + ')' : ''), BOOT.user || 'root')) + '</div></div>';
     $app.setAttribute('aria-busy', 'false');
@@ -605,6 +782,7 @@
     return api('status').then(function (d) {
       if (!d || d.ok === false) { throw new Error((d && (d.message || d.error)) || 'status'); }
       S = d; LANG = d.lang === 'tr' ? 'tr' : 'en'; CLOCK = d.now - Date.now() / 1000;
+      if (SEEN0 === null) { SEEN0 = d.last_seen || 0; setTimeout(function () { api('seen').catch(function () {}); }, 1500); }
       document.documentElement.lang = LANG;
       if (wasRunning && !d.running) toast(t('t_done'), 'ok');
       wasRunning = d.running;
@@ -711,6 +889,32 @@
       render(); window.scrollTo(0, 0);
     },
     pall: function () { UI.pAll = true; render(); },
+    menu: function (el) { var k = el.getAttribute('data-key'); UI.menu = UI.menu === k ? null : k; render(); },
+    gsort: function (el) { var k = el.getAttribute('data-k'); if (UI.gs === k) UI.gd = -UI.gd; else { UI.gs = k; UI.gd = k === 'added' || k === 'n' ? -1 : 1; } UI.gp = 0; render(); },
+    gpage: function (el) { UI.gp = Math.max(0, UI.gp + (+el.getAttribute('data-d'))); render(); },
+    shownew: function () { UI.ef = 'new'; UI.evLimit = 200; render(); var e = document.getElementById('ag-events'); if (e) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
+    asnhint: function (el) {
+      var asn = 'AS' + el.getAttribute('data-asn'), name = el.getAttribute('data-name'), g = el.getAttribute('data-g');
+      modal({
+        icon: 'globe', tone: 'warn', title: esc(t('m_asn_t', el.getAttribute('data-asn'))), okText: null, cancelText: t('close'),
+        html: '<p>' + esc(t('m_asn_b', g, name)) + '</p><div class="ag-warnbox">' + esc(t('m_asn_w')) + '</div><p>' + esc(t('m_asn_s', asn)) + '</p>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ag-btn ag-btn-sm" data-m="copyasn">' + IC.copy + esc(t('copy_asn', asn)) + '</button>' +
+          '<a class="ag-btn ag-btn-sm" href="../configserver/csf.cgi" target="_top">' + IC.ext + t('csf_open2') + '</a></div>',
+        onOpen: function (wrap) {
+          var b = wrap.querySelector('[data-m="copyasn"]');
+          b.addEventListener('click', function (ev) { ev.stopPropagation(); if (navigator.clipboard) navigator.clipboard.writeText(asn).then(function () { toast(t('t_copied'), 'ok'); }); });
+        }
+      });
+    },
+    digestprev: function () {
+      modal({
+        icon: 'inbox', tone: 'acc', title: t('m_digest_t'), wide: true, okText: null, cancelText: t('close'),
+        html: '<pre class="ag-out" id="ag-dg"><span class="ag-spin ag-spin-sm"></span></pre>',
+        onOpen: function (wrap) {
+          api('digest_preview').then(function (r) { var pre = wrap.querySelector('#ag-dg'); if (pre) pre.textContent = r.output || r.error || ''; });
+        }
+      });
+    },
     cfgchip: function (el) { DRAFT[el.getAttribute('data-k')] = el.getAttribute('data-v'); render(); },
     cfgdiscard: function () { DRAFT = {}; render(); },
     cfgtest: function (el) {
@@ -739,7 +943,7 @@
     cfgsave: function () {
       var ch = changedKeys();
       var list = '<ul class="ag-changes">' + ch.map(function (k) {
-        var label = k === 'ALERT_MAIL' ? t('st_mail') : k === 'MSG_LANG' ? t('st_lang') : k === 'CRON_MIN' ? t('st_sched') : k === 'PANEL_URL' ? t('st_panel') : t('k_' + k);
+        var label = k === 'ALERT_MAIL' ? t('st_mail') : k === 'MSG_LANG' ? t('st_lang') : k === 'CRON_MIN' ? t('st_sched') : k === 'PANEL_URL' ? t('st_panel') : k === 'DIGEST' ? t('st_digest') : k === 'DIGEST_DAY' ? t('st_digest_day') : t('k_' + k);
         return '<li><b>' + esc(label) + '</b><span class="ag-mono">' + esc(CFG.values[k] || '—') + '</span> → <span class="ag-mono">' + esc(cv(k) || t('auto')) + '</span></li>';
       }).join('') + '</ul>';
       modal({ icon: 'sliders', tone: 'acc', title: t('m_save_t'), html: '<p>' + t('m_save_b') + '</p>' + list, okText: t('save') }).then(function (m) {
@@ -755,7 +959,7 @@
       });
     },
     toggle: function (el) { var k = el.getAttribute('data-key'); UI.open[k] = !UI.open[k]; render(); },
-    gf: function (el) { UI.gf = el.getAttribute('data-f'); UI.gLimit = 40; render(); },
+    gf: function (el) { UI.gf = el.getAttribute('data-f'); UI.gLimit = 40; UI.gp = 0; render(); },
     gall: function () { UI.gLimit = 1e6; render(); },
     evmore: function () { UI.evLimit += 60; render(); },
     commits: function () { UI.commits = !UI.commits; render(); },
@@ -923,13 +1127,20 @@
 
   /* ── Olay bağlama (tek dinleyici) ──────────────────────────────── */
   $app.addEventListener('click', function (ev) {
-    var ipEl = ev.target.closest('[data-ip]');
+    var act = ev.target.closest('[data-act]'), ipEl = ev.target.closest('[data-ip]');
+    // Açık menü, menüyü açıp kapatan düğme dışındaki her tıklamada kapanır — işlemden ÖNCE,
+    // yoksa açılan onay penceresinin arkasında (ve pencere kapanınca da) menü açık kalıyordu.
+    if (UI.menu && !(act && act.getAttribute('data-act') === 'menu')) {
+      UI.menu = null; render();
+      if (!act && !(ipEl && ipEl.getAttribute('data-ip'))) return;
+    }
     if (ipEl && ipEl.getAttribute('data-ip')) { ev.preventDefault(); openDrawer(ipEl.getAttribute('data-ip')); return; }
-    var el = ev.target.closest('[data-act]');
+    var el = act;
     if (!el || el.disabled) return;
     var fn = ACTIONS[el.getAttribute('data-act')];
     if (fn) { ev.preventDefault(); fn(el); }
   });
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && UI.menu && !layerStack.length) { UI.menu = null; render(); } });
   $app.addEventListener('submit', function (ev) {
     if (ev.target.id === 'ag-lk') { ev.preventDefault(); openDrawer((document.getElementById('ag-lk-ip').value || '').trim()); }
   });
@@ -937,7 +1148,7 @@
     var ck = ev.target.getAttribute && ev.target.getAttribute('data-cfg');
     if (ck && CFG) { DRAFT[ck] = ev.target.value.trim(); refreshSaveBar(); return; }
     if (ev.target.id === 'ag-gq') {
-      UI.gq = ev.target.value; UI.gLimit = 40;
+      UI.gq = ev.target.value; UI.gLimit = 40; UI.gp = 0;
       var b = document.getElementById('ag-groups-b'); if (b) b.innerHTML = groupRows();
     }
   });

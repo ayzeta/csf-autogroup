@@ -17,7 +17,7 @@ overflowing its line limit, and you get an email when it nears that limit.
 Works on **any CSF server** (cPanel or not). No dependencies beyond CSF and a
 working `mail` command (`dig` or `host` for the optional lookups below).
 
-**Version 1.4.0** · bilingual logs, alert emails and WHM plugin (English /
+**Version 1.5.0** · bilingual logs, alert emails and WHM plugin (English /
 Türkçe, set `MSG_LANG`). The running version is printed on each run's first log
 line.
 
@@ -115,13 +115,26 @@ under **WHM → Plugins → CSF Auto-Group**. Only `root` and WHM accounts with 
 What it shows:
 
 - **Overview** — deny-list usage, active group bans, items to review, last run.
+  The header turns red when the last run is much older than the cron interval.
+- **Since your last visit** — what happened since you last opened the page;
+  new rows carry a dot.
+- **Last 30 days** — a daily chart of group bans, promotions, temp groups,
+  `/16` warnings and whitelist skips.
 - **To review** — `/16` warnings and whitelist-skipped `/24`s from the last 7
   days, with every IP's hostname, owner and ban reason.
 - **Pending promotion** — `/24`s that were temp-banned once. If one comes back,
-  it becomes permanent + `do not delete`. Shows how many days its record has
-  left.
-- **Active group bans** — searchable by CIDR, AS number or organisation.
+  it becomes permanent + `do not delete`. Sorted by days left; ones about to
+  expire are highlighted.
+- **Active group bans** — a sortable, paged table with each block's owner
+  (ASN, organisation, country), searchable by CIDR, AS number or organisation.
+- **Top attacking networks** — group bans and single bans counted per network.
+  When one network has 3+ banned `/24`s, it explains how to block the whole ASN
+  with CSF's own `CC_DENY` (the plugin never edits `csf.conf`).
 - **Recent actions** — every ban, promotion, skip, warning and manual change.
+
+Owner info comes from a cache (`/var/lib/csf_autogroup/owners`, 30 days). Each
+run looks up at most 50 blocks that aren't cached yet, so older bans fill in
+over a few runs.
 - **IP lookup** — hostname (forward-confirmed), owner (ASN), announced prefix,
   registry, whether CSF blocks it and which list whitelists it, with links to
   bgp.he.net and AbuseIPDB.
@@ -156,7 +169,11 @@ link.
 
 The same settings as `config.env`, with validation:
 
-- **Notifications** — alert email (with a *Send test email* button) and language.
+- **Notifications** — alert email (with a *Send test email* button), language,
+  panel address, and the **weekly summary**: sent with the first run after
+  09:00 on the chosen day (default Monday) — new groups, top attacking
+  networks, promotion records about to expire, list usage and run count. Can be
+  previewed from the page or with `--digest` (`--digest --send` emails it now).
 - **Thresholds** — `/24` ban, `do not delete`, `/16` warning, temp `/24` and
   temp `/16`. The `do not delete` threshold can't be lower than the `/24` one.
 - **Schedule** — cron every 5 / 10 / 15 / 30 minutes or hourly.

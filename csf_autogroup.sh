@@ -29,6 +29,7 @@
 #   csf_autogroup.sh --config get|test-mail [--json]
 #   csf_autogroup.sh --config set KEY=VALUE ... [--json]   validated, config.env + cron
 #   csf_autogroup.sh --dry-run --set THRESHOLD_24=4 ...    try settings without saving
+#   csf_autogroup.sh --digest [--send]    weekly summary: print it (or email it now)
 #
 # Config : optional config.env in the same dir (see config.env.example).
 # Cron   : e.g.  */10 * * * * /path/csf_autogroup.sh >/dev/null 2>&1
@@ -38,7 +39,7 @@
 # ============================================================================
 set -o pipefail
 
-VERSION="1.4.0"   # sürüm — başlangıç log satırında görünür
+VERSION="1.5.0"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -69,11 +70,16 @@ IGNORE_FILE="${IGNORE_FILE:-$(dirname "$SAYAC_FILE")/ignored}"       # "yoksay" 
 REVIEW_DAYS="${REVIEW_DAYS:-7}"                                        # "kontrol edilecekler" kaç gün geriye bakar
 PANEL_URL="${PANEL_URL:-}"            # maillerdeki panel bağlantısının kökü; boşsa https://$(hostname -f):2087
 PLUGIN_DIR="${PLUGIN_DIR:-/usr/local/cpanel/whostmgr/docroot/cgi/csf_autogroup}"   # eklenti kurulu mu?
+OWNERS_FILE="${OWNERS_FILE:-$(dirname "$SAYAC_FILE")/owners}"      # /24 → ASN önbelleği (30 gün)
+OWNER_TTL_DAYS="${OWNER_TTL_DAYS:-30}"
+BACKFILL_MAX="${BACKFILL_MAX:-50}"      # her turda en fazla bu kadar /24'ün sahibi sorgulanır
+DIGEST="${DIGEST:-1}"                   # 1 = haftalık özet maili
+DIGEST_DAY="${DIGEST_DAY:-1}"           # 1 = pazartesi … 7 = pazar (09:00'dan sonraki ilk tur)
 TODAY=$(date '+%Y-%m-%d')
 NL=$'\n'
 
 # ── Command line ────────────────────────────────────────────────────────────
-MODE=run; JSON=0; FORCE=0; DRY=0; ACT=""; ARGS=(); SETS=()
+MODE=run; JSON=0; FORCE=0; DRY=0; ACT=""; ARGS=(); SETS=(); SEND=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --dry-run) MODE=run; DRY=1 ;;
@@ -82,6 +88,8 @@ while [ $# -gt 0 ]; do
         --action)  MODE=action; ACT="${2:-}"; shift ;;
         --config)  MODE=config ;;
         --set)     SETS+=("${2:-}"); shift ;;
+        --digest)  MODE=digest ;;
+        --send)    SEND=1 ;;
         --json)    JSON=1 ;;
         --force)   FORCE=1 ;;
         --version) echo "$VERSION"; exit 0 ;;
@@ -215,6 +223,19 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_TM_BODY="Bu bir test mailidir. %s sunucusundaki CSF Auto-Group uyarıları bu adrese gelecek.\nGönderen: %s"
   M_TM_SENT="Test maili %s adresine gönderildi (mail komutu kabul etti)"
   M_TM_FAIL="mail komutu hata verdi: %s"
+  M_DG_SUBJ="CSF Auto-Group haftalık özet (%s)"
+  M_DG_HEAD="Son 7 gün: %s – %s"
+  M_DG_COUNTS="%s grup banı · %s geçici grup · %s kalıcıya terfi · %s /16 uyarısı · %s beyaz liste atlaması · %s elle işlem"
+  M_DG_USAGE="Kalıcı liste: %s / %s satır (%%%s) · 7 gün önce: %s"
+  M_DG_TUSAGE="Geçici liste: %s / %s satır"
+  M_DG_NEW="Yeni grup banları:"
+  M_DG_TOP="En çok saldıran ağlar (banlı /24 grupları ve tekil banlar):"
+  M_DG_TOPL="   %-9s %-44s %s grup · %s tekil"
+  M_DG_EXP="14 gün içinde süresi dolacak terfi kayıtları (tekrar gelirlerse kalıcı olurlar):"
+  M_DG_EXPL="   %-18s %s gün"
+  M_DG_RUNS="Tur sağlığı: son 7 günde %s tur çalıştı (cron aralığına göre beklenen ~%s)"
+  M_DG_NONE="   yok"
+  M_DG_SENT="Haftalık özet gönderildi: %s"
 else
   M_START="--- Started ---";                                       M_END="--- Done ---"
   M_ERR_NOFILE="ERROR: %s not found, exiting."
@@ -334,6 +355,19 @@ else
   M_TM_BODY="This is a test email. CSF Auto-Group alerts from %s will arrive at this address.\nSent by: %s"
   M_TM_SENT="Test email handed to the mail command for %s"
   M_TM_FAIL="the mail command failed: %s"
+  M_DG_SUBJ="CSF Auto-Group weekly summary (%s)"
+  M_DG_HEAD="Last 7 days: %s – %s"
+  M_DG_COUNTS="%s group bans · %s temp groups · %s promoted · %s /16 warnings · %s whitelist skips · %s manual actions"
+  M_DG_USAGE="Permanent list: %s / %s lines (%s%%) · 7 days ago: %s"
+  M_DG_TUSAGE="Temp list: %s / %s lines"
+  M_DG_NEW="New group bans:"
+  M_DG_TOP="Top attacking networks (banned /24 groups and single bans):"
+  M_DG_TOPL="   %-9s %-44s %s groups · %s singles"
+  M_DG_EXP="Promotion records expiring within 14 days (become permanent if they return):"
+  M_DG_EXPL="   %-18s %s days"
+  M_DG_RUNS="Run health: %s runs in the last 7 days (about %s expected from the cron interval)"
+  M_DG_NONE="   none"
+  M_DG_SENT="Weekly summary sent: %s"
 fi
 m() { local f="$1"; shift; printf "$f" "$@"; }   # format a message template
 
@@ -362,7 +396,7 @@ mail() {
 
 # ── Settings: validation (panel + --config set + --dry-run --set) ──────────
 # Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
-CFG_KEYS="MSG_LANG ALERT_MAIL PANEL_URL THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES CRON_MIN"
+CFG_KEYS="MSG_LANG ALERT_MAIL PANEL_URL DIGEST DIGEST_DAY THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES CRON_MIN"
 CFG_TRY_KEYS="THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS"
 cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değer), 1 değil (CFG_ERR)
     local k="$1" v="$2" lo="" hi="" opts=""
@@ -371,6 +405,8 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
         MSG_LANG) opts="tr en" ;;
         LOOKUP) opts="0 1" ;;
         CRON_MIN) opts="*/5 */10 */15 */30 0" ;;
+        DIGEST) opts="0 1" ;;
+        DIGEST_DAY) opts="1 2 3 4 5 6 7" ;;
         ALERT_MAIL)
             # Yerel adresler de geçerli: "root", "root@localhost" (cPanel root'un postasını
             # sunucunun iletişim adresine yönlendirir; script'in varsayılanı da budur).
@@ -554,10 +590,54 @@ owner_lookup() { # IP → OWN_LONG ("AS60729 ARTIKEL10, DE"), OWN_SHORT ("AS6072
             name="${ASNAME[$asn]}"
             OWN_A[$p]="$asn"; OWN_C[$p]="$cc"
             OWN_L[$p]="AS$asn ${name:-?}"; [ -z "$name" ] && [ -n "$cc" ] && OWN_L[$p]="AS$asn, $cc"
-            OWN_S[$p]="AS$asn${cc:+ $cc}"
+            OWN_S[$p]="AS$asn${cc:+ $cc}"; OWN_N[$p]="$name"
         fi
+        OWN_NEW[$p]=1
     fi
     OWN_LONG="${OWN_L[$p]}"; OWN_SHORT="${OWN_S[$p]}"; OWN_ASN="${OWN_A[$p]}"; OWN_CC="${OWN_C[$p]}"
+}
+# Önbellek satırı: "a.b.c|ASN|CC|KURUM|zaman". Sorgulanıp bilgi çıkmayan blok da (boş ASN) saklanır,
+# her turda boşuna yeniden sorulmasın. OWNER_TTL_DAYS'ten eski kayıt okunmaz, yeniden sorulur.
+declare -A OWN_N OWN_T OWN_NEW
+owners_load() {
+    local p asn cc name t min
+    [ -r "$OWNERS_FILE" ] || return 0
+    min=$(( $(date +%s) - OWNER_TTL_DAYS * 86400 ))
+    while IFS='|' read -r p asn cc name t; do
+        [[ "$p" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || continue
+        [[ "$t" =~ ^[0-9]+$ ]] && [ "$t" -ge "$min" ] || continue
+        OWN_A[$p]="$asn"; OWN_C[$p]="$cc"; OWN_N[$p]="$name"; OWN_T[$p]="$t"
+        if [ -n "$asn" ]; then
+            OWN_L[$p]="AS$asn ${name:-?}"; [ -z "$name" ] && [ -n "$cc" ] && OWN_L[$p]="AS$asn, $cc"
+            OWN_S[$p]="AS$asn${cc:+ $cc}"
+        else OWN_L[$p]=""; OWN_S[$p]=""; fi
+    done < "$OWNERS_FILE"
+}
+owners_save() {  # yalnız yeni sorgu olduysa; atomik
+    local p now tmp
+    [ "$DRY" = 1 ] && return 0
+    [ ${#OWN_NEW[@]} -gt 0 ] || return 0
+    now=$(date +%s); tmp="$OWNERS_FILE.tmp.$$"
+    for p in "${!OWN_A[@]}"; do
+        [ -n "${OWN_NEW[$p]+x}" ] && OWN_T[$p]="$now"
+        [ -n "${OWN_T[$p]}" ] || continue
+        printf '%s|%s|%s|%s|%s\n' "$p" "${OWN_A[$p]}" "${OWN_C[$p]}" "${OWN_N[$p]//|/ }" "${OWN_T[$p]}"
+    done > "$tmp" && mv -f "$tmp" "$OWNERS_FILE"
+}
+deny_prefixes() {   # csf.deny'deki grupların ve tekillerin /24 önekleri (tekrarsız) → stdout
+    local i c
+    for c in "${!SINGLE_NOTE[@]}"; do echo "${c%.*}"; done
+    for i in "${!DC_TXT[@]}"; do c="${DC_TXT[i]%/*}"; echo "${c%.*}"; done
+}
+backfill_owners() { # sahibi bilinmeyen blokları bu turda sorgula (en fazla BACKFILL_MAX)
+    local p n=0
+    [ "$LOOK_OK" = 1 ] || return 0
+    for p in $(deny_prefixes | sort -u); do
+        [ -n "${OWN_L[$p]+x}" ] && continue
+        [ "$n" -ge "$BACKFILL_MAX" ] && break
+        owner_lookup "$p.1"; n=$((n + 1))
+        [ "$LOOK_OK" = 1 ] || break
+    done
 }
 resolve_a() {    # HOSTNAME → REPLY = IPv4 adresleri (satır satır)
     if [ "$LOOK_OK" = 1 ]; then
@@ -898,6 +978,36 @@ do_status() {
     local recent=()
     [ -r "$EVENTS_FILE" ] && mapfile -t recent < <(grep -v '"type":"run"' "$EVENTS_FILE" | tail -n 300)
 
+    # Sahipler (önbellekten), en çok saldıran ağlar, son 30 günün günlük etkinliği
+    owners_load
+    local owners=() pfx_seen=() dstart daily=""
+    for p in $(deny_prefixes | sort -u); do
+        [ -n "${OWN_A[$p]}" ] || continue
+        jstr "${OWN_N[$p]}"; owners+=("\"$p\":[\"${OWN_A[$p]}\",\"${OWN_C[$p]}\",$REPLY]")
+    done
+    asn_top 10
+    local tops=() a nm cc g sg
+    if [ -n "$ASN_TOP" ]; then
+        while IFS='|' read -r a nm cc g sg; do
+            jstr "$nm"; tops+=("{\"asn\":\"$a\",\"name\":$REPLY,\"cc\":\"$cc\",\"groups\":$g,\"singles\":$sg}")
+        done <<< "$ASN_TOP"
+    fi
+    dstart=$(date -d "$(date -d '29 days ago' +%Y-%m-%d) 00:00" +%s)
+    if [ -r "$EVENTS_FILE" ]; then
+        daily=$(awk -v s="$dstart" '
+            match($0, /"t":[0-9]+/) { t = substr($0, RSTART + 4, RLENGTH - 4) + 0 } t < s { next }
+            match($0, /"type":"[a-z0-9_]+"/) { ty = substr($0, RSTART + 8, RLENGTH - 9); d = int((t - s) / 86400); if (d < 0 || d > 29) next
+                if (ty == "add24" || ty == "manual_ban") A[d]++; else if (ty == "temp24") T[d]++; else if (ty == "promote") P[d]++
+                else if (ty == "warn16" || ty == "warn16t") W[d]++; else if (ty == "skip_wl") S[d]++ }
+            END { split("A T P W S", keys, " ")
+                  for (k = 1; k <= 5; k++) { line = ""; for (d = 0; d < 30; d++) { v = 0
+                      if (keys[k] == "A") v = A[d] + 0; if (keys[k] == "T") v = T[d] + 0; if (keys[k] == "P") v = P[d] + 0
+                      if (keys[k] == "W") v = W[d] + 0; if (keys[k] == "S") v = S[d] + 0
+                      line = line (d ? "," : "") v }
+                    printf "\"%s\":[%s]%s", keys[k], line, (k < 5 ? "," : "") } }' "$EVENTS_FILE")
+    fi
+    [ -z "$daily" ] && daily='"A":[],"T":[],"P":[],"W":[],"S":[]'
+
     if [ "$JSON" = 1 ]; then
         local IFS=,
         printf '{"ok":true,"version":"%s","lang":"%s","now":%s,"running":%s,' "$VERSION" "$MSG_LANG" "$now" "$running"
@@ -906,6 +1016,8 @@ do_status() {
             "$(num "$THRESHOLD_TEMP_16")" "$(num "$SAYAC_RETENTION_DAYS")" "$(num "$REVIEW_DAYS")" "$([ "$LOOK_INIT" = 1 ] && echo true || echo false)"
         printf '"usage":{"perm":[%s,%s],"temp":[%s,%s]},' "$(num "$pc")" "$limit" "$(num "$tc")" "$tlimit"
         printf '"last_run":%s,' "${last:-null}"
+        printf '"cron_interval":%s,"daily":{"start":%s,%s},"owners":{%s},"asn_top":[%s],' \
+            "$(cron_interval)" "$dstart" "$daily" "${owners[*]}" "${tops[*]}"
         printf '"groups":[%s],"pending":[%s],"review":[%s],"ignored":[%s],"events":[%s]}\n' \
             "${groups[*]}" "${pending[*]}" "${review[*]}" "${ignored[*]}" "${recent[*]}"
         return 0
@@ -1098,6 +1210,108 @@ do_action() {    # NAME TARGET [DAYS]
     esac
 }
 
+# ── Top attacking networks: gruplar + tekiller ASN'e göre ────────────────────
+asn_top() {      # [N] → ASN_TOP satırları: "ASN|KURUM|CC|grup|tekil" (grup, sonra tekil azalan)
+    local -A G=() T=() NM=() CC=()
+    local c i p a
+    for c in "${!SINGLE_NOTE[@]}"; do
+        p="${c%.*}"; a="${OWN_A[$p]}"; [ -n "$a" ] || continue
+        T[$a]=$(( ${T[$a]:-0} + 1 )); NM[$a]="${OWN_N[$p]}"; CC[$a]="${OWN_C[$p]}"
+    done
+    for i in "${!DC_TXT[@]}"; do
+        c="${DC_TXT[i]%/*}"; p="${c%.*}"; a="${OWN_A[$p]}"; [ -n "$a" ] || continue
+        G[$a]=$(( ${G[$a]:-0} + 1 )); NM[$a]="${OWN_N[$p]}"; CC[$a]="${OWN_C[$p]}"
+    done
+    ASN_TOP=$(for a in $(printf '%s\n' "${!G[@]}" "${!T[@]}" | sort -u); do
+        printf '%s|%s|%s|%s|%s\n' "$a" "${NM[$a]//|/ }" "${CC[$a]}" "${G[$a]:-0}" "${T[$a]:-0}"
+    done | sort -t'|' -k4,4nr -k5,5nr | head -n "${1:-10}")
+}
+cron_interval() { # crontab'daki dakika alanı → saniye (bilinmiyorsa 0)
+    local c; c="$(cron_now)"
+    case "$c" in
+        "*/"*) [[ "${c#*/}" =~ ^[0-9]+$ ]] && echo $(( ${c#*/} * 60 )) || echo 0 ;;
+        [0-9]*) echo 3600 ;;
+        *) echo 0 ;;
+    esac
+}
+digest_build() { # → DG_SUBJ, DG_BODY
+    local now since k a b line cidr owner n=0 t p u left age iv exp=0 runs perm0="-" pc limit tlimit tc
+    now=$(date +%s); since=$(( now - 7 * 86400 ))
+    local -A C=()
+    if [ -r "$EVENTS_FILE" ]; then
+        while IFS='|' read -r k a; do C[$k]="$a"; done < <(awk -v s="$since" '
+            match($0, /"t":[0-9]+/) { t = substr($0, RSTART + 4, RLENGTH - 4) + 0 } t < s { next }
+            match($0, /"type":"[a-z0-9_]+"/) { ty = substr($0, RSTART + 8, RLENGTH - 9)
+                if (ty == "warn16t") ty = "warn16"
+                if (ty ~ /^manual_/ || ty == "config") ty = "manual"
+                c[ty]++
+                if (ty == "run" && p0 == "" && match($0, /"perm_used":[0-9]+/)) p0 = substr($0, RSTART + 12, RLENGTH - 12) }
+            END { for (k in c) print k "|" c[k]; print "perm0|" p0 }' "$EVENTS_FILE")
+    fi
+    [ -n "${C[perm0]}" ] && perm0="${C[perm0]}"
+    limit=$(num "$(conf_val DENY_IP_LIMIT)"); tlimit=$(num "$(conf_val DENY_TEMP_IP_LIMIT)")
+    pc=$(grep -cE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' "$DENY_FILE")
+    tc=$("$CSF_BIN" -t 2>/dev/null 9>&- | grep -c "^DENY")
+    DG_SUBJ=$(m "$M_DG_SUBJ" "$(hostname 2>/dev/null || echo "$HOSTNAME")")
+    DG_BODY="$(m "$M_DG_HEAD" "$(date -d "@$since" '+%d.%m')" "$(date -d "@$now" '+%d.%m')")$NL$NL"
+    DG_BODY+="$(m "$M_DG_COUNTS" "${C[add24]:-0}" "${C[temp24]:-0}" "${C[promote]:-0}" "${C[warn16]:-0}" "${C[skip_wl]:-0}" "${C[manual]:-0}")$NL"
+    DG_BODY+="$(m "$M_DG_USAGE" "$pc" "$limit" "$([ "$limit" -gt 0 ] && echo $(( pc * 100 / limit )) || echo 0)" "$perm0")$NL"
+    DG_BODY+="$(m "$M_DG_TUSAGE" "$tc" "$tlimit")$NL$NL"
+    # yeni grup banları (7 gün): add24 / promote / manual_ban
+    DG_BODY+="$M_DG_NEW$NL"
+    if [ -r "$EVENTS_FILE" ]; then
+        while IFS='|' read -r cidr owner; do
+            DG_BODY+="   $(printf '%-18s' "$cidr") ${owner:--}$NL"; n=$((n + 1))
+        done < <(awk -v s="$since" '
+            match($0, /"t":[0-9]+/) { t = substr($0, RSTART + 4, RLENGTH - 4) + 0 } t < s { next }
+            /"type":"(add24|promote|manual_ban)"/ {
+                c = ""; o = ""
+                if (match($0, /"cidr":"[0-9.\/]+"/)) c = substr($0, RSTART + 8, RLENGTH - 9)
+                if (match($0, /"owner":"[^"]*"/)) o = substr($0, RSTART + 9, RLENGTH - 10)
+                print c "|" o }' "$EVENTS_FILE" | tail -n 25)
+    fi
+    [ "$n" -eq 0 ] && DG_BODY+="$M_DG_NONE$NL"
+    # en çok saldıran ağlar
+    DG_BODY+="$NL$M_DG_TOP$NL"
+    asn_top 5
+    if [ -n "$ASN_TOP" ]; then
+        while IFS='|' read -r a owner k b line; do
+            DG_BODY+="$(m "$M_DG_TOPL" "AS$a" "${owner:0:44}" "$b" "$line")$NL"   # kurum adı ülkeyle bitiyor
+        done <<< "$ASN_TOP"
+    else DG_BODY+="$M_DG_NONE$NL"; fi
+    # süresi dolacak terfi kayıtları
+    DG_BODY+="$NL$M_DG_EXP$NL"
+    while read -r p u; do
+        [[ "$p" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ && "$u" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || continue
+        age=$(( (now - $(date -d "$u" +%s)) / 86400 )); left=$(( SAYAC_RETENTION_DAYS - age ))
+        [ "$left" -le 14 ] || continue
+        DG_BODY+="$(m "$M_DG_EXPL" "$p.0/24" "$left")$NL"; exp=$((exp + 1))
+    done < "$SAYAC_FILE"
+    [ "$exp" -eq 0 ] && DG_BODY+="$M_DG_NONE$NL"
+    # Beklenen tur sayısı, olay kaydının başladığı andan itibaren hesaplanır: kayıt yeni başladıysa
+    # "7 günde 2 tur (beklenen 336)" gibi yanlış bir alarm vermesin.
+    iv=$(cron_interval); runs="${C[run]:-0}"
+    local first win
+    first=$(grep -m1 '"type":"run"' "$EVENTS_FILE" 2>/dev/null | grep -o '"t":[0-9]*' | cut -d: -f2)
+    win=$(( now - since )); [ -n "$first" ] && [ "$first" -gt "$since" ] && win=$(( now - first ))
+    DG_BODY+="$NL$(m "$M_DG_RUNS" "$runs" "$([ "$iv" -gt 0 ] && echo $(( win / iv + 1 )) || echo '?')")$NL"
+    [ -n "$PANEL_FOOT" ] && DG_BODY+="$NL${PANEL_FOOT%$NL}"
+    return 0
+}
+digest_maybe() { # çalışma sonunda: seçilen gün, 09:00'dan sonra, haftada bir kez
+    local wk
+    [ "$DIGEST" = 1 ] || return 0
+    [ "$(date +%u)" = "$DIGEST_DAY" ] || return 0
+    [ "$((10#$(date +%H)))" -ge 9 ] || return 0
+    wk="DIGEST_$(date +%G-W%V)"
+    grep -q "^$wk " "$SAYAC_FILE" && return 0
+    digest_build
+    printf '%s\n' "$DG_BODY" | mail -s "$DG_SUBJ" "$ALERT_MAIL"
+    cnt_add "$wk $TODAY"
+    log "$(m "$M_DG_SENT" "$ALERT_MAIL")"
+    ev digest ""
+}
+
 # ── --config (WHM eklentisinin Ayarlar sekmesi) ─────────────────────────────
 CFG_FILE="$SELF_DIR/config.env"
 INSTALL_CONF="$SELF_DIR/.install.conf"
@@ -1149,7 +1363,7 @@ do_config() {
                 o="{\"ok\":true,\"values\":{"
                 i=0
                 for k in $CFG_KEYS; do jstr "$(cfg_value "$k")"; o+="$([ $i -gt 0 ] && echo ,)\"$k\":$REPLY"; i=1; done
-                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"root@localhost\",\"PANEL_URL\":\"\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_MAX_LINES\":\"5000\",\"CRON_MIN\":\"*/10\"}"
+                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"root@localhost\",\"PANEL_URL\":\"\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_MAX_LINES\":\"5000\",\"CRON_MIN\":\"*/10\"}"
                 o+=",\"csf\":{\"deny_limit\":$(num "$(conf_val DENY_IP_LIMIT)"),\"temp_limit\":$(num "$(conf_val DENY_TEMP_IP_LIMIT)")}"
                 jstr "$(panel_auto)"; o+=",\"panel_auto\":$REPLY,\"plugin\":$([ -d "$PLUGIN_DIR" ] && echo true || echo false)"
                 o+=",\"dns_tool\":$([ -n "$DIG_BIN$HOST_BIN" ] && echo true || echo false),\"crontab\":$(command -v crontab >/dev/null 2>&1 && echo true || echo false)}"
@@ -1213,6 +1427,10 @@ case "$MODE" in
     lookup) LOG_MODE=quiet; do_lookup "${ARGS[0]}"; exit $? ;;
     action) LOG_MODE=file; do_action "$ACT" "${ARGS[0]}" "${ARGS[1]}"; exit $? ;;
     config) LOG_MODE=file; do_config; exit $? ;;
+    digest) LOG_MODE=file; owners_load; parse_deny "$DENY_FILE" 1; panel_init; digest_build
+            if [ "$SEND" = 1 ]; then printf '%s\n' "$DG_BODY" | mail -s "$DG_SUBJ" "$ALERT_MAIL"; log "$(m "$M_DG_SENT" "$ALERT_MAIL")"; ev digest "" "by=\"$AG_BY\""
+            else printf '%s\n\n%s\n' "$DG_SUBJ" "$DG_BODY"; fi
+            exit 0 ;;
 esac
 
 # Tek seferde tek çalışma: cron turu uzarsa ikinci kopya aynı bloğu tekrar eklemesin.
@@ -1221,6 +1439,7 @@ take_lock || { log "$M_LOCKED"; exit 0; }
 [ ${#SETS[@]} -gt 0 ] && log "$(m "$M_DRY_OVR" "${SETS[*]}")"
 RUN_T0=$(date +%s)
 panel_init
+owners_load
 log "$M_START (v$VERSION)"
 
 # ── Permanent deny limit ────────────────────────────────────────────────────
@@ -1485,4 +1704,7 @@ ev run "" "v=\"$VERSION\"" "dur=$(( $(date +%s) - RUN_T0 ))" "added=$added24" "w
 if [ "$DRY" != 1 ] && [ -f "$EVENTS_FILE" ] && [ "$(wc -l < "$EVENTS_FILE")" -gt "$EVENTS_MAX" ]; then
     tail -n "$EVENTS_MAX" "$EVENTS_FILE" > "${EVENTS_FILE}.tmp" && mv "${EVENTS_FILE}.tmp" "$EVENTS_FILE"
 fi
+backfill_owners
+owners_save
+digest_maybe
 log "$M_END"
