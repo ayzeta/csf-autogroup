@@ -12,7 +12,7 @@
   var UPD = null;               // güncelleme kontrolü sonucu
   var LANG = 'en';
   var CLOCK = 0;                // sunucu saati - istemci saati (sn)
-  var UI = { gf: 'all', gq: '', ef: 'all', open: {}, evLimit: 40, gLimit: 40, commits: false, gs: 'added', gd: -1, gp: 0, pp: 0, hist: {}, cd: 30, menu: null, at: 'atk',
+  var UI = { gf: 'all', gq: '', ef: 'all', open: {}, evLimit: 40, commits: false, gs: 'added', gd: -1, gp: 0, pp: 0, hist: {}, cd: 30, menu: null, at: 'atk',
              tab: location.hash === '#settings' ? 'settings' : 'overview' };
   var CFG = null, DRAFT = {}, cfgLoading = false;
   var pollTimer = null, wasRunning = false, busy = false, CONN = null, LAST_OK = 0, HIDDEN_DUE = false;
@@ -121,7 +121,7 @@
       panel_bad: 'https://sunucu:2087 biçiminde yazın.', auto: 'otomatik', focus_gone: '{0} artık listede değil; güncel durumu gösteriliyor.',
       new_badge: 'Son ziyaretinden beri yeni', actions: 'İşlemler', overdue: 'Tur gecikti · son tur {0} (beklenen aralık {1})',
       since_visit: 'Son ziyaretinden beri ({0}):', sn_add: '{0} grup banı', sn_temp: '{0} geçici grup', sn_warn: '{0} /16 uyarısı',
-      sn_skip: '{0} beyaz liste atlaması', show_new: 'Göster', e_new: 'Son ziyaretten beri', ch_title: 'Son 30 gün', ch_total: '{0} olay', ch_title_n: 'Son {0} gün', ch_d: '{0} gün', sb_ok: 'Koruma çalışıyor', sb_run: 'Tur çalışıyor', sb_late: 'Koruma durdu', sb_every: 'Cron her {0}', sb_24: 'son 24 saatte {0}/{1} tur', sb_none: 'henüz tur yok', sb_last: 'Son tur', sb_dur: 'Tur süresi', sb_avg: 'ort. {0}', sb_next: 'Sıradaki', sb_now: 'şimdi', sb_spark: 'Son {0} turun süresi', conn_net: 'Sunucuya ulaşılamıyor; gösterilenler {0} alındı. Yeniden deneniyor…', conn_session: 'Oturumun süresi doldu.', upd_busy: 'Bir güncelleme zaten çalışıyor.', sec: '{0} sn', k_week: '▲ {0} bu hafta', lk_recent: 'Son bakılanlar',
+      sn_skip: '{0} beyaz liste atlaması', show_new: 'Göster', e_new: 'Son ziyaretten beri', ch_title: 'Son 30 gün', ch_total: '{0} olay', ch_title_n: 'Son {0} gün', ch_d: '{0} gün', sb_ok: 'Koruma çalışıyor', sb_run: 'Tur çalışıyor', sb_late: 'Koruma durdu', sb_every: 'Cron her {0}', sb_24: 'son 24 saatte {0}/{1} tur', sb_none: 'henüz tur yok', sb_last: 'Son tur', sb_dur: 'Tur süresi', sb_avg: 'ort. {0}', sb_next: 'Sıradaki', sb_now: 'şimdi', sb_spark: 'Son {0} turun süresi', pg_prev: 'Önceki sayfa', pg_next: 'Sonraki sayfa', dirty_leave: '{0} değişiklik kaydedilmedi. Yine de sekme değiştirilsin mi?', conn_net: 'Sunucuya ulaşılamıyor; gösterilenler {0} alındı. Yeniden deneniyor…', conn_session: 'Oturumun süresi doldu.', upd_busy: 'Bir güncelleme zaten çalışıyor.', sec: '{0} sn', k_week: '▲ {0} bu hafta', lk_recent: 'Son bakılanlar',
       ch_add: 'Grup banı', ch_promote: 'Kalıcıya alındı', ch_temp: 'Geçici', ch_warn: '/16 uyarısı', ch_skip: 'Beyaz liste',
       ch_empty: 'Son 30 günde kayıt yok; grafik olay kaydı biriktikçe dolacak.', ipcard: 'IP kartı', col_block: 'Blok', col_owner: 'Sahip', col_since: 'Başlangıç', col_left: 'Kalan', col_state: 'Durum', left_short: '{0} kaldı', r_hist: 'olay kaydı başlamadan önce · ayrıntı lfd günlüğünden getirilir', h_btn: 'Ayrıntı', h_loading: 'Getiriliyor…', h_none: 'lfd günlüğünde bu bloğa ait kayıt kalmamış', h_src: 'lfd günlüğünden',
       col_singles: 'Tekil', col_added: 'Eklendi', of_n: '{0}–{1} / {2}', s_asn: 'En çok saldıran ağlar',
@@ -213,7 +213,7 @@
       panel_bad: 'Use the form https://server:2087.', auto: 'automatic', focus_gone: '{0} is no longer on the list; showing its current state.',
       new_badge: 'New since your last visit', actions: 'Actions', overdue: 'Run overdue · last run {0} (expected every {1})',
       since_visit: 'Since your last visit ({0}):', sn_add: '{0} group bans', sn_temp: '{0} temp groups', sn_warn: '{0} /16 warnings',
-      sn_skip: '{0} whitelist skips', show_new: 'Show', e_new: 'Since last visit', ch_title: 'Last 30 days', ch_total: '{0} events', ch_title_n: 'Last {0} days', ch_d: '{0} days', sb_ok: 'Protection is running', sb_run: 'A run is in progress', sb_late: 'Protection stopped', sb_every: 'Cron every {0}', sb_24: '{0}/{1} runs in the last 24 h', sb_none: 'no runs yet', sb_last: 'Last run', sb_dur: 'Run time', sb_avg: 'avg {0}', sb_next: 'Next', sb_now: 'now', sb_spark: 'Last {0} run times', conn_net: 'Can\'t reach the server; what you see was fetched {0}. Retrying…', conn_session: 'Your session has expired.', upd_busy: 'An update is already running.', sec: '{0} s', k_week: '▲ {0} this week', lk_recent: 'Recently viewed',
+      sn_skip: '{0} whitelist skips', show_new: 'Show', e_new: 'Since last visit', ch_title: 'Last 30 days', ch_total: '{0} events', ch_title_n: 'Last {0} days', ch_d: '{0} days', sb_ok: 'Protection is running', sb_run: 'A run is in progress', sb_late: 'Protection stopped', sb_every: 'Cron every {0}', sb_24: '{0}/{1} runs in the last 24 h', sb_none: 'no runs yet', sb_last: 'Last run', sb_dur: 'Run time', sb_avg: 'avg {0}', sb_next: 'Next', sb_now: 'now', sb_spark: 'Last {0} run times', pg_prev: 'Previous page', pg_next: 'Next page', dirty_leave: '{0} unsaved changes. Switch tabs anyway?', conn_net: 'Can\'t reach the server; what you see was fetched {0}. Retrying…', conn_session: 'Your session has expired.', upd_busy: 'An update is already running.', sec: '{0} s', k_week: '▲ {0} this week', lk_recent: 'Recently viewed',
       ch_add: 'Group ban', ch_promote: 'Made permanent', ch_temp: 'Temp', ch_warn: '/16 warning', ch_skip: 'Whitelist',
       ch_empty: 'Nothing in the last 30 days; the chart fills as the event log grows.', ipcard: 'IP card', col_block: 'Block', col_owner: 'Owner', col_since: 'Since', col_left: 'Left', col_state: 'State', left_short: '{0} left', r_hist: 'before the event log started · details come from the lfd log', h_btn: 'Details', h_loading: 'Loading…', h_none: 'no records for this block are left in the lfd log', h_src: 'from the lfd log',
       col_singles: 'Singles', col_added: 'Added', of_n: '{0}–{1} of {2}', s_asn: 'Top attacking networks',
@@ -255,8 +255,10 @@
   function stamp(ts) {
     var d = new Date(ts * 1000);
     function p(n) { return (n < 10 ? '0' : '') + n; }
+    if (LANG !== 'tr') return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
     return p(d.getDate()) + '.' + p(d.getMonth() + 1) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
+  function loc() { return LANG === 'tr' ? 'tr-TR' : 'en-US'; }
   function dur(s) {
     s = Math.max(0, s | 0);
     var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
@@ -468,7 +470,7 @@
         return v ? '<i style="height:' + Math.max(3, Math.round(v / top * (H - 8))) + 'px;background:' + SERIES[k][2] + '"></i>' : '';
       }).join('');
       var tip = c.sum ? '<div class="ag-tip"><b>' + esc(day.toLocaleDateString(loc, { day: 'numeric', month: 'long', weekday: 'long' })) + '</b>' +
-        c.vals.map(function (v, k) { return v ? '<div><i style="background:' + SERIES[k][2] + '"></i>' + esc(t(SERIES[k][1])) + '<em>' + v + '</em></div>' : ''; }).join('') + '</div>' : '';
+        c.vals.map(function (v, k) { return v ? '<div><i style="background:' + SERIES[k][2] + '"></i>' + esc(t(SERIES[k][1])) + '<em>' + num(v) + '</em></div>' : ''; }).join('') + '</div>' : '';
       return '<div class="ag-c' + (j >= days - Math.ceil(days / 6) ? ' r' : '') + (c.sum ? ' has' : '') + '">' + segs + tip + '</div>';
     }).join('');
     var step = days === 7 ? 1 : 7, ax = '';
@@ -502,12 +504,12 @@
 
   function review() {
     if (!S.review.length) {
-      return '<div class="ag-okbar">' + IC.check + '<b>' + t('no_review') + '</b><span>' + t('k_review_m', S.config.review_days) + '</span></div>';
+      return '<div class="ag-okbar">' + IC.check + '<b>' + t('no_review') + '</b><span>' + t('k_review_m', num(S.config.review_days)) + '</span></div>';
     }
     var items = S.review.slice().sort(function (a, b) { return b.t - a.t; }).map(function (e) {
       var key = 'r:' + e.cidr, open = UI.open[key], is16 = /\/16$/.test(e.cidr), hasIps = e.ips && e.ips.length;
       var pill = e.type === 'skip_wl' ? '<span class="ag-pill ag-pill-info">' + t('ev_skip_wl') + '</span>'
-        : '<span class="ag-pill ag-pill-warn">' + t('ev_' + e.type) + '</span>';
+        : '<span class="ag-pill ag-pill-warn">' + esc(t('ev_' + e.type)) + '</span>';
       var H = e.hist ? UI.hist[e.cidr] : null, hd = H && H.ok ? H : null;
       var meta = e.hist ? (hd ? (hd.total ? (is16 ? [t('n_ip', num(hd.total)), t('n_subnets', num(hd.subnets))] : [t('n_ip', num(hd.total))]).concat([t('h_src')]) : [t('h_none')]) : [])
         : is16 ? [t('n_ip', num(e.n)), t('n_subnets', num(e.subnets))] : [t('n_ip', num(e.n))];
@@ -517,7 +519,7 @@
       if (e.hist && !hd) meta.push(t('r_hist'));
       if (hd && hd.ips.length) { e = Object.assign({}, e, { ips: hd.ips, total: hd.total }); hasIps = true; }
       var first = hasIps ? e.ips[0].ip : e.cidr.replace(/\/\d+$/, '').replace(/\.0$/, '.1');
-      var acts = hasIps ? '<button class="ag-btn ag-btn-sm" data-act="toggle" data-key="' + key + '">' + (open ? t('hide') : t('ips')) + '</button>'
+      var acts = hasIps ? '<button class="ag-btn ag-btn-sm" data-act="toggle" data-key="' + esc(key) + '">' + (open ? t('hide') : t('ips')) + '</button>'
         : e.hist && !hd ? '<button class="ag-btn ag-btn-sm" data-act="hist" data-c="' + esc(e.cidr) + '" data-d="' + esc(e.day) + '"' + (H === 'loading' ? ' disabled' : '') + '>' + (H === 'loading' ? t('h_loading') : t('h_btn')) + '</button>' : '';
       if (is16) acts += '<button class="ag-btn ag-btn-sm ag-btn-danger" data-act="ban16" data-t="' + esc(pfx(e.cidr)) + '">' + t('ban16') + '</button>';
       else acts += '<button class="ag-btn ag-btn-sm ag-btn-danger" data-act="banforce" data-t="' + esc(pfx(e.cidr)) + '" data-wl="' + esc(e.wl || '') + '">' + t('ban_anyway') + '</button>';
@@ -583,12 +585,12 @@
       var first = ev && ev.ips && ev.ips[0] ? ev.ips[0].ip : g.cidr.replace(/\/\d+$/, '').replace(/\.0$/, '.1');
       var when = g.kind === 'temp' ? '<span class="ag-t-warn">' + t('left_short', dur(g.ttl)) + '</span>' : (g.added ? rel(g.added) : '—');
       var items = [];
-      if (ev && ev.ips && ev.ips.length) items.push({ act: 'toggle', label: open ? t('hide') : t('ips'), icon: 'list', attrs: 'data-key="' + key + '"' });
+      if (ev && ev.ips && ev.ips.length) items.push({ act: 'toggle', label: open ? t('hide') : t('ips'), icon: 'list', attrs: 'data-key="' + esc(key) + '"' });
       items.push({ act: 'ipcard', label: t('ipcard'), icon: 'search', attrs: 'data-ip="' + esc(first) + '"' });
       items.push({ act: 'unban', label: t('unban'), icon: 'x', danger: true, attrs: 'data-c="' + esc(g.cidr) + '" data-dnd="' + (g.dnd ? 1 : 0) + '" data-kind="' + esc(g.kind) + '"' });
       return '<div class="ag-item" data-row="' + esc(g.cidr) + '"><div class="ag-tr">' +
         '<div class="ag-td ag-td-main">' + newDot(g.added) + '<span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(g.cidr) + '</span></div>' +
-        '<div class="ag-td"><span class="ag-pill ' + kindCls + '"' + (g.dnd ? ' title="do not delete"' : '') + '>' + (g.dnd ? IC.lock : '') + t('kind_' + g.kind) + '</span></div>' +
+        '<div class="ag-td"><span class="ag-pill ' + kindCls + '"' + (g.dnd ? ' title="do not delete"' : '') + '>' + (g.dnd ? IC.lock : '') + esc(t('kind_' + g.kind)) + '</span></div>' +
         '<div class="ag-td ag-td-own" title="' + esc(o.label || '') + '">' + (o.asn ? flag(o.cc) + '<span class="ag-asn">AS' + esc(o.asn) + '</span><span class="ag-org">' + esc(o.name || '') + '</span>' : '<span class="ag-muted">—</span>') + '</div>' +
         '<div class="ag-td ag-num-c">' + (g.n ? num(g.n) : '—') + '</div>' +
         '<div class="ag-td ag-when">' + when + '</div>' +
@@ -596,8 +598,8 @@
         (open && ev ? ipTable(ev.ips, ev.total) : '') + '</div>';
     }).join('');
     var pager = pages > 1 ? '<div class="ag-pager"><span>' + t('of_n', from + 1, from + shown.length, list.length) + '</span>' +
-      '<button class="ag-iconbtn" data-act="gpage" data-d="-1"' + (UI.gp ? '' : ' disabled') + ' aria-label="‹">‹</button>' +
-      '<button class="ag-iconbtn" data-act="gpage" data-d="1"' + (UI.gp < pages - 1 ? '' : ' disabled') + ' aria-label="›">›</button></div>' : '';
+      '<button class="ag-iconbtn" data-act="gpage" data-d="-1"' + (UI.gp ? '' : ' disabled') + ' aria-label="' + t('pg_prev') + '">‹</button>' +
+      '<button class="ag-iconbtn" data-act="gpage" data-d="1"' + (UI.gp < pages - 1 ? '' : ' disabled') + ' aria-label="' + t('pg_next') + '">›</button></div>' : '';
     return '<div class="ag-thead">' + th('cidr', t('col_block'), 'ag-td-main') + th('kind', t('col_state')) + th('owner', t('col_owner'), 'ag-td-own') +
       th('n', t('col_singles'), 'ag-num-c ag-th-r') + th('added', t('col_added'), 'ag-when') + '<span></span></div>' + rows + pager;
   }
@@ -659,12 +661,12 @@
     var rows = shown.map(function (e, i) {
       var key = 'e:' + e.t + ':' + e.type + ':' + (e.cidr || i), open = UI.open[key], has = e.ips && e.ips.length;
       var ic = EV_ICON[e.type] || (/^manual_/.test(e.type) ? ['sliders', 'n'] : ['list', 'n']);
-      return '<div class="ag-item"><div class="ag-ev' + (has ? ' clickable" data-act="toggle" data-key="' + esc(key) : '') + '">' +
+      return '<div class="ag-item"><div class="ag-ev' + (has ? ' clickable" data-act="toggle" aria-expanded="' + !!open + '" data-key="' + esc(key) : '') + '">' +
         '<div class="ag-ev-ic ' + ic[1] + '">' + IC[ic[0]] + '</div>' +
         '<div class="ag-ev-b"><div class="ag-ev-t">' + newDot(NEW_TYPES.indexOf(e.type) >= 0 ? e.t : 0) +
         (e.cidr ? '<span class="ag-cidr">' + esc(e.cidr) + '</span>' : '') + '<span class="ag-pill ' + (EV_CLASS[e.type] || 'ag-pill-n') + '">' + esc(t('ev_' + e.type)) + '</span></div>' +
         '<div class="ag-ev-d">' + evDetail(e) + '</div></div>' +
-        '<div class="ag-ev-time" title="' + esc(new Date(e.t * 1000).toLocaleString()) + '">' + stamp(e.t) + (has ? '<span class="ag-chev">' + (open ? '−' : '+') + '</span>' : '') + '</div></div>' +
+        '<div class="ag-ev-time" title="' + esc(new Date(e.t * 1000).toLocaleString(loc())) + '">' + stamp(e.t) + (has ? '<span class="ag-chev">' + (open ? '−' : '+') + '</span>' : '') + '</div></div>' +
         (open ? ipTable(e.ips, e.total) : '') + '</div>';
     }).join('');
     var more = list.length > shown.length ? '<div class="ag-card-f"><button class="ag-btn ag-btn-sm ag-btn-ghost" data-act="evmore">' + t('more') + '</button></div>' : '';
@@ -705,7 +707,7 @@
       if (a.blocks) parts.push('<span class="ag-muted">' + t('p_b', num(a.blocks)) + '</span>');
       // Öneri: en az 5 kendi grup banı (≥15 saldırgan, 5 ayrı blok) ve CC_DENY'de değilse.
       var tail = a.denied ? ' · <span class="ag-pill ag-pill-ok">' + t('asn_denied') + '</span>'
-        : a.groups >= 5 ? ' · <button class="ag-link" data-act="asnhint" data-asn="' + esc(a.asn) + '" data-name="' + esc(name) + '" data-g="' + a.groups + '">' + t('asn_hint') + '</button>' : '';
+        : a.groups >= 5 ? ' · <button class="ag-link" data-act="asnhint" data-asn="' + esc(a.asn) + '" data-name="' + esc(name) + '" data-g="' + num(a.groups) + '">' + t('asn_hint') + '</button>' : '';
       return asnRow(i, a, pct(wt(a), max), parts.join(' · ') + tail, a.blocks ? pct(a.blocks * 4, max) : 0);
     }).join('');
   }
@@ -766,14 +768,14 @@
         (p.temp_ttl > 0 ? '<span class="ag-t-warn">' + t('ttl_left', dur(p.temp_ttl)) + '</span>' : '') + '</div>' +
         '<div class="ag-td ag-td-own" title="' + esc(o.label || '') + '">' + (o.asn ? flag(o.cc) + '<span class="ag-asn">AS' + esc(o.asn) + '</span><span class="ag-org">' + esc(o.name || '') + '</span>' : '<span class="ag-muted">—</span>') + '</div>' +
         '<div class="ag-td ag-when ag-td-since">' + esc(p.since) + '</div>' +
-        '<div class="ag-td"><div class="ag-left' + urg + '"><div class="ag-days"><i style="width:' + pct + '%"></i></div><span>' + t('days_left', left) + '</span></div></div>' +
+        '<div class="ag-td"><div class="ag-left' + urg + '"><div class="ag-days"><i style="width:' + pct + '%"></i></div><span>' + t('days_left', num(left)) + '</span></div></div>' +
         '<div class="ag-td ag-td-act">' + menu('pm:' + p.prefix, [{ act: 'promote', label: t('promote'), icon: 'ban', attrs: 'data-t="' + esc(p.prefix) + '"' },
                                 { act: 'forget', label: t('forget'), icon: 'x', attrs: 'data-t="' + esc(p.prefix) + '"' },
                                 { act: 'ipcard', label: t('ipcard'), icon: 'search', attrs: 'data-ip="' + esc(first) + '"' }]) + '</div></div></div>';
     }).join('');
     var pager = pages > 1 ? '<div class="ag-pager"><span>' + t('of_n', from + 1, from + shown.length, list.length) + '</span>' +
-      '<button class="ag-iconbtn" data-act="ppage" data-d="-1"' + (UI.pp ? '' : ' disabled') + ' aria-label="‹">‹</button>' +
-      '<button class="ag-iconbtn" data-act="ppage" data-d="1"' + (UI.pp < pages - 1 ? '' : ' disabled') + ' aria-label="›">›</button></div>' : '';
+      '<button class="ag-iconbtn" data-act="ppage" data-d="-1"' + (UI.pp ? '' : ' disabled') + ' aria-label="' + t('pg_prev') + '">‹</button>' +
+      '<button class="ag-iconbtn" data-act="ppage" data-d="1"' + (UI.pp < pages - 1 ? '' : ' disabled') + ' aria-label="' + t('pg_next') + '">›</button></div>' : '';
     var body = list.length ? '<div class="ag-thead ag-tr-p"><span class="ag-th">' + t('col_block') + '</span><span class="ag-th">' + t('col_owner') + '</span>' +
       '<span class="ag-th ag-td-since">' + t('col_since') + '</span><span class="ag-th ag-th-r">' + t('col_left') + '</span><span></span></div>' + rows + pager
       : empty('check', t('no_pending'));
@@ -834,7 +836,7 @@
   function field(k, errs) {
     var r = RANGES[k], changed = CFG && String(cv(k)) !== String(CFG.values[k]);
     return '<div class="ag-field' + (errs[k] ? ' bad' : '') + (changed ? ' changed' : '') + '"><div class="ag-field-l"><label for="ag-f-' + k + '">' + t('k_' + k) + '</label>' +
-      '<span class="ag-sub">' + t('default_v', CFG.defaults[k]) + '</span></div>' +
+      '<span class="ag-sub">' + t('default_v', esc(CFG.defaults[k])) + '</span></div>' +
       '<input class="ag-input ag-num" id="ag-f-' + k + '" data-cfg="' + k + '" type="number" inputmode="numeric" min="' + r[0] + '" max="' + r[1] + '" step="1" value="' + esc(cv(k)) + '">' +
       '<div class="ag-field-h">' + (errs[k] ? esc(errs[k]) : t('h_' + k)) + '</div></div>';
   }
@@ -905,8 +907,9 @@
   function render() {
     if (!S) return;
     indexOwners();
-    var y = window.scrollY, ae = document.activeElement, fid = ae && ae.id && $app.contains(ae) ? ae.id : '', s0 = null, s1 = null;
-    try { if (fid && ae.selectionStart !== undefined) { s0 = ae.selectionStart; s1 = ae.selectionEnd; } } catch (e) { s0 = null; }
+    var y = window.scrollY, ae = document.activeElement, fsel = ae && $app.contains(ae) ? focusSel(ae) : '', s0 = null, s1 = null;
+    var mw = fsel && ae.closest ? ae.closest('.ag-menu-wrap') : null, fmenu = mw ? focusSel(mw.querySelector('[data-act="menu"]')) : '';   // menü kapanırsa odak düğmesine
+    try { if (fsel && ae.id && ae.selectionStart !== undefined) { s0 = ae.selectionStart; s1 = ae.selectionEnd; } } catch (e) { s0 = null; }
     var body = UI.tab === 'settings' ? settingsView()
       : statusBand() + sinceBar() + kpis() + activity() + '<div class="ag-grid"><div class="ag-col">' + review() + groups() + pending() + events() + '</div>' +
         '<div class="ag-col">' + lookupCard() + topAsn() + ignored() + config() + '</div></div>';
@@ -914,10 +917,48 @@
       '<div class="ag-foot">' + esc(t('foot', S.version + (BOOT.commit ? ' (' + BOOT.commit + ')' : ''), BOOT.user || 'root')) + '</div></div>';
     $app.setAttribute('aria-busy', 'false');
     window.scrollTo(0, y);
-    if (fid) {
-      var fe = document.getElementById(fid);
-      if (fe) { fe.focus({ preventScroll: true }); try { if (s0 !== null) fe.setSelectionRange(s0, s1); } catch (e) { /* bu alan türü imleç desteklemiyor */ } }
+    keyboardable($app);
+    if (fsel) {
+      var fe = refocus(fsel) || refocus(fmenu);
+      if (fe && s0 !== null) { try { fe.setSelectionRange(s0, s1); } catch (e) { /* bu alan türü imleç desteklemiyor */ } }
     }
+    if (UI.menu) { var mi = $app.querySelector('.ag-menu .ag-menu-i'); if (mi && (!fsel || /data-act="menu"/.test(fsel))) mi.focus({ preventScroll: true }); }
+  }
+
+  /* Odak: öğe yeniden çizilince aynı niteliklerle bulunup odak geri verilir */
+  var FKEYS = ['data-act', 'data-key', 'data-f', 'data-t', 'data-d', 'data-c', 'data-k', 'data-tab', 'data-ip', 'data-v'];
+  function focusSel(el) {
+    if (!el || el === document.body || !el.getAttribute) return '';
+    if (el.id) return '#' + CSS.escape(el.id);
+    var s = '';
+    FKEYS.forEach(function (a) { var v = el.getAttribute(a); if (v !== null) s += '[' + a + '="' + CSS.escape(v) + '"]'; });
+    return s;
+  }
+  function refocus(sel) {
+    if (!sel) return null;
+    var el = null;
+    try { el = $app.querySelector(sel) || document.querySelector(sel); } catch (e) { el = null; }
+    if (el) el.focus({ preventScroll: true });
+    return el;
+  }
+  /* Tıklanabilir ama düğme olmayan öğeler (IP, olay satırı, grafik günü) klavyeyle de ulaşılsın */
+  function keyboardable(box) {
+    box.querySelectorAll('[data-ip]:not(button):not(a), .ag-ev.clickable, .ag-c.has').forEach(function (e) {
+      e.tabIndex = 0;
+      if (!e.classList.contains('ag-c') && !e.getAttribute('role')) e.setAttribute('role', 'button');
+    });
+  }
+  /* Pencere ve yan panel: Tab odak içinde döner */
+  function trap(box) {
+    box.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Tab') return;
+      var f = Array.prototype.filter.call(box.querySelectorAll('button:not([disabled]),input:not([disabled]),select,textarea,a[href],[tabindex]:not([tabindex="-1"])'),
+        function (e) { return e.offsetParent !== null; });
+      if (!f.length) return;
+      var a = f[0], z = f[f.length - 1];
+      if (ev.shiftKey && document.activeElement === a) { ev.preventDefault(); z.focus(); }
+      else if (!ev.shiftKey && document.activeElement === z) { ev.preventDefault(); a.focus(); }
+    });
   }
 
   /* ── Durum / yoklama ───────────────────────────────────────────── */
@@ -963,7 +1004,11 @@
   document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && layerStack.length) closeTop(); });
 
   /* opts: {icon, tone, title, html, typed, days, okText, okClass, wide, noCancel} → Promise<{ok, days}> */
+  var MODAL_N = 0;
   function modal(opts) {
+    // menü öğesinden açıldıysa öğe menüyle birlikte kaybolur: odak menünün düğmesine döner
+    var oa = document.activeElement, ow = oa && oa.closest ? oa.closest('.ag-menu-wrap') : null;
+    var opener = focusSel(ow ? ow.querySelector('[data-act="menu"]') : oa), hid = 'ag-mh-' + (++MODAL_N);
     return new Promise(function (resolve) {
       var scrim = document.createElement('div'); scrim.className = 'ag-scrim';
       var wrap = document.createElement('div'); wrap.className = 'ag-modal-wrap ag-app'; wrap.style.cssText = 'background:transparent;margin:0;padding:20px;min-height:0';
@@ -972,9 +1017,9 @@
       }).join('') + '</div>' : '';
       var typed = opts.typed ? '<label>' + t('type_to_confirm', '<span class="ag-target">' + esc(opts.typed) + '</span>') + '</label>' +
         '<input class="ag-input ag-mono" id="ag-typed" autocomplete="off" spellcheck="false">' : '';
-      wrap.innerHTML = '<div class="ag-modal' + (opts.wide ? ' wide' : '') + '" role="dialog" aria-modal="true">' +
+      wrap.innerHTML = '<div class="ag-modal' + (opts.wide ? ' wide' : '') + '" role="dialog" aria-modal="true" aria-labelledby="' + hid + '">' +
         '<div class="ag-modal-h">' + (opts.icon ? '<div class="ag-modal-ic ' + (opts.tone || 'acc') + '">' + IC[opts.icon] + '</div>' : '') +
-        '<h3 style="padding-top:' + (opts.icon ? '7px' : '0') + '">' + opts.title + '</h3></div>' +
+        '<h3 id="' + hid + '" style="padding-top:' + (opts.icon ? '7px' : '0') + '">' + opts.title + '</h3></div>' +
         '<div class="ag-modal-b">' + (opts.html || '') + days + typed + '</div>' +
         '<div class="ag-modal-f">' + (opts.noCancel ? '' : '<button class="ag-btn" data-m="no">' + (opts.cancelText || t('cancel')) + '</button>') +
         (opts.okText === null ? '' : '<button class="ag-btn ' + (opts.okClass || 'ag-btn-primary') + '" data-m="ok">' + (opts.okText || t('confirm')) + '</button>') + '</div></div>';
@@ -982,13 +1027,19 @@
       var ok = wrap.querySelector('[data-m="ok"]'), inp = wrap.querySelector('#ag-typed'), chosen = 30;
       if (inp && ok) { ok.disabled = true; inp.addEventListener('input', function () { ok.disabled = inp.value.trim() !== opts.typed; }); setTimeout(function () { inp.focus(); }, 30); }
       else if (ok) setTimeout(function () { ok.focus(); }, 30);
+      else setTimeout(function () { var c0 = wrap.querySelector('[data-m="no"]'); if (c0) c0.focus(); }, 30);
+      trap(wrap);
       var dz = wrap.querySelector('#ag-days');
       if (dz) dz.addEventListener('click', function (ev) {
         var b = ev.target.closest('[data-d]'); if (!b) return;
         chosen = +b.getAttribute('data-d');
         dz.querySelectorAll('.ag-chip').forEach(function (c) { c.classList.toggle('on', c === b); });
       });
-      function done(v) { scrim.remove(); wrap.remove(); var i = layerStack.indexOf(cancel); if (i >= 0) layerStack.splice(i, 1); resolve({ ok: v, days: chosen, el: wrap }); }
+      function done(v) {
+        scrim.remove(); wrap.remove(); var i = layerStack.indexOf(cancel); if (i >= 0) layerStack.splice(i, 1);
+        resolve({ ok: v, days: chosen, el: wrap });
+        setTimeout(function () { if (!layerStack.length && (document.activeElement === document.body || !document.activeElement)) refocus(opener); }, 0);
+      }
       function cancel() { done(false); }
       layerStack.push(cancel);
       wrap.addEventListener('click', function (ev) {
@@ -1034,7 +1085,7 @@
     tab: function (el) {
       var k = el.getAttribute('data-tab');
       if (k === UI.tab) return;
-      if (UI.tab === 'settings' && CFG && changedKeys().length && !window.confirm(t('dirty_n', changedKeys().length))) return;
+      if (UI.tab === 'settings' && CFG && changedKeys().length && !window.confirm(t('dirty_leave', changedKeys().length))) return;
       UI.tab = k; history.replaceState(null, '', k === 'settings' ? '#settings' : '#');
       if (k === 'settings') { CFG = null; DRAFT = {}; }
       render(); window.scrollTo(0, 0);
@@ -1115,7 +1166,7 @@
         var p = {};
         ch.forEach(function (k) { p['v[' + k + ']'] = String(cv(k)); });
         api('config_set', p).then(function (r) {
-          if (!r.ok) { toast(t('t_err', r.message || r.error || '?'), r.code === 3 ? 'bad' : 'bad'); return; }
+          if (!r.ok) { toast(t('t_err', r.message || r.error || '?'), 'bad'); return; }
           toast(r.message, 'ok');
           CFG = null; DRAFT = {};
           refresh();           // dil değiştiyse panel de yeni dile geçer
@@ -1123,8 +1174,7 @@
       });
     },
     toggle: function (el) { var k = el.getAttribute('data-key'); UI.open[k] = !UI.open[k]; render(); },
-    gf: function (el) { UI.gf = el.getAttribute('data-f'); UI.gLimit = 40; UI.gp = 0; render(); },
-    gall: function () { UI.gLimit = 1e6; render(); },
+    gf: function (el) { UI.gf = el.getAttribute('data-f'); UI.gp = 0; render(); },
     evmore: function () { UI.evLimit += 60; render(); },
     commits: function () { UI.commits = !UI.commits; render(); },
     ban16: function (el) {
@@ -1251,6 +1301,8 @@
     recentAdd(ip);
     var scrim = document.createElement('div'); scrim.className = 'ag-scrim';
     var dr = document.createElement('aside'); dr.className = 'ag-drawer ag-app'; dr.style.cssText = 'margin:0;padding:0;min-height:0;background:#fff';
+    var dOpener = focusSel(document.activeElement);
+    dr.setAttribute('role', 'dialog'); dr.setAttribute('aria-modal', 'true'); dr.setAttribute('aria-label', ip);
     dr.innerHTML = '<div class="ag-drawer-h"><div><h3>' + esc(ip) + '</h3><div class="ag-sub" id="ag-dr-sub">&nbsp;</div></div>' +
       '<button class="ag-x" data-dr="x" aria-label="' + esc(t('close')) + '">' + IC.x + '</button></div>' +
       '<div class="ag-drawer-b" id="ag-dr-b">' + [1, 2, 3, 4, 5].map(function () {
@@ -1259,7 +1311,11 @@
       '<div class="ag-drawer-f"><a class="ag-btn ag-btn-sm" target="_blank" rel="noopener noreferrer" href="https://www.abuseipdb.com/check/' + encodeURIComponent(ip) + '">' + IC.ext + t('l_abuse') + '</a>' +
       '<span id="ag-dr-bgp"></span><button class="ag-btn ag-btn-sm ag-btn-ghost" data-dr="copy">' + IC.copy + t('l_copy') + '</button></div>';
     document.body.appendChild(scrim); document.body.appendChild(dr);
-    function close() { scrim.remove(); dr.remove(); var i = layerStack.indexOf(close); if (i >= 0) layerStack.splice(i, 1); }
+    trap(dr); setTimeout(function () { var x = dr.querySelector('[data-dr="x"]'); if (x) x.focus(); }, 30);
+    function close() {
+      scrim.remove(); dr.remove(); var i = layerStack.indexOf(close); if (i >= 0) layerStack.splice(i, 1);
+      if (!layerStack.length) refocus(dOpener);
+    }
     layerStack.push(close);
     scrim.addEventListener('click', close);
     dr.addEventListener('click', function (ev) {
@@ -1306,7 +1362,22 @@
     var fn = ACTIONS[el.getAttribute('data-act')];
     if (fn) { ev.preventDefault(); fn(el); }
   });
-  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && UI.menu && !layerStack.length) { UI.menu = null; render(); } });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape' && UI.menu && !layerStack.length) {
+      var mk = UI.menu; UI.menu = null; render();
+      refocus('[data-act="menu"][data-key="' + CSS.escape(mk) + '"]');
+      return;
+    }
+    var tg = ev.target;
+    if ((ev.key === 'ArrowDown' || ev.key === 'ArrowUp') && tg.closest && tg.closest('.ag-menu')) {
+      var items = Array.prototype.slice.call(tg.closest('.ag-menu').querySelectorAll('.ag-menu-i')), ix = items.indexOf(tg);
+      if (items.length) { ev.preventDefault(); items[(ix + (ev.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus(); }
+      return;
+    }
+    if ((ev.key === 'Enter' || ev.key === ' ') && tg.matches && tg.matches('[data-ip]:not(button):not(a), .ag-ev.clickable') && $app.contains(tg)) {
+      ev.preventDefault(); tg.click();
+    }
+  });
   $app.addEventListener('submit', function (ev) {
     if (ev.target.id === 'ag-lk') { ev.preventDefault(); openDrawer((document.getElementById('ag-lk-ip').value || '').trim()); }
   });
@@ -1315,13 +1386,10 @@
     if (ck && CFG) { DRAFT[ck] = ev.target.value.trim(); refreshSaveBar(); return; }
     if (ev.target.id === 'ag-lk-ip') { UI.lk = ev.target.value; return; }
     if (ev.target.id === 'ag-gq') {
-      UI.gq = ev.target.value; UI.gLimit = 40; UI.gp = 0;
+      UI.gq = ev.target.value; UI.gp = 0;
       var b = document.getElementById('ag-groups-b'); if (b) b.innerHTML = groupRows();
       var gc = document.getElementById('ag-gcount'); if (gc) gc.textContent = groupCount();
     }
-  });
-  $app.addEventListener('change', function (ev) {
-    if (ev.target.id === 'ag-ef') { UI.ef = ev.target.value; UI.evLimit = 40; render(); }
   });
 
   /* ── Maildeki bağlantı: ?focus=CIDR → o satıra kay, aç, vurgula ─── */
