@@ -39,7 +39,7 @@
 # ============================================================================
 set -o pipefail
 
-VERSION="1.7.5"   # sürüm — başlangıç log satırında görünür
+VERSION="1.7.6"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -63,7 +63,9 @@ THRESHOLD_TEMP_24="${THRESHOLD_TEMP_24:-3}"
 THRESHOLD_TEMP_16="${THRESHOLD_TEMP_16:-5}"
 LOOKUP="${LOOKUP:-1}"                            # 1 = hostname/owner lookups in emails
 LOOKUP_TIMEOUT="${LOOKUP_TIMEOUT:-2}"            # seconds per DNS query
-LOG_MAX_LINES="${LOG_MAX_LINES:-5000}"
+LOG_MAX_LINES="${LOG_MAX_LINES:-5000}"         # yalnız logrotate yoksa (yedek yöntem)
+LOG_ROTATE_MB="${LOG_ROTATE_MB:-1}"             # logrotate: günlük bu boyutu geçince döndürülür
+LOG_ROTATE_KEEP="${LOG_ROTATE_KEEP:-5}"         # logrotate: saklanan sıkıştırılmış arşiv sayısı
 SAYAC_RETENTION_DAYS="${SAYAC_RETENTION_DAYS:-180}"
 EVENTS_FILE="${EVENTS_FILE:-$(dirname "$SAYAC_FILE")/events.jsonl}"   # WHM eklentisi / --status okur
 EVENTS_MAX="${EVENTS_MAX:-5000}"   # banlar/uyarılar/elle işlemler; tur kayıtları ayrıca son RUNS_MAX
@@ -75,7 +77,8 @@ OWNERS_FILE="${OWNERS_FILE:-$(dirname "$SAYAC_FILE")/owners}"      # /24 → ASN
 OWNER_TTL_DAYS="${OWNER_TTL_DAYS:-30}"
 BACKFILL_MAX="${BACKFILL_MAX:-50}"      # her turda en fazla bu kadar /24'ün sahibi sorgulanır
 IMUNIFY_BIN="${IMUNIFY_BIN:-$(command -v imunify360-agent 2>/dev/null)}"   # yoksa Imunify kısmı atlanır
-HIST_FILE="${HIST_FILE:-$(dirname "$SAYAC_FILE")/history.jsonl}"      # "Ayrıntı" ile getirilen eski uyarılar (bir kez)
+HIST_FILE="${HIST_FILE:-$(dirname "$SAYAC_FILE")/history.jsonl}"
+LOGHIST_FILE="${LOGHIST_FILE:-$(dirname "$SAYAC_FILE")/loghist.jsonl}"   # günlükten çıkarılan, olay kaydından önceki işler      # "Ayrıntı" ile getirilen eski uyarılar (bir kez)
 IMUNIFY_FILE="${IMUNIFY_FILE:-$(dirname "$SAYAC_FILE")/imunify}"         # yerel kara liste önbelleği
 LFD_LOG="${LFD_LOG:-/var/log/lfd.log}"         # eski uyarıların ayrıntısı için okunur (lfd.log, .1, .gz)
 IMUNIFY_REFRESH_MIN="${IMUNIFY_REFRESH_MIN:-60}"   # liste en çok bu kadar dakikada bir yeniden alınır (yalnız panelde gösterilir)
@@ -98,6 +101,7 @@ while [ $# -gt 0 ]; do
         --digest)  MODE=digest ;;
         --busy)    MODE=busy ;;
         --history) MODE=history ;;
+        --logrotate) MODE=logrotate ;;
         --send)    SEND=1 ;;
         --json)    JSON=1 ;;
         --force)   FORCE=1 ;;
@@ -116,6 +120,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   export LANG=tr_TR.UTF-8 LC_ALL=tr_TR.UTF-8
   M_START="--- Başladı ---";                                       M_END="--- Bitti ---"
   M_END_T="--- Bitti (toplam %s sn) ---"
+  M_CFG_ROTFAIL="UYARI: logrotate ayarı yazılamadı (/etc/logrotate.d)"
   M_QUIET="Tur: değişiklik yok · kalıcı %s/%s · geçici %s/%s · %s sn"
   M_STEP_OWN="Sahip sorgusu: %s blok, %s sn"
   M_STEP_IM="Imunify listesi yenilendi: %s IP, %s sn"
@@ -259,6 +264,7 @@ if [ "$MSG_LANG" = "tr" ]; then
 else
   M_START="--- Started ---";                                       M_END="--- Done ---"
   M_END_T="--- Done (%s s total) ---"
+  M_CFG_ROTFAIL="WARNING: could not write the logrotate config (/etc/logrotate.d)"
   M_QUIET="Run: no changes · permanent %s/%s · temp %s/%s · %s s"
   M_STEP_OWN="Owner lookups: %s blocks, %s s"
   M_STEP_IM="Imunify list refreshed: %s IPs, %s s"
@@ -445,8 +451,16 @@ mail() {
 
 # ── Settings: validation (panel + --config set + --dry-run --set) ──────────
 # Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
-CFG_KEYS="MSG_LANG ALERT_MAIL DIGEST DIGEST_DAY THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES CRON_MIN"
+CFG_KEYS="MSG_LANG ALERT_MAIL DIGEST DIGEST_DAY THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES LOG_ROTATE_MB LOG_ROTATE_KEEP CRON_MIN"
 CFG_TRY_KEYS="THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS"
+logrotate_write() { # [MB] [ARŞİV] → /etc/logrotate.d/csf_autogroup (geçici dosya + mv)
+    local mb="${1:-$LOG_ROTATE_MB}" keep="${2:-$LOG_ROTATE_KEEP}" tmp
+    [ -d "$(dirname "$LOGROTATE_CONF")" ] && command -v logrotate >/dev/null 2>&1 || return 1
+    [[ "$LOG_FILE" =~ ^/[A-Za-z0-9._/-]+$ && "$mb" =~ ^[0-9]+$ && "$keep" =~ ^[0-9]+$ ]] || return 1
+    tmp="$LOGROTATE_CONF.new.$$"
+    printf '%s {\n    size %sM\n    rotate %s\n    compress\n    delaycompress\n    missingok\n    notifempty\n    create 0600 root root\n}\n' \
+        "$LOG_FILE" "$mb" "$keep" > "$tmp" && chmod 0644 "$tmp" && mv -f "$tmp" "$LOGROTATE_CONF" || { rm -f "$tmp"; return 1; }
+}
 cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değer), 1 değil (CFG_ERR)
     local k="$1" v="$2" lo="" hi="" opts=""
     CFG_ERR=""; CFG_VAL="$v"
@@ -468,6 +482,8 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
         SAYAC_RETENTION_DAYS) lo=7; hi=730 ;;
         REVIEW_DAYS) lo=1; hi=90 ;;
         LOG_MAX_LINES) lo=500; hi=100000 ;;
+        LOG_ROTATE_MB) lo=1; hi=100 ;;
+        LOG_ROTATE_KEEP) lo=1; hi=52 ;;
         *) CFG_ERR=$(m "$M_CFG_UNKNOWN" "$k"); return 1 ;;
     esac
     if [ -n "$opts" ]; then
@@ -965,6 +981,52 @@ read_temp_groups() {
     done < "$CSF_VAR/csf.tempban"
 }
 
+# Olay kaydından önceki işler: günlükteki (ve arşivlerindeki) iş satırları bir kez olaya çevrilir ve
+# saklanır (LOGHIST_FILE). Yalnız ilk olaydan önceki satırlar alınır; sonrası zaten olay kaydında.
+# TR ve EN kalıplarının ikisi de tanınır (dil sonradan değişmiş olabilir). mktime için gawk gerekir.
+loghist_build() {
+    local first=0 f aw
+    [ "$DRY" = 1 ] && return 0
+    aw=$(command -v gawk 2>/dev/null)
+    if [ -z "$aw" ] || [ ! -r "$LOG_FILE" ]; then : > "$LOGHIST_FILE" 2>/dev/null; return 0; fi
+    [ -r "$EVENTS_FILE" ] && [[ "$(awk 'NR == 1' "$EVENTS_FILE")" =~ ^\{\"t\":([0-9]+), ]] && first="${BASH_REMATCH[1]}"
+    [ "$first" -gt 0 ] || first=$(( $(date +%s) + 1 ))
+    { for f in $(ls -1r "$LOG_FILE".[0-9]*.gz 2>/dev/null); do zcat "$f" 2>/dev/null; done
+      for f in "$LOG_FILE.1" "$LOG_FILE"; do [ -r "$f" ] && cat "$f"; done; } |
+    grep -aE '^\[[0-9-]{10} [0-9:]{8}\] (OK |UYARI |WARNING |Temizlendi: |Cleaned: |ATLANDI [0-9]|SKIPPED [0-9]|Silindi tekil: |Removed single: )' |
+    "$aw" -v first="$first" '
+        function js(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); return "\"" s "\"" }
+        function flush() { if (cur != "") { print cur (ips != "" ? ",\"ips\":[" ips "],\"total\":" ni : "") "}"; cur = ""; ips = ""; ni = 0 } }
+        {
+            ts = substr($0, 2, 19); msg = substr($0, 23)
+            t = mktime(substr(ts, 1, 4) " " substr(ts, 6, 2) " " substr(ts, 9, 2) " " substr(ts, 12, 2) " " substr(ts, 15, 2) " " substr(ts, 18, 2))
+            if (t <= 0 || t >= first) next
+            if (msg ~ /^(Silindi tekil|Removed single): /) {          # bir önceki grup banının silinen tekilleri
+                if (cur != "" && ni < 40) { ip = msg; sub(/^[^:]*: /, "", ip); sub(/ .*/, "", ip); ips = ips (ips != "" ? "," : "") "{\"ip\":" js(ip) "}"; ni++ }
+                next
+            }
+            flush()
+            ty = ""; c = ""; n = ""; sn = ""; dnd = "false"; wl = ""
+            if (match(msg, /^OK (Temp→Kalıcı|temp->permanent) \/24 [a-z]+: [0-9.]+\/24 \([0-9]+/)) ty = "promote"
+            else if (match(msg, /^OK (Temp|temp) \/24 [a-z]+: [0-9.]+\/24 \([0-9]+/)) ty = "temp24"
+            else if (match(msg, /^OK \/24 [a-z]+: [0-9.]+\/24 \([0-9]+/)) ty = "add24"
+            else if (match(msg, /^(UYARI Temp|WARNING temp) \/16: /)) ty = "warn16t"
+            else if (match(msg, /^(UYARI|WARNING) \/16: /)) ty = "warn16"
+            else if (match(msg, /^(Temizlendi|Cleaned): /)) ty = "clean_temp"
+            else if (match(msg, /^(ATLANDI|SKIPPED) [0-9.]+\/24: .*\(.*\)$/) && msg !~ /(bugün zaten|already reported)/) ty = "skip_wl"
+            if (ty == "") next
+            if (match(msg, /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\/[0-9]+)?/)) c = substr(msg, RSTART, RLENGTH)
+            if (ty ~ /^(add24|temp24|promote)$/ && match(msg, /\([0-9]+ /)) n = substr(msg, RSTART + 1, RLENGTH - 2)
+            if (ty ~ /^warn16/ && match(msg, / - [0-9]+ /)) { n = substr(msg, RSTART + 3, RLENGTH - 4); r = substr(msg, RSTART + RLENGTH)
+                if (match(r, /, [0-9]+ /)) sn = substr(r, RSTART + 2, RLENGTH - 3) }
+            if (ty == "promote" || msg ~ /\[do not delete\]/) dnd = "true"
+            if (ty == "skip_wl" && match(msg, /\(.*\)$/)) wl = substr(msg, RSTART + 1, RLENGTH - 2)
+            cur = "{\"t\":" t ",\"type\":\"" ty "\",\"cidr\":" js(c) (n != "" ? ",\"n\":" n : "") (sn != "" ? ",\"subnets\":" sn : "") \
+                  (ty ~ /^(add24|promote)$/ ? ",\"dnd\":" dnd : "") (wl != "" ? ",\"wl\":" js(wl) : "") ",\"src\":\"log\""
+        }
+        END { flush() }' | awk 'NR <= 1000' > "$LOGHIST_FILE.tmp.$$" 2>/dev/null && mv -f "$LOGHIST_FILE.tmp.$$" "$LOGHIST_FILE"
+    rm -f "$LOGHIST_FILE.tmp.$$"
+}
 # ── --status ────────────────────────────────────────────────────────────────
 declare -A DAYEP
 day_epoch() {    # YYYY-MM-DD → REPLY (epoch), aynı gün için tek date çağrısı
@@ -1087,6 +1149,13 @@ do_status() {
 
     local recent=()
     [ -r "$EVENTS_FILE" ] && mapfile -t recent < <(grep -v '"type":"run"' "$EVENTS_FILE" | grep -E '^\{"t":[0-9]+,.*\}$' | tail -n 300)
+    # olay kaydından önceki işler (günlükten; bir kez hesaplanıp saklanır)
+    [ -f "$LOGHIST_FILE" ] || loghist_build
+    if [ -s "$LOGHIST_FILE" ]; then
+        local lh=()
+        mapfile -t lh < <(grep -E '^\{"t":[0-9]+,.*\}$' "$LOGHIST_FILE")
+        recent=("${lh[@]}" "${recent[@]}")
+    fi
 
     # Sahipler (önbellekten), en çok saldıran ağlar, son 30 günün günlük etkinliği
     owners_load
@@ -1699,12 +1768,28 @@ do_config() {
                 o="{\"ok\":true,\"values\":{"
                 i=0
                 for k in $CFG_KEYS; do jstr "$(cfg_value "$k")"; o+="$([ $i -gt 0 ] && echo ,)\"$k\":$REPLY"; i=1; done
-                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"root@localhost\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_MAX_LINES\":\"5000\",\"CRON_MIN\":\"*/10\"}"
+                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"root@localhost\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_MAX_LINES\":\"5000\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"CRON_MIN\":\"*/10\"}"
                 o+=",\"csf\":{\"deny_limit\":$(num "$(conf_val DENY_IP_LIMIT)"),\"temp_limit\":$(num "$(conf_val DENY_TEMP_IP_LIMIT)")}"
                 local lb=0 la=0 ll=0
                 [ -f "$LOG_FILE" ] && { lb=$(wc -c < "$LOG_FILE"); ll=$(wc -l < "$LOG_FILE"); }
                 la=$(ls -1 "$LOG_FILE".[0-9]* 2>/dev/null | grep -c .)
                 o+=",\"log\":{\"rotate\":$([ -f "$LOGROTATE_CONF" ] && echo true || echo false),\"bytes\":$(num "$lb"),\"lines\":$(num "$ll"),\"archives\":$(num "$la")}"
+                # Sunucu gereksinimleri (Ayarlar sekmesindeki kart): ok | missing | warn
+                local dp="" dk ds
+                for dk in csf crontab mail dns logrotate flock timeout git imunify; do
+                    ds=missing
+                    case "$dk" in
+                        csf)       { [ -x "$CSF_BIN" ] || command -v csf >/dev/null 2>&1; } && ds=ok ;;
+                        dns)       [ -n "$DIG_BIN$HOST_BIN" ] && ds=ok ;;
+                        imunify)   [ -n "$IMUNIFY_BIN" ] && [ -x "$IMUNIFY_BIN" ] && ds=ok ;;
+                        logrotate) if command -v logrotate >/dev/null 2>&1 && [ -d "$(dirname "$LOGROTATE_CONF")" ]; then
+                                       ds=ok; [ -f "$LOGROTATE_CONF" ] || ds=warn      # kurulu ama bizim dosyamız yok
+                                   fi ;;
+                        *)         command -v "$dk" >/dev/null 2>&1 && ds=ok ;;
+                    esac
+                    dp+="${dp:+,}{\"k\":\"$dk\",\"s\":\"$ds\"}"
+                done
+                o+=",\"deps\":[$dp]"
                 o+=",\"dns_tool\":$([ -n "$DIG_BIN$HOST_BIN" ] && echo true || echo false),\"crontab\":$(command -v crontab >/dev/null 2>&1 && echo true || echo false)}"
                 echo "$o"
             else
@@ -1738,6 +1823,9 @@ do_config() {
             if [ -n "$cron_new" ]; then cron_write "$cron_new" || { act_out 1 "$M_CFG_CRONFAIL"; return 1; }; fi
             if [ -n "$lines" ]; then cfg_write "$lines" || { act_out 1 "$M_CFG_WFAIL"; return 1; }; fi
             install_conf_write "${NEW[MSG_LANG]:-$MSG_LANG}" "${NEW[ALERT_MAIL]:-$ALERT_MAIL}" "${cron_new:-$(cron_now)}"
+            if [[ "$lines" == *LOG_ROTATE_* ]]; then
+                logrotate_write "${NEW[LOG_ROTATE_MB]:-$LOG_ROTATE_MB}" "${NEW[LOG_ROTATE_KEEP]:-$LOG_ROTATE_KEEP}" || logs+=("$M_CFG_ROTFAIL")
+            fi
             for msg in "${logs[@]}"; do log "$msg"; done
             ev config "" "by=\"$AG_BY\"" "changes=[$changes]"
             act_out 0 "$(m "$M_CFG_SAVED" "$n")" ;;
@@ -1767,7 +1855,8 @@ case "$MODE" in
     action) LOG_MODE=file; do_action "$ACT" "${ARGS[0]}" "${ARGS[1]}"; exit $? ;;
     config) LOG_MODE=file; do_config; exit $? ;;
     busy)   if lock_busy; then echo busy; else echo idle; fi; exit 0 ;;
-    history) LOG_MODE=quiet; do_history "${ARGS[0]}" "${ARGS[1]}"; exit $? ;;   # eklenti "Şimdi çalıştır"dan önce sorar
+    history) LOG_MODE=quiet; do_history "${ARGS[0]}" "${ARGS[1]}"; exit $? ;;
+    logrotate) logrotate_write && { echo "$LOGROTATE_CONF"; exit 0; }; exit 1 ;;   # install.sh çağırır   # eklenti "Şimdi çalıştır"dan önce sorar
     digest) LOG_MODE=file; owners_load; parse_deny "$DENY_FILE" 1; panel_init; digest_build
             if [ "$SEND" = 1 ]; then printf '%s\n' "$DG_BODY" | mail -s "$DG_SUBJ" "$ALERT_MAIL"; log "$(m "$M_DG_SENT" "$ALERT_MAIL")"; ev digest "" "by=\"$AG_BY\""
             else printf '%s\n\n%s\n' "$DG_SUBJ" "$DG_BODY"; fi

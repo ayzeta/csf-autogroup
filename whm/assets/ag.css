@@ -532,3 +532,59 @@
 .ag-rules-f b { color: var(--ag-text); font-weight: 650; }
 .ag-cfglog { margin-top: 20px; }
 .ag-loginfo { font-size: 12.5px; color: var(--ag-text-2); line-height: 1.5; }
+
+/* Sunucu gereksinimleri */
+.ag-depcard { margin-top: 20px; }
+.ag-deps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ag-dep { display: flex; gap: 12px; align-items: flex-start; padding: 12px 18px; border-top: 1px solid var(--ag-line-soft); }
+.ag-dep:nth-child(-n+2) { border-top: 0; }
+.ag-dep:nth-child(4n+3), .ag-dep:nth-child(4n+4) { background: var(--ag-zebra); }
+.ag-dep-ic { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex: none; }
+.ag-dep-ic svg { width: 15px; height: 15px; }
+.ag-dep-ic.ok { background: var(--ag-ok-soft); color: var(--ag-ok); }
+.ag-dep-ic.bad { background: var(--ag-warn-soft); color: var(--ag-warn); }
+.ag-dep-ic.n { background: var(--ag-neutral-soft); color: var(--ag-text-3); }
+.ag-dep-m { flex: 1; min-width: 0; }
+.ag-dep-t { display: flex; gap: 8px; align-items: baseline; font-size: 13px; }
+.ag-dep-t .ag-muted { font-size: 11.5px; }
+.ag-dep-d { font-size: 12px; color: var(--ag-text-3); margin-top: 2px; line-height: 1.45; }
+@media (max-width: 760px) {
+  .ag-deps { grid-template-columns: 1fr; }
+  .ag-dep:nth-child(2) { border-top: 1px solid var(--ag-line-soft); }
+  .ag-dep:nth-child(4n+3), .ag-dep:nth-child(4n+4) { background: none; }
+  .ag-dep:nth-child(even) { background: var(--ag-zebra); }
+}
+
+/* ── Ayarlar: bölüm menüsü + satır düzeni ─────────────────────── */
+.ag-setwrap { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px; align-items: start; padding-bottom: 80px; }
+.ag-setnav { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 2px; background: var(--ag-card); border: 1px solid var(--ag-line); border-radius: var(--ag-radius); box-shadow: var(--ag-shadow); padding: 6px; }
+.ag-setnav-i { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: 0; border-radius: 9px; background: transparent; color: var(--ag-text-2); font-size: 13px; font-weight: 600; text-align: left; cursor: pointer; }
+.ag-setnav-i svg { width: 16px; height: 16px; color: var(--ag-text-3); flex: none; }
+.ag-setnav-i span { flex: 1; min-width: 0; }
+.ag-setnav-i:hover { background: var(--ag-neutral-soft); color: var(--ag-text); }
+.ag-setnav-i.on { background: var(--ag-accent-soft); color: var(--ag-accent); }
+.ag-setnav-i.on svg { color: var(--ag-accent); }
+.ag-setnav-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.ag-setnav-dot.dirty { background: var(--ag-accent); }
+.ag-setnav-dot.warn { background: #d97706; }
+.ag-setnav-dot.bad { background: #dc2626; }
+.ag-setmain { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.ag-setmain .ag-depcard { margin-top: 0; }
+/* satır: etiket + açıklama solda, denetim sağda */
+.ag-setform .ag-form { padding: 4px 22px 8px; }
+.ag-setform .ag-field { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 28px; align-items: center; padding: 16px 0; }
+.ag-setform .ag-field > .ag-field-l { grid-column: 1; grid-row: 1; margin: 0; justify-content: flex-start; gap: 10px; }
+.ag-setform .ag-field > .ag-field-l .ag-sub { font-size: 11.5px; }
+.ag-setform .ag-field > .ag-field-h { grid-column: 1; grid-row: 2; margin-top: 3px; max-width: 520px; }
+.ag-setform .ag-field > :not(.ag-field-l):not(.ag-field-h) { grid-column: 2; grid-row: 1 / span 2; justify-self: end; max-width: 380px; }
+.ag-setform .ag-field .ag-input:not(.ag-num) { width: 300px; max-width: 100%; }
+.ag-setform .ag-field .ag-num { width: 120px; text-align: right; }
+.ag-setform .ag-field > .ag-loginfo { grid-column: 1 / -1; grid-row: 2; justify-self: start; max-width: none; margin-top: 3px; }
+@media (max-width: 900px) {
+  .ag-setwrap { grid-template-columns: 1fr; }
+  .ag-setnav { position: static; flex-direction: row; flex-wrap: wrap; }
+  .ag-setnav-i { width: auto; padding: 7px 10px; }
+  .ag-setform .ag-field { display: block; }
+  .ag-setform .ag-field > * { max-width: none; }
+  .ag-setform .ag-field > :not(.ag-field-l):not(.ag-field-h) { margin-top: 8px; justify-self: start; max-width: 100%; }
+}

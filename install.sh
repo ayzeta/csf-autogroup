@@ -83,19 +83,12 @@ EXISTING="$(crontab -l 2>/dev/null | grep -vF "$SCRIPT" || true)"
 printf '%s\n%s\n' "$EXISTING" "$CRON_LINE" | crontab -
 
 # ── Log rotation (logrotate varsa) ──────────────────────────────────
-# Günlük 1 MB'ı geçince döndürülür, son 5 arşiv sıkıştırılmış saklanır. Betik bu dosyayı görünce
+# Günlük LOG_ROTATE_MB'ı geçince döndürülür, son LOG_ROTATE_KEEP arşiv sıkıştırılmış saklanır. Betik bu dosyayı görünce
 # kendi satır sınırıyla kesmeyi bırakır; logrotate yoksa LOG_MAX_LINES kullanılır.
 ROTATE="skipped (logrotate not found)"
 if [ -d /etc/logrotate.d ] && command -v logrotate >/dev/null 2>&1; then
-    LOGF="$(sed -n 's/^LOG_FILE=//p' "$SRC/config.env" 2>/dev/null | tr -d "\"'" | awk 'END { print }')"
-    LOGF="${LOGF:-/var/log/csf_autogroup.log}"
-    if [[ "$LOGF" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
-        printf '%s {\n    size 1M\n    rotate 5\n    compress\n    delaycompress\n    missingok\n    notifempty\n    create 0600 root root\n}\n' "$LOGF" \
-            > /etc/logrotate.d/csf_autogroup.new && chmod 0644 /etc/logrotate.d/csf_autogroup.new \
-            && mv -f /etc/logrotate.d/csf_autogroup.new /etc/logrotate.d/csf_autogroup && ROTATE="$LOGF (1 MB, 5 archives)"
-    else
-        ROTATE="skipped (unusual LOG_FILE path: $LOGF)"
-    fi
+    # boyut ve arşiv sayısı config.env'den (Ayarlar sekmesi): dosyayı betiğin kendisi yazar
+    if R="$("$SCRIPT" --logrotate 2>/dev/null)"; then ROTATE="$R"; else ROTATE="failed (try: $SCRIPT --logrotate)"; fi
 fi
 
 # ── WHM plugin (cPanel servers only) ────────────────────────────────

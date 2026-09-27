@@ -12,7 +12,7 @@
   var UPD = null;               // güncelleme kontrolü sonucu
   var LANG = 'en';
   var CLOCK = 0;                // sunucu saati - istemci saati (sn)
-  var UI = { gf: 'all', gq: '', ef: 'all', open: {}, evLimit: 40, commits: false, gs: 'added', gd: -1, gp: 0, pp: 0, hist: {}, cd: 30, menu: null, at: 'atk',
+  var UI = { gf: 'all', gq: '', ef: 'all', open: {}, evLimit: 40, commits: false, st: 'notify', gs: 'added', gd: -1, gp: 0, pp: 0, hist: {}, cd: 30, menu: null, at: 'atk',
              tab: location.hash === '#settings' ? 'settings' : location.hash === '#history' ? 'history' : 'overview', asnAll: false };
   var CFG = null, DRAFT = {}, cfgLoading = false;
   var pollTimer = null, wasRunning = false, busy = false, CONN = null, LAST_OK = 0, HIDDEN_DUE = false;
@@ -97,7 +97,7 @@
       l_perm_cover: 'Kalıcı (blok)', l_temp: 'Geçici', l_nolookup: 'Sahip ve hostname sorguları kapalı (LOOKUP=0).',
       l_abuse: 'AbuseIPDB', l_bgp: 'bgp.he.net', l_copy: 'Kopyala', bad_ip: 'Geçerli bir IPv4 adresi yazın.',
       foot: 'CSF Auto-Group v{0} · {1} olarak oturum açıldı',
-      tab_overview: 'Genel bakış', tab_settings: 'Ayarlar', tab_history: 'Geçmiş', show_less: 'Daha az göster', s_cfglog: 'Ayar geçmişi', k_logfile: 'Günlük dosyası', log_rot: 'logrotate döndürüyor: 1 MB\'ı geçince, son 5 arşiv sıkıştırılarak saklanır. Şu an {0} · {1} arşiv.', log_lines: 'Şu an {0} / {1} satır.', no_cfglog: 'Henüz ayar değişikliği yok.', ev_config: 'Ayar değişti', ev_test_mail: 'Test maili',
+      tab_overview: 'Genel bakış', tab_settings: 'Ayarlar', tab_history: 'Geçmiş', show_less: 'Daha az göster', s_cfglog: 'Ayar geçmişi', from_log: 'günlükten', sn_server: 'Sunucu', sn_server_h: 'CSF\'in liste sınırları ve eklentinin kullandığı araçlar.', st_deps: 'Sunucu gereksinimleri', st_deps_h: 'Eklentinin kullandığı araçlar ve eksik olduğunda ne olduğu.', dep_ok: 'Var', dep_missing: 'Yok', dep_warn: 'Eksik', dep_opt: 'isteğe bağlı', dep_csf: 'Güvenlik duvarı; banları o uygular.', dep_csf_x: 'Zorunlu: CSF olmadan hiçbir şey çalışmaz.', dep_crontab: 'Turları zamanında çalıştırır.', dep_crontab_x: 'Turlar otomatik çalışmaz; zamanlama Ayarlar\'dan değiştirilemez.', dep_mail: 'Uyarı mailleri ve haftalık özet.', dep_mail_x: 'Uyarı mailleri ve haftalık özet gönderilmez.', dep_dns: 'Sahip ve hostname sorguları.', dep_dns_x: 'Sahip ve hostname bilgisi olmaz; CC_IGNORE / CC_ALLOW ve csf.rignore kontrol edilemez, bu listelere dayanan bloklar banlanmaz.', dep_logrotate: 'Günlük dosyasını döndürür.', dep_logrotate_x: 'Günlük, satır sınırıyla kesilir (yedek yöntem).', dep_logrotate_w: 'Kurulu ama ayar dosyası yok; günlük şimdilik satır sınırıyla kesiliyor. update.sh ya da install.sh ile yeniden kurun.', dep_flock: 'Aynı anda tek tur çalışmasını sağlar.', dep_flock_x: 'Üst üste binen turlara karşı koruma olmaz.', dep_timeout: 'Eklentinin çalıştırdığı komutlara zaman sınırı koyar.', dep_timeout_x: 'Takılan bir komut sayfayı bekletebilir.', dep_git: 'Arayüzden güncelleme.', dep_git_x: 'Güncelleme kontrolü ve Güncelle düğmesi çalışmaz.', dep_imunify: 'Ağlar kartındaki Imunify sekmesi.', dep_imunify_x: 'Imunify sekmesi görünmez; başka etkisi yok.', k_logfile: 'Günlük dosyası', log_rot: 'logrotate ile döndürülüyor. Şu an {0} · {1} arşiv.', k_LOG_ROTATE_MB: 'Günlük boyutu (MB)', h_LOG_ROTATE_MB: 'Günlük bu boyutu geçince döndürülür (logrotate günde bir kontrol eder).', k_LOG_ROTATE_KEEP: 'Arşiv sayısı', h_LOG_ROTATE_KEEP: 'Döndürülen günlüklerden kaç tanesi sıkıştırılarak saklanır.', log_lines: 'Şu an {0} / {1} satır.', no_cfglog: 'Henüz ayar değişikliği yok.', ev_config: 'Ayar değişti', ev_test_mail: 'Test maili',
       st_notify: 'Bildirim', st_mail: 'Uyarı maili adresi', st_mail_h: 'Gruplama, /16 uyarısı ve limit mailleri buraya gider. root@localhost, cPanel\'de sunucunun iletişim adresine yönlenir.',
       st_lang: 'Dil', st_lang_h: 'Log, mail ve bu panelin dili.', st_test: 'Test maili gönder', st_test_h: 'Kayıtlı adrese gönderilir.',
       st_test_dirty: 'Önce yeni adresi kaydedin.', st_thr: 'Eşikler', st_thr_h: 'Kaç tekil ban bir işlemi tetikler.',
@@ -189,7 +189,7 @@
       l_perm_cover: 'Permanent (block)', l_temp: 'Temp', l_nolookup: 'Owner and hostname lookups are off (LOOKUP=0).',
       l_abuse: 'AbuseIPDB', l_bgp: 'bgp.he.net', l_copy: 'Copy', bad_ip: 'Enter a valid IPv4 address.',
       foot: 'CSF Auto-Group v{0} · signed in as {1}',
-      tab_overview: 'Overview', tab_settings: 'Settings', tab_history: 'History', show_less: 'Show less', s_cfglog: 'Settings history', k_logfile: 'Log file', log_rot: 'Rotated by logrotate: at 1 MB, the last 5 archives are kept compressed. Now {0} · {1} archives.', log_lines: 'Now {0} / {1} lines.', no_cfglog: 'No settings changes yet.', ev_config: 'Settings changed', ev_test_mail: 'Test email',
+      tab_overview: 'Overview', tab_settings: 'Settings', tab_history: 'History', show_less: 'Show less', s_cfglog: 'Settings history', from_log: 'from the log', sn_server: 'Server', sn_server_h: 'CSF\'s list limits and the tools the plugin uses.', st_deps: 'Server requirements', st_deps_h: 'Tools the plugin uses and what happens when one is missing.', dep_ok: 'Found', dep_missing: 'Missing', dep_warn: 'Incomplete', dep_opt: 'optional', dep_csf: 'The firewall; it applies the bans.', dep_csf_x: 'Required: nothing works without CSF.', dep_crontab: 'Runs the job on schedule.', dep_crontab_x: 'Runs don\'t happen automatically; the schedule can\'t be changed from Settings.', dep_mail: 'Alert emails and the weekly summary.', dep_mail_x: 'No alert emails or weekly summary are sent.', dep_dns: 'Owner and hostname lookups.', dep_dns_x: 'No owner or hostname info; CC_IGNORE / CC_ALLOW and csf.rignore can\'t be checked, so blocks relying on them aren\'t banned.', dep_logrotate: 'Rotates the log file.', dep_logrotate_x: 'The log is trimmed by a line limit instead (fallback).', dep_logrotate_w: 'Installed, but our config file is missing; the log is trimmed by the line limit for now. Re-run update.sh or install.sh.', dep_flock: 'Makes sure only one run happens at a time.', dep_flock_x: 'No protection against overlapping runs.', dep_timeout: 'Puts a time limit on commands the plugin runs.', dep_timeout_x: 'A stuck command can keep the page waiting.', dep_git: 'Updating from the plugin.', dep_git_x: 'The update check and the Update button don\'t work.', dep_imunify: 'The Imunify tab in the networks card.', dep_imunify_x: 'The Imunify tab is hidden; nothing else is affected.', k_logfile: 'Log file', log_rot: 'Rotated by logrotate. Now {0} · {1} archives.', k_LOG_ROTATE_MB: 'Log size (MB)', h_LOG_ROTATE_MB: 'The log is rotated once it grows past this size (logrotate checks daily).', k_LOG_ROTATE_KEEP: 'Archives kept', h_LOG_ROTATE_KEEP: 'How many rotated logs are kept, compressed.', log_lines: 'Now {0} / {1} lines.', no_cfglog: 'No settings changes yet.', ev_config: 'Settings changed', ev_test_mail: 'Test email',
       st_notify: 'Notifications', st_mail: 'Alert email address', st_mail_h: 'Grouping, /16 warning and limit emails go here. On cPanel, root@localhost is forwarded to the server contact address.',
       st_lang: 'Language', st_lang_h: 'Language of the log, emails and this panel.', st_test: 'Send test email', st_test_h: 'Sent to the saved address.',
       st_test_dirty: 'Save the new address first.', st_thr: 'Thresholds', st_thr_h: 'How many single bans trigger an action.',
@@ -257,6 +257,22 @@
     function p(n) { return (n < 10 ? '0' : '') + n; }
     if (LANG !== 'tr') return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
     return p(d.getDate()) + '.' + p(d.getMonth() + 1) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+  var DEP_NAMES = { csf: 'CSF', crontab: 'cron', mail: 'mail', dns: 'dig / host', logrotate: 'logrotate', flock: 'flock', timeout: 'timeout', git: 'git', imunify: 'Imunify360' };
+  function depsCard() {
+    var D = (CFG && CFG.deps) || [];
+    if (!D.length) return '';
+    var rows = D.map(function (d) {
+      var ok = d.s === 'ok', warn = d.s === 'warn', opt = d.k === 'imunify';
+      var txt = ok ? t('dep_' + d.k) : warn ? t('dep_' + d.k + '_w') : t('dep_' + d.k + '_x');
+      var pill = ok ? 'ag-pill-ok' : opt ? 'ag-pill-n' : warn ? 'ag-pill-warn' : (d.k === 'csf' ? 'ag-pill-bad' : 'ag-pill-warn');
+      return '<div class="ag-dep"><div class="ag-dep-ic ' + (ok ? 'ok' : opt ? 'n' : 'bad') + '">' + (ok ? IC.check : IC.alert) + '</div>' +
+        '<div class="ag-dep-m"><div class="ag-dep-t"><b>' + esc(DEP_NAMES[d.k] || d.k) + '</b>' + (opt ? '<span class="ag-muted">' + t('dep_opt') + '</span>' : '') + '</div>' +
+        '<div class="ag-dep-d">' + esc(txt) + '</div></div>' +
+        '<span class="ag-pill ' + pill + '">' + t('dep_' + (ok ? 'ok' : warn ? 'warn' : 'missing')) + '</span></div>';
+    }).join('');
+    return '<section class="ag-card ag-depcard"><div class="ag-card-h"><h2>' + IC.shield + t('st_deps') + '</h2><span class="ag-hint">' + t('st_deps_h') + '</span></div>' +
+      '<div class="ag-deps">' + rows + '</div></section>';
   }
   function bytes(n) { n = +n || 0; return n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(0) + ' KB' : (n / 1048576).toFixed(1) + ' MB'; }
   function loc() { return LANG === 'tr' ? 'tr-TR' : 'en-US'; }
@@ -642,6 +658,7 @@
     if (e.changes) e.changes.forEach(function (c) { d.push((DICT[LANG]['k_' + c.key] || c.key) + ': ' + (c.from || '—') + ' → ' + (c.to || '—')); });
     if (e.to) d.push(e.to);
     if (e.by) d.push(t('by', e.by));
+    if (e.src === 'log') d.push(t('from_log'));
     if (e.until) d.push(t('until', e.until));
     return esc(d.join(' · '));
   }
@@ -814,7 +831,7 @@
   /* ── Ayarlar sekmesi ───────────────────────────────────────────── */
   var RANGES = {
     THRESHOLD_24: [2, 50], THRESHOLD_24_PERMANENT: [2, 100], THRESHOLD_16: [2, 500], THRESHOLD_TEMP_24: [2, 50],
-    THRESHOLD_TEMP_16: [2, 500], LOOKUP_TIMEOUT: [1, 10], SAYAC_RETENTION_DAYS: [7, 730], REVIEW_DAYS: [1, 90], LOG_MAX_LINES: [500, 100000]
+    THRESHOLD_TEMP_16: [2, 500], LOOKUP_TIMEOUT: [1, 10], SAYAC_RETENTION_DAYS: [7, 730], REVIEW_DAYS: [1, 90], LOG_ROTATE_MB: [1, 100], LOG_ROTATE_KEEP: [1, 52], LOG_MAX_LINES: [500, 100000]
   };
   var TRY_KEYS = ['THRESHOLD_24', 'THRESHOLD_24_PERMANENT', 'THRESHOLD_16', 'THRESHOLD_TEMP_24', 'THRESHOLD_TEMP_16', 'LOOKUP', 'LOOKUP_TIMEOUT', 'SAYAC_RETENTION_DAYS', 'REVIEW_DAYS'];
   function cv(k) { return DRAFT[k] !== undefined ? DRAFT[k] : (CFG ? CFG.values[k] : ''); }
@@ -888,20 +905,52 @@
     var look = '<div class="ag-field"><div class="ag-field-l"><label>' + t('k_LOOKUP') + '</label></div>' + seg('LOOKUP', [['1', t('on')], ['0', t('off')]]) +
       '<div class="ag-field-h">' + (CFG.dns_tool ? t('h_LOOKUP') : '<span style="color:var(--ag-warn)">' + t('st_nodns') + '</span>') + '</div></div>' + field('LOOKUP_TIMEOUT', errs);
     var LG = CFG.log || {}, rot = !!LG.rotate;
-    var keep = (rot ? ['SAYAC_RETENTION_DAYS', 'REVIEW_DAYS'] : ['SAYAC_RETENTION_DAYS', 'REVIEW_DAYS', 'LOG_MAX_LINES']).map(function (k) { return field(k, errs); }).join('') +
+    var keep = (rot ? ['SAYAC_RETENTION_DAYS', 'REVIEW_DAYS', 'LOG_ROTATE_MB', 'LOG_ROTATE_KEEP'] : ['SAYAC_RETENTION_DAYS', 'REVIEW_DAYS', 'LOG_MAX_LINES']).map(function (k) { return field(k, errs); }).join('') +
       '<div class="ag-field"><div class="ag-field-l"><label>' + t('k_logfile') + '</label></div><div class="ag-loginfo">' +
       (rot ? t('log_rot', esc(bytes(LG.bytes)), num(LG.archives)) : t('log_lines', num(LG.lines), num(cv('LOG_MAX_LINES')))) + '</div></div>';
     var csf = '<dl class="ag-kv" style="padding:0">' +
       '<dt>' + t('csf_deny') + '</dt><dd>' + (CFG.csf.deny_limit ? num(CFG.csf.deny_limit) : '—') + '</dd>' +
       '<dt>' + t('csf_temp') + '</dt><dd>' + (CFG.csf.temp_limit ? num(CFG.csf.temp_limit) : '—') + '</dd></dl>' +
       '<a class="ag-btn ag-btn-sm" href="../configserver/csf.cgi" target="_top">' + IC.ext + t('csf_open') + '</a>';
-    return '<div class="ag-settings"><div class="ag-col">' + card('inbox', t('st_notify'), '', notify) + card('clock', t('st_sched'), '', sched) +
-      card('search', t('st_lookup'), '', look) + '</div><div class="ag-col">' + card('sliders', t('st_thr'), t('st_thr_h'), thr) +
-      card('hour', t('st_keep'), '', keep) + card('shield', t('st_csf'), t('st_csf_h'), csf) + '</div></div>' +
-      '<div class="ag-cfglog">' + events(true) + '</div>' +
+    var secs = settingsSections(), cur = secs.filter(function (x) { return x.k === UI.st; })[0] || secs[0];
+    var body = cur.k === 'notify' ? card('inbox', t('st_notify'), '', notify)
+      : cur.k === 'thr' ? card('sliders', t('st_thr'), t('st_thr_h'), thr)
+      : cur.k === 'sched' ? card('clock', t('st_sched'), '', sched)
+      : cur.k === 'look' ? card('search', t('st_lookup'), '', look)
+      : cur.k === 'keep' ? card('hour', t('st_keep'), '', keep)
+      : cur.k === 'server' ? card('shield', t('st_csf'), t('st_csf_h'), csf) + depsCard()
+      : events(true);
+    var nav = secs.map(function (x) {
+      return '<button class="ag-setnav-i' + (x.k === cur.k ? ' on' : '') + '" data-act="st" data-s="' + x.k + '"' + (x.k === cur.k ? ' aria-current="page"' : '') + '>' +
+        IC[x.icon] + '<span>' + esc(x.label) + '</span><i class="ag-setnav-dot' + secState(x) + '"></i></button>';
+    }).join('');
+    return '<div class="ag-setwrap"><nav class="ag-setnav" aria-label="' + esc(t('tab_settings')) + '">' + nav + '</nav>' +
+      '<div class="ag-setmain ag-setform">' + body + '</div></div>' +
       '<div id="ag-savebar-slot">' + saveBar() + '</div>';
   }
+  /* Ayarlar bölümleri: hangi anahtar hangi bölümde (kaydedilmemiş değişiklik noktası için) */
+  function settingsSections() {
+    return [
+      { k: 'notify', icon: 'inbox', label: t('st_notify'), keys: ['ALERT_MAIL', 'MSG_LANG', 'DIGEST', 'DIGEST_DAY'] },
+      { k: 'thr', icon: 'sliders', label: t('st_thr'), keys: ['THRESHOLD_24', 'THRESHOLD_24_PERMANENT', 'THRESHOLD_16', 'THRESHOLD_TEMP_24', 'THRESHOLD_TEMP_16'] },
+      { k: 'sched', icon: 'clock', label: t('st_sched'), keys: ['CRON_MIN'] },
+      { k: 'look', icon: 'search', label: t('st_lookup'), keys: ['LOOKUP', 'LOOKUP_TIMEOUT'] },
+      { k: 'keep', icon: 'hour', label: t('st_keep'), keys: ['SAYAC_RETENTION_DAYS', 'REVIEW_DAYS', 'LOG_ROTATE_MB', 'LOG_ROTATE_KEEP', 'LOG_MAX_LINES'] },
+      { k: 'server', icon: 'shield', label: t('sn_server'), keys: [] },
+      { k: 'hist', icon: 'list', label: t('s_cfglog'), keys: [] }
+    ];
+  }
+  function secState(x) {       // '' | ' dirty' (kaydedilmemiş) | ' bad' (hatalı alan ya da eksik zorunlu araç)
+    var errs = cfgErrors(), ch = changedKeys();
+    if (x.keys.some(function (k) { return errs[k]; })) return ' bad';
+    if (x.k === 'server' && ((CFG && CFG.deps) || []).some(function (d) { return d.s !== 'ok' && d.k !== 'imunify'; })) return ' warn';
+    return x.keys.some(function (k) { return ch.indexOf(k) >= 0; }) ? ' dirty' : '';
+  }
   function refreshSaveBar() {
+    document.querySelectorAll('#ag-app .ag-setnav-i').forEach(function (b) {
+      var x = settingsSections().filter(function (s) { return s.k === b.getAttribute('data-s'); })[0];
+      var dot = b.querySelector('.ag-setnav-dot'); if (x && dot) dot.className = 'ag-setnav-dot' + secState(x);
+    });
     var slot = document.getElementById('ag-savebar-slot'); if (slot) slot.innerHTML = saveBar();
     // alan hata/değişti işaretleri: yeniden çizmeden güncelle (yazarken odak kaybolmasın)
     var errs = cfgErrors();
@@ -937,7 +986,7 @@
   }
 
   /* Odak: öğe yeniden çizilince aynı niteliklerle bulunup odak geri verilir */
-  var FKEYS = ['data-act', 'data-key', 'data-f', 'data-t', 'data-d', 'data-c', 'data-k', 'data-tab', 'data-ip', 'data-v'];
+  var FKEYS = ['data-act', 'data-key', 'data-f', 'data-t', 'data-d', 'data-c', 'data-k', 'data-tab', 'data-ip', 'data-v', 'data-s'];
   function focusSel(el) {
     if (!el || el === document.body || !el.getAttribute) return '';
     if (el.id) return '#' + CSS.escape(el.id);
@@ -1113,6 +1162,7 @@
     },
     ppage: function (el) { UI.pp = Math.max(0, UI.pp + (+el.getAttribute('data-d'))); render(); },
     at: function (el) { UI.at = el.getAttribute('data-t'); render(); },
+    st: function (el) { UI.st = el.getAttribute('data-s'); render(); window.scrollTo(0, 0); },
     asnall: function () { UI.asnAll = !UI.asnAll; render(); },
     ef: function (el) { UI.ef = el.getAttribute('data-f'); UI.evLimit = 40; render(); },
     cd: function (el) { UI.cd = +el.getAttribute('data-d'); render(); },

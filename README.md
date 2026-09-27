@@ -22,7 +22,7 @@ is escalated to a **permanent** ban. `/16` ranges are only flagged for review
 - **English / Türkçe** — the plugin, logs and emails.
 - **Works on phones** — the page adapts to small screens.
 
-**Version 1.7.5** · root-only WHM plugin on cPanel servers. On servers without
+**Version 1.7.6** · root-only WHM plugin on cPanel servers. On servers without
 cPanel the same engine runs from cron and the command line
 ([details](#without-cpanel)).
 
@@ -91,7 +91,9 @@ settings, with no prompts. `config.env` is left untouched.
   Blocks that became permanent on a second attack are tagged *repeat*.
 - **Watched** — `/24`s that were temp-banned once. If one comes back, it becomes
   permanent + `do not delete`. Sorted by days left.
-- **Recent actions** — every ban, promotion, skip, warning and manual change.
+- **History** (its own tab) — every ban, promotion, skip, warning and manual
+  action. Work from before the event log existed is filled in from the log.
+  Settings changes are listed under Settings → Settings history.
 - **Look up an IP** — hostname (forward-confirmed), owner, announced prefix,
   registry, whether CSF blocks it and which list whitelists it, with links to
   bgp.he.net and AbuseIPDB. Recently viewed IPs stay one click away.
@@ -122,11 +124,13 @@ whitelist, removing a `do not delete` block) make you type the target.
 | Dry run | show what a run would do; changes nothing, sends nothing |
 | Run now | run immediately instead of waiting for cron |
 
-Manual actions are logged as `MANUAL (user): …` and appear under recent actions.
+Manual actions are logged as `MANUAL (user): …` and appear on the History tab.
 
 ### Settings
 
-The same settings as `config.env`, with validation:
+The same settings as `config.env`, with validation, grouped into sections
+(notifications, thresholds, schedule, lookups, retention, server, settings
+history):
 
 - **Notifications** — alert email (with *Send test email*), language, and the
   **weekly summary**: new groups, top attacking networks, watched blocks about to
@@ -136,10 +140,15 @@ The same settings as `config.env`, with validation:
   `/16`.
 - **Schedule** — cron every 5 / 10 / 15 / 30 minutes or hourly.
 - **Lookups** — owner/hostname lookups on or off, DNS timeout.
-- **Retention** — watch period, review days. The log is rotated by the system's
-  logrotate (`/etc/logrotate.d/csf_autogroup`: at 1 MB, 5 compressed archives);
-  where logrotate is missing, a log line limit is used instead. A run where
+- **Retention** — watch period, review days, log size and archive count. The
+  log is rotated by the system's logrotate (`/etc/logrotate.d/csf_autogroup`,
+  written from these settings; default 1 MB, 5 compressed archives); where
+  logrotate is missing, a log line limit is used instead. A run where
   nothing happened leaves a single line in the log.
+
+A **Server requirements** card lists the tools CSF Auto-Group uses (CSF, cron,
+mail, dig/host, logrotate, flock, timeout, git, Imunify360) and what happens when
+one of them is missing.
 
 *Try before saving* runs a dry run with the unsaved thresholds. Saving writes
 `config.env` (previous file kept as `config.env.bak`), updates the crontab and
