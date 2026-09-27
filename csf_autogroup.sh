@@ -39,7 +39,7 @@
 # ============================================================================
 set -o pipefail
 
-VERSION="1.7.0"   # sürüm — başlangıç log satırında görünür
+VERSION="1.7.1"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -401,12 +401,13 @@ m() { local f="$1"; shift; printf -- "$f" "$@"; }   # "--" : "--- Bitti …" gib
 # karışmasın) · quiet = hiçbir yere (--status/--lookup salt okur) · kuru çalıştırmada yalnız ekrana.
 LOG_MODE=tee
 log() {
-    local line="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+    local line
+    printf -v line '[%(%Y-%m-%d %H:%M:%S)T] %s' -1 "$1"
     if [ "$DRY" = 1 ]; then echo "$line"; return; fi
     case "$LOG_MODE" in
         quiet) ;;
         file)  echo "$line" >> "$LOG_FILE" ;;
-        *)     echo "$line" | tee -a "$LOG_FILE" ;;
+        *)     printf '%s\n' "$line"; printf '%s\n' "$line" >> "$LOG_FILE" ;;
     esac
 }
 # Kilit (fd 9) alt süreçlere geçmesin: arka planda teslimat yapan bir MTA kilidi tutup sonraki turları engellemesin.
@@ -537,8 +538,9 @@ jstr() {         # dizgi → REPLY = JSON dizgisi (tırnaklı, kaçışlı)
 }
 ev() {           # TYPE CIDR [anahtar=HAZIR_JSON ...]
     [ "$DRY" = 1 ] && return 0
-    local line kv
-    line="{\"t\":$(date +%s),\"type\":\"$1\""
+    local line kv ts
+    printf -v ts '%(%s)T' -1
+    line="{\"t\":$ts,\"type\":\"$1\""
     if [ -n "$2" ]; then jstr "$2"; line+=",\"cidr\":$REPLY"; fi
     shift 2
     for kv in "$@"; do line+=",\"${kv%%=*}\":${kv#*=}"; done
@@ -941,6 +943,11 @@ read_temp_groups() {
 }
 
 # ── --status ────────────────────────────────────────────────────────────────
+declare -A DAYEP
+day_epoch() {    # YYYY-MM-DD → REPLY (epoch), aynı gün için tek date çağrısı
+    [ -n "${DAYEP[$1]}" ] || DAYEP[$1]=$(date -d "$1" +%s 2>/dev/null || echo 0)
+    REPLY="${DAYEP[$1]}"
+}
 do_status() {
     local now limit tlimit pc tc running=false last line tok kind dnd n added c u b
     local re_n=': ([0-9]+) ' re_d='- ([A-Z][a-z]{2} [A-Z][a-z]{2} +[0-9]{1,2} [0-9:]{8} [0-9]{4})[[:space:]]*$'
@@ -949,12 +956,17 @@ do_status() {
     read_temp_groups
     limit=$(num "$(conf_val DENY_IP_LIMIT)"); tlimit=$(num "$(conf_val DENY_TEMP_IP_LIMIT)")
     pc=$(grep -cE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' "$DENY_FILE")
-    tc=$("$CSF_BIN" -t 2>/dev/null 9>&- | grep -c "^DENY")
+    # Geçici liste doluluğu: her sayfa yoklamasında csf -t (Perl) başlatmak yerine csf.tempban'ın
+    # satırları sayılır; csf.pl dotempban ile aynı: boş olmayan her satır, port listesindeki her port için
+    # bir DENY satırı (port yoksa bir).
+    tc=0; [ -r "$CSF_VAR/csf.tempban" ] && tc=$(awk -F'|' '$0 != "" { k = split($3, a, ","); c += (k > 0 ? k : 1) } END { print c + 0 }' "$CSF_VAR/csf.tempban")
     lock_busy && running=true
-    last=$(grep '"type":"run"' "$EVENTS_FILE" 2>/dev/null | tail -1)
+    last=$(grep '"type":"run"' "$EVENTS_FILE" 2>/dev/null | grep -E '^\{"t":[0-9]+,.*\}$' | tail -1)   # yarım satır JSON'u bozmasın
+    local cronm; cronm=$(cron_now)
 
     # Aktif grup banları (kalıcı + geçici)
-    local groups=() gtext=() ghist=""
+    local groups=() gtext=() ghist="" gi
+    local g_tok=() g_kind=() g_dnd=() g_n=() g_ds=() g_ep=()
     while IFS= read -r line; do
         tok="${line%%[[:space:]]*}"
         [[ "$tok" =~ $CIDR4_RE && "$tok" == */* ]] || continue
@@ -962,26 +974,38 @@ do_status() {
         kind=perm; [[ "$line" == *"from temp"* ]] && kind=promoted; [[ "$line" == *csf_autogroup:* ]] && kind=manual
         dnd=false; is_dnd "$line" && dnd=true
         n=0; [[ "$line" =~ $re_n ]] && n="${BASH_REMATCH[1]}"
-        added=0; [[ "$line" =~ $re_d ]] && added=$(LC_ALL=C date -d "${BASH_REMATCH[1]}" +%s 2>/dev/null || echo 0)
-        groups+=("{\"cidr\":\"$tok\",\"kind\":\"$kind\",\"dnd\":$dnd,\"n\":$n,\"added\":$added,\"ttl\":0}")
-        [ "$added" -gt 0 ] && ghist+="$added $kind $tok"$'\n'
-        gtext+=("$(printf '%-18s %-9s %s' "$tok" "$kind" "$([ "$dnd" = true ] && echo 'do not delete')")")
+        added=""; [[ "$line" =~ $re_d ]] && added="${BASH_REMATCH[1]}"
+        g_tok+=("$tok"); g_kind+=("$kind"); g_dnd+=("$dnd"); g_n+=("$n"); g_ds+=("${added:-Thu Jan  1 00:00:00 1970}")
     done < "$DENY_FILE"
+    # Eklenme tarihleri tek date çağrısıyla (satır başına alt süreç yerine); sayı tutmazsa tek tek
+    if [ ${#g_ds[@]} -gt 0 ]; then
+        mapfile -t g_ep < <(printf '%s\n' "${g_ds[@]}" | LC_ALL=C date -f - +%s 2>/dev/null)
+        if [ ${#g_ep[@]} -ne ${#g_ds[@]} ]; then
+            g_ep=(); for gi in "${!g_ds[@]}"; do g_ep+=("$(LC_ALL=C date -d "${g_ds[gi]}" +%s 2>/dev/null || echo 0)"); done
+        fi
+    fi
+    for gi in "${!g_tok[@]}"; do
+        added="${g_ep[gi]:-0}"; [[ "$added" =~ ^[0-9]+$ ]] && [ "$added" -gt 86400 ] || added=0
+        tok="${g_tok[gi]}"; kind="${g_kind[gi]}"; dnd="${g_dnd[gi]}"
+        groups+=("{\"cidr\":\"$tok\",\"kind\":\"$kind\",\"dnd\":$dnd,\"n\":${g_n[gi]},\"added\":$added,\"ttl\":0}")
+        [ "$added" -gt 0 ] && ghist+="$added $kind $tok"$'\n'
+        [ "$JSON" = 1 ] || gtext+=("$(printf '%-18s %-9s %s' "$tok" "$kind" "$([ "$dnd" = true ] && echo 'do not delete')")")
+    done
     for c in "${!TG_TTL[@]}"; do
         [ "${TG_TTL[$c]}" -gt 0 ] || continue
         n=0; [[ "${TG_NOTE[$c]}" =~ $re_n ]] && n="${BASH_REMATCH[1]}"
         groups+=("{\"cidr\":\"$c\",\"kind\":\"temp\",\"dnd\":false,\"n\":$n,\"added\":0,\"ttl\":${TG_TTL[$c]}}")
-        gtext+=("$(printf '%-18s %-9s %s' "$c" "temp" "$(m "$M_S_TTL" "$(( TG_TTL[$c] / 3600 ))h")")")
+        [ "$JSON" = 1 ] || gtext+=("$(printf '%-18s %-9s %s' "$c" "temp" "$(m "$M_S_TTL" "$(( TG_TTL[$c] / 3600 ))h")")")
     done
 
     # Terfi bekleyenler: sayaçtaki "a.b.c tarih" kayıtları
     local pending=() ptext=() age left ttl
     while read -r c u; do
         [[ "$c" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ && "$u" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || continue
-        age=$(( (now - $(date -d "$u" +%s)) / 86400 )); left=$(( SAYAC_RETENTION_DAYS - age ))
+        day_epoch "$u"; age=$(( (now - REPLY) / 86400 )); left=$(( SAYAC_RETENTION_DAYS - age ))
         ttl="${TG_TTL[$c.0/24]:-0}"; [ "$ttl" -lt 0 ] && ttl=0
         pending+=("{\"prefix\":\"$c\",\"since\":\"$u\",\"days_left\":$left,\"temp_ttl\":$ttl}")
-        ptext+=("$(printf '%-18s %s · %s' "$c.0/24" "$u" "$(m "$M_S_DAYSLEFT" "$left")")")
+        [ "$JSON" = 1 ] || ptext+=("$(printf '%-18s %s · %s' "$c.0/24" "$u" "$(m "$M_S_DAYSLEFT" "$left")")")
     done < "$SAYAC_FILE"
 
     # Kontrol edilecekler: son REVIEW_DAYS gündeki /16 uyarıları ve beyaz liste atlamaları,
@@ -990,7 +1014,7 @@ do_status() {
     local -A seen=()
     if [ -r "$EVENTS_FILE" ]; then
         while IFS= read -r line; do
-            [[ "$line" =~ \"t\":([0-9]+) ]] || continue; t="${BASH_REMATCH[1]}"
+            [[ "$line" =~ ^\{\"t\":([0-9]+),.*\}$ ]] || continue; t="${BASH_REMATCH[1]}"   # yarım satırlar atlanır
             [ "$t" -lt $(( now - REVIEW_DAYS * 86400 )) ] && break
             [[ "$line" =~ \"type\":\"(warn16|warn16t|skip_wl)\" ]] || continue; ty="${BASH_REMATCH[1]}"
             [[ "$line" =~ \"cidr\":\"([0-9./]+)\" ]] || continue; c="${BASH_REMATCH[1]}"
@@ -1035,7 +1059,7 @@ do_status() {
     fi
 
     local recent=()
-    [ -r "$EVENTS_FILE" ] && mapfile -t recent < <(grep -v '"type":"run"' "$EVENTS_FILE" | tail -n 300)
+    [ -r "$EVENTS_FILE" ] && mapfile -t recent < <(grep -v '"type":"run"' "$EVENTS_FILE" | grep -E '^\{"t":[0-9]+,.*\}$' | tail -n 300)
 
     # Sahipler (önbellekten), en çok saldıran ağlar, son 30 günün günlük etkinliği
     owners_load
@@ -1129,9 +1153,9 @@ do_status() {
             "$(num "$THRESHOLD_TEMP_16")" "$(num "$SAYAC_RETENTION_DAYS")" "$(num "$REVIEW_DAYS")" "$([ "$LOOK_INIT" = 1 ] && echo true || echo false)"
         printf '"usage":{"perm":[%s,%s],"temp":[%s,%s]},' "$(num "$pc")" "$limit" "$(num "$tc")" "$tlimit"
         printf '"last_run":%s,' "${last:-null}"
-        jstr "$(cron_now)"; printf '"cron_min":%s,"runs":%s,' "$REPLY" "$runsj"
+        jstr "$cronm"; printf '"cron_min":%s,"runs":%s,' "$REPLY" "$runsj"
         printf '"cron_interval":%s,"daily":{"start":%s,%s},"owners":{%s},"asn_top":[%s],"blocks_top":[%s],"imunify":%s,' \
-            "$(cron_interval)" "$dstart" "$daily" "${owners[*]}" "${tops[*]}" "${btops[*]}" "$imj"
+            "$(cron_interval "$cronm")" "$dstart" "$daily" "${owners[*]}" "${tops[*]}" "${btops[*]}" "$imj"
         printf '"groups":[%s],"pending":[%s],"review":[%s],"ignored":[%s],"events":[%s]}\n' \
             "${groups[*]}" "${pending[*]}" "${review[*]}" "${ignored[*]}" "${recent[*]}"
         return 0
@@ -1412,7 +1436,7 @@ asn_top() {      # [N] [evidence|blocks] → ASN_TOP satırları: "ASN|KURUM|CC|
     done
     ASN_TOP=$(for a in $(printf '%s\n' "${!G[@]}" "${!B[@]}" "${!T[@]}" | sort -u); do
         printf '%s|%s|%s|%s|%s|%s|%s|%s\n' "$a" "${NM[$a]//|/ }" "${CC[$a]}" "${G[$a]:-0}" "${B[$a]:-0}" "${T[$a]:-0}" \
-            "$([ -n "${DEN[AS$a]}" ] && echo 1 || echo 0)" $(( ${G[$a]:-0} * 4 + ${T[$a]:-0} ))
+            $(( ${#DEN[AS$a]} > 0 )) $(( ${G[$a]:-0} * 4 + ${T[$a]:-0} ))
     done | if [ "${2:-evidence}" = blocks ]; then awk -F'|' '$5 > 0' | sort -t'|' -k5,5nr; else sort -t'|' -k8,8nr -k5,5nr; fi \
          | cut -d'|' -f1-7 | awk -v n="${1:-10}" 'NR <= n')   # head değil: bkz. SIGPIPE notu
 }
@@ -1493,8 +1517,8 @@ asn_parts() {    # grup blok tekil → "8 grup · 3 tekil · +2 blok başka kayn
     [ "$2" -gt 0 ] && out+="${out:+ · }$(m "$M_DG_PB" "$2")"
     printf '%s' "$out"
 }
-cron_interval() { # crontab'daki dakika alanı → saniye (bilinmiyorsa 0)
-    local c; c="$(cron_now)"
+cron_interval() { # crontab'daki dakika alanı → saniye (bilinmiyorsa 0); [önceden okunmuş alan]
+    local c; if [ $# -gt 0 ]; then c="$1"; else c="$(cron_now)"; fi
     case "$c" in
         "*/"*) [[ "${c#*/}" =~ ^[0-9]+$ ]] && echo $(( ${c#*/} * 60 )) || echo 0 ;;
         [0-9]*) echo 3600 ;;
@@ -1974,6 +1998,18 @@ if [ "$DRY" != 1 ] && [ -f "$LOG_FILE" ]; then
         log "$(m "$M_LOGTRIM" "$LOG_MAX_LINES" "$line_count")"
     fi
 fi
+if [ "$DRY" != 1 ] && [ -f "$EVENTS_FILE" ] && [ "$(wc -l < "$EVENTS_FILE")" -gt "$EVENTS_MAX" ]; then
+    tail -n "$EVENTS_MAX" "$EVENTS_FILE" > "${EVENTS_FILE}.tmp" && mv "${EVENTS_FILE}.tmp" "$EVENTS_FILE"
+fi
+digest_maybe
+
+# Ban işleri bitti: ana kilit bırakılır. Aşağıdaki sahip ve Imunify sorguları ban kararlarına girmez
+# ve dakikalar sürebilir; o sırada paneldeki işlemler "meşgul" demesin, sıradaki cron turu atlanmasın.
+# Aynı anda iki zenginleştirme çalışmasın diye ayrı bir kilit (fd 8) kullanılır; tutuluyorsa atlanır.
+if command -v flock >/dev/null 2>&1; then flock -u 9 2>/dev/null; exec 9>&-; fi
+ENRICH=1
+if command -v flock >/dev/null 2>&1; then exec 8>"$LOCK_FILE.enrich"; flock -n 8 || ENRICH=0; fi
+if [ "$ENRICH" = 1 ]; then
 # Adım süreleri günlüğe: tur uzun sürdüğünde nerede geçtiği görünsün
 st=$(date +%s); backfill_owners
 [ "$BF_N" -gt 0 ] && log "$(m "$M_STEP_OWN" "$BF_N" "$(( $(date +%s) - st ))")"
@@ -1986,11 +2022,8 @@ esac
 st=$(date +%s); backfill_imunify
 [ "$BF_N" -gt 0 ] && log "$(m "$M_STEP_IMOWN" "$BF_N" "$(( $(date +%s) - st ))")"
 owners_save
+fi
 ev run "" "v=\"$VERSION\"" "dur=$(( $(date +%s) - RUN_T0 ))" "added=$added24" "warn16=$warn16" \
     "temp_added=$temp_added24" "promoted=$temp_perm_added24" "temp_warn16=$temp_warn16" "wl_skipped=$wl_skipped" \
     "perm_used=$(num "$current_count")" "perm_limit=$(num "$limit")" "temp_used=$(num "$temp_current")" "temp_limit=$(num "$temp_limit")"
-if [ "$DRY" != 1 ] && [ -f "$EVENTS_FILE" ] && [ "$(wc -l < "$EVENTS_FILE")" -gt "$EVENTS_MAX" ]; then
-    tail -n "$EVENTS_MAX" "$EVENTS_FILE" > "${EVENTS_FILE}.tmp" && mv "${EVENTS_FILE}.tmp" "$EVENTS_FILE"
-fi
-digest_maybe
 log "$(m "$M_END_T" "$(( $(date +%s) - RUN_T0 ))")"

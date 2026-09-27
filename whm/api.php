@@ -159,7 +159,7 @@ switch ($a) {
         ag_json(ag_update_check());
 
     case 'update_apply':
-        $chk = ag_update_check();
+        $chk = ag_update_check(true);
         if (empty($chk['ok'])) {
             ag_json($chk);
         }
@@ -173,6 +173,21 @@ switch ($a) {
             ag_json(['ok' => false, 'error' => 'confirm_mismatch']);
         }
         $repo = ag_version()['repo'];
+        // update.sh root olarak çalışır: depo ve çalıştırılan dosyalar root'a ait, başkası yazamaz olmalı.
+        foreach (['', '/.git', '/update.sh', '/install.sh', '/csf_autogroup.sh'] as $f) {
+            if (!ag_root_safe($repo . $f)) {
+                ag_json(['ok' => false, 'error' => 'unsafe_repo', 'message' => 'not root-owned or group/world-writable: ' . $repo . $f]);
+            }
+        }
+        // Aynı anda tek güncelleme: update.sh bu kilidi tutar (çift tıklama, iki yönetici).
+        $lk = @fopen($repo . '/.git/csf_autogroup_update.lock', 'c');
+        if ($lk !== false) {
+            if (!flock($lk, LOCK_EX | LOCK_NB)) {
+                ag_json(['ok' => false, 'error' => 'busy']);
+            }
+            flock($lk, LOCK_UN);
+            fclose($lk);
+        }
         @file_put_contents(AG_UPDATE_LOG, sprintf("[%s] %s: %s (%s) -> %s (%s)\n", date('Y-m-d H:i:s'),
             ag_user(), $chk['current'], $chk['current_commit'], $chk['latest'], $chk['latest_commit']));
         @chmod(AG_UPDATE_LOG, 0600);

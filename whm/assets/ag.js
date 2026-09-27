@@ -15,7 +15,7 @@
   var UI = { gf: 'all', gq: '', ef: 'all', open: {}, evLimit: 40, gLimit: 40, commits: false, gs: 'added', gd: -1, gp: 0, pp: 0, hist: {}, cd: 30, menu: null, at: 'atk',
              tab: location.hash === '#settings' ? 'settings' : 'overview' };
   var CFG = null, DRAFT = {}, cfgLoading = false;
-  var pollTimer = null, wasRunning = false, busy = false;
+  var pollTimer = null, wasRunning = false, busy = false, CONN = null, LAST_OK = 0, HIDDEN_DUE = false;
 
   /* ── Simgeler (çizgi, 24px ızgara) ─────────────────────────────── */
   function svg(p) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>'; }
@@ -121,7 +121,7 @@
       panel_bad: 'https://sunucu:2087 biçiminde yazın.', auto: 'otomatik', focus_gone: '{0} artık listede değil; güncel durumu gösteriliyor.',
       new_badge: 'Son ziyaretinden beri yeni', actions: 'İşlemler', overdue: 'Tur gecikti · son tur {0} (beklenen aralık {1})',
       since_visit: 'Son ziyaretinden beri ({0}):', sn_add: '{0} grup banı', sn_temp: '{0} geçici grup', sn_warn: '{0} /16 uyarısı',
-      sn_skip: '{0} beyaz liste atlaması', show_new: 'Göster', e_new: 'Son ziyaretten beri', ch_title: 'Son 30 gün', ch_total: '{0} olay', ch_title_n: 'Son {0} gün', ch_d: '{0} gün', sb_ok: 'Koruma çalışıyor', sb_run: 'Tur çalışıyor', sb_late: 'Koruma durdu', sb_every: 'Cron her {0}', sb_24: 'son 24 saatte {0}/{1} tur', sb_none: 'henüz tur yok', sb_last: 'Son tur', sb_dur: 'Tur süresi', sb_avg: 'ort. {0}', sb_next: 'Sıradaki', sb_now: 'şimdi', sb_spark: 'Son {0} turun süresi', sec: '{0} sn', k_week: '▲ {0} bu hafta', lk_recent: 'Son bakılanlar',
+      sn_skip: '{0} beyaz liste atlaması', show_new: 'Göster', e_new: 'Son ziyaretten beri', ch_title: 'Son 30 gün', ch_total: '{0} olay', ch_title_n: 'Son {0} gün', ch_d: '{0} gün', sb_ok: 'Koruma çalışıyor', sb_run: 'Tur çalışıyor', sb_late: 'Koruma durdu', sb_every: 'Cron her {0}', sb_24: 'son 24 saatte {0}/{1} tur', sb_none: 'henüz tur yok', sb_last: 'Son tur', sb_dur: 'Tur süresi', sb_avg: 'ort. {0}', sb_next: 'Sıradaki', sb_now: 'şimdi', sb_spark: 'Son {0} turun süresi', conn_net: 'Sunucuya ulaşılamıyor; gösterilenler {0} alındı. Yeniden deneniyor…', conn_session: 'Oturumun süresi doldu.', upd_busy: 'Bir güncelleme zaten çalışıyor.', sec: '{0} sn', k_week: '▲ {0} bu hafta', lk_recent: 'Son bakılanlar',
       ch_add: 'Grup banı', ch_promote: 'Kalıcıya alındı', ch_temp: 'Geçici', ch_warn: '/16 uyarısı', ch_skip: 'Beyaz liste',
       ch_empty: 'Son 30 günde kayıt yok; grafik olay kaydı biriktikçe dolacak.', ipcard: 'IP kartı', col_block: 'Blok', col_owner: 'Sahip', col_since: 'Başlangıç', col_left: 'Kalan', col_state: 'Durum', left_short: '{0} kaldı', r_hist: 'olay kaydı başlamadan önce · ayrıntı lfd günlüğünden getirilir', h_btn: 'Ayrıntı', h_loading: 'Getiriliyor…', h_none: 'lfd günlüğünde bu bloğa ait kayıt kalmamış', h_src: 'lfd günlüğünden',
       col_singles: 'Tekil', col_added: 'Eklendi', of_n: '{0}–{1} / {2}', s_asn: 'En çok saldıran ağlar',
@@ -213,7 +213,7 @@
       panel_bad: 'Use the form https://server:2087.', auto: 'automatic', focus_gone: '{0} is no longer on the list; showing its current state.',
       new_badge: 'New since your last visit', actions: 'Actions', overdue: 'Run overdue · last run {0} (expected every {1})',
       since_visit: 'Since your last visit ({0}):', sn_add: '{0} group bans', sn_temp: '{0} temp groups', sn_warn: '{0} /16 warnings',
-      sn_skip: '{0} whitelist skips', show_new: 'Show', e_new: 'Since last visit', ch_title: 'Last 30 days', ch_total: '{0} events', ch_title_n: 'Last {0} days', ch_d: '{0} days', sb_ok: 'Protection is running', sb_run: 'A run is in progress', sb_late: 'Protection stopped', sb_every: 'Cron every {0}', sb_24: '{0}/{1} runs in the last 24 h', sb_none: 'no runs yet', sb_last: 'Last run', sb_dur: 'Run time', sb_avg: 'avg {0}', sb_next: 'Next', sb_now: 'now', sb_spark: 'Last {0} run times', sec: '{0} s', k_week: '▲ {0} this week', lk_recent: 'Recently viewed',
+      sn_skip: '{0} whitelist skips', show_new: 'Show', e_new: 'Since last visit', ch_title: 'Last 30 days', ch_total: '{0} events', ch_title_n: 'Last {0} days', ch_d: '{0} days', sb_ok: 'Protection is running', sb_run: 'A run is in progress', sb_late: 'Protection stopped', sb_every: 'Cron every {0}', sb_24: '{0}/{1} runs in the last 24 h', sb_none: 'no runs yet', sb_last: 'Last run', sb_dur: 'Run time', sb_avg: 'avg {0}', sb_next: 'Next', sb_now: 'now', sb_spark: 'Last {0} run times', conn_net: 'Can\'t reach the server; what you see was fetched {0}. Retrying…', conn_session: 'Your session has expired.', upd_busy: 'An update is already running.', sec: '{0} s', k_week: '▲ {0} this week', lk_recent: 'Recently viewed',
       ch_add: 'Group ban', ch_promote: 'Made permanent', ch_temp: 'Temp', ch_warn: '/16 warning', ch_skip: 'Whitelist',
       ch_empty: 'Nothing in the last 30 days; the chart fills as the event log grows.', ipcard: 'IP card', col_block: 'Block', col_owner: 'Owner', col_since: 'Since', col_left: 'Left', col_state: 'State', left_short: '{0} left', r_hist: 'before the event log started · details come from the lfd log', h_btn: 'Details', h_loading: 'Loading…', h_none: 'no records for this block are left in the lfd log', h_src: 'from the lfd log',
       col_singles: 'Singles', col_added: 'Added', of_n: '{0}–{1} of {2}', s_asn: 'Top attacking networks',
@@ -273,11 +273,29 @@
       method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString()
     }).then(function (r) {
-      return r.json().catch(function () { throw new Error('HTTP ' + r.status); });
-    }).then(function (j) {
-      if (j && j.error === 'session') { toast(t('session'), 'bad'); throw new Error('session'); }
-      return j;
+      return r.text().then(function (tx) {
+        var j = null;
+        try { j = JSON.parse(tx); } catch (e) { j = null; }
+        // JSON değilse: WHM giriş sayfası = oturum bitti; başka bir şey = sunucu hatası
+        return j || { ok: false, error: /<html|<form/i.test(tx) ? 'session' : 'http', message: 'HTTP ' + r.status };
+      });
+    }, function () { return { ok: false, error: 'network' }; }).then(function (j) {
+      if (j && j.error === 'session') setConn('session');
+      return j || { ok: false, error: 'empty' };
     });
+  }
+
+  /* Bağlantı çubuğu: sayfa eski veriyi "güncel" gibi göstermesin */
+  var $conn = null;
+  function setConn(k) {
+    if (CONN === 'session' && k === 'net') return;
+    if (CONN === k) return;
+    CONN = k;
+    if (k === 'session') clearTimeout(pollTimer);          // oturum yoksa yoklamanın anlamı yok
+    if (!$conn) { $conn = document.createElement('div'); $conn.className = 'ag-app ag-connwrap'; $app.parentNode.insertBefore($conn, $app); }
+    $conn.innerHTML = !k ? '' : '<div class="ag-conn' + (k === 'session' ? ' bad' : '') + '">' + IC.alert + '<span>' +
+      esc(k === 'session' ? t('conn_session') : t('conn_net', LAST_OK ? rel(LAST_OK) : '—')) + '</span>' +
+      '<button class="ag-btn ag-btn-sm" onclick="location.reload()">' + esc(t('reload')) + '</button></div>';
   }
 
   /* ── Sahip bilgisi: script'in önbelleği (S.owners) + olay kaydı ─── */
@@ -662,7 +680,7 @@
   function lookupCard() {
     var rec = recentGet();
     return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.search + t('s_lookup') + '</h2></div>' +
-      '<div class="ag-lookup"><form id="ag-lk"><input class="ag-input ag-mono" id="ag-lk-ip" inputmode="decimal" autocomplete="off" placeholder="' + esc(t('lookup_ph')) + '">' +
+      '<div class="ag-lookup"><form id="ag-lk"><input class="ag-input ag-mono" id="ag-lk-ip" inputmode="decimal" autocomplete="off" value="' + esc(UI.lk || '') + '" placeholder="' + esc(t('lookup_ph')) + '">' +
       '<button class="ag-btn ag-btn-primary" type="submit">' + t('lookup_btn') + '</button></form>' +
       (rec.length ? '<div class="ag-recent"><span>' + t('lk_recent') + '</span>' + rec.map(function (ip) { return '<button class="ag-rc" data-ip="' + esc(ip) + '">' + esc(ip) + '</button>'; }).join('') + '</div>'
         : '<p>' + t('lookup_hint') + '</p>') + '</div></section>';
@@ -887,7 +905,8 @@
   function render() {
     if (!S) return;
     indexOwners();
-    var y = window.scrollY;
+    var y = window.scrollY, ae = document.activeElement, fid = ae && ae.id && $app.contains(ae) ? ae.id : '', s0 = null, s1 = null;
+    try { if (fid && ae.selectionStart !== undefined) { s0 = ae.selectionStart; s1 = ae.selectionEnd; } } catch (e) { s0 = null; }
     var body = UI.tab === 'settings' ? settingsView()
       : statusBand() + sinceBar() + kpis() + activity() + '<div class="ag-grid"><div class="ag-col">' + review() + groups() + pending() + events() + '</div>' +
         '<div class="ag-col">' + lookupCard() + topAsn() + ignored() + config() + '</div></div>';
@@ -895,13 +914,17 @@
       '<div class="ag-foot">' + esc(t('foot', S.version + (BOOT.commit ? ' (' + BOOT.commit + ')' : ''), BOOT.user || 'root')) + '</div></div>';
     $app.setAttribute('aria-busy', 'false');
     window.scrollTo(0, y);
+    if (fid) {
+      var fe = document.getElementById(fid);
+      if (fe) { fe.focus({ preventScroll: true }); try { if (s0 !== null) fe.setSelectionRange(s0, s1); } catch (e) { /* bu alan türü imleç desteklemiyor */ } }
+    }
   }
 
   /* ── Durum / yoklama ───────────────────────────────────────────── */
   function refresh() {
     return api('status').then(function (d) {
       if (!d || d.ok === false) { throw new Error((d && (d.message || d.error)) || 'status'); }
-      S = d; LANG = d.lang === 'tr' ? 'tr' : 'en'; CLOCK = d.now - Date.now() / 1000;
+      S = d; LANG = d.lang === 'tr' ? 'tr' : 'en'; CLOCK = d.now - Date.now() / 1000; LAST_OK = d.now; setConn(null);
       if (SEEN0 === null) { SEEN0 = d.last_seen || 0; setTimeout(function () { api('seen').catch(function () {}); }, 1500); }
       document.documentElement.lang = LANG;
       if (wasRunning && !d.running) toast(t('t_done'), 'ok');
@@ -910,11 +933,18 @@
       if (!busy && !(UI.tab === 'settings' && CFG && changedKeys().length)) render();
     }).catch(function (e) {
       if (!S) $app.innerHTML = '<div class="ag-wrap">' + empty('alert', String(e.message || e)) + '</div>';
+      else if (CONN !== 'session') setConn('net');
       schedule(60000);
     });
   }
-  setInterval(function () { var el = document.getElementById('ag-next'); if (el && S && !S.running) el.textContent = nextIn() || '—'; }, 1000);
-  function schedule(ms) { clearTimeout(pollTimer); pollTimer = setTimeout(refresh, ms); }
+  setInterval(function () { if (document.hidden) return; var el = document.getElementById('ag-next'); if (el && S && !S.running) el.textContent = nextIn() || '—'; }, 1000);
+  function schedule(ms) {
+    clearTimeout(pollTimer);
+    if (CONN === 'session') return;
+    // Sekme görünmüyorsa sunucuyu yorma: vakti gelen yoklama sekmeye dönülünce yapılır
+    pollTimer = setTimeout(function () { if (document.hidden) { HIDDEN_DUE = true; return; } refresh(); }, ms);
+  }
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && HIDDEN_DUE) { HIDDEN_DUE = false; refresh(); } });
 
   /* ── Toast ─────────────────────────────────────────────────────── */
   var $toasts = null;
@@ -1179,7 +1209,7 @@
       modal({ icon: 'download', tone: 'acc', title: t('m_upd_t', esc(UPD.latest)), html: '<p>' + t('m_upd_b') + '</p>', okText: t('upd_apply') }).then(function (m) {
         if (!m.ok) return;
         api('update_apply', { confirm: UPD.latest_commit }).then(function (r) {
-          if (!r.ok) { toast(t('t_err', r.error || '?'), 'bad'); return; }
+          if (!r.ok) { toast(r.error === 'busy' ? t('upd_busy') : t('t_err', r.message || r.error || '?'), 'bad'); return; }
           var timer = null, finished = false;
           modal({
             icon: 'download', tone: 'acc', title: t('m_upd_run'), wide: true, okText: t('reload'), noCancel: true,
@@ -1283,6 +1313,7 @@
   $app.addEventListener('input', function (ev) {
     var ck = ev.target.getAttribute && ev.target.getAttribute('data-cfg');
     if (ck && CFG) { DRAFT[ck] = ev.target.value.trim(); refreshSaveBar(); return; }
+    if (ev.target.id === 'ag-lk-ip') { UI.lk = ev.target.value; return; }
     if (ev.target.id === 'ag-gq') {
       UI.gq = ev.target.value; UI.gLimit = 40; UI.gp = 0;
       var b = document.getElementById('ag-groups-b'); if (b) b.innerHTML = groupRows();
@@ -1304,7 +1335,11 @@
     var inReview = S.review.some(function (e) { return e.cidr === f; });
     var inGroups = S.groups.some(function (g) { return g.cidr === f; });
     if (inReview) UI.open['r:' + f] = true;
-    else if (inGroups) { UI.open['g:' + f] = true; UI.gLimit = 1e6; UI.gf = 'all'; UI.gq = ''; }
+    else if (inGroups) {
+      UI.open['g:' + f] = true; UI.gf = 'all'; UI.gq = '';
+      var gix = groupSorted().findIndex(function (g) { return g.cidr === f; });
+      if (gix >= 0) UI.gp = Math.floor(gix / PAGE);
+    }
     else { var pi = pendingSorted().findIndex(function (p) { return p.prefix + '.0/24' === f; }); if (pi >= 0) UI.pp = Math.floor(pi / PPAGE); }
     render();
     var el = document.querySelector('#ag-app [data-row="' + f + '"]');

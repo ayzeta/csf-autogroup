@@ -23,18 +23,37 @@ MSG_LANG="en"; ALERT_MAIL="root@localhost"; CRON_MIN="*/10"
 [ -f "$CONF" ] && . "$CONF"
 
 ask() { local p="$1" d="$2" v; read -r -p "$p [$d]: " v || true; echo "${v:-$d}"; }
+# .install.conf her güncellemede kabukta okunur: yalnız güvenli karakterlere izin verilir.
+valid() {   # KEY VALUE
+    case "$1" in
+        MSG_LANG)   [[ "$2" =~ ^(en|tr)$ ]] ;;
+        ALERT_MAIL) [[ "$2" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+$ ]] ;;
+        CRON_MIN)   [[ "$2" =~ ^(\*/[0-9]{1,2}|[0-9]{1,2})$ ]] ;;
+    esac
+}
+ask_valid() {   # KEY PROMPT DEFAULT
+    local v
+    while :; do
+        v="$(ask "$2" "$3")"
+        valid "$1" "$v" && { echo "$v"; return; }
+        echo "  invalid value: $v" >&2
+    done
+}
 
 if [ $AUTO -eq 1 ]; then
     # Non-interactive: reuse saved answers, keep config.env (thresholds/lang) as-is.
     [ -f "$CONF" ] || { echo "ERROR: no saved config (.install.conf). Run 'bash install.sh' once interactively first."; exit 1; }
+    for k in MSG_LANG ALERT_MAIL CRON_MIN; do
+        valid "$k" "${!k}" || { echo "ERROR: invalid $k in .install.conf: ${!k}  — run 'bash install.sh' interactively."; exit 1; }
+    done
     echo "── Update (non-interactive) ──  lang: $MSG_LANG  alerts: $ALERT_MAIL  cron: $CRON_MIN"
     [ -f "$SRC/config.env" ] || { cp "$SRC/config.env.example" "$SRC/config.env"
         sed -i -e "s/^MSG_LANG=.*/MSG_LANG=$MSG_LANG/" -e "s#^ALERT_MAIL=.*#ALERT_MAIL=$ALERT_MAIL#" "$SRC/config.env"; }
 else
     echo "── CSF Auto-Group install ──"
-    MSG_LANG="$(ask 'Language for logs/emails (en/tr)' "$MSG_LANG")"
-    ALERT_MAIL="$(ask 'Email address for alerts' "$ALERT_MAIL")"
-    CRON_MIN="$(ask 'Cron minute field (how often to run)' "$CRON_MIN")"
+    MSG_LANG="$(ask_valid MSG_LANG 'Language for logs/emails (en/tr)' "$MSG_LANG")"
+    ALERT_MAIL="$(ask_valid ALERT_MAIL 'Email address for alerts' "$ALERT_MAIL")"
+    CRON_MIN="$(ask_valid CRON_MIN 'Cron minute field (e.g. */10)' "$CRON_MIN")"
 
     echo
     echo "  language : $MSG_LANG"

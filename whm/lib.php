@@ -13,6 +13,9 @@
 
 declare(strict_types=1);
 
+// PHP uyarıları çıktıya karışıp JSON'u bozmasın (ör. dizi gelen bir girdi); hatalar günlüğe gider.
+@ini_set('display_errors', '0');
+
 if (!defined('AG_LOADED')) {
     define('AG_LOADED', true);
     define('AG_STATE', '/var/cpanel/csf_autogroup');         // eklentinin kendi durumu (anahtar, kayıtlar)
@@ -104,10 +107,21 @@ function ag_bootstrap(): void
         @mkdir(AG_STATE, 0700, true);
     }
     @chmod(AG_STATE, 0700);
-    if (!is_file(AG_SECRET)) {
-        @file_put_contents(AG_SECRET, bin2hex(random_bytes(32)), LOCK_EX);
-        @chmod(AG_SECRET, 0600);
+    if (ag_secret() === '') {
+        $tmp = AG_SECRET . '.' . bin2hex(random_bytes(6));
+        if (@file_put_contents($tmp, bin2hex(random_bytes(32))) !== false) {
+            @chmod($tmp, 0600);
+            @rename($tmp, AG_SECRET);
+        }
+        @unlink($tmp);
     }
+}
+
+/** CSRF anahtarı: 64 onaltılık karakter değilse boş döner — boş anahtarla imza üretilmez/doğrulanmaz. */
+function ag_secret(): string
+{
+    $s = trim((string) @file_get_contents(AG_SECRET));
+    return preg_match('/^[a-f0-9]{64}$/', $s) ? $s : '';
 }
 
 /* ------------------------------------------------------------------ */
@@ -191,7 +205,8 @@ function ag_user(): string
 function ag_csrf_token(): string
 {
     $ts = time();
-    return $ts . '.' . hash_hmac('sha256', 'csf-autogroup|' . ag_user() . '|' . $ts, trim((string) @file_get_contents(AG_SECRET)));
+    $key = ag_secret();
+    return $key === '' ? '' : $ts . '.' . hash_hmac('sha256', 'csf-autogroup|' . ag_user() . '|' . $ts, $key);
 }
 
 function ag_csrf_check(): void
@@ -201,10 +216,11 @@ function ag_csrf_check(): void
     }
     $sent = (string) ($_POST['csrf'] ?? '');
     $ok = false;
-    if (preg_match('/^([0-9]{1,12})\.([a-f0-9]{64})$/', $sent, $m)) {
+    $key = ag_secret();
+    if ($key !== '' && preg_match('/^([0-9]{1,12})\.([a-f0-9]{64})$/', $sent, $m)) {
         $age = time() - (int) $m[1];
         if ($age >= -300 && $age <= AG_CSRF_TTL) {
-            $want = hash_hmac('sha256', 'csf-autogroup|' . ag_user() . '|' . $m[1], trim((string) @file_get_contents(AG_SECRET)));
+            $want = hash_hmac('sha256', 'csf-autogroup|' . ag_user() . '|' . $m[1], $key);
             $ok = hash_equals($want, $m[2]);
         }
     }
@@ -325,7 +341,20 @@ function ag_spawn(string $shellCmd, string $log): void
 /* Güncelleme (repo herkese açık GitHub deposu; update.sh kullanılır)  */
 /* ------------------------------------------------------------------ */
 
-function ag_update_check(): array
+/** Yol root'a ait ve grup/diğerleri yazamıyor mu? (root olarak çalıştırılacak dosyalar için) */
+function ag_root_safe(string $p): bool
+{
+    clearstatcache(true, $p);
+    $o = @fileowner($p);
+    $m = @fileperms($p);
+    return $o === 0 && $m !== false && ($m & 0022) === 0;
+}
+
+/**
+ * $fresh: güncellemeyi uygulamadan hemen önce true — GitHub her seferinde sorulur. Sayfa açılışlarında
+ * GitHub en çok 5 dakikada bir sorulur, arada yerel bilgiyle yanıt verilir.
+ */
+function ag_update_check(bool $fresh = false): array
 {
     $repo = ag_version()['repo'];
     $git = ag_which('git');
@@ -340,15 +369,23 @@ function ag_update_check(): array
     if ($branch === '' || $branch === 'HEAD') {
         return ['ok' => false, 'error' => 'detached'];
     }
-    $fetch = (string) @shell_exec($g . 'fetch --quiet origin ' . escapeshellarg($branch) . ' 2>&1');
+    $fetch = '';
+    $stamp = AG_STATE . '/fetch.stamp';
+    if ($fresh || !is_file($stamp) || time() - (int) @filemtime($stamp) > 300) {
+        $to = ag_which('timeout');
+        $fetch = (string) @shell_exec('env HOME=/root GIT_TERMINAL_PROMPT=0 ' . ($to !== null ? escapeshellarg($to) . ' 30 ' : '')
+            . substr($g, strlen('env HOME=/root ')) . 'fetch --quiet origin ' . escapeshellarg($branch) . ' 2>&1');
+        @touch($stamp);
+    }
     $local = $run('rev-parse @');
     $remote = $run('rev-parse ' . escapeshellarg('origin/' . $branch));
     if ($local === '' || $remote === '') {
-        return ['ok' => false, 'error' => 'unreachable', 'detail' => trim(substr($fetch, 0, 300))];
+        // adreste kullanıcı:parola varsa sayfaya taşınmasın
+        return ['ok' => false, 'error' => 'unreachable', 'detail' => trim(substr((string) preg_replace('#://[^@/\s]+@#', '://', $fetch), 0, 300))];
     }
     $base = $run('merge-base @ ' . escapeshellarg('origin/' . $branch));
     $latest = '';
-    if (preg_match('/^VERSION="([^"]+)"/m', $run('show ' . escapeshellarg('origin/' . $branch . ':csf_autogroup.sh')), $m)) {
+    if (preg_match('/^VERSION="([^"\n]+)"/m', $run('show ' . escapeshellarg('origin/' . $branch . ':csf_autogroup.sh')), $m)) {
         $latest = $m[1];
     }
     $commits = [];
