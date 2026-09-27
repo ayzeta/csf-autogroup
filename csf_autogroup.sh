@@ -1346,14 +1346,19 @@ do_status() {
     # Son turlar (durum bandı): son 36 turun [zaman, süre]'si, son 24 saatteki tur sayısı, ilk tur
     local runsj='{"n24":0,"first":0,"list":[]}'
     if [ -r "$EVENTS_FILE" ]; then
-        runsj=$(grep '"type":"run"' "$EVENTS_FILE" | awk -v c=$(( now - 86400 )) '
+        # p7/t7: 7 gün önceki (ya da daha yeni ilk) turun liste doluluğu — özet kartlarındaki haftalık değişim için
+        runsj=$(grep '"type":"run"' "$EVENTS_FILE" | awk -v c=$(( now - 86400 )) -v w=$(( now - 7 * 86400 )) '
             { t = 0; d = 0
               if (match($0, /"t":[0-9]+/))   t = substr($0, RSTART + 4, RLENGTH - 4) + 0
               if (match($0, /"dur":[0-9]+/)) d = substr($0, RSTART + 6, RLENGTH - 6) + 0
-              if (NR == 1) f = t; if (t >= c) n++; T[NR] = t; D[NR] = d }
+              if (NR == 1) f = t; if (t >= c) n++; T[NR] = t; D[NR] = d
+              if (!got && t >= w && match($0, /"perm_used":[0-9]+/)) {
+                  p7 = substr($0, RSTART + 12, RLENGTH - 12) + 0
+                  if (match($0, /"temp_used":[0-9]+/)) t7 = substr($0, RSTART + 12, RLENGTH - 12) + 0; else t7 = -1
+                  got = 1 } }
             END { s = NR > 36 ? NR - 35 : 1; o = ""
                   for (i = s; i <= NR; i++) o = o (o != "" ? "," : "") "[" T[i] "," D[i] "]"
-                  printf "{\"n24\":%d,\"first\":%d,\"list\":[%s]}", n, f, o }')
+                  printf "{\"n24\":%d,\"first\":%d,\"p7\":%d,\"t7\":%d,\"list\":[%s]}", n, f, (got ? p7 : -1), (got ? t7 : -1), o }')
     fi
 
     if [ "$JSON" = 1 ]; then
