@@ -527,7 +527,7 @@
 .ag-c.has:focus-visible { outline-offset: 0; }
 
 /* Geçmiş sekmesi: tek sütun, okunaklı genişlik */
-.ag-history { max-width: 980px; margin: 0 auto; }
+
 .ag-rules-f { padding: 0 18px 14px; font-size: 12px; color: var(--ag-text-3); }
 .ag-rules-f b { color: var(--ag-text); font-weight: 650; }
 .ag-cfglog { margin-top: 20px; }
@@ -588,3 +588,4 @@
   .ag-setform .ag-field > * { max-width: none; }
   .ag-setform .ag-field > :not(.ag-field-l):not(.ag-field-h) { margin-top: 8px; justify-self: start; max-width: 100%; }
 }
+.ag-ev-x { flex: none; display: flex; align-items: center; font-size: 12px; }

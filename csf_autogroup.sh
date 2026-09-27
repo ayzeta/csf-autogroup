@@ -39,7 +39,7 @@
 # ============================================================================
 set -o pipefail
 
-VERSION="1.7.6"   # sürüm — başlangıç log satırında görünür
+VERSION="1.7.7"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -78,7 +78,7 @@ OWNER_TTL_DAYS="${OWNER_TTL_DAYS:-30}"
 BACKFILL_MAX="${BACKFILL_MAX:-50}"      # her turda en fazla bu kadar /24'ün sahibi sorgulanır
 IMUNIFY_BIN="${IMUNIFY_BIN:-$(command -v imunify360-agent 2>/dev/null)}"   # yoksa Imunify kısmı atlanır
 HIST_FILE="${HIST_FILE:-$(dirname "$SAYAC_FILE")/history.jsonl}"
-LOGHIST_FILE="${LOGHIST_FILE:-$(dirname "$SAYAC_FILE")/loghist.jsonl}"   # günlükten çıkarılan, olay kaydından önceki işler      # "Ayrıntı" ile getirilen eski uyarılar (bir kez)
+LOGHIST_FILE="${LOGHIST_FILE:-$(dirname "$SAYAC_FILE")/loghist.v2.jsonl}"   # günlükten çıkarılan, olay kaydından önceki işler      # "Ayrıntı" ile getirilen eski uyarılar (bir kez)
 IMUNIFY_FILE="${IMUNIFY_FILE:-$(dirname "$SAYAC_FILE")/imunify}"         # yerel kara liste önbelleği
 LFD_LOG="${LFD_LOG:-/var/log/lfd.log}"         # eski uyarıların ayrıntısı için okunur (lfd.log, .1, .gz)
 IMUNIFY_REFRESH_MIN="${IMUNIFY_REFRESH_MIN:-60}"   # liste en çok bu kadar dakikada bir yeniden alınır (yalnız panelde gösterilir)
@@ -1021,7 +1021,7 @@ loghist_build() {
                 if (match(r, /, [0-9]+ /)) sn = substr(r, RSTART + 2, RLENGTH - 3) }
             if (ty == "promote" || msg ~ /\[do not delete\]/) dnd = "true"
             if (ty == "skip_wl" && match(msg, /\(.*\)$/)) wl = substr(msg, RSTART + 1, RLENGTH - 2)
-            cur = "{\"t\":" t ",\"type\":\"" ty "\",\"cidr\":" js(c) (n != "" ? ",\"n\":" n : "") (sn != "" ? ",\"subnets\":" sn : "") \
+            cur = "{\"t\":" t ",\"type\":\"" ty "\",\"cidr\":" js(c) ",\"day\":\"" substr(ts, 1, 10) "\"" (n != "" ? ",\"n\":" n : "") (sn != "" ? ",\"subnets\":" sn : "") \
                   (ty ~ /^(add24|promote)$/ ? ",\"dnd\":" dnd : "") (wl != "" ? ",\"wl\":" js(wl) : "") ",\"src\":\"log\""
         }
         END { flush() }' | awk 'NR <= 1000' > "$LOGHIST_FILE.tmp.$$" 2>/dev/null && mv -f "$LOGHIST_FILE.tmp.$$" "$LOGHIST_FILE"
@@ -1151,6 +1151,9 @@ do_status() {
     [ -r "$EVENTS_FILE" ] && mapfile -t recent < <(grep -v '"type":"run"' "$EVENTS_FILE" | grep -E '^\{"t":[0-9]+,.*\}$' | tail -n 300)
     # olay kaydından önceki işler (günlükten; bir kez hesaplanıp saklanır)
     [ -f "$LOGHIST_FILE" ] || loghist_build
+    # "Ayrıntı" ile daha önce getirilenler (blok|gün): Geçmiş'teki günlük satırları da kullanır
+    local hcache=()
+    [ -r "$HIST_FILE" ] && mapfile -t hcache < <(grep -E '^\{"cidr":.*\}$' "$HIST_FILE")
     if [ -s "$LOGHIST_FILE" ]; then
         local lh=()
         mapfile -t lh < <(grep -E '^\{"t":[0-9]+,.*\}$' "$LOGHIST_FILE")
@@ -1252,8 +1255,8 @@ do_status() {
         jstr "$cronm"; printf '"cron_min":%s,"runs":%s,' "$REPLY" "$runsj"
         printf '"cron_interval":%s,"daily":{"start":%s,%s},"owners":{%s},"asn_top":[%s],"blocks_top":[%s],"imunify":%s,' \
             "$(cron_interval "$cronm")" "$dstart" "$daily" "${owners[*]}" "${tops[*]}" "${btops[*]}" "$imj"
-        printf '"groups":[%s],"pending":[%s],"review":[%s],"ignored":[%s],"events":[%s]}\n' \
-            "${groups[*]}" "${pending[*]}" "${review[*]}" "${ignored[*]}" "${recent[*]}"
+        printf '"groups":[%s],"pending":[%s],"review":[%s],"ignored":[%s],"hist_cache":[%s],"events":[%s]}\n' \
+            "${groups[*]}" "${pending[*]}" "${review[*]}" "${ignored[*]}" "${hcache[*]}" "${recent[*]}"
         return 0
     fi
 

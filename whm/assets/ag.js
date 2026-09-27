@@ -97,7 +97,7 @@
       l_perm_cover: 'Kalıcı (blok)', l_temp: 'Geçici', l_nolookup: 'Sahip ve hostname sorguları kapalı (LOOKUP=0).',
       l_abuse: 'AbuseIPDB', l_bgp: 'bgp.he.net', l_copy: 'Kopyala', bad_ip: 'Geçerli bir IPv4 adresi yazın.',
       foot: 'CSF Auto-Group v{0} · {1} olarak oturum açıldı',
-      tab_overview: 'Genel bakış', tab_settings: 'Ayarlar', tab_history: 'Geçmiş', show_less: 'Daha az göster', s_cfglog: 'Ayar geçmişi', from_log: 'günlükten', sn_server: 'Sunucu', sn_server_h: 'CSF\'in liste sınırları ve eklentinin kullandığı araçlar.', st_deps: 'Sunucu gereksinimleri', st_deps_h: 'Eklentinin kullandığı araçlar ve eksik olduğunda ne olduğu.', dep_ok: 'Var', dep_missing: 'Yok', dep_warn: 'Eksik', dep_opt: 'isteğe bağlı', dep_csf: 'Güvenlik duvarı; banları o uygular.', dep_csf_x: 'Zorunlu: CSF olmadan hiçbir şey çalışmaz.', dep_crontab: 'Turları zamanında çalıştırır.', dep_crontab_x: 'Turlar otomatik çalışmaz; zamanlama Ayarlar\'dan değiştirilemez.', dep_mail: 'Uyarı mailleri ve haftalık özet.', dep_mail_x: 'Uyarı mailleri ve haftalık özet gönderilmez.', dep_dns: 'Sahip ve hostname sorguları.', dep_dns_x: 'Sahip ve hostname bilgisi olmaz; CC_IGNORE / CC_ALLOW ve csf.rignore kontrol edilemez, bu listelere dayanan bloklar banlanmaz.', dep_logrotate: 'Günlük dosyasını döndürür.', dep_logrotate_x: 'Günlük, satır sınırıyla kesilir (yedek yöntem).', dep_logrotate_w: 'Kurulu ama ayar dosyası yok; günlük şimdilik satır sınırıyla kesiliyor. update.sh ya da install.sh ile yeniden kurun.', dep_flock: 'Aynı anda tek tur çalışmasını sağlar.', dep_flock_x: 'Üst üste binen turlara karşı koruma olmaz.', dep_timeout: 'Eklentinin çalıştırdığı komutlara zaman sınırı koyar.', dep_timeout_x: 'Takılan bir komut sayfayı bekletebilir.', dep_git: 'Arayüzden güncelleme.', dep_git_x: 'Güncelleme kontrolü ve Güncelle düğmesi çalışmaz.', dep_imunify: 'Ağlar kartındaki Imunify sekmesi.', dep_imunify_x: 'Imunify sekmesi görünmez; başka etkisi yok.', k_logfile: 'Günlük dosyası', log_rot: 'logrotate ile döndürülüyor. Şu an {0} · {1} arşiv.', k_LOG_ROTATE_MB: 'Günlük boyutu (MB)', h_LOG_ROTATE_MB: 'Günlük bu boyutu geçince döndürülür (logrotate günde bir kontrol eder).', k_LOG_ROTATE_KEEP: 'Arşiv sayısı', h_LOG_ROTATE_KEEP: 'Döndürülen günlüklerden kaç tanesi sıkıştırılarak saklanır.', log_lines: 'Şu an {0} / {1} satır.', no_cfglog: 'Henüz ayar değişikliği yok.', ev_config: 'Ayar değişti', ev_test_mail: 'Test maili',
+      tab_overview: 'Genel bakış', tab_settings: 'Ayarlar', tab_history: 'Geçmiş', show_less: 'Daha az göster', s_cfglog: 'Ayar geçmişi', from_log: 'günlükten', sn_server: 'Sunucu', sn_server_h: 'CSF\'in liste sınırları ve eklentinin kullandığı araçlar.', st_deps: 'Sunucu gereksinimleri', st_deps_h: 'Eklentinin kullandığı araçlar ve eksik olduğunda ne olduğu.', dep_ok: 'Var', dep_missing: 'Yok', dep_warn: 'Eksik', dep_opt: 'isteğe bağlı', dep_csf: 'Güvenlik duvarı; banları o uygular.', dep_csf_x: 'Zorunlu: CSF olmadan hiçbir şey çalışmaz.', dep_crontab: 'Turları zamanında çalıştırır.', dep_crontab_x: 'Turlar otomatik çalışmaz; zamanlama Ayarlar\'dan değiştirilemez.', dep_mail: 'Uyarı mailleri ve haftalık özet.', dep_mail_x: 'Uyarı mailleri ve haftalık özet gönderilmez.', dep_dns: 'Sahip ve hostname sorguları.', dep_dns_x: 'Sahip ve hostname bilgisi olmaz; CC_IGNORE / CC_ALLOW ve csf.rignore kontrol edilemez, bu listelere dayanan bloklar banlanmaz.', dep_logrotate: 'Günlük dosyasını döndürür.', dep_logrotate_x: 'Günlük, satır sınırıyla kesilir (yedek yöntem).', dep_logrotate_w: 'Kurulu ama ayar dosyası yok; günlük şimdilik satır sınırıyla kesiliyor. update.sh ya da install.sh ile yeniden kurun.', dep_flock: 'Aynı anda tek tur çalışmasını sağlar.', dep_flock_x: 'Üst üste binen turlara karşı koruma olmaz.', dep_timeout: 'Eklentinin çalıştırdığı komutlara zaman sınırı koyar.', dep_timeout_x: 'Takılan bir komut sayfayı bekletebilir.', dep_git: 'Arayüzden güncelleme.', dep_git_x: 'Güncelleme kontrolü ve Güncelle düğmesi çalışmaz.', dep_imunify: 'Ağlar kartındaki Imunify sekmesi.', dep_imunify_x: 'Imunify sekmesi görünmez; başka etkisi yok.', k_logfile: 'Günlük dosyası', log_rot: 'logrotate: {2} MB\'ı geçince döndürülür, son {3} arşiv saklanır · şu an {0} · {1} arşiv.', k_LOG_ROTATE_MB: 'Günlük boyutu (MB)', h_LOG_ROTATE_MB: 'Günlük bu boyutu geçince döndürülür (logrotate günde bir kontrol eder).', k_LOG_ROTATE_KEEP: 'Arşiv sayısı', h_LOG_ROTATE_KEEP: 'Döndürülen günlüklerden kaç tanesi sıkıştırılarak saklanır.', log_lines: 'Şu an {0} / {1} satır.', no_cfglog: 'Henüz ayar değişikliği yok.', ev_config: 'Ayar değişti', ev_test_mail: 'Test maili',
       st_notify: 'Bildirim', st_mail: 'Uyarı maili adresi', st_mail_h: 'Gruplama, /16 uyarısı ve limit mailleri buraya gider. root@localhost, cPanel\'de sunucunun iletişim adresine yönlenir.',
       st_lang: 'Dil', st_lang_h: 'Log, mail ve bu panelin dili.', st_test: 'Test maili gönder', st_test_h: 'Kayıtlı adrese gönderilir.',
       st_test_dirty: 'Önce yeni adresi kaydedin.', st_thr: 'Eşikler', st_thr_h: 'Kaç tekil ban bir işlemi tetikler.',
@@ -189,7 +189,7 @@
       l_perm_cover: 'Permanent (block)', l_temp: 'Temp', l_nolookup: 'Owner and hostname lookups are off (LOOKUP=0).',
       l_abuse: 'AbuseIPDB', l_bgp: 'bgp.he.net', l_copy: 'Copy', bad_ip: 'Enter a valid IPv4 address.',
       foot: 'CSF Auto-Group v{0} · signed in as {1}',
-      tab_overview: 'Overview', tab_settings: 'Settings', tab_history: 'History', show_less: 'Show less', s_cfglog: 'Settings history', from_log: 'from the log', sn_server: 'Server', sn_server_h: 'CSF\'s list limits and the tools the plugin uses.', st_deps: 'Server requirements', st_deps_h: 'Tools the plugin uses and what happens when one is missing.', dep_ok: 'Found', dep_missing: 'Missing', dep_warn: 'Incomplete', dep_opt: 'optional', dep_csf: 'The firewall; it applies the bans.', dep_csf_x: 'Required: nothing works without CSF.', dep_crontab: 'Runs the job on schedule.', dep_crontab_x: 'Runs don\'t happen automatically; the schedule can\'t be changed from Settings.', dep_mail: 'Alert emails and the weekly summary.', dep_mail_x: 'No alert emails or weekly summary are sent.', dep_dns: 'Owner and hostname lookups.', dep_dns_x: 'No owner or hostname info; CC_IGNORE / CC_ALLOW and csf.rignore can\'t be checked, so blocks relying on them aren\'t banned.', dep_logrotate: 'Rotates the log file.', dep_logrotate_x: 'The log is trimmed by a line limit instead (fallback).', dep_logrotate_w: 'Installed, but our config file is missing; the log is trimmed by the line limit for now. Re-run update.sh or install.sh.', dep_flock: 'Makes sure only one run happens at a time.', dep_flock_x: 'No protection against overlapping runs.', dep_timeout: 'Puts a time limit on commands the plugin runs.', dep_timeout_x: 'A stuck command can keep the page waiting.', dep_git: 'Updating from the plugin.', dep_git_x: 'The update check and the Update button don\'t work.', dep_imunify: 'The Imunify tab in the networks card.', dep_imunify_x: 'The Imunify tab is hidden; nothing else is affected.', k_logfile: 'Log file', log_rot: 'Rotated by logrotate. Now {0} · {1} archives.', k_LOG_ROTATE_MB: 'Log size (MB)', h_LOG_ROTATE_MB: 'The log is rotated once it grows past this size (logrotate checks daily).', k_LOG_ROTATE_KEEP: 'Archives kept', h_LOG_ROTATE_KEEP: 'How many rotated logs are kept, compressed.', log_lines: 'Now {0} / {1} lines.', no_cfglog: 'No settings changes yet.', ev_config: 'Settings changed', ev_test_mail: 'Test email',
+      tab_overview: 'Overview', tab_settings: 'Settings', tab_history: 'History', show_less: 'Show less', s_cfglog: 'Settings history', from_log: 'from the log', sn_server: 'Server', sn_server_h: 'CSF\'s list limits and the tools the plugin uses.', st_deps: 'Server requirements', st_deps_h: 'Tools the plugin uses and what happens when one is missing.', dep_ok: 'Found', dep_missing: 'Missing', dep_warn: 'Incomplete', dep_opt: 'optional', dep_csf: 'The firewall; it applies the bans.', dep_csf_x: 'Required: nothing works without CSF.', dep_crontab: 'Runs the job on schedule.', dep_crontab_x: 'Runs don\'t happen automatically; the schedule can\'t be changed from Settings.', dep_mail: 'Alert emails and the weekly summary.', dep_mail_x: 'No alert emails or weekly summary are sent.', dep_dns: 'Owner and hostname lookups.', dep_dns_x: 'No owner or hostname info; CC_IGNORE / CC_ALLOW and csf.rignore can\'t be checked, so blocks relying on them aren\'t banned.', dep_logrotate: 'Rotates the log file.', dep_logrotate_x: 'The log is trimmed by a line limit instead (fallback).', dep_logrotate_w: 'Installed, but our config file is missing; the log is trimmed by the line limit for now. Re-run update.sh or install.sh.', dep_flock: 'Makes sure only one run happens at a time.', dep_flock_x: 'No protection against overlapping runs.', dep_timeout: 'Puts a time limit on commands the plugin runs.', dep_timeout_x: 'A stuck command can keep the page waiting.', dep_git: 'Updating from the plugin.', dep_git_x: 'The update check and the Update button don\'t work.', dep_imunify: 'The Imunify tab in the networks card.', dep_imunify_x: 'The Imunify tab is hidden; nothing else is affected.', k_logfile: 'Log file', log_rot: 'logrotate: rotated past {2} MB, the last {3} archives are kept · now {0} · {1} archives.', k_LOG_ROTATE_MB: 'Log size (MB)', h_LOG_ROTATE_MB: 'The log is rotated once it grows past this size (logrotate checks daily).', k_LOG_ROTATE_KEEP: 'Archives kept', h_LOG_ROTATE_KEEP: 'How many rotated logs are kept, compressed.', log_lines: 'Now {0} / {1} lines.', no_cfglog: 'No settings changes yet.', ev_config: 'Settings changed', ev_test_mail: 'Test email',
       st_notify: 'Notifications', st_mail: 'Alert email address', st_mail_h: 'Grouping, /16 warning and limit emails go here. On cPanel, root@localhost is forwarded to the server contact address.',
       st_lang: 'Language', st_lang_h: 'Language of the log, emails and this panel.', st_test: 'Send test email', st_test_h: 'Sent to the saved address.',
       st_test_dirty: 'Save the new address first.', st_thr: 'Thresholds', st_thr_h: 'How many single bans trigger an action.',
@@ -318,8 +318,9 @@
   }
 
   /* ── Sahip bilgisi: script'in önbelleği (S.owners) + olay kaydı ─── */
-  var OWNERS = {};
+  var OWNERS = {}, HCACHE = {};
   function indexOwners() {
+    HCACHE = {}; (S.hist_cache || []).forEach(function (h) { if (h && h.cidr) HCACHE[h.cidr + '|' + h.day] = h; });
     OWNERS = {};
     (S.events || []).forEach(function (e) {
       if (!e.cidr) return;
@@ -527,7 +528,7 @@
       var key = 'r:' + e.cidr, open = UI.open[key], is16 = /\/16$/.test(e.cidr), hasIps = e.ips && e.ips.length;
       var pill = e.type === 'skip_wl' ? '<span class="ag-pill ag-pill-info">' + t('ev_skip_wl') + '</span>'
         : '<span class="ag-pill ag-pill-warn">' + esc(t('ev_' + e.type)) + '</span>';
-      var H = e.hist ? (UI.hist[e.cidr] || e.cached || null) : null, hd = H && H.ips ? H : null;   // e.cached: sunucuda saklanan sonuç
+      var H = e.hist ? (UI.hist[e.cidr + '|' + e.day] || e.cached || null) : null, hd = H && H.ips ? H : null;   // e.cached: sunucuda saklanan sonuç
       var meta = e.hist ? (hd ? (hd.total ? (is16 ? [t('n_ip', num(hd.total)), t('n_subnets', num(hd.subnets))] : [t('n_ip', num(hd.total))]).concat([t('h_src')]) : [t('h_none')]) : [])
         : is16 ? [t('n_ip', num(e.n)), t('n_subnets', num(e.subnets))] : [t('n_ip', num(e.n))];
       var owner = e.owner || ownerOfIps(e.ips) || ownerOf(e.cidr).label;
@@ -652,7 +653,7 @@
       if (e.dnd) d.push('do not delete');
     }
     if (e.type === 'warn16' || e.type === 'warn16t') d.push(t('n_ip', num(e.n)), t('n_subnets', num(e.subnets)));
-    if (e.type === 'skip_wl') { d.push(t('n_ip', num(e.n))); if (e.wl) d.push(t('wl', e.wl)); }
+    if (e.type === 'skip_wl') { if (e.n != null) d.push(t('n_ip', num(e.n))); if (e.wl) d.push(t('wl', e.wl)); }
     var owner = e.owner || ownerOfIps(e.ips);
     if (owner) d.push(owner);
     if (e.changes) e.changes.forEach(function (c) { d.push((DICT[LANG]['k_' + c.key] || c.key) + ': ' + (c.from || '—') + ' → ' + (c.to || '—')); });
@@ -679,13 +680,20 @@
       return '<button class="ag-chip' + (UI.ef === f ? ' on' : '') + '" data-act="ef" data-f="' + f + '">' + t('e_' + f) + '<span class="ag-chip-n">' + num(n) + '</span></button>';
     }).join('') + '</div>';
     var rows = shown.map(function (e, i) {
-      var key = 'e:' + e.t + ':' + e.type + ':' + (e.cidr || i), open = UI.open[key], has = e.ips && e.ips.length;
+      var key = 'e:' + e.t + ':' + e.type + ':' + (e.cidr || i);
+      // günlükten gelen eski satır: IP'ler ve ban sebepleri "Ayrıntı" ile lfd günlüğünden (bir kez, saklanır)
+      var hk = e.src === 'log' && e.day && /\/(16|24)$/.test(e.cidr || '') ? e.cidr + '|' + e.day : '', H = hk ? (UI.hist[hk] || HCACHE[hk] || null) : null;
+      if (H && H.ips && H.ips.length) e = Object.assign({}, e, { ips: H.ips, total: H.total });   // sebepli liste, günlükteki çıplak IP'lerin yerine
+      var open = UI.open[key], has = e.ips && e.ips.length;
+      var hbtn = hk && !(H && H.ips) ? '<button class="ag-btn ag-btn-sm" data-act="hist" data-c="' + esc(e.cidr) + '" data-d="' + esc(e.day) + '" data-key="' + esc(key) + '"' +
+        (H === 'loading' ? ' disabled>' + t('h_loading') : '>' + t('h_btn')) + '</button>' : (H && H.ips && !H.ips.length ? '<span class="ag-muted">' + t('h_none') + '</span>' : '');
       var ic = EV_ICON[e.type] || (/^manual_/.test(e.type) ? ['sliders', 'n'] : ['list', 'n']);
       return '<div class="ag-item"><div class="ag-ev' + (has ? ' clickable" data-act="toggle" aria-expanded="' + !!open + '" data-key="' + esc(key) : '') + '">' +
         '<div class="ag-ev-ic ' + ic[1] + '">' + IC[ic[0]] + '</div>' +
         '<div class="ag-ev-b"><div class="ag-ev-t">' + newDot(NEW_TYPES.indexOf(e.type) >= 0 ? e.t : 0) +
         (e.cidr ? '<span class="ag-cidr">' + esc(e.cidr) + '</span>' : '') + '<span class="ag-pill ' + (EV_CLASS[e.type] || 'ag-pill-n') + '">' + esc(t('ev_' + e.type)) + '</span></div>' +
         '<div class="ag-ev-d">' + evDetail(e) + '</div></div>' +
+        (hbtn ? '<div class="ag-ev-x">' + hbtn + '</div>' : '') +
         '<div class="ag-ev-time" title="' + esc(new Date(e.t * 1000).toLocaleString(loc())) + '">' + stamp(e.t) + (has ? '<span class="ag-chev">' + (open ? '−' : '+') + '</span>' : '') + '</div></div>' +
         (open ? ipTable(e.ips, e.total) : '') + '</div>';
     }).join('');
@@ -907,7 +915,7 @@
     var LG = CFG.log || {}, rot = !!LG.rotate;
     var keep = (rot ? ['SAYAC_RETENTION_DAYS', 'REVIEW_DAYS', 'LOG_ROTATE_MB', 'LOG_ROTATE_KEEP'] : ['SAYAC_RETENTION_DAYS', 'REVIEW_DAYS', 'LOG_MAX_LINES']).map(function (k) { return field(k, errs); }).join('') +
       '<div class="ag-field"><div class="ag-field-l"><label>' + t('k_logfile') + '</label></div><div class="ag-loginfo">' +
-      (rot ? t('log_rot', esc(bytes(LG.bytes)), num(LG.archives)) : t('log_lines', num(LG.lines), num(cv('LOG_MAX_LINES')))) + '</div></div>';
+      (rot ? t('log_rot', esc(bytes(LG.bytes)), num(LG.archives), num(CFG.values.LOG_ROTATE_MB || 1), num(CFG.values.LOG_ROTATE_KEEP || 5)) : t('log_lines', num(LG.lines), num(cv('LOG_MAX_LINES')))) + '</div></div>';
     var csf = '<dl class="ag-kv" style="padding:0">' +
       '<dt>' + t('csf_deny') + '</dt><dd>' + (CFG.csf.deny_limit ? num(CFG.csf.deny_limit) : '—') + '</dd>' +
       '<dt>' + t('csf_temp') + '</dt><dd>' + (CFG.csf.temp_limit ? num(CFG.csf.temp_limit) : '—') + '</dd></dl>' +
@@ -1151,14 +1159,14 @@
       render(); window.scrollTo(0, 0);
     },
     hist: function (el) {
-      var c = el.getAttribute('data-c'), d = el.getAttribute('data-d');
-      UI.hist[c] = 'loading'; render();
+      var c = el.getAttribute('data-c'), d = el.getAttribute('data-d'), k = c + '|' + d, okey = el.getAttribute('data-key') || ('r:' + c);
+      UI.hist[k] = 'loading'; render();
       api('history', { cidr: c, day: d }).then(function (r) {
-        UI.hist[c] = r && r.ok ? r : null;
-        if (r && r.ok && r.ips.length) UI.open['r:' + c] = true;
+        UI.hist[k] = r && r.ok ? r : null;
+        if (r && r.ok && r.ips.length) UI.open[okey] = true;
         if (!r || !r.ok) toast(t('t_err', (r && r.error) || '?'), 'bad');
         render();
-      }).catch(function () { UI.hist[c] = null; render(); });
+      });
     },
     ppage: function (el) { UI.pp = Math.max(0, UI.pp + (+el.getAttribute('data-d'))); render(); },
     at: function (el) { UI.at = el.getAttribute('data-t'); render(); },
