@@ -39,7 +39,7 @@
 # ============================================================================
 set -o pipefail
 
-VERSION="1.7.2"   # sürüm — başlangıç log satırında görünür
+VERSION="1.7.3"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -73,6 +73,7 @@ OWNERS_FILE="${OWNERS_FILE:-$(dirname "$SAYAC_FILE")/owners}"      # /24 → ASN
 OWNER_TTL_DAYS="${OWNER_TTL_DAYS:-30}"
 BACKFILL_MAX="${BACKFILL_MAX:-50}"      # her turda en fazla bu kadar /24'ün sahibi sorgulanır
 IMUNIFY_BIN="${IMUNIFY_BIN:-$(command -v imunify360-agent 2>/dev/null)}"   # yoksa Imunify kısmı atlanır
+HIST_FILE="${HIST_FILE:-$(dirname "$SAYAC_FILE")/history.jsonl}"      # "Ayrıntı" ile getirilen eski uyarılar (bir kez)
 IMUNIFY_FILE="${IMUNIFY_FILE:-$(dirname "$SAYAC_FILE")/imunify}"         # yerel kara liste önbelleği
 LFD_LOG="${LFD_LOG:-/var/log/lfd.log}"         # eski uyarıların ayrıntısı için okunur (lfd.log, .1, .gz)
 IMUNIFY_REFRESH_MIN="${IMUNIFY_REFRESH_MIN:-60}"   # liste en çok bu kadar dakikada bir yeniden alınır (yalnız panelde gösterilir)
@@ -1042,7 +1043,11 @@ do_status() {
             [ -n "${seen[$c]}" ] && continue; seen[$c]=1
             ign_until "$c" && continue
             cidr_range "$c" && perm_covers "$R_LO" "$R_HI" && continue
-            review+=("{\"t\":$(date -d "$u" +%s),\"type\":\"$ty\",\"cidr\":\"$c\",\"day\":\"$u\",\"hist\":true}")
+            # daha önce "Ayrıntı" ile getirildiyse saklanan sonuç da gelir
+            local hc=""
+            [ -r "$HIST_FILE" ] && hc=$(grep -F "{\"cidr\":\"$c\",\"day\":\"$u\"," "$HIST_FILE" | grep -E '^\{"cidr":.*\}$' | tail -1)
+            day_epoch "$u"
+            review+=("{\"t\":$REPLY,\"type\":\"$ty\",\"cidr\":\"$c\",\"day\":\"$u\",\"hist\":true${hc:+,\"cached\":$hc}}")
             rtext+=("$(printf '%-18s %s · %s' "$c" "$ty" "$(date -d "$u" '+%d.%m')")")
         done < <(sort -k2,2r "$SAYAC_FILE")        # blok başına en yeni tarih
     fi
@@ -1252,7 +1257,17 @@ do_history() {   # CIDR GÜN(YYYY-MM-DD) → JSON
         js+="${js:+,}{\"ip\":\"$ip\",\"host\":$jh,\"why\":$jw,\"owner\":$jo,\"src\":\"${HS[$ip]}\",\"when\":$jt}"
     done
     owners_save 2>/dev/null
-    echo "{\"ok\":true,\"cidr\":\"$cidr\",\"day\":\"$day\",\"total\":$total,\"subnets\":$(num "$subnets"),\"ips\":[$js]}"
+    local res="{\"cidr\":\"$cidr\",\"day\":\"$day\",\"total\":$total,\"subnets\":$(num "$subnets"),\"ips\":[$js]}"
+    # Sonuç saklanır: sayfa her açıldığında yeniden "Ayrıntı" demek gerekmesin. Aynı blok+gün için
+    # tek satır, en çok 50 kayıt; geçici dosya + mv (aynı anda okuyan durum çıktısı yarım görmesin).
+    if [ "$DRY" != 1 ]; then
+        local tmp="$HIST_FILE.tmp.$$"
+        { [ -r "$HIST_FILE" ] && grep -vF "{\"cidr\":\"$cidr\",\"day\":\"$day\"," "$HIST_FILE" | awk 'NR <= 49'
+          printf '%s
+' "$res"; } > "$tmp" 2>/dev/null && mv -f "$tmp" "$HIST_FILE"
+        rm -f "$tmp"
+    fi
+    echo "{\"ok\":true,${res#\{}"
 }
 do_lookup() {
     local ip="$1" n host="" fwd=false txt asn="" pfx="" cc="" reg="" alloc="" asname="" a b c d i

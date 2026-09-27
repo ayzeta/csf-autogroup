@@ -525,3 +525,9 @@
 .ag-app .ag-input:focus-visible { outline-offset: 0; }
 .ag-c.has:focus .ag-tip, .ag-c.has:focus-visible .ag-tip { display: block; }
 .ag-c.has:focus-visible { outline-offset: 0; }
+
+/* Geçmiş sekmesi: tek sütun, okunaklı genişlik */
+.ag-history { max-width: 980px; margin: 0 auto; }
+.ag-rules-f { padding: 0 18px 14px; font-size: 12px; color: var(--ag-text-3); }
+.ag-rules-f b { color: var(--ag-text); font-weight: 650; }
+.ag-cfglog { margin-top: 20px; }

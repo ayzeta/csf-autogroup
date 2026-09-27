@@ -13,7 +13,7 @@
   var LANG = 'en';
   var CLOCK = 0;                // sunucu saati - istemci saati (sn)
   var UI = { gf: 'all', gq: '', ef: 'all', open: {}, evLimit: 40, commits: false, gs: 'added', gd: -1, gp: 0, pp: 0, hist: {}, cd: 30, menu: null, at: 'atk',
-             tab: location.hash === '#settings' ? 'settings' : 'overview' };
+             tab: location.hash === '#settings' ? 'settings' : location.hash === '#history' ? 'history' : 'overview', asnAll: false };
   var CFG = null, DRAFT = {}, cfgLoading = false;
   var pollTimer = null, wasRunning = false, busy = false, CONN = null, LAST_OK = 0, HIDDEN_DUE = false;
 
@@ -97,7 +97,7 @@
       l_perm_cover: 'Kalıcı (blok)', l_temp: 'Geçici', l_nolookup: 'Sahip ve hostname sorguları kapalı (LOOKUP=0).',
       l_abuse: 'AbuseIPDB', l_bgp: 'bgp.he.net', l_copy: 'Kopyala', bad_ip: 'Geçerli bir IPv4 adresi yazın.',
       foot: 'CSF Auto-Group v{0} · {1} olarak oturum açıldı',
-      tab_overview: 'Genel bakış', tab_settings: 'Ayarlar', ev_config: 'Ayar değişti', ev_test_mail: 'Test maili',
+      tab_overview: 'Genel bakış', tab_settings: 'Ayarlar', tab_history: 'Geçmiş', show_less: 'Daha az göster', s_cfglog: 'Ayar geçmişi', no_cfglog: 'Henüz ayar değişikliği yok.', ev_config: 'Ayar değişti', ev_test_mail: 'Test maili',
       st_notify: 'Bildirim', st_mail: 'Uyarı maili adresi', st_mail_h: 'Gruplama, /16 uyarısı ve limit mailleri buraya gider. root@localhost, cPanel\'de sunucunun iletişim adresine yönlenir.',
       st_lang: 'Dil', st_lang_h: 'Log, mail ve bu panelin dili.', st_test: 'Test maili gönder', st_test_h: 'Kayıtlı adrese gönderilir.',
       st_test_dirty: 'Önce yeni adresi kaydedin.', st_thr: 'Eşikler', st_thr_h: 'Kaç tekil ban bir işlemi tetikler.',
@@ -189,7 +189,7 @@
       l_perm_cover: 'Permanent (block)', l_temp: 'Temp', l_nolookup: 'Owner and hostname lookups are off (LOOKUP=0).',
       l_abuse: 'AbuseIPDB', l_bgp: 'bgp.he.net', l_copy: 'Copy', bad_ip: 'Enter a valid IPv4 address.',
       foot: 'CSF Auto-Group v{0} · signed in as {1}',
-      tab_overview: 'Overview', tab_settings: 'Settings', ev_config: 'Settings changed', ev_test_mail: 'Test email',
+      tab_overview: 'Overview', tab_settings: 'Settings', tab_history: 'History', show_less: 'Show less', s_cfglog: 'Settings history', no_cfglog: 'No settings changes yet.', ev_config: 'Settings changed', ev_test_mail: 'Test email',
       st_notify: 'Notifications', st_mail: 'Alert email address', st_mail_h: 'Grouping, /16 warning and limit emails go here. On cPanel, root@localhost is forwarded to the server contact address.',
       st_lang: 'Language', st_lang_h: 'Language of the log, emails and this panel.', st_test: 'Send test email', st_test_h: 'Sent to the saved address.',
       st_test_dirty: 'Save the new address first.', st_thr: 'Thresholds', st_thr_h: 'How many single bans trigger an action.',
@@ -349,7 +349,7 @@
     var run = S.running;
     return '<div class="ag-head"><div class="ag-mark">' + IC.shield + '</div>' +
       '<div class="ag-title"><h1>CSF Auto-Group</h1><div class="ag-sub">' + esc(location.hostname) + ' · v' + esc(S.version) + '</div></div>' +
-      '<div class="ag-tabs" role="tablist">' + ['overview', 'settings'].map(function (k) {
+      '<div class="ag-tabs" role="tablist">' + ['overview', 'history', 'settings'].map(function (k) {
         return '<button class="ag-tab' + (UI.tab === k ? ' on' : '') + '" role="tab" aria-selected="' + (UI.tab === k) + '" data-act="tab" data-tab="' + k + '">' + t('tab_' + k) + '</button>';
       }).join('') + '</div>' +
       '<div class="ag-head-actions">' +
@@ -510,7 +510,7 @@
       var key = 'r:' + e.cidr, open = UI.open[key], is16 = /\/16$/.test(e.cidr), hasIps = e.ips && e.ips.length;
       var pill = e.type === 'skip_wl' ? '<span class="ag-pill ag-pill-info">' + t('ev_skip_wl') + '</span>'
         : '<span class="ag-pill ag-pill-warn">' + esc(t('ev_' + e.type)) + '</span>';
-      var H = e.hist ? UI.hist[e.cidr] : null, hd = H && H.ok ? H : null;
+      var H = e.hist ? (UI.hist[e.cidr] || e.cached || null) : null, hd = H && H.ips ? H : null;   // e.cached: sunucuda saklanan sonuç
       var meta = e.hist ? (hd ? (hd.total ? (is16 ? [t('n_ip', num(hd.total)), t('n_subnets', num(hd.subnets))] : [t('n_ip', num(hd.total))]).concat([t('h_src')]) : [t('h_none')]) : [])
         : is16 ? [t('n_ip', num(e.n)), t('n_subnets', num(e.subnets))] : [t('n_ip', num(e.n))];
       var owner = e.owner || ownerOfIps(e.ips) || ownerOf(e.cidr).label;
@@ -626,7 +626,7 @@
   };
   var EV_GROUP = {
     bans: ['add24', 'promote', 'temp24', 'manual_ban'], warn: ['warn16', 'warn16t'], skip: ['skip_wl'],
-    manual: ['manual_ban', 'manual_unban', 'manual_forget', 'manual_ignore', 'manual_unignore', 'config', 'test_mail', 'digest'], clean: ['clean_temp']
+    manual: ['manual_ban', 'manual_unban', 'manual_forget', 'manual_ignore', 'manual_unignore'], clean: ['clean_temp']
   };
   function evDetail(e) {
     var d = [];
@@ -648,12 +648,14 @@
     add24: ['ban', 'acc'], manual_ban: ['ban', 'bad'], promote: ['lock', 'vio'], temp24: ['clock', 'warn'], warn16: ['alert', 'warn'], warn16t: ['alert', 'warn'],
     skip_wl: ['check', 'info'], clean_temp: ['x', 'n'], config: ['sliders', 'acc'], test_mail: ['inbox', 'n'], digest: ['inbox', 'n']
   };
-  function events() {
-    var all = (S.events || []).slice().reverse();
+  /* Geçmiş sekmesi: eklentinin işleri · Ayarlar sekmesi (cfg): ayar değişiklikleri, test maili, özet */
+  var CFG_TYPES = ['config', 'test_mail', 'digest'];
+  function events(cfg) {
+    var all = (S.events || []).slice().reverse().filter(function (e) { return (CFG_TYPES.indexOf(e.type) >= 0) === !!cfg; });
     function match(e, f) { return f === 'all' ? true : f === 'new' ? isNew(e.t) && NEW_TYPES.indexOf(e.type) >= 0 : EV_GROUP[f].indexOf(e.type) >= 0; }
-    var list = all.filter(function (e) { return match(e, UI.ef); });
+    var list = cfg ? all : all.filter(function (e) { return match(e, UI.ef); });
     var shown = list.slice(0, UI.evLimit);
-    var chips = '<div class="ag-chips">' + (SEEN0 > 0 ? ['all', 'new'] : ['all']).concat(['bans', 'warn', 'skip', 'manual', 'clean']).map(function (f) {
+    var chips = cfg ? '' : '<div class="ag-chips">' + (SEEN0 > 0 ? ['all', 'new'] : ['all']).concat(['bans', 'warn', 'skip', 'manual', 'clean']).map(function (f) {
       var n = all.filter(function (e) { return match(e, f); }).length;
       if (!n && f !== 'all' && f !== UI.ef) return '';
       return '<button class="ag-chip' + (UI.ef === f ? ' on' : '') + '" data-act="ef" data-f="' + f + '">' + t('e_' + f) + '<span class="ag-chip-n">' + num(n) + '</span></button>';
@@ -670,9 +672,9 @@
         (open ? ipTable(e.ips, e.total) : '') + '</div>';
     }).join('');
     var more = list.length > shown.length ? '<div class="ag-card-f"><button class="ag-btn ag-btn-sm ag-btn-ghost" data-act="evmore">' + t('more') + '</button></div>' : '';
-    return '<section class="ag-card" id="ag-events"><div class="ag-card-h"><h2>' + IC.list + t('s_events') + '</h2>' +
-      '<div class="ag-tools">' + chips + '</div></div>' +
-      '<div class="ag-card-b">' + (rows || empty('inbox', all.length ? t('no_match') : t('no_events'))) + '</div>' + more + '</section>';
+    return '<section class="ag-card" id="' + (cfg ? 'ag-cfglog' : 'ag-events') + '"><div class="ag-card-h"><h2>' + (cfg ? IC.sliders + t('s_cfglog') : IC.list + t('s_events')) + '</h2>' +
+      (chips ? '<div class="ag-tools">' + chips + '</div>' : '') + '</div>' +
+      '<div class="ag-card-b">' + (rows || empty('inbox', all.length ? t('no_match') : t(cfg ? 'no_cfglog' : 'no_events'))) + '</div>' + more + '</section>';
   }
 
   function recentGet() { try { var r = JSON.parse(localStorage.getItem('ag-recent') || '[]'); return Array.isArray(r) ? r : []; } catch (e) { return []; } }
@@ -700,7 +702,7 @@
     var list = S.asn_top || [], max = 0;
     function wt(a) { return a.groups * 4 + a.singles; }
     list.forEach(function (a) { max = Math.max(max, wt(a) + (a.blocks || 0) * 4); });
-    return list.map(function (a, i) {
+    return list.slice(0, UI.asnAll ? list.length : 5).map(function (a, i) {
       var name = String(a.name || '').replace(/,\s*[A-Z]{2}$/, ''), parts = [];
       if (a.groups) parts.push(t('p_g', num(a.groups)));
       if (a.singles) parts.push(t('p_t', num(a.singles)));
@@ -714,7 +716,7 @@
   function asnBlocks() {        // csf.deny'deki başka kaynaklı aralıklar
     var list = S.blocks_top || [], max = 0;
     list.forEach(function (a) { max = Math.max(max, a.blocks); });
-    return list.map(function (a, i) {
+    return list.slice(0, UI.asnAll ? list.length : 5).map(function (a, i) {
       var parts = [t('p_bn', num(a.blocks))];
       if (a.groups) parts.push('<span class="ag-muted">' + t('p_g', num(a.groups)) + '</span>');
       if (a.singles) parts.push('<span class="ag-muted">' + t('p_t', num(a.singles)) + '</span>');
@@ -724,7 +726,7 @@
   function asnImunify() {       // Imunify360'ın bu sunucudaki kendi kara listesi
     var im = S.imunify || {}, list = im.top || [], max = 0;
     list.forEach(function (a) { max = Math.max(max, a.count); });
-    return list.map(function (a, i) {
+    return list.slice(0, UI.asnAll ? list.length : 5).map(function (a, i) {
       var rs = (a.reasons || []).map(function (r) { return '<span class="ag-reason">' + esc(r[0]) + ' <b>' + num(r[1]) + '</b></span>'; }).join('');
       return asnRow(i, a, pct(a.count, max), '<b class="ag-imc">' + t('im_n', num(a.count)) + '</b>' + (rs ? '<span class="ag-reasons">' + rs + '</span>' : ''));
     }).join('');
@@ -747,6 +749,9 @@
       body = asnAttack(); hint = t('s_asn_h', num(Object.keys(S.owners || {}).length));
       if (!body) body = '<div class="ag-empty ag-empty-sm">' + (S.config.lookup ? t('asn_filling') : t('asn_nolookup')) + '</div>';
     }
+    var nAll = (UI.at === 'blk' ? S.blocks_top : UI.at === 'im' ? im.top : S.asn_top) || [];
+    if (nAll.length > 5) body += '<div class="ag-card-f"><button class="ag-btn ag-btn-sm ag-btn-ghost" data-act="asnall">' +
+      (UI.asnAll ? t('show_less') : t('show_all', num(nAll.length))) + '</button></div>';
     return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.globe + t('s_asn') + '</h2>' + chips +
       '<span class="ag-hint" style="width:100%">' + hint + '</span></div><div class="ag-card-b">' + body + '</div></section>';
   }
@@ -802,7 +807,7 @@
       '<div class="ag-tools"><button class="ag-link" data-act="tab" data-tab="settings">' + t('edit') + '</button></div></div><div class="ag-rules">' +
       kv(t('c_t24'), t('c_singles', c.t24)) + kv(t('c_t24p'), t('c_singles', c.t24p)) + kv(t('c_t16'), t('c_singles', c.t16)) +
       kv(t('c_tt24'), t('c_singles', c.tt24)) + kv(t('c_tt16'), t('c_singles', c.tt16)) + kv(t('c_ret'), t('c_days', c.retention)) +
-      kv(t('c_lookup'), c.lookup ? t('c_on') : t('c_off')) + '</div></section>';
+      '</div><div class="ag-rules-f">' + esc(t('c_lookup')) + ': <b>' + (c.lookup ? t('c_on') : t('c_off')) + '</b></div></section>';
   }
 
   /* ── Ayarlar sekmesi ───────────────────────────────────────────── */
@@ -889,6 +894,7 @@
     return '<div class="ag-settings"><div class="ag-col">' + card('inbox', t('st_notify'), '', notify) + card('clock', t('st_sched'), '', sched) +
       card('search', t('st_lookup'), '', look) + '</div><div class="ag-col">' + card('sliders', t('st_thr'), t('st_thr_h'), thr) +
       card('hour', t('st_keep'), '', keep) + card('shield', t('st_csf'), t('st_csf_h'), csf) + '</div></div>' +
+      '<div class="ag-cfglog">' + events(true) + '</div>' +
       '<div id="ag-savebar-slot">' + saveBar() + '</div>';
   }
   function refreshSaveBar() {
@@ -911,7 +917,8 @@
     var mw = fsel && ae.closest ? ae.closest('.ag-menu-wrap') : null, fmenu = mw ? focusSel(mw.querySelector('[data-act="menu"]')) : '';   // menü kapanırsa odak düğmesine
     try { if (fsel && ae.id && ae.selectionStart !== undefined) { s0 = ae.selectionStart; s1 = ae.selectionEnd; } } catch (e) { s0 = null; }
     var body = UI.tab === 'settings' ? settingsView()
-      : statusBand() + sinceBar() + kpis() + activity() + '<div class="ag-grid"><div class="ag-col">' + review() + groups() + pending() + events() + '</div>' +
+      : UI.tab === 'history' ? '<div class="ag-history">' + events() + '</div>'
+      : statusBand() + sinceBar() + kpis() + activity() + '<div class="ag-grid"><div class="ag-col">' + review() + groups() + pending() + '</div>' +
         '<div class="ag-col">' + lookupCard() + topAsn() + ignored() + config() + '</div></div>';
     $app.innerHTML = '<div class="ag-wrap">' + head() + banner() + body +
       '<div class="ag-foot">' + esc(t('foot', S.version + (BOOT.commit ? ' (' + BOOT.commit + ')' : ''), BOOT.user || 'root')) + '</div></div>';
@@ -1086,7 +1093,7 @@
       var k = el.getAttribute('data-tab');
       if (k === UI.tab) return;
       if (UI.tab === 'settings' && CFG && changedKeys().length && !window.confirm(t('dirty_leave', changedKeys().length))) return;
-      UI.tab = k; history.replaceState(null, '', k === 'settings' ? '#settings' : '#');
+      UI.tab = k; history.replaceState(null, '', k === 'overview' ? '#' : '#' + k);
       if (k === 'settings') { CFG = null; DRAFT = {}; }
       render(); window.scrollTo(0, 0);
     },
@@ -1102,12 +1109,13 @@
     },
     ppage: function (el) { UI.pp = Math.max(0, UI.pp + (+el.getAttribute('data-d'))); render(); },
     at: function (el) { UI.at = el.getAttribute('data-t'); render(); },
+    asnall: function () { UI.asnAll = !UI.asnAll; render(); },
     ef: function (el) { UI.ef = el.getAttribute('data-f'); UI.evLimit = 40; render(); },
     cd: function (el) { UI.cd = +el.getAttribute('data-d'); render(); },
     menu: function (el) { var k = el.getAttribute('data-key'); UI.menu = UI.menu === k ? null : k; render(); },
     gsort: function (el) { var k = el.getAttribute('data-k'); if (UI.gs === k) UI.gd = -UI.gd; else { UI.gs = k; UI.gd = k === 'added' || k === 'n' ? -1 : 1; } UI.gp = 0; render(); },
     gpage: function (el) { UI.gp = Math.max(0, UI.gp + (+el.getAttribute('data-d'))); render(); },
-    shownew: function () { UI.ef = 'new'; UI.evLimit = 200; render(); var e = document.getElementById('ag-events'); if (e) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
+    shownew: function () { UI.ef = 'new'; UI.evLimit = 200; UI.tab = 'history'; history.replaceState(null, '', '#history'); render(); window.scrollTo(0, 0); },
     asnhint: function (el) {
       var asn = 'AS' + el.getAttribute('data-asn'), name = el.getAttribute('data-name'), g = el.getAttribute('data-g');
       modal({
