@@ -233,6 +233,7 @@ every list CSF uses to say "don't block this". If **any** entry overlaps the
 | Server's own IPs | a `/24` containing one of this server's addresses |
 | `CC_IGNORE`, `CC_ALLOW` in `csf.conf` | the block's country code or `ASnnnn` |
 | `csf.rignore` | a banned IP whose reverse DNS matches (forward-confirmed, like lfd) |
+| Imunify360 whitelist (only with Imunify360) | the server's local whitelist: manual entries and search engine bots Imunify whitelisted; expired entries are ignored, refreshed hourly |
 
 This matters most for `csf.ignore`: CSF lets `csf.allow` addresses through even
 inside a banned range, but `csf.ignore` only stops lfd, so a `/24` ban would

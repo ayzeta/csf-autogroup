@@ -13,7 +13,7 @@
 #   Clears temp bans already covered by a permanent block.
 #   Never bans a /24 that overlaps a CSF whitelist (csf.allow, csf.ignore,
 #   GLOBAL_ALLOW/IGNORE, dyndns, temp allows, server IPs, CC_IGNORE/CC_ALLOW,
-#   csf.rignore) — it is reported by email instead.
+#   csf.rignore, Imunify360's local whitelist) — it is reported by email instead.
 #   Alert emails show who owns each block (ASN / org / country) and each IP's
 #   hostname + ban reason (DNS: PTR + Team Cymru; set LOOKUP=0 to disable).
 #   Emails when the deny list reaches 80% of its limit.
@@ -83,6 +83,7 @@ IMUNIFY_BIN="${IMUNIFY_BIN:-$(command -v imunify360-agent 2>/dev/null)}"   # yok
 HIST_FILE="${HIST_FILE:-$(dirname "$SAYAC_FILE")/history.jsonl}"
 LOGHIST_FILE="${LOGHIST_FILE:-$(dirname "$SAYAC_FILE")/loghist.v2.jsonl}"   # günlükten çıkarılan, olay kaydından önceki işler      # "Ayrıntı" ile getirilen eski uyarılar (bir kez)
 IMUNIFY_FILE="${IMUNIFY_FILE:-$(dirname "$SAYAC_FILE")/imunify}"         # yerel kara liste önbelleği
+IMUNIFY_WL_FILE="${IMUNIFY_WL_FILE:-$(dirname "$SAYAC_FILE")/imunify_white}"  # yerel beyaz liste önbelleği
 LFD_LOG="${LFD_LOG:-/var/log/lfd.log}"         # eski uyarıların ayrıntısı için okunur (lfd.log, .1, .gz)
 IMUNIFY_REFRESH_MIN="${IMUNIFY_REFRESH_MIN:-60}"   # liste en çok bu kadar dakikada bir yeniden alınır (yalnız panelde gösterilir)
 IMUNIFY_BACKFILL="${IMUNIFY_BACKFILL:-200}"   # Imunify IP'leri için turda ayrıca bu kadar /24 sorgulanır
@@ -932,6 +933,17 @@ load_whitelist() {
     wl_load "$CSF_VAR/csf.tempdyn"    "DYNDNS"
     wl_load "$CSF_VAR/csf.tempgdyn"   "GLOBAL_DYNDNS"
     wl_load "$CSF_VAR/csf.tempallow"  "csf.tempallow"
+    # Imunify360'ın yerel beyaz listesi (elle eklenenler ve Imunify'ın doğruladığı arama motoru botları).
+    # Önbellekten okunur (imunify_refresh, IMUNIFY_REFRESH_MIN dakikada bir); süresi dolan kayıt sayılmaz.
+    if [ -r "$IMUNIFY_WL_FILE" ]; then
+        local now wip wexp wcm
+        now=$(date +%s)
+        while IFS='|' read -r wip wexp wcm; do
+            [[ "$wip" =~ ^[0-9] ]] || continue
+            [[ "$wexp" =~ ^[0-9]+$ ]] && [ "$wexp" -gt 0 ] && [ "$wexp" -le "$now" ] && continue
+            wl_add "$wip" "Imunify: $wip${wcm:+ ($wcm)}"
+        done < "$IMUNIFY_WL_FILE"
+    fi
     # Sunucunun kendi IP'leri: CSF yalnızca IP'nin kendisini korur, içinde bulunduğu /24'ü değil.
     for ip in $( { ip -4 -o addr show 2>/dev/null | awk '{print $4}'; hostname -I 2>/dev/null | tr ' ' '\n'; } | sed 's#/.*##' | grep -E "$IPV4_RE" | sort -u); do
         case "$ip" in 127.*) continue;; esac
@@ -1248,6 +1260,20 @@ do_status() {
         done < <(sort -k2,2r "$SAYAC_FILE")        # blok başına en yeni tarih
     fi
 
+    # Bir önceki pencerede (REVIEW_DAYS gün daha geride) kaç FARKLI blok/ağ işaretlenmişti: kartın haftalık
+    # değişimi aynı ölçüyle (olay sayısı değil, farklı kayıt sayısı) karşılaştırılsın.
+    local rprev=0 rw1 rw2 rs1 rs2
+    rw2=$(( now - REVIEW_DAYS * 86400 )); rw1=$(( now - 2 * REVIEW_DAYS * 86400 ))
+    printf -v rs1 '%(%Y-%m-%d)T' "$rw1"; printf -v rs2 '%(%Y-%m-%d)T' "$rw2"
+    rprev=$( { [ -r "$EVENTS_FILE" ] && awk -v a="$rw1" -v b="$rw2" '
+                   match($0, /"t":[0-9]+/) { t = substr($0, RSTART + 4, RLENGTH - 4) + 0 }
+                   t >= a && t < b && /"type":"(warn16|warn16t|skip_wl)"/ && match($0, /"cidr":"[0-9.\/]+"/) { print substr($0, RSTART + 8, RLENGTH - 9) }' "$EVENTS_FILE"
+               [ -r "$SAYAC_FILE" ] && awk -v a="$rs1" -v b="$rs2" '$2 >= a && $2 < b {
+                   k = $1
+                   if (k ~ /^WARN16_/)           { sub(/^WARN16_/, "", k);      print k ".0.0/16" }
+                   else if (k ~ /^WARN_TEMP16_/) { sub(/^WARN_TEMP16_/, "", k); print k ".0.0/16" }
+                   else if (k ~ /^WLSKIP_/)      { sub(/^WLSKIP_/, "", k);      print k ".0/24" } }' "$SAYAC_FILE"; } | sort -u | grep -c .)
+
     # Yoksayılanlar
     local ignored=() itext=()
     if [ -r "$IGNORE_FILE" ]; then
@@ -1365,6 +1391,7 @@ do_status() {
         local IFS=,
         printf '{"ok":true,"version":"%s","lang":"%s","now":%s,"running":%s,' "$VERSION" "$MSG_LANG" "$now" "$running"
         health_check
+        printf '"review_prev":%s,' "$(num "$rprev")"
         printf '"health":{"csf":"%s","lfd":"%s"},"expire":{"days":%s,"auto":%s},"repeat_min":%s,' "$H_CSF" "$H_LFD" "$(num "$BLOCK_EXPIRE_DAYS")" "$([ "$BLOCK_EXPIRE_AUTO" = 1 ] && echo true || echo false)" "$(num "$REPEAT16_MIN")"
         printf '"config":{"t24":%s,"t24p":%s,"t16":%s,"tt24":%s,"tt16":%s,"retention":%s,"review_days":%s,"lookup":%s},' \
             "$(num "$THRESHOLD_24")" "$(num "$THRESHOLD_24_PERMANENT")" "$(num "$THRESHOLD_16")" "$(num "$THRESHOLD_TEMP_24")" \
@@ -1405,15 +1432,17 @@ do_status() {
 # ── --lookup IP ─────────────────────────────────────────────────────────────
 # Olay kaydı başlamadan önceki bir uyarının ayrıntısı: o gün ve bir önceki gün lfd günlüğünde bu
 # bloktan geçen IP'ler (ban satırındaki sebeple), şu an csf.deny ve geçici listede olanlarla birlikte.
-do_history() {   # CIDR GÜN(YYYY-MM-DD) → JSON
-    local cidr="$1" day="$2" re d0 d1 f ip t why src n=0 total subnets js="" p
+do_history() {   # CIDR GÜN(YYYY-MM-DD) [GÜN SAYISI, varsayılan 2: o gün ve önceki] → JSON
+    local cidr="$1" day="$2" span="${3:-2}" re dl="" di f ip t why src n=0 total subnets js="" p
     local -A HT=() HW=() HS=()
     if ! [[ "$cidr" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.0/24$|^([0-9]{1,3})\.([0-9]{1,3})\.0\.0/16$ ]] || \
-       ! [[ "$day" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || ! date -d "$day" >/dev/null 2>&1; then
+       ! [[ "$day" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || ! date -d "$day" >/dev/null 2>&1 || \
+       ! [[ "$span" =~ ^[0-9]{1,2}$ ]] || [ "$span" -lt 1 ] || [ "$span" -gt 60 ]; then
         echo '{"ok":false,"error":"bad_input"}'; return 2
     fi
     if [[ "$cidr" == */24 ]]; then re="${cidr%.0/24}."; else re="${cidr%.0.0/16}."; fi
-    d1=$(LC_ALL=C date -d "$day" '+%b %e'); d0=$(LC_ALL=C date -d "$day -1 day" '+%b %e')
+    # bakılacak günler (lfd satırının başı: "Sep 26"): blok banında tekiller günler önce banlanmış olabilir
+    for (( di = 0; di < span; di++ )); do dl+="${dl:+|}$(LC_ALL=C date -d "$day -$di day" '+%b %e')"; done
     # lfd satırı: "Sep 26 04:00:10 lin lfd[123]: (sshd) Failed SSH login from 34.47.1.2 (US/..): 5 in the
     # last 3600 secs - *Blocked in csf* for 3600 secs [LF_SSHD]" ya da "Incoming IP 34.47.1.2 temporary block removed"
     while IFS='|' read -r ip t why; do
@@ -1423,8 +1452,9 @@ do_history() {   # CIDR GÜN(YYYY-MM-DD) → JSON
         HS[$ip]=lfd
     done < <( { for f in "$LFD_LOG" "$LFD_LOG.1"; do [ -r "$f" ] && cat "$f"; done
                 for f in "$LFD_LOG".*.gz "$LFD_LOG"-*.gz; do [ -r "$f" ] && zcat "$f"; done; } 2>/dev/null |
-        awk -v d0="$d0" -v d1="$d1" -v pre="$re" '
-            substr($0, 1, 6) != d0 && substr($0, 1, 6) != d1 { next }
+        awk -v dl="$dl" -v pre="$re" '
+            BEGIN { nd = split(dl, DL, "|"); for (k = 1; k <= nd; k++) OK[DL[k]] = 1 }
+            !(substr($0, 1, 6) in OK) { next }
             {
                 msg = $0; sub(/^[A-Z][a-z][a-z] +[0-9]+ [0-9:]+ [^ ]+ [^:]+: /, "", msg)
                 rest = msg
@@ -1470,12 +1500,12 @@ do_history() {   # CIDR GÜN(YYYY-MM-DD) → JSON
         js+="${js:+,}{\"ip\":\"$ip\",\"host\":$jh,\"why\":$jw,\"owner\":$jo,\"src\":\"${HS[$ip]}\",\"when\":$jt}"
     done
     owners_save 2>/dev/null
-    local res="{\"cidr\":\"$cidr\",\"day\":\"$day\",\"total\":$total,\"subnets\":$(num "$subnets"),\"ips\":[$js]}"
+    local res="{\"cidr\":\"$cidr\",\"day\":\"$day\",\"span\":$span,\"total\":$total,\"subnets\":$(num "$subnets"),\"ips\":[$js]}"
     # Sonuç saklanır: sayfa her açıldığında yeniden "Ayrıntı" demek gerekmesin. Aynı blok+gün için
-    # tek satır, en çok 50 kayıt; geçici dosya + mv (aynı anda okuyan durum çıktısı yarım görmesin).
+    # (ve aynı gün sayısı) için tek satır, en çok 50 kayıt; geçici dosya + mv (aynı anda okuyan durum çıktısı yarım görmesin).
     if [ "$DRY" != 1 ]; then
         local tmp="$HIST_FILE.tmp.$$"
-        { [ -r "$HIST_FILE" ] && grep -vF "{\"cidr\":\"$cidr\",\"day\":\"$day\"," "$HIST_FILE" | awk 'NR <= 49'
+        { [ -r "$HIST_FILE" ] && grep -vF "{\"cidr\":\"$cidr\",\"day\":\"$day\",\"span\":$span," "$HIST_FILE" | awk 'NR <= 49'
           printf '%s
 ' "$res"; } > "$tmp" 2>/dev/null && mv -f "$tmp" "$HIST_FILE"
         rm -f "$tmp"
@@ -1682,7 +1712,7 @@ imunify_refresh() {
     local off=0 total=0 out page n tmp last
     IM_R=none; IM_N=0; IM_AGE=0
     [ "$DRY" = 1 ] && return 0
-    if [ -z "$IMUNIFY_BIN" ] || [ ! -x "$IMUNIFY_BIN" ]; then rm -f "$IMUNIFY_FILE"; return 0; fi
+    if [ -z "$IMUNIFY_BIN" ] || [ ! -x "$IMUNIFY_BIN" ]; then rm -f "$IMUNIFY_FILE" "$IMUNIFY_WL_FILE"; return 0; fi
     # Liste yalnız panelde gösteriliyor, ban kararına girmiyor; imunify360-agent her çağrıda yavaş
     # açıldığı için her turda değil IMUNIFY_REFRESH_MIN dakikada bir alınır.
     last=$(sed -n 's/^#t|//p' "$IMUNIFY_FILE" 2>/dev/null | awk 'NR == 1')
@@ -1690,6 +1720,16 @@ imunify_refresh() {
         IM_R=fresh; IM_AGE=$(( ($(date +%s) - last) / 60 )); return 0
     fi
     IM_R=fail
+    # Beyaz liste (ban kararında kullanılır, bkz. load_whitelist): tek sayfa yeter. Hata → eski önbellek kalır.
+    out=$(timeout 90 "$IMUNIFY_BIN" ip-list local list --purpose white --by-type ip --limit 1000 --json 2>/dev/null 9>&-) && {
+        printf '%s' "$out" | grep -oE '"ip": ?"[^"]*"|"expiration": ?[0-9]+|"comment": ?(null|"[^"]*")' | awk '
+            function out() { if (ip != "") print ip "|" ex "|" cm }
+            /^"ip"/         { out(); ip = $0; sub(/^"ip": ?"/, "", ip); sub(/"$/, "", ip); ex = 0; cm = ""; next }
+            /^"expiration"/ { ex = $0; sub(/^[^0-9]*/, "", ex); next }
+            /^"comment"/    { cm = $0; sub(/^"comment": ?/, "", cm); if (cm == "null") cm = ""; gsub(/^"|"$/, "", cm); gsub(/\|/, "/", cm); next }
+            END             { out() }' > "$IMUNIFY_WL_FILE.tmp.$$" && mv -f "$IMUNIFY_WL_FILE.tmp.$$" "$IMUNIFY_WL_FILE"
+        rm -f "$IMUNIFY_WL_FILE.tmp.$$"
+    }
     tmp="$IMUNIFY_FILE.tmp.$$"; : > "$tmp"
     while :; do
         out=$(timeout 90 "$IMUNIFY_BIN" ip-list local list --purpose drop --by-type ip --limit 500 --offset "$off" --json 2>/dev/null 9>&-) \
@@ -1994,7 +2034,7 @@ case "$MODE" in
     action) LOG_MODE=file; do_action "$ACT" "${ARGS[0]}" "${ARGS[1]}"; exit $? ;;
     config) LOG_MODE=file; do_config; exit $? ;;
     busy)   if lock_busy; then echo busy; else echo idle; fi; exit 0 ;;
-    history) LOG_MODE=quiet; do_history "${ARGS[0]}" "${ARGS[1]}"; exit $? ;;
+    history) LOG_MODE=quiet; do_history "${ARGS[0]}" "${ARGS[1]}" "${ARGS[2]:-2}"; exit $? ;;
     logrotate) logrotate_write && { echo "$LOGROTATE_CONF"; exit 0; }; exit 1 ;;   # install.sh çağırır   # eklenti "Şimdi çalıştır"dan önce sorar
     digest) LOG_MODE=file; owners_load; parse_deny "$DENY_FILE" 1; panel_init; digest_build
             if [ "$SEND" = 1 ]; then printf '%s\n' "$DG_BODY" | mail -s "$DG_SUBJ" "$ALERT_MAIL"; log "$(m "$M_DG_SENT" "$ALERT_MAIL")"; ev digest "" "by=\"$AG_BY\""

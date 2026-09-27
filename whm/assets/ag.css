@@ -406,9 +406,13 @@
   .ag-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ag-row { flex-wrap: wrap; }
   .ag-row-a { width: 100%; justify-content: flex-start; }
-  .ag-ip { grid-template-columns: 110px minmax(0, 1fr); }
   .ag-thead { display: none; }
-  .ag-ip > :nth-child(n+3) { display: none; }
+  /* IP satırı iki satır: 1) IP ····· hostname  2) ban sebebi (tamamı, gerekirse alta kayar); sahip bloğun satırında zaten var */
+  .ag-ip { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "ip host" "why why"; row-gap: 3px; column-gap: 10px; padding: 8px 12px; }
+  .ag-ip > :nth-child(1) { grid-area: ip; }
+  .ag-ip > :nth-child(2) { grid-area: host; text-align: right; font-size: 12px; color: var(--ag-text-3); }
+  .ag-ip > :nth-child(3) { display: none; }
+  .ag-ip > :nth-child(4) { grid-area: why; white-space: normal; font-size: 12px; line-height: 1.4; color: var(--ag-text-2); }
   .ag-modal-b { padding-left: 22px; }
 }
 
@@ -585,8 +589,8 @@
 .ag-setform .ag-field > .ag-loginfo { grid-column: 1 / -1; grid-row: 2; justify-self: start; max-width: none; margin-top: 3px; }
 @media (max-width: 900px) {
   .ag-setwrap { grid-template-columns: 1fr; }
-  .ag-setnav { position: static; flex-direction: row; flex-wrap: wrap; }
-  .ag-setnav-i { width: auto; padding: 7px 10px; }
+  /* eşit sütunlar: ikonlar ve yazılar alt alta aynı hizada (telefonda iki sütun) */
+  .ag-setnav { position: static; display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
   .ag-setform .ag-field { display: block; }
   .ag-setform .ag-field > * { max-width: none; }
   .ag-setform .ag-field > :not(.ag-field-l):not(.ag-field-h) { margin-top: 8px; justify-self: start; max-width: 100%; }
@@ -658,7 +662,15 @@
 
 /* özet kartları eklentinin kendi genişliğine göre dizilir (WHM menüsü yer kapladığı için pencere genişliği yanıltır) */
 .ag-wrap { container: agwrap / inline-size; }
-@container agwrap (max-width: 1180px) { .ag-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* WHM'de sol menüyle alan ~1176px kalır: 1000px'e kadar 4'lü, 1000–1180 arası ikon/halka/boşluk biraz küçülür */
+@container agwrap (max-width: 1180px) and (min-width: 1001px) {
+  .ag-kpis { gap: 12px; }
+  .ag-kpi { padding: 14px; column-gap: 11px; grid-template-columns: 34px minmax(0, 1fr) auto; }
+  .ag-kpi-ic { width: 34px; height: 34px; border-radius: 10px; }
+  .ag-kpi-ic svg { width: 18px; height: 18px; }
+  .ag-kpi-g .ag-ring { width: 38px; height: 38px; }
+}
+@container agwrap (max-width: 1000px) { .ag-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* Geçmiş satırı telefonda: "Ayrıntı" düğmesi alt satıra, metin sıkışmasın */
 @media (max-width: 600px) {
