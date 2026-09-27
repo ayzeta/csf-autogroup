@@ -538,7 +538,7 @@
   }
 
   /* Aktif grup banları: sıralanabilir, sayfalı tablo */
-  var PAGE = 15;
+  var PAGE = 10;       // iki tablo da (gruplar, izlenenler) aynı sayfa boyunda
   function kindMatch(g, f) {
     if (f === 'perm') return g.kind === 'perm' || g.kind === 'promoted';
     if (f === 'dnd') return g.dnd;
@@ -702,7 +702,7 @@
     var list = S.asn_top || [], max = 0;
     function wt(a) { return a.groups * 4 + a.singles; }
     list.forEach(function (a) { max = Math.max(max, wt(a) + (a.blocks || 0) * 4); });
-    return list.slice(0, UI.asnAll ? list.length : 5).map(function (a, i) {
+    return list.slice(0, UI.asnAll ? list.length : 10).map(function (a, i) {
       var name = String(a.name || '').replace(/,\s*[A-Z]{2}$/, ''), parts = [];
       if (a.groups) parts.push(t('p_g', num(a.groups)));
       if (a.singles) parts.push(t('p_t', num(a.singles)));
@@ -716,7 +716,7 @@
   function asnBlocks() {        // csf.deny'deki başka kaynaklı aralıklar
     var list = S.blocks_top || [], max = 0;
     list.forEach(function (a) { max = Math.max(max, a.blocks); });
-    return list.slice(0, UI.asnAll ? list.length : 5).map(function (a, i) {
+    return list.slice(0, UI.asnAll ? list.length : 10).map(function (a, i) {
       var parts = [t('p_bn', num(a.blocks))];
       if (a.groups) parts.push('<span class="ag-muted">' + t('p_g', num(a.groups)) + '</span>');
       if (a.singles) parts.push('<span class="ag-muted">' + t('p_t', num(a.singles)) + '</span>');
@@ -726,7 +726,7 @@
   function asnImunify() {       // Imunify360'ın bu sunucudaki kendi kara listesi
     var im = S.imunify || {}, list = im.top || [], max = 0;
     list.forEach(function (a) { max = Math.max(max, a.count); });
-    return list.slice(0, UI.asnAll ? list.length : 5).map(function (a, i) {
+    return list.slice(0, UI.asnAll ? list.length : 10).map(function (a, i) {
       var rs = (a.reasons || []).map(function (r) { return '<span class="ag-reason">' + esc(r[0]) + ' <b>' + num(r[1]) + '</b></span>'; }).join('');
       return asnRow(i, a, pct(a.count, max), '<b class="ag-imc">' + t('im_n', num(a.count)) + '</b>' + (rs ? '<span class="ag-reasons">' + rs + '</span>' : ''));
     }).join('');
@@ -750,14 +750,14 @@
       if (!body) body = '<div class="ag-empty ag-empty-sm">' + (S.config.lookup ? t('asn_filling') : t('asn_nolookup')) + '</div>';
     }
     var nAll = (UI.at === 'blk' ? S.blocks_top : UI.at === 'im' ? im.top : S.asn_top) || [];
-    if (nAll.length > 5) body += '<div class="ag-card-f"><button class="ag-btn ag-btn-sm ag-btn-ghost" data-act="asnall">' +
+    if (nAll.length > 10) body += '<div class="ag-card-f"><button class="ag-btn ag-btn-sm ag-btn-ghost" data-act="asnall">' +
       (UI.asnAll ? t('show_less') : t('show_all', num(nAll.length))) + '</button></div>';
     return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.globe + t('s_asn') + '</h2>' + chips +
       '<span class="ag-hint" style="width:100%">' + hint + '</span></div><div class="ag-card-b">' + body + '</div></section>';
   }
 
   /* İzlenenler: bir kez geçici banlanmış /24'ler; grup tablosuyla aynı biçimde, sayfalı */
-  var PPAGE = 8;
+  var PPAGE = PAGE;
   function pendingSorted() { return S.pending.slice().sort(function (a, b) { return a.days_left - b.days_left; }); }
   function pending() {
     var list = pendingSorted(), pages = Math.max(1, Math.ceil(list.length / PPAGE));

@@ -39,7 +39,7 @@
 # ============================================================================
 set -o pipefail
 
-VERSION="1.7.3"   # sürüm — başlangıç log satırında görünür
+VERSION="1.7.4"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -65,7 +65,8 @@ LOOKUP_TIMEOUT="${LOOKUP_TIMEOUT:-2}"            # seconds per DNS query
 LOG_MAX_LINES="${LOG_MAX_LINES:-5000}"
 SAYAC_RETENTION_DAYS="${SAYAC_RETENTION_DAYS:-180}"
 EVENTS_FILE="${EVENTS_FILE:-$(dirname "$SAYAC_FILE")/events.jsonl}"   # WHM eklentisi / --status okur
-EVENTS_MAX="${EVENTS_MAX:-5000}"
+EVENTS_MAX="${EVENTS_MAX:-5000}"   # banlar/uyarılar/elle işlemler; tur kayıtları ayrıca son RUNS_MAX
+RUNS_MAX="${RUNS_MAX:-1000}"
 IGNORE_FILE="${IGNORE_FILE:-$(dirname "$SAYAC_FILE")/ignored}"       # "yoksay" denen /16 ve /24'ler
 REVIEW_DAYS="${REVIEW_DAYS:-7}"                                        # "kontrol edilecekler" kaç gün geriye bakar
 PLUGIN_DIR="${PLUGIN_DIR:-/usr/local/cpanel/whostmgr/docroot/cgi/csf_autogroup}"   # eklenti kurulu mu?
@@ -114,6 +115,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   export LANG=tr_TR.UTF-8 LC_ALL=tr_TR.UTF-8
   M_START="--- Başladı ---";                                       M_END="--- Bitti ---"
   M_END_T="--- Bitti (toplam %s sn) ---"
+  M_QUIET="Tur: değişiklik yok · kalıcı %s/%s · geçici %s/%s · %s sn"
   M_STEP_OWN="Sahip sorgusu: %s blok, %s sn"
   M_STEP_IM="Imunify listesi yenilendi: %s IP, %s sn"
   M_STEP_IMFRESH="Imunify listesi güncel (%s dk önce alındı, %s dk'da bir yenilenir)"
@@ -256,6 +258,7 @@ if [ "$MSG_LANG" = "tr" ]; then
 else
   M_START="--- Started ---";                                       M_END="--- Done ---"
   M_END_T="--- Done (%s s total) ---"
+  M_QUIET="Run: no changes · permanent %s/%s · temp %s/%s · %s s"
   M_STEP_OWN="Owner lookups: %s blocks, %s s"
   M_STEP_IM="Imunify list refreshed: %s IPs, %s s"
   M_STEP_IMFRESH="Imunify list is current (fetched %s min ago, refreshed every %s min)"
@@ -405,11 +408,28 @@ log() {
     local line
     printf -v line '[%(%Y-%m-%d %H:%M:%S)T] %s' -1 "$1"
     if [ "$DRY" = 1 ]; then echo "$line"; return; fi
+    log_flush
     case "$LOG_MODE" in
         quiet) ;;
         file)  echo "$line" >> "$LOG_FILE" ;;
         *)     printf '%s\n' "$line"; printf '%s\n' "$line" >> "$LOG_FILE" ;;
     esac
+}
+# Rutin satırlar (başladı, doluluk, "turu bitti: 0", adım süreleri): ekrana her zaman yazılır; dosyaya
+# yalnız turda bir şey olduysa. Hiçbir şey olmayan tur dosyaya tek özet satırı bırakır — yoksa günlük
+# her turda ~11 satır büyür, satır sınırı dolar ve gerçek işler birkaç günde silinirdi.
+RUN_MODE=0; EVENTFUL=0; RBUF=()
+log_flush() {    # biriken rutin satırları dosyaya yaz; bundan sonra tur "olaylı" sayılır
+    [ "$RUN_MODE" = 1 ] && [ "$EVENTFUL" = 0 ] || return 0
+    EVENTFUL=1
+    [ "$DRY" = 1 ] || [ ${#RBUF[@]} -eq 0 ] || printf '%s\n' "${RBUF[@]}" >> "$LOG_FILE"
+    RBUF=()
+}
+logr() {
+    if [ "$RUN_MODE" != 1 ] || [ "$DRY" = 1 ] || [ "$LOG_MODE" != tee ] || [ "$EVENTFUL" = 1 ]; then log "$1"; return; fi
+    local line
+    printf -v line '[%(%Y-%m-%d %H:%M:%S)T] %s' -1 "$1"
+    printf '%s\n' "$line"; RBUF+=("$line")
 }
 # Kilit (fd 9) alt süreçlere geçmesin: arka planda teslimat yapan bir MTA kilidi tutup sonraki turları engellemesin.
 mail() {
@@ -528,6 +548,7 @@ csf_run() {      # csf'i çalıştır, çıktıyı log'a yaz, CSF_OUT'ta sakla (
         case "$1" in -d|-dr|-td|-tr) echo "      [dry-run] csf $*"; CSF_OUT=""; return 0 ;; esac
     fi
     CSF_OUT=$("$CSF_BIN" "$@" 2>&1 9>&-)
+    log_flush                       # csf çıktısı dosyaya doğrudan yazılıyor: önce bağlam satırları
     [ -n "$CSF_OUT" ] && printf '%s\n' "$CSF_OUT" >> "$LOG_FILE"
 }
 
@@ -799,7 +820,7 @@ load_whitelist() {
     done
     rignore_load "$CSF_DIR/csf.rignore"
     CC_LIST=$( { conf_val CC_IGNORE | sed 's/^/CC_IGNORE=/'; conf_val CC_ALLOW | sed 's/^/CC_ALLOW=/'; } | grep -v '=$' | LC_ALL=C tr '[:lower:]' '[:upper:]')
-    log "$(m "$M_WL_LOADED" "${#WL_LO[@]}" "${#RIGNORE[@]}")"
+    logr "$(m "$M_WL_LOADED" "${#WL_LO[@]}" "${#RIGNORE[@]}")"
 }
 wl_overlap() {   # LO HI → WL_HIT = çakışan beyaz liste kaydı
     local i
@@ -861,7 +882,7 @@ wl_skip() {      # CIDR COUNT PREFIX24 "IPS" KIND — doğrulanamadıysa yalnız
 }
 wl_skip_body=""; wl_skipped=0
 wl_report() {    # CIDR COUNT PREFIX24 "IPS" KIND — günde bir kez maile ekle
-    if grep -qF "WLSKIP_$3 $TODAY" "$SAYAC_FILE"; then log "$(m "$M_WL_SKIPD" "$1" "$WL_HIT")"; return; fi
+    if grep -qF "WLSKIP_$3 $TODAY" "$SAYAC_FILE"; then logr "$(m "$M_WL_SKIPD" "$1" "$WL_HIT")"; return; fi
     log "$(m "$M_WL_SKIP" "$1" "$WL_HIT")"
     cnt_add "WLSKIP_$3 $TODAY"
     wl_skip_body+="$(m "$M_WL_B" "$1" "$2" "$WL_HIT")$NL"
@@ -1755,14 +1776,15 @@ take_lock || { log "$M_LOCKED"; exit 0; }
 RUN_T0=$(date +%s)
 panel_init
 owners_load
-log "$M_START (v$VERSION)"
+RUN_MODE=1
+logr "$M_START (v$VERSION)"
 
 # ── Permanent deny limit ────────────────────────────────────────────────────
 limit=$(grep "^DENY_IP_LIMIT" "$CSF_CONF" | cut -d'=' -f2 | tr -d ' "')
 current_count=$(grep -cP '^\d+\.\d+\.\d+\.\d+|^\d+\.\d+\.\d+\.\d+\/\d+' "$DENY_FILE" || true)
 if [ -n "$limit" ] && [ "$limit" -gt 0 ] 2>/dev/null; then
     percent=$((current_count * 100 / limit))
-    log "$(m "$M_PERM_USAGE" "$current_count" "$limit" "$percent")"
+    logr "$(m "$M_PERM_USAGE" "$current_count" "$limit" "$percent")"
     if [ "$percent" -ge 80 ]; then
         log "$(m "$M_PERM_WARN")"
         doluluk_satiri=$(m "$M_PERM_FULL" "$current_count" "$limit" "$percent")
@@ -1780,7 +1802,7 @@ temp_limit=$(grep "^DENY_TEMP_IP_LIMIT" "$CSF_CONF" | cut -d'=' -f2 | tr -d ' "'
 temp_current=$("$CSF_BIN" -t 2>/dev/null 9>&- | grep -c "^DENY" || true)
 if [ -n "$temp_limit" ] && [ "$temp_limit" -gt 0 ] 2>/dev/null; then
     temp_percent=$((temp_current * 100 / temp_limit))
-    log "$(m "$M_TEMP_USAGE" "$temp_current" "$temp_limit" "$temp_percent")"
+    logr "$(m "$M_TEMP_USAGE" "$temp_current" "$temp_limit" "$temp_percent")"
     if [ "$temp_percent" -ge 80 ]; then
         log "$(m "$M_TEMP_WARN")"
         temp_doluluk_satiri=$(m "$M_TEMP_FULL" "$temp_current" "$temp_limit" "$temp_percent")
@@ -1845,7 +1867,7 @@ if [ "$added24" -gt 0 ]; then
     printf '%s\n\n%s\n%s\n%s\n' "$(m "$M_MAIL24_BODY")" "$added24_body" "$doluluk_satiri" "$PANEL_FOOT$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
         mail -s "$(m "$M_MAIL24_SUBJ" "$added24")" "$ALERT_MAIL"
 fi
-log "$(m "$M_24_DONE" "$added24")"
+logr "$(m "$M_24_DONE" "$added24")"
 
 # ── /16 grouping (permanent): warn only, once per day ───────────────────────
 declare -A count16 seen_subnets ips16
@@ -1860,10 +1882,10 @@ for prefix in $(printf '%s\n' "${!count16[@]}" | sort -V); do
     subnet_count=$(echo "${seen_subnets[$prefix]}" | tr ' ' '\n' | sort -u | grep -c '\.')
     if [ "${count16[$prefix]}" -ge "$THRESHOLD_16" ] && [ "$subnet_count" -ge 2 ]; then
         ip2int "$prefix.0.0"; lo=$REPLY
-        if ign_until "$prefix.0.0/16"; then log "$(m "$M_IGN16" "$prefix" "$IGN_UNTIL")"; continue; fi
+        if ign_until "$prefix.0.0/16"; then logr "$(m "$M_IGN16" "$prefix" "$IGN_UNTIL")"; continue; fi
         if ! perm_covers "$lo" $((lo + 65535)); then
             if grep -qF "WARN16_${prefix} $TODAY" "$SAYAC_FILE"; then
-                log "$(m "$M_SKIP16" "$prefix")"; continue
+                logr "$(m "$M_SKIP16" "$prefix")"; continue
             fi
             log "$(m "$M_WARN16" "$prefix" "${count16[$prefix]}" "$subnet_count")"
             warn_body+="$(m "$M_WARN16_B" "$prefix" "${count16[$prefix]}" "$subnet_count")$NL"
@@ -1879,7 +1901,7 @@ if [ "$warn16" -gt 0 ]; then
     printf '%b\n\n%s\n%s\n%s\n' "$(m "$M_MAIL16_BODY")" "$warn_body" "$doluluk_satiri" "$PANEL_FOOT$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
         mail -s "$(m "$M_MAIL16_SUBJ" "$warn16")" "$ALERT_MAIL"
 fi
-log "$(m "$M_16_DONE" "$warn16")"
+logr "$(m "$M_16_DONE" "$warn16")"
 
 # ── Read temp bans + clear singles already covered permanently ──────────────
 # csf -t çok portlu bir bani her port için ayrı satır basar → IP'ler tekilleştirilir.
@@ -1918,7 +1940,7 @@ for prefix in $(printf '%s\n' "${!temp_count24[@]}" | sort -V); do
     n="${temp_count24[$prefix]}"
     if [ "$n" -ge "$THRESHOLD_TEMP_24" ]; then
         ip2int "$prefix.0"; lo=$REPLY
-        if perm_covers "$lo" $((lo + 255)); then log "$(m "$M_TSKIP24" "$prefix")"; continue; fi
+        if perm_covers "$lo" $((lo + 255)); then logr "$(m "$M_TSKIP24" "$prefix")"; continue; fi
         if wl_check "$prefix" "${temp_ips24[$prefix]}"; then
             wl_skip "${prefix}.0/24" "$n" "$prefix" "${temp_ips24[$prefix]}" temp; continue
         fi
@@ -1961,7 +1983,7 @@ if [ "$temp_perm_added24" -gt 0 ]; then
     printf '%s\n\n%s\n%s\n%s\n' "$(m "$M_MAILT24P_BODY")" "$temp_perm_added24_body" "$doluluk_satiri" "$PANEL_FOOT$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
         mail -s "$(m "$M_MAILT24P_SUBJ" "$temp_perm_added24")" "$ALERT_MAIL"
 fi
-log "$(m "$M_T24_DONE" "$temp_added24" "$temp_perm_added24")"
+logr "$(m "$M_T24_DONE" "$temp_added24" "$temp_perm_added24")"
 
 # ── Temp /16: warn only, once per day ───────────────────────────────────────
 declare -A temp_count16 temp_seen_subnets temp_ips16
@@ -1976,9 +1998,9 @@ for prefix in $(printf '%s\n' "${!temp_count16[@]}" | sort -V); do
     subnet_count=$(echo "${temp_seen_subnets[$prefix]}" | tr ' ' '\n' | sort -u | grep -c '\.')
     if [ "${temp_count16[$prefix]}" -ge "$THRESHOLD_TEMP_16" ] && [ "$subnet_count" -ge 2 ]; then
         ip2int "$prefix.0.0"; lo=$REPLY
-        if perm_covers "$lo" $((lo + 65535)); then log "$(m "$M_TSKIP16" "$prefix")"; continue; fi
-        if ign_until "$prefix.0.0/16"; then log "$(m "$M_IGN16" "$prefix" "$IGN_UNTIL")"; continue; fi
-        if grep -qF "WARN_TEMP16_${prefix} $TODAY" "$SAYAC_FILE"; then log "$(m "$M_TSKIP16D" "$prefix")"; continue; fi
+        if perm_covers "$lo" $((lo + 65535)); then logr "$(m "$M_TSKIP16" "$prefix")"; continue; fi
+        if ign_until "$prefix.0.0/16"; then logr "$(m "$M_IGN16" "$prefix" "$IGN_UNTIL")"; continue; fi
+        if grep -qF "WARN_TEMP16_${prefix} $TODAY" "$SAYAC_FILE"; then logr "$(m "$M_TSKIP16D" "$prefix")"; continue; fi
         log "$(m "$M_TWARN16" "$prefix" "${temp_count16[$prefix]}" "$subnet_count")"
         temp_warn_body+="$(m "$M_WARN16_B" "$prefix" "${temp_count16[$prefix]}" "$subnet_count")$NL"
         WL_HIT=""; wl_overlap "$lo" $((lo + 65535)) && temp_warn_body+="$(m "$M_WL_NOTE" "$WL_HIT")$NL"
@@ -1992,7 +2014,7 @@ if [ "$temp_warn16" -gt 0 ]; then
     printf '%b\n\n%s\n%s\n%s\n' "$(m "$M_MAILT16_BODY")" "$temp_warn_body" "$temp_doluluk_satiri" "$PANEL_FOOT$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
         mail -s "$(m "$M_MAILT16_SUBJ" "$temp_warn16")" "$ALERT_MAIL"
 fi
-log "$(m "$M_T16_DONE" "$temp_warn16")"
+logr "$(m "$M_T16_DONE" "$temp_warn16")"
 
 # ── Whitelist skips: one email per run (each block once per day) ────────────
 if [ "$wl_skipped" -gt 0 ]; then
@@ -2004,17 +2026,24 @@ fi
 if [ "$DRY" != 1 ] && [ -f "$SAYAC_FILE" ]; then
     cutoff=$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')
     awk -v d="$cutoff" '$2 >= d' "$SAYAC_FILE" > "${SAYAC_FILE}.tmp" && mv "${SAYAC_FILE}.tmp" "$SAYAC_FILE"
-    log "$(m "$M_CLEANCNT" "$SAYAC_RETENTION_DAYS")"
+    logr "$(m "$M_CLEANCNT" "$SAYAC_RETENTION_DAYS")"
 fi
 if [ "$DRY" != 1 ] && [ -f "$LOG_FILE" ]; then
     line_count=$(wc -l < "$LOG_FILE")
     if [ "$line_count" -gt "$LOG_MAX_LINES" ]; then
         tail -"$LOG_MAX_LINES" "$LOG_FILE" > "${LOG_FILE}.tmp" && mv "${LOG_FILE}.tmp" "$LOG_FILE"
-        log "$(m "$M_LOGTRIM" "$LOG_MAX_LINES" "$line_count")"
+        logr "$(m "$M_LOGTRIM" "$LOG_MAX_LINES" "$line_count")"
     fi
 fi
-if [ "$DRY" != 1 ] && [ -f "$EVENTS_FILE" ] && [ "$(wc -l < "$EVENTS_FILE")" -gt "$EVENTS_MAX" ]; then
-    tail -n "$EVENTS_MAX" "$EVENTS_FILE" > "${EVENTS_FILE}.tmp" && mv "${EVENTS_FILE}.tmp" "$EVENTS_FILE"
+# Olay kaydı: tur kayıtları (her turda bir) ve gerçek işler ayrı sınırlanır — yoksa sessiz turlar
+# banları ve uyarıları birkaç ayda kayıttan iterdi.
+if [ "$DRY" != 1 ] && [ -f "$EVENTS_FILE" ]; then
+    read -r ev_r ev_o < <(awk '/"type":"run"/ { r++; next } { o++ } END { print r + 0, o + 0 }' "$EVENTS_FILE")
+    if [ "$ev_r" -gt $(( RUNS_MAX + 100 )) ] || [ "$ev_o" -gt "$EVENTS_MAX" ]; then
+        awk -v r="$ev_r" -v o="$ev_o" -v kr="$RUNS_MAX" -v ko="$EVENTS_MAX" '
+            /"type":"run"/ { if (++ri > r - kr) print; next }
+            { if (++oi > o - ko) print }' "$EVENTS_FILE" > "${EVENTS_FILE}.tmp" && mv "${EVENTS_FILE}.tmp" "$EVENTS_FILE"
+    fi
 fi
 digest_maybe
 
@@ -2027,18 +2056,24 @@ if command -v flock >/dev/null 2>&1; then exec 8>"$LOCK_FILE.enrich"; flock -n 8
 if [ "$ENRICH" = 1 ]; then
 # Adım süreleri günlüğe: tur uzun sürdüğünde nerede geçtiği görünsün
 st=$(date +%s); backfill_owners
-[ "$BF_N" -gt 0 ] && log "$(m "$M_STEP_OWN" "$BF_N" "$(( $(date +%s) - st ))")"
+[ "$BF_N" -gt 0 ] && logr "$(m "$M_STEP_OWN" "$BF_N" "$(( $(date +%s) - st ))")"
 st=$(date +%s); imunify_refresh
 case "$IM_R" in
-    ok)    log "$(m "$M_STEP_IM" "$IM_N" "$(( $(date +%s) - st ))")" ;;
-    fresh) log "$(m "$M_STEP_IMFRESH" "$IM_AGE" "$IMUNIFY_REFRESH_MIN")" ;;
+    ok)    logr "$(m "$M_STEP_IM" "$IM_N" "$(( $(date +%s) - st ))")" ;;
+    fresh) logr "$(m "$M_STEP_IMFRESH" "$IM_AGE" "$IMUNIFY_REFRESH_MIN")" ;;
     fail)  log "$(m "$M_STEP_IMFAIL" "$(( $(date +%s) - st ))")" ;;
 esac
 st=$(date +%s); backfill_imunify
-[ "$BF_N" -gt 0 ] && log "$(m "$M_STEP_IMOWN" "$BF_N" "$(( $(date +%s) - st ))")"
+[ "$BF_N" -gt 0 ] && logr "$(m "$M_STEP_IMOWN" "$BF_N" "$(( $(date +%s) - st ))")"
 owners_save
 fi
 ev run "" "v=\"$VERSION\"" "dur=$(( $(date +%s) - RUN_T0 ))" "added=$added24" "warn16=$warn16" \
     "temp_added=$temp_added24" "promoted=$temp_perm_added24" "temp_warn16=$temp_warn16" "wl_skipped=$wl_skipped" \
     "perm_used=$(num "$current_count")" "perm_limit=$(num "$limit")" "temp_used=$(num "$temp_current")" "temp_limit=$(num "$temp_limit")"
-log "$(m "$M_END_T" "$(( $(date +%s) - RUN_T0 ))")"
+RUN_DUR=$(( $(date +%s) - RUN_T0 ))
+if [ "$EVENTFUL" = 0 ] && [ "$DRY" != 1 ] && [ "$LOG_MODE" = tee ]; then
+    printf '[%(%Y-%m-%d %H:%M:%S)T] %s\n' -1 "$(m "$M_END_T" "$RUN_DUR")"          # ekrana her zamanki gibi
+    printf '[%(%Y-%m-%d %H:%M:%S)T] %s\n' -1 "$(m "$M_QUIET" "$(num "$current_count")" "$(num "$limit")" "$(num "$temp_current")" "$(num "$temp_limit")" "$RUN_DUR")" >> "$LOG_FILE"
+else
+    logr "$(m "$M_END_T" "$RUN_DUR")"
+fi
