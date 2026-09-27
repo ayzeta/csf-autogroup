@@ -282,7 +282,7 @@
 
 /* ── Tablo (aktif grup banları) ─────────────────────────────────── */
 .ag-tbl { padding: 0; }
-.ag-tbl { container-type: inline-size; }
+.ag-tbl { container: agtbl / inline-size; }
 /* blok · durum · sahip · tekil · eklendi · menü — sabit sütunlar, hiçbir hücre komşusuna taşmaz */
 .ag-thead, .ag-tr { display: grid; grid-template-columns: 146px 104px minmax(0, 1fr) 60px 112px 36px; align-items: center; gap: 12px; padding: 0 10px 0 18px; }
 .ag-thead { height: 36px; background: #fafafb; border-bottom: 1px solid var(--ag-line-soft); }
@@ -310,7 +310,7 @@
 .ag-pager span { margin-right: 6px; font-variant-numeric: tabular-nums; }
 /* izlenenler tablosu: blok · sahip · başlangıç · kalan · menü */
 .ag-tr-p { grid-template-columns: 146px minmax(0, 1fr) 92px 104px 36px; }
-@container (max-width: 760px) {
+@container agtbl (max-width: 760px) {
   .ag-thead:not(.ag-tr-p), .ag-tr:not(.ag-tr-p) { grid-template-columns: 146px 104px minmax(0, 1fr) 108px 36px; }
   .ag-tr:not(.ag-tr-p) .ag-num-c, .ag-thead:not(.ag-tr-p) .ag-num-c { display: none; }
 }
@@ -470,12 +470,17 @@
   .ag-head-actions { margin-left: 0; width: 100%; }
 }
 /* dar KPI kartında halka ve simge yer kaplamasın */
-.ag-kpi { container-type: inline-size; }
-@container (max-width: 250px) {
-  .ag-ring { display: none; }
-  .ag-kpi-ic { width: 34px; height: 34px; border-radius: 10px; }
-  .ag-kpi-ic svg { width: 18px; height: 18px; }
+.ag-kpis { container: agkpis / inline-size; }
+/* dar ekran (iki sütunlu küçük kartlar): simge üstte, metin kesilmeden alt alta */
+@container agkpis (max-width: 620px) {
+  .ag-kpi { flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px 16px; position: relative; }
+  .ag-kpi-ic { width: 36px; height: 36px; border-radius: 10px; }
+  .ag-kpi-ic svg { width: 19px; height: 19px; }
+  .ag-kpi-x { width: 100%; }
+  .ag-kpi-m { white-space: normal; overflow: visible; }
   .ag-kpi-d { display: block; margin: 2px 0 0; }
+  .ag-ring { position: absolute; top: 14px; right: 14px; width: 36px; height: 36px; }
+  .ag-kpi-side { position: absolute; top: 14px; right: 14px; }
 }
 
 /* ── Telefon ───────────────────────────────────────────────────── */
@@ -614,3 +619,48 @@
 .ag-upd-f { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .ag-upd-acts { display: flex; gap: 8px; }
 .ag-upd-f .ag-sub { flex: 1; min-width: 220px; }
+
+/* ── Durum bandı düzeni (v1.8): bölümler içerik kadar, aralarında ince çizgi; grafik kalan alanı doldurur ── */
+.ag-band { grid-template-columns: auto auto auto auto minmax(160px, 1fr); gap: 0; padding: 14px 6px; }
+.ag-band > * { padding: 2px 26px; min-width: 0; }
+.ag-band > .ag-band-m, .ag-band > .ag-band-g { border-left: 1px solid var(--ag-line-soft); }
+.ag-band-m { min-width: 120px; }
+.ag-band-g .ag-spark { justify-content: flex-start; }
+.ag-band-g .ag-spark i { max-width: 12px; }   /* az tur varken çubuklar blok gibi genişlemesin */
+@media (max-width: 1100px) {
+  /* üstte durum, altında üç ölçü yan yana, en altta tam genişlik grafik */
+  .ag-band { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 0; padding: 14px 4px; }
+  .ag-band > * { padding: 2px 18px; }
+  .ag-band-s { grid-column: 1 / -1; }
+  .ag-band > .ag-band-m:nth-child(2) { border-left: 0; }
+  .ag-band-g { grid-column: 1 / -1; border-left: 0 !important; border-top: 1px solid var(--ag-line-soft); padding-top: 10px; display: flex; align-items: center; gap: 12px; }
+  .ag-band-g small { flex: none; }
+  .ag-band-g .ag-spark { flex: 1; margin-top: 0; height: 22px; }
+}
+@media (max-width: 600px) {
+  .ag-band > * { padding: 2px 12px; }
+  .ag-band-g { display: flex; }
+  .ag-band-m b { font-size: 15px; }
+}
+
+.ag-c.lft .ag-tip { left: 0; right: auto; transform: none; }
+
+/* ── Dar ekran başlığı: başlık solda, iki düğme sağda alt alta ── */
+@media (max-width: 760px) {
+  .ag-head { flex-wrap: wrap; align-items: center; }
+  .ag-title { flex: 1; min-width: 0; }
+  .ag-title h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ag-title .ag-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .ag-head-actions { display: flex; flex-direction: column; align-items: stretch; gap: 6px; width: auto; margin-left: auto; }
+  .ag-head-actions .ag-btn { height: 30px; padding: 0 12px; font-size: 12.5px; justify-content: flex-start; }
+}
+
+/* özet kartlarının sağı: halka ya da küçük döküm (kartlar dengeli dursun) */
+.ag-ring.vio circle + circle { stroke: var(--ag-vio); }
+.ag-kpi-side { display: flex; flex-direction: column; gap: 3px; align-items: flex-end; flex: none; font-size: 11.5px; color: var(--ag-text-3); white-space: nowrap; }
+.ag-kpi-side b { color: var(--ag-text); font-size: 13px; margin-right: 3px; font-variant-numeric: tabular-nums; }
+.ag-kpi-side .warn b { color: var(--ag-warn); }
+
+/* özet kartları eklentinin kendi genişliğine göre dizilir (WHM menüsü yer kapladığı için pencere genişliği yanıltır) */
+.ag-wrap { container: agwrap / inline-size; }
+@container agwrap (max-width: 1180px) { .ag-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
