@@ -10,6 +10,7 @@
   var $app = document.getElementById('ag-app');
   var S = null;                 // son durum verisi
   var UPD = null;               // güncelleme kontrolü sonucu
+  var UPD_T = 0, UPD_BUSY = false; // son denetim zamanı (sn), denetim sürüyor mu
   var LANG = 'en';
   var CLOCK = 0;                // sunucu saati - istemci saati (sn)
   var UI = { gf: 'all', gq: '', ef: 'all', open: {}, evLimit: 40, commits: false, st: 'notify', gs: 'added', gd: -1, gp: 0, pp: 0, hist: {}, cd: 30, menu: null, at: 'atk',
@@ -59,71 +60,71 @@
       s_review: 'Kontrol edilecekler', s_review_h: 'Otomatik banlanmayan, göz atılması gerekenler',
       s_groups: 'Aktif blok banları', s_events: 'Son işlemler', s_lookup: 'IP sorgula', s_pending: 'İzlenenler',
       s_pending_h: 'Bir kez geçici banlandı; bu blok tekrar gelirse kalıcı + do not delete olur', s_ignored: 'Yoksayılanlar', s_config: 'Kurallar',
-      lookup_ph: '185.220.101.12', lookup_btn: 'Sorgula', lookup_hint: 'Hostname, sahip (ASN), duyurulan blok, kayıt ve CSF listelerindeki durumu.',
+      lookup_ph: '185.220.101.12', lookup_btn: 'Sorgula', lookup_hint: 'Hostname, sahip (ASN), duyurulan aralık, kayıt ve CSF listelerindeki durumu.',
       f_all: 'Tümü', f_perm: 'Kalıcı', f_dnd: 'Do not delete', f_temp: 'Geçici', f_manual: 'Elle', g_search: 'CIDR, AS ya da kurum',
       e_all: 'Tümü', e_bans: 'Banlar', e_warn: 'Şüpheli ağlar', e_skip: 'Atlananlar', e_manual: 'Elle işlemler', e_clean: 'Temizlik',
       ev_add24: 'Blok banı', ev_promote: 'Kalıcıya alındı', ev_temp24: 'Geçici blok banı', ev_skip_wl: 'Atlandı', ev_warn16: 'Şüpheli ağ',
       ev_warn16t: 'Şüpheli ağ', ev_clean_temp: 'Temizlendi', ev_manual_ban: 'Elle ban', ev_manual_unban: 'Kaldırıldı',
       ev_manual_forget: 'İzlemeden çıkarıldı', ev_manual_ignore: 'Yoksayıldı', ev_manual_unignore: 'Yoksayma kalktı',
       kind_perm: 'kalıcı', kind_promoted: 'tekrar eden', kind_temp: 'geçici', kind_manual: 'elle',
-      ips: 'IP\'ler', hide: 'Gizle', ban16: '/16 banla', ban_anyway: 'Yine de banla', ignore: 'Yoksay', unban: 'Kaldır',
+      ips: 'IP\'ler', hide: 'Gizle', ban16: 'Ağı banla (/16)', ban_anyway: 'Yine de banla', ignore: 'Yoksay', unban: 'Kaldır',
       promote: 'Kalıcı yap', forget: 'İzlemeden çıkar', unignore: 'Kaldır', show_all: 'Tümünü göster ({0})', more: 'Daha fazla',
-      n_ip: '{0} IP', n_subnets: '{0} farklı /24', from_temp: 'geçici banlardan', from_perm: 'kalıcı banlardan', n_singles: '{0} tekilden', since: '{0} tarihinden beri', days_left: '{0} gün kaldı',
+      n_ip: '{0} IP', n_subnets: '{0} farklı blok', from_temp: 'geçici banlardan', from_perm: 'kalıcı banlardan', n_singles: '{0} tekilden', since: '{0} tarihinden beri', days_left: '{0} gün kaldı',
       ttl_left: 'geçici ban {0}', until: '{0} tarihine kadar', by: '{0} tarafından', wl: 'beyaz liste: {0}', and_more: '+{0} IP daha',
       no_review: 'Göz atılacak bir şey yok.', no_groups: 'Aktif blok banı yok.', no_pending: 'İzlenen blok yok.',
       no_events: 'Henüz kayıt yok. İlk turdan sonra burada görünecek.', no_match: 'Eşleşen kayıt yok.',
-      c_t24: 'Blok banı (/24)', c_t24p: 'do not delete eşiği', c_t16: 'Şüpheli ağ (/16)', c_tt24: 'Geçici blok banı (/24)', c_tt16: 'Şüpheli ağ, geçici (/16)',
+      c_t24: 'Blok banı (/24)', c_t24p: 'Do not delete eşiği', c_t16: 'Şüpheli ağ (/16)', c_tt24: 'Geçici blok banı (/24)', c_tt16: 'Şüpheli ağ, geçici (/16)',
       c_ret: 'İzleme süresi', c_lookup: 'Sahip / hostname sorgusu', c_on: 'açık', c_off: 'kapalı', c_days: '{0} gün', c_singles: '≥ {0} tekil',
       now: 'az önce', min_ago: '{0} dk önce', h_ago: '{0} sa önce', d_ago: '{0} gün önce', dur_h: '{0} sa {1} dk', dur_m: '{0} dk',
       cancel: 'Vazgeç', confirm: 'Onayla', close: 'Kapat', reload: 'Sayfayı yenile', type_to_confirm: 'Onaylamak için {0} yazın',
-      m_ban16_t: '{0} kalıcı olarak banlansın mı?', m_ban16_b: 'Bu, 65.536 adresin tamamını engeller. Blok "do not delete" olarak eklenir; limit dolduğunda da silinmez.',
+      m_ban16_t: '{0} kalıcı olarak banlansın mı?', m_ban16_b: 'Bu, ağdaki 65.536 adresin tamamını engeller. Ban "do not delete" olarak eklenir; liste dolduğunda da silinmez.',
       m_force_t: 'Beyaz listeye rağmen banlansın mı?', m_force_b: 'Bu blok CSF beyaz listelerinden biriyle çakışıyor:',
       m_force_n: 'csf.allow adresleri ban içinden geçmeye devam eder; csf.ignore ve diğerleri ise ENGELLENİR.',
       m_promote_t: '{0} şimdi kalıcı yapılsın mı?', m_promote_b: 'Blok "do not delete" olarak kalıcı listeye eklenir ve izlemeden çıkarılır.',
-      m_forget_t: '{0} izlemeden çıkarılsın mı?', m_forget_b: 'Bu bloktan bir sonraki grup saldırısı yine "ilk kez" sayılır ve 12 saatlik geçici ban alır.',
-      m_unban_t: '{0} kaldırılsın mı?', m_unban_b: 'Blok banı kaldırılır. Gruplanırken silinen tekil banlar geri gelmez; bu adresler tamamen açılır.',
+      m_forget_t: '{0} izlemeden çıkarılsın mı?', m_forget_b: 'Bu bloktan bir sonraki saldırı yine "ilk kez" sayılır ve 12 saatlik geçici blok banı alır.',
+      m_unban_t: '{0} kaldırılsın mı?', m_unban_b: 'Blok banı kaldırılır. Blok banı eklenirken silinen tekil banlar geri gelmez; bu adresler tamamen açılır.',
       m_unban_dnd: 'Bu blok "do not delete" işaretli. Kaldırmak için csf.deny\'deki işaret önce silinir (dosyanın yedeği alınır).',
-      m_ignore_t: '{0} yoksayılsın mı?', m_ignore_b: 'Bu blok "Kontrol edilecekler" listesinden gizlenir; /16 ise uyarı maili de gelmez.', m_ignore_d: 'Süre',
+      m_ignore_t: '{0} yoksayılsın mı?', m_ignore_b: 'Bu kayıt Kontrol edilecekler listesinden gizlenir; şüpheli ağsa (/16) uyarı maili de gelmez.', m_ignore_d: 'Süre',
       m_unignore_t: '{0} tekrar izlensin mi?', m_run_t: 'Tur şimdi çalıştırılsın mı?',
-      m_run_b: 'Cron\'un yapacağının aynısı hemen yapılır: eşiği geçen /24\'ler banlanır, mailler gönderilir.',
+      m_run_b: 'Cron\'un yapacağının aynısı hemen yapılır: eşiği geçen bloklar banlanır, mail gönderilir.',
       m_dry_t: 'Kuru çalıştırma', m_dry_wait: 'Tur hiçbir şeyi değiştirmeden simüle ediliyor…', m_dry_none: 'Bu tur hiçbir değişiklik yapmazdı.',
       m_upd_t: 'v{0} sürümüne güncellensin mi?', m_upd_b: 'update.sh çalıştırılır; config.env ve kayıtlar korunur. Birkaç saniye sürer.',
       m_upd_run: 'Güncelleniyor…', m_upd_ok: 'Güncelleme tamamlandı.', m_upd_fail: 'Güncelleme tamamlanamadı; çıktıya bakın.',
       t_started: 'Tur başlatıldı.', t_done: 'Tur tamamlandı.', t_busy: 'Başka bir tur çalışıyor, birazdan tekrar deneyin.', t_cron_busy: 'Bir tur zaten çalışıyor (büyük olasılıkla cron); bitince sonuçlar burada görünecek.',
       t_err: 'İşlem tamamlanamadı: {0}', session: 'Oturum süresi doldu. Sayfayı yenileyin.', t_copied: 'Kopyalandı.',
       l_host: 'Hostname', l_fwd: 'ileri yönde doğrulandı', l_nofwd: 'ileri yönde doğrulanamadı', l_noptr: 'Ters DNS kaydı yok',
-      l_owner: 'Sahip', l_prefix: 'Duyurulan blok', l_reg: 'Kayıt', l_fw: 'Güvenlik duvarı', l_wl: 'Beyaz liste',
+      l_owner: 'Sahip', l_prefix: 'Duyurulan aralık', l_reg: 'Kayıt', l_fw: 'Güvenlik duvarı', l_wl: 'Beyaz liste',
       l_pending: 'İzleniyor', l_ign: 'Yoksayılıyor', l_notbanned: 'Engelli değil', l_none: 'Yok', l_perm_single: 'Kalıcı (tekil)',
       l_perm_cover: 'Kalıcı (blok)', l_temp: 'Geçici', l_nolookup: 'Sahip ve hostname sorguları kapalı (LOOKUP=0).',
       l_abuse: 'AbuseIPDB', l_bgp: 'bgp.he.net', l_copy: 'Kopyala', bad_ip: 'Geçerli bir IPv4 adresi yazın.',
       foot: 'CSF Auto-Group v{0} · {1} olarak oturum açıldı',
-      tab_overview: 'Genel bakış', tab_settings: 'Ayarlar', tab_history: 'Geçmiş', show_less: 'Daha az göster', s_cfglog: 'Ayar geçmişi', c_expire: 'Eski blok banı', c_auto_on: 'otomatik kaldırılır', c_auto_off: 'elle kaldırılır', hc_csf: 'CSF', hc_lfd: 'lfd', hc_cron: 'Cron', hc_csf_ok: 'Güvenlik duvarı kuralları yüklü', hc_csf_off: 'CSF devre dışı (csf.disable)', hc_csf_testing: 'CSF test modunda (TESTING = 1)', hc_csf_norules: 'CSF kuralları yüklü değil', hc_csf_unknown: 'Durum okunamadı (iptables yok)', hc_lfd_ok: 'lfd çalışıyor', hc_lfd_down: 'lfd çalışmıyor: yeni ban gelmez', hc_cron_ok: 'Turlar zamanında çalışıyor', hc_cron_late: 'Tur gecikti', sb_fw: 'Güvenlik duvarında sorun var', f_old: 'Eski', old_h: '{0} blok banı {1} günden eski.', old_auto: 'Otomatik kaldırma açık; sıradaki turda kaldırılacaklar.', old_manual: 'Otomatik kaldırma kapalı (Ayarlar → Saklama).', old_rm: 'Eskileri kaldır ({0})', m_exp_t: '{0} eski blok banı kaldırılsın mı?', m_exp_b: '{1} günden eski {0} blok banı csf.deny\'den kaldırılır (do not delete olanlar da). Bu bloklardan tekrar saldırı gelirse yeniden banlanırlar. csf.deny önce yedeklenir.', ev_expire: 'Eski blok kaldırıldı', exp_age: '{0} gün önce eklenmişti', rep_n: 'tekrar ediyor · {0} gün', k_BLOCK_EXPIRE_DAYS: 'Eski blok banı sınırı (gün)', h_BLOCK_EXPIRE_DAYS: 'Bu süreden eski blok banları Aktif blok banları tablosunda "Eski" filtresinde toplanır.', k_BLOCK_EXPIRE_AUTO: 'Eski blok banlarını otomatik kaldır', h_BLOCK_EXPIRE_AUTO: 'Açıksa her turda bu süreden eski blok banları kaldırılır ve mailde bildirilir. Elle eklenen banlara dokunulmaz.', from_log: 'günlükten', sn_server: 'Sunucu', sn_server_h: 'CSF\'in liste sınırları ve eklentinin kullandığı araçlar.', st_deps: 'Sunucu gereksinimleri', st_deps_h: 'Eklentinin kullandığı araçlar ve eksik olduğunda ne olduğu.', dep_ok: 'Var', dep_missing: 'Yok', dep_warn: 'Eksik', dep_opt: 'isteğe bağlı', dep_csf: 'Güvenlik duvarı; banları o uygular.', dep_csf_x: 'Zorunlu: CSF olmadan hiçbir şey çalışmaz.', dep_crontab: 'Turları zamanında çalıştırır.', dep_crontab_x: 'Turlar otomatik çalışmaz; zamanlama Ayarlar\'dan değiştirilemez.', dep_mail: 'Uyarı mailleri ve haftalık özet.', dep_mail_x: 'Uyarı mailleri ve haftalık özet gönderilmez.', dep_dns: 'Sahip ve hostname sorguları.', dep_dns_x: 'Sahip ve hostname bilgisi olmaz; CC_IGNORE / CC_ALLOW ve csf.rignore kontrol edilemez, bu listelere dayanan bloklar banlanmaz.', dep_logrotate: 'Günlük dosyasını döndürür.', dep_logrotate_x: 'Günlük, satır sınırıyla kesilir (yedek yöntem).', dep_logrotate_w: 'Kurulu ama ayar dosyası yok; günlük şimdilik satır sınırıyla kesiliyor. update.sh ya da install.sh ile yeniden kurun.', dep_flock: 'Aynı anda tek tur çalışmasını sağlar.', dep_flock_x: 'Üst üste binen turlara karşı koruma olmaz.', dep_timeout: 'Eklentinin çalıştırdığı komutlara zaman sınırı koyar.', dep_timeout_x: 'Takılan bir komut sayfayı bekletebilir.', dep_git: 'Arayüzden güncelleme.', dep_git_x: 'Güncelleme kontrolü ve Güncelle düğmesi çalışmaz.', dep_imunify: 'Sağlayıcılar kartındaki Imunify sekmesi.', dep_imunify_x: 'Imunify sekmesi görünmez; başka etkisi yok.', k_logfile: 'Günlük dosyası', log_rot: 'logrotate: {2} MB\'ı geçince döndürülür, son {3} arşiv saklanır · şu an {0} · {1} arşiv.', k_LOG_ROTATE_MB: 'Günlük boyutu (MB)', h_LOG_ROTATE_MB: 'Günlük bu boyutu geçince döndürülür (logrotate günde bir kontrol eder).', k_LOG_ROTATE_KEEP: 'Arşiv sayısı', h_LOG_ROTATE_KEEP: 'Döndürülen günlüklerden kaç tanesi sıkıştırılarak saklanır.', log_lines: 'Şu an {0} / {1} satır.', no_cfglog: 'Henüz ayar değişikliği yok.', ev_config: 'Ayar değişti', ev_test_mail: 'Test maili',
+      tab_overview: 'Genel bakış', tab_settings: 'Ayarlar', tab_history: 'Geçmiş', show_less: 'Daha az göster', s_cfglog: 'Ayar geçmişi', st_upd: 'Sürüm ve güncelleme', upd_check: 'Güncellemeleri denetle', upd_checking: 'Denetleniyor…', upd_cur: 'Kurulu sürüm', upd_ok: 'Güncel', upd_new: 'Yeni sürüm var: v{0}', upd_last: 'Son denetim: {0}', upd_never: 'Henüz denetlenmedi', upd_auto: 'Sayfa açıkken yarım saatte bir kendiliğinden de denetlenir; yeni sürüm çıkınca üstte bildirim belirir.', upd_err_not_git: 'Kurulum bir git deposu değil; arayüzden güncelleme yapılamaz (update.sh de çalışmaz).', upd_err_unreachable: 'GitHub\'a ulaşılamadı; biraz sonra tekrar deneyin.', upd_err_detached: 'Depo bir dala bağlı değil; güncelleme SSH üzerinden yapılmalı.', c_expire: 'Eski blok banı', c_auto_on: 'otomatik kaldırılır', c_auto_off: 'elle kaldırılır', hc_csf: 'CSF', hc_lfd: 'LFD', hc_cron: 'Cron', hc_csf_ok: 'Güvenlik duvarı kuralları yüklü', hc_csf_off: 'CSF devre dışı (csf.disable)', hc_csf_testing: 'CSF test modunda (TESTING = 1)', hc_csf_norules: 'CSF kuralları yüklü değil', hc_csf_unknown: 'Durum okunamadı (iptables yok)', hc_lfd_ok: 'LFD çalışıyor', hc_lfd_down: 'LFD çalışmıyor: yeni ban gelmez', hc_cron_ok: 'Turlar zamanında çalışıyor', hc_cron_late: 'Tur gecikti', sb_fw: 'Güvenlik duvarında sorun var', f_old: 'Eski', old_h: '{0} blok banı {1} günden eski.', old_auto: 'Otomatik kaldırma açık; sıradaki turda kaldırılacaklar.', old_manual: 'Otomatik kaldırma kapalı (Ayarlar → Saklama).', old_rm: 'Eskileri kaldır ({0})', m_exp_t: '{0} eski blok banı kaldırılsın mı?', m_exp_b: '{1} günden eski {0} blok banı csf.deny\'den kaldırılır (do not delete olanlar da). Bu bloklardan tekrar saldırı gelirse yeniden banlanırlar. csf.deny önce yedeklenir.', ev_expire: 'Eski blok kaldırıldı', exp_age: '{0} gün önce eklenmişti', rep_n: 'tekrar ediyor · {0} gün', k_BLOCK_EXPIRE_DAYS: 'Eski blok banı sınırı (gün)', h_BLOCK_EXPIRE_DAYS: 'Bu süreden eski blok banları Aktif blok banları tablosunda "Eski" filtresinde toplanır.', k_BLOCK_EXPIRE_AUTO: 'Eski blok banlarını otomatik kaldır', h_BLOCK_EXPIRE_AUTO: 'Açıksa her turda bu süreden eski blok banları kaldırılır ve mailde bildirilir. Elle eklenen banlara dokunulmaz.', from_log: 'günlükten', sn_server: 'Sunucu', sn_server_h: 'CSF\'in liste sınırları ve eklentinin kullandığı araçlar.', st_deps: 'Sunucu gereksinimleri', st_deps_h: 'Eklentinin kullandığı araçlar ve eksik olduğunda ne olduğu.', dep_ok: 'Var', dep_missing: 'Yok', dep_warn: 'Eksik', dep_opt: 'isteğe bağlı', dep_csf: 'Güvenlik duvarı; banları o uygular.', dep_csf_x: 'Zorunlu: CSF olmadan hiçbir şey çalışmaz.', dep_crontab: 'Turları zamanında çalıştırır.', dep_crontab_x: 'Turlar otomatik çalışmaz; zamanlama Ayarlar\'dan değiştirilemez.', dep_mail: 'Uyarı mailleri ve haftalık özet.', dep_mail_x: 'Uyarı mailleri ve haftalık özet gönderilmez.', dep_dns: 'Sahip ve hostname sorguları.', dep_dns_x: 'Sahip ve hostname bilgisi olmaz; CC_IGNORE / CC_ALLOW ve csf.rignore kontrol edilemez, bu listelere dayanan bloklar banlanmaz.', dep_logrotate: 'Günlük dosyasını döndürür.', dep_logrotate_x: 'Günlük, satır sınırıyla kesilir (yedek yöntem).', dep_logrotate_w: 'Kurulu ama ayar dosyası yok; günlük şimdilik satır sınırıyla kesiliyor. update.sh ya da install.sh ile yeniden kurun.', dep_flock: 'Aynı anda tek tur çalışmasını sağlar.', dep_flock_x: 'Üst üste binen turlara karşı koruma olmaz.', dep_timeout: 'Eklentinin çalıştırdığı komutlara zaman sınırı koyar.', dep_timeout_x: 'Takılan bir komut sayfayı bekletebilir.', dep_git: 'Arayüzden güncelleme.', dep_git_x: 'Güncelleme kontrolü ve Güncelle düğmesi çalışmaz.', dep_imunify: 'Sağlayıcılar kartındaki Imunify sekmesi.', dep_imunify_x: 'Imunify sekmesi görünmez; başka etkisi yok.', k_logfile: 'Günlük dosyası', log_rot: 'logrotate: {2} MB\'ı geçince döndürülür, son {3} arşiv saklanır · şu an {0} · {1} arşiv.', k_LOG_ROTATE_MB: 'Günlük boyutu (MB)', h_LOG_ROTATE_MB: 'Günlük bu boyutu geçince döndürülür (logrotate günde bir kontrol eder).', k_LOG_ROTATE_KEEP: 'Arşiv sayısı', h_LOG_ROTATE_KEEP: 'Döndürülen günlüklerden kaç tanesi sıkıştırılarak saklanır.', log_lines: 'Şu an {0} / {1} satır.', no_cfglog: 'Henüz ayar değişikliği yok.', ev_config: 'Ayar değişti', ev_test_mail: 'Test maili',
       st_notify: 'Bildirim', st_mail: 'Uyarı maili adresi', st_mail_h: 'Blok banları, şüpheli ağ uyarıları ve limit mailleri buraya gider. root@localhost, cPanel\'de sunucunun iletişim adresine yönlenir.',
-      st_lang: 'Dil', st_lang_h: 'Log, mail ve bu panelin dili.', st_test: 'Test maili gönder', st_test_h: 'Kayıtlı adrese gönderilir.',
-      st_test_dirty: 'Önce yeni adresi kaydedin.', st_thr: 'Eşikler', st_thr_h: 'Kaç tekil ban bir işlemi tetikler.',
-      k_THRESHOLD_24: 'Blok banı (/24)', h_THRESHOLD_24: 'Bir /24 içinde bu kadar kalıcı tekil olunca /24 banlanır.',
-      k_THRESHOLD_24_PERMANENT: 'Do not delete eşiği', h_THRESHOLD_24_PERMANENT: 'Bu kadar tekil olunca /24 "do not delete" alır. /24 eşiğinden küçük olamaz.',
-      k_THRESHOLD_16: 'Şüpheli ağ (/16)', h_THRESHOLD_16: 'En az 2 farklı /24\'ten bu kadar tekil olunca mail gelir. Otomatik ban yok.',
-      k_THRESHOLD_TEMP_24: 'Geçici blok banı (/24)', h_THRESHOLD_TEMP_24: 'Bu kadar geçici tekil: ilk sefer 12 saat geçici ban, ikinci sefer kalıcı.',
-      k_THRESHOLD_TEMP_16: 'Şüpheli ağ, geçici (/16)', h_THRESHOLD_TEMP_16: 'Geçici listedeki /16 yoğunluğu için uyarı eşiği.',
-      st_sched: 'Zamanlama', st_sched_h: 'Script\'in cron ile ne sıklıkla çalışacağı.', cron_5: '5 dk', cron_10: '10 dk', cron_15: '15 dk', cron_30: '30 dk', cron_0: 'Saatte bir',
+      st_lang: 'Dil', st_lang_h: 'Günlük, mail ve bu panelin dili.', st_test: 'Test maili gönder', st_test_h: 'Kayıtlı adrese gönderilir.',
+      st_test_dirty: 'Önce yeni adresi kaydedin.', st_thr: 'Eşikler', st_thr_h: 'Kaç tekil banın bir işlemi tetiklediği.',
+      k_THRESHOLD_24: 'Blok banı (/24)', h_THRESHOLD_24: 'Bir blokta (/24) bu kadar kalıcı tekil olunca blok banlanır.',
+      k_THRESHOLD_24_PERMANENT: 'Do not delete eşiği', h_THRESHOLD_24_PERMANENT: 'Bu kadar tekil olunca blok banı "do not delete" alır. Blok banı eşiğinden küçük olamaz.',
+      k_THRESHOLD_16: 'Şüpheli ağ (/16)', h_THRESHOLD_16: 'Bir ağda (/16), en az 2 farklı bloktan bu kadar kalıcı tekil olunca şüpheli ağ olarak bildirilir. Ağ banlanmaz.',
+      k_THRESHOLD_TEMP_24: 'Geçici blok banı (/24)', h_THRESHOLD_TEMP_24: 'Bir blokta bu kadar geçici tekil olunca: ilk sefer 12 saatlik geçici blok banı, tekrar gelirse kalıcı.',
+      k_THRESHOLD_TEMP_16: 'Şüpheli ağ, geçici (/16)', h_THRESHOLD_TEMP_16: 'Bir ağda (/16), en az 2 farklı bloktan bu kadar geçici tekil olunca şüpheli ağ olarak bildirilir. Ağ banlanmaz.',
+      st_sched: 'Zamanlama', st_sched_h: 'Turların cron ile ne sıklıkla çalışacağı.', cron_5: '5 dk', cron_10: '10 dk', cron_15: '15 dk', cron_30: '30 dk', cron_0: 'Saatte bir',
       st_lookup: 'Sorgular', k_LOOKUP: 'Sahip ve hostname sorgusu', h_LOOKUP: 'Mailde ve panelde ASN, kurum ve hostname gösterir; CC_IGNORE ve csf.rignore kontrolleri de buna bağlı.',
       k_LOOKUP_TIMEOUT: 'DNS zaman aşımı (sn)', h_LOOKUP_TIMEOUT: 'Her sorgu için bekleme süresi.', st_nodns: 'Sunucuda dig/host yok; sorgular çalışmaz (dnf install bind-utils).',
       on: 'Açık', off: 'Kapalı', st_keep: 'Saklama', k_SAYAC_RETENTION_DAYS: 'İzleme süresi (gün)',
-      h_SAYAC_RETENTION_DAYS: 'Geçici banlanmış /24 bu süre içinde tekrar gelirse kalıcı olur.', k_REVIEW_DAYS: 'Kontrol edilecekler (gün)',
-      h_REVIEW_DAYS: 'Uyarı ve atlamaların listede kaç gün kalacağı.', k_LOG_MAX_LINES: 'Log satır sınırı', h_LOG_MAX_LINES: 'Log bu satır sayısında tutulur.',
+      h_SAYAC_RETENTION_DAYS: 'Geçici banlanmış bir blok bu süre içinde tekrar gelirse kalıcı olur.', k_REVIEW_DAYS: 'Kontrol edilecekler (gün)',
+      h_REVIEW_DAYS: 'Şüpheli ağların ve atlanan blokların Kontrol edilecekler listesinde kaç gün kalacağı.', k_LOG_MAX_LINES: 'Günlük satır sınırı', h_LOG_MAX_LINES: 'Günlük bu satır sayısında tutulur (yalnız logrotate yoksa).',
       st_csf: 'CSF liste sınırları', st_csf_h: 'Bunlar CSF\'in kendi ayarları; buradan değil CSF\'ten değiştirilir.',
       csf_deny: 'Kalıcı liste (DENY_IP_LIMIT)', csf_temp: 'Geçici liste (DENY_TEMP_IP_LIMIT)', csf_open: 'CSF ayarlarını aç',
       default_v: 'varsayılan {0}', range_v: '{0}–{1} arası bir tam sayı', mail_bad: 'Geçerli bir e-posta adresi yazın.',
-      rule_dnd: 'Do not delete eşiği /24 eşiğinden küçük olamaz.', dirty_n: '{0} değişiklik kaydedilmedi', discard: 'Vazgeç',
+      rule_dnd: 'Do not delete eşiği, blok banı eşiğinden küçük olamaz.', dirty_n: '{0} değişiklik kaydedilmedi', discard: 'Vazgeç',
       try_save: 'Kaydetmeden önce dene', save: 'Kaydet', m_save_t: 'Ayarlar kaydedilsin mi?', m_save_b: 'Şu değişiklikler config.env\'e yazılacak (önce yedek alınır):',
       m_try_t: 'Yeni eşiklerle kuru çalıştırma', m_try_b: 'Kaydedilmemiş ayarlarla; hiçbir şey değişmez.', show_pending_all: 'Tümünü göster ({0})',
       panel_bad: 'https://sunucu:2087 biçiminde yazın.', auto: 'otomatik', focus_gone: '{0} artık listede değil; güncel durumu gösteriliyor.',
       new_badge: 'Son ziyaretinden beri yeni', actions: 'İşlemler', overdue: 'Tur gecikti · son tur {0} (beklenen aralık {1})',
       since_visit: 'Son ziyaretinden beri ({0}):', sn_add: '{0} blok banı', sn_temp: '{0} geçici blok banı', sn_warn: '{0} şüpheli ağ',
-      sn_skip: '{0} beyaz liste atlaması', show_new: 'Göster', e_new: 'Son ziyaretten beri', ch_title: 'Son 30 gün', ch_total: '{0} olay', ch_title_n: 'Son {0} gün', ch_d: '{0} gün', sb_ok: 'Koruma çalışıyor', sb_run: 'Tur çalışıyor', sb_late: 'Koruma durdu', sb_every: 'Cron her {0}', sb_24: 'son 24 saatte {0}/{1} tur', sb_none: 'henüz tur yok', sb_last: 'Son tur', sb_dur: 'Tur süresi', sb_avg: 'ort. {0}', sb_next: 'Sıradaki', sb_now: 'şimdi', sb_spark: 'Son {0} turun süresi', pg_prev: 'Önceki sayfa', pg_next: 'Sonraki sayfa', dirty_leave: '{0} değişiklik kaydedilmedi. Yine de sekme değiştirilsin mi?', conn_net: 'Sunucuya ulaşılamıyor; gösterilenler {0} alındı. Yeniden deneniyor…', conn_session: 'Oturumun süresi doldu.', upd_busy: 'Bir güncelleme zaten çalışıyor.', sec: '{0} sn', k_week: '▲ {0} bu hafta', lk_recent: 'Son bakılanlar',
+      sn_skip: '{0} atlanan blok', show_new: 'Göster', e_new: 'Son ziyaretten beri', ch_title: 'Son 30 gün', ch_total: '{0} olay', ch_title_n: 'Son {0} gün', ch_d: '{0} gün', sb_ok: 'Koruma çalışıyor', sb_run: 'Tur çalışıyor', sb_late: 'Koruma durdu', sb_every: 'Cron her {0}', sb_24: 'son 24 saatte {0}/{1} tur', sb_none: 'henüz tur yok', sb_last: 'Son tur', sb_dur: 'Tur süresi', sb_avg: 'ort. {0}', sb_next: 'Sıradaki', sb_now: 'şimdi', sb_spark: 'Son {0} turun süresi', pg_prev: 'Önceki sayfa', pg_next: 'Sonraki sayfa', dirty_leave: '{0} değişiklik kaydedilmedi. Yine de sekme değiştirilsin mi?', conn_net: 'Sunucuya ulaşılamıyor; gösterilenler {0} alındı. Yeniden deneniyor…', conn_session: 'Oturumun süresi doldu.', upd_busy: 'Bir güncelleme zaten çalışıyor.', sec: '{0} sn', k_week: '▲ {0} bu hafta', lk_recent: 'Son bakılanlar',
       ch_add: 'Blok banı', ch_promote: 'Kalıcıya alındı', ch_temp: 'Geçici blok banı', ch_warn: 'Şüpheli ağ', ch_skip: 'Atlandı',
-      ch_empty: 'Son 30 günde kayıt yok; grafik olay kaydı biriktikçe dolacak.', ipcard: 'IP kartı', col_block: 'Blok', col_owner: 'Sahip', col_since: 'Başlangıç', col_left: 'Kalan', col_state: 'Durum', left_short: '{0} kaldı', r_hist: 'olay kaydı başlamadan önce · ayrıntı lfd günlüğünden getirilir', h_btn: 'Ayrıntı', h_loading: 'Getiriliyor…', h_none: 'lfd günlüğünde bu bloğa ait kayıt kalmamış', h_src: 'lfd günlüğünden',
+      ch_empty: 'Son 30 günde kayıt yok; grafik olay kaydı biriktikçe dolacak.', ipcard: 'IP kartı', col_block: 'Blok', col_owner: 'Sahip', col_since: 'Başlangıç', col_left: 'Kalan', col_state: 'Durum', left_short: '{0} kaldı', r_hist: 'olay kaydı başlamadan önce · ayrıntı LFD günlüğünden getirilir', h_btn: 'Ayrıntı', h_loading: 'Getiriliyor…', h_none: 'LFD günlüğünde bu bloğa ait kayıt kalmamış', h_src: 'LFD günlüğünden',
       col_singles: 'Tekil', col_added: 'Eklendi', of_n: '{0}–{1} / {2}', s_asn: 'En çok saldıran sağlayıcılar',
       s_asn_h: 'Blok banı ve tekil bana göre sıralı; csf.deny\'deki başka kaynaklı bloklar ayrıca belirtilir · {0} bloğun sahibi biliniyor', p_g: '{0} blok', p_b: '+{0} blok başka kaynaklı', p_t: '{0} tekil', p_bn: '{0} blok',
       at_atk: 'Saldıranlar', at_blk: 'Diğer bloklar', blk_h: 'csf.deny\'de CSF Auto-Group dışından eklenmiş aralıklar (elle ya da başka araçla); zaten engelliler.',
@@ -134,7 +135,7 @@
       asn_nolookup: 'Sahip sorgusu kapalı (Ayarlar → Sorgular).', m_asn_t: 'AS{0} sağlayıcısını CSF\'de toptan engellemek',
       m_asn_b: '{1} sağlayıcısından {0} ayrı blok banı eklendi; her biri aynı blokta en az 3 saldırgan demek. Saldırı sürekli bu sağlayıcıdan geliyorsa, sağlayıcının (ASN) tamamını CSF\'nin kendi ülke/ASN engeliyle kapatmak daha kalıcı olur.',
       m_asn_w: 'Bu, o sağlayıcıdaki meşru kullanıcıları da (ör. o sağlayıcıda sunucusu olan müşterileri) engeller. Büyük bulut sağlayıcılarında dikkatli olun.',
-      m_asn_s: 'Nasıl: CSF → Firewall Configuration → CC_DENY alanına {0} ekleyin (virgülle ayırarak), kaydedip csf ve lfd\'yi yeniden başlatın. Bu eklenti csf.conf\'u değiştirmez.',
+      m_asn_s: 'Nasıl: CSF → Firewall Configuration → CC_DENY alanına {0} ekleyin (virgülle ayırarak), kaydedip csf ve LFD\'yi yeniden başlatın. Bu eklenti csf.conf\'u değiştirmez.',
       copy_asn: '{0} kopyala', csf_open2: 'CSF\'yi aç', edit: 'Düzenle', st_digest: 'Haftalık özet',
       st_digest_h: 'Seçilen gün 09:00\'dan sonraki ilk turda gönderilir: yeni blok banları, en çok saldıran sağlayıcılar, izlemesi bitecek bloklar.',
       st_digest_day: 'Gönderim günü', d1: 'Pzt', d2: 'Sal', d3: 'Çar', d4: 'Per', d5: 'Cum', d6: 'Cmt', d7: 'Paz',
@@ -151,71 +152,71 @@
       s_review: 'To review', s_review_h: 'Not banned automatically — worth a look',
       s_groups: 'Active block bans', s_events: 'Recent actions', s_lookup: 'Look up an IP', s_pending: 'Watched',
       s_pending_h: 'Temp-banned once; if this block comes back it becomes permanent + do not delete', s_ignored: 'Ignored', s_config: 'Rules',
-      lookup_ph: '185.220.101.12', lookup_btn: 'Look up', lookup_hint: 'Hostname, owner (ASN), announced prefix, registry and CSF list status.',
+      lookup_ph: '185.220.101.12', lookup_btn: 'Look up', lookup_hint: 'Hostname, owner (ASN), announced range, registry and status in the CSF lists.',
       f_all: 'All', f_perm: 'Permanent', f_dnd: 'Do not delete', f_temp: 'Temp', f_manual: 'Manual', g_search: 'CIDR, AS or org',
       e_all: 'All', e_bans: 'Bans', e_warn: 'Suspicious', e_skip: 'Skipped', e_manual: 'Manual', e_clean: 'Cleanup',
       ev_add24: 'Block ban', ev_promote: 'Made permanent', ev_temp24: 'Temp block ban', ev_skip_wl: 'Skipped', ev_warn16: 'Suspicious range',
       ev_warn16t: 'Suspicious range', ev_clean_temp: 'Cleaned', ev_manual_ban: 'Manual ban', ev_manual_unban: 'Removed',
       ev_manual_forget: 'Unwatched', ev_manual_ignore: 'Ignored', ev_manual_unignore: 'Unignored',
       kind_perm: 'permanent', kind_promoted: 'repeat', kind_temp: 'temp', kind_manual: 'manual',
-      ips: 'IPs', hide: 'Hide', ban16: 'Ban /16', ban_anyway: 'Ban anyway', ignore: 'Ignore', unban: 'Remove',
+      ips: 'IPs', hide: 'Hide', ban16: 'Ban range (/16)', ban_anyway: 'Ban anyway', ignore: 'Ignore', unban: 'Remove',
       promote: 'Make permanent', forget: 'Stop watching', unignore: 'Remove', show_all: 'Show all ({0})', more: 'Show more',
-      n_ip: '{0} IPs', n_subnets: '{0} distinct /24s', from_temp: 'from temp bans', from_perm: 'from permanent bans', n_singles: 'from {0} singles', since: 'since {0}', days_left: '{0} days left',
+      n_ip: '{0} IPs', n_subnets: '{0} distinct blocks', from_temp: 'from temp bans', from_perm: 'from permanent bans', n_singles: 'from {0} singles', since: 'since {0}', days_left: '{0} days left',
       ttl_left: 'temp ban {0}', until: 'until {0}', by: 'by {0}', wl: 'whitelist: {0}', and_more: '+{0} more IPs',
       no_review: 'Nothing to review.', no_groups: 'No active block bans.', no_pending: 'No watched blocks.',
       no_events: 'Nothing recorded yet. Runs will show up here.', no_match: 'No matching entries.',
-      c_t24: 'Block ban (/24)', c_t24p: 'do not delete at', c_t16: 'Suspicious range (/16)', c_tt24: 'Temp block ban (/24)', c_tt16: 'Suspicious range, temp (/16)',
+      c_t24: 'Block ban (/24)', c_t24p: 'Do not delete threshold', c_t16: 'Suspicious range (/16)', c_tt24: 'Temp block ban (/24)', c_tt16: 'Suspicious range, temp (/16)',
       c_ret: 'Watch period', c_lookup: 'Owner / hostname lookups', c_on: 'on', c_off: 'off', c_days: '{0} days', c_singles: '≥ {0} singles',
       now: 'just now', min_ago: '{0} min ago', h_ago: '{0} h ago', d_ago: '{0} d ago', dur_h: '{0} h {1} min', dur_m: '{0} min',
       cancel: 'Cancel', confirm: 'Confirm', close: 'Close', reload: 'Reload page', type_to_confirm: 'Type {0} to confirm',
-      m_ban16_t: 'Permanently ban {0}?', m_ban16_b: 'This blocks all 65,536 addresses. The block is added as "do not delete", so the deny limit never rotates it out.',
+      m_ban16_t: 'Permanently ban {0}?', m_ban16_b: 'This blocks all 65,536 addresses in the range. The ban is added as "do not delete" and is kept even when the list is full.',
       m_force_t: 'Ban despite the whitelist?', m_force_b: 'This block overlaps a CSF whitelist entry:',
       m_force_n: 'csf.allow addresses still get through a ban; csf.ignore and the others WILL be blocked.',
       m_promote_t: 'Make {0} permanent now?', m_promote_b: 'The block is added to the permanent list as "do not delete" and is no longer watched.',
-      m_forget_t: 'Stop watching {0}?', m_forget_b: 'The next group attack from this block counts as a "first time" again and gets a 12-hour temp ban.',
-      m_unban_t: 'Remove {0}?', m_unban_b: 'The block ban is removed. The single bans deleted when it was grouped do not come back — these addresses are fully unblocked.',
+      m_forget_t: 'Stop watching {0}?', m_forget_b: 'The next attack from this block counts as the "first time" again and gets a 12-hour temp block ban.',
+      m_unban_t: 'Remove {0}?', m_unban_b: 'The block ban is removed. The single bans deleted when it was added do not come back; these addresses are fully unblocked.',
       m_unban_dnd: 'This block is marked "do not delete". The marker is removed from csf.deny first (a backup is kept).',
-      m_ignore_t: 'Ignore {0}?', m_ignore_b: 'The block is hidden from "To review"; for a /16 its warning emails stop too.', m_ignore_d: 'For',
+      m_ignore_t: 'Ignore {0}?', m_ignore_b: 'The item is hidden from To review; for a suspicious range (/16) its warning emails stop too.', m_ignore_d: 'For',
       m_unignore_t: 'Watch {0} again?', m_run_t: 'Run now?',
-      m_run_b: 'Does exactly what cron would: /24s over the threshold get banned and emails are sent.',
+      m_run_b: 'Does exactly what cron would: blocks over the threshold get banned and emails are sent.',
       m_dry_t: 'Dry run', m_dry_wait: 'Simulating a run without changing anything…', m_dry_none: 'This run would not change anything.',
       m_upd_t: 'Update to v{0}?', m_upd_b: 'Runs update.sh; config.env and records are kept. Takes a few seconds.',
       m_upd_run: 'Updating…', m_upd_ok: 'Update complete.', m_upd_fail: 'The update did not complete; see the output.',
       t_started: 'Run started.', t_done: 'Run finished.', t_busy: 'Another run is in progress, try again shortly.', t_cron_busy: 'A run is already in progress (most likely cron); results will show up here when it finishes.',
       t_err: 'Could not complete: {0}', session: 'Session expired. Reload the page.', t_copied: 'Copied.',
       l_host: 'Hostname', l_fwd: 'forward-confirmed', l_nofwd: 'not forward-confirmed', l_noptr: 'No reverse DNS',
-      l_owner: 'Owner', l_prefix: 'Announced prefix', l_reg: 'Registry', l_fw: 'Firewall', l_wl: 'Whitelist',
+      l_owner: 'Owner', l_prefix: 'Announced range', l_reg: 'Registry', l_fw: 'Firewall', l_wl: 'Whitelist',
       l_pending: 'Watched', l_ign: 'Ignored', l_notbanned: 'Not blocked', l_none: 'None', l_perm_single: 'Permanent (single)',
       l_perm_cover: 'Permanent (block)', l_temp: 'Temp', l_nolookup: 'Owner and hostname lookups are off (LOOKUP=0).',
       l_abuse: 'AbuseIPDB', l_bgp: 'bgp.he.net', l_copy: 'Copy', bad_ip: 'Enter a valid IPv4 address.',
       foot: 'CSF Auto-Group v{0} · signed in as {1}',
-      tab_overview: 'Overview', tab_settings: 'Settings', tab_history: 'History', show_less: 'Show less', s_cfglog: 'Settings history', c_expire: 'Old block bans', c_auto_on: 'removed automatically', c_auto_off: 'removed manually', hc_csf: 'CSF', hc_lfd: 'lfd', hc_cron: 'Cron', hc_csf_ok: 'Firewall rules are loaded', hc_csf_off: 'CSF is disabled (csf.disable)', hc_csf_testing: 'CSF is in testing mode (TESTING = 1)', hc_csf_norules: 'CSF rules are not loaded', hc_csf_unknown: 'Status unknown (no iptables)', hc_lfd_ok: 'lfd is running', hc_lfd_down: 'lfd is not running: no new bans will arrive', hc_cron_ok: 'Runs happen on schedule', hc_cron_late: 'A run is overdue', sb_fw: 'There is a problem with the firewall', f_old: 'Old', old_h: '{0} block bans are older than {1} days.', old_auto: 'Automatic removal is on; they will be removed on the next run.', old_manual: 'Automatic removal is off (Settings → Retention).', old_rm: 'Remove old ones ({0})', m_exp_t: 'Remove {0} old block bans?', m_exp_b: '{0} block bans older than {1} days are removed from csf.deny (do not delete ones too). If attacks come from them again they are banned again. csf.deny is backed up first.', ev_expire: 'Old block removed', exp_age: 'added {0} days ago', rep_n: 'repeating · {0} days', k_BLOCK_EXPIRE_DAYS: 'Old block ban limit (days)', h_BLOCK_EXPIRE_DAYS: 'Block bans older than this are grouped under the "Old" filter in the active block bans table.', k_BLOCK_EXPIRE_AUTO: 'Remove old block bans automatically', h_BLOCK_EXPIRE_AUTO: 'When on, block bans older than this are removed on every run and reported by email. Manual bans are left alone.', from_log: 'from the log', sn_server: 'Server', sn_server_h: 'CSF\'s list limits and the tools the plugin uses.', st_deps: 'Server requirements', st_deps_h: 'Tools the plugin uses and what happens when one is missing.', dep_ok: 'Found', dep_missing: 'Missing', dep_warn: 'Incomplete', dep_opt: 'optional', dep_csf: 'The firewall; it applies the bans.', dep_csf_x: 'Required: nothing works without CSF.', dep_crontab: 'Runs the job on schedule.', dep_crontab_x: 'Runs don\'t happen automatically; the schedule can\'t be changed from Settings.', dep_mail: 'Alert emails and the weekly summary.', dep_mail_x: 'No alert emails or weekly summary are sent.', dep_dns: 'Owner and hostname lookups.', dep_dns_x: 'No owner or hostname info; CC_IGNORE / CC_ALLOW and csf.rignore can\'t be checked, so blocks relying on them aren\'t banned.', dep_logrotate: 'Rotates the log file.', dep_logrotate_x: 'The log is trimmed by a line limit instead (fallback).', dep_logrotate_w: 'Installed, but our config file is missing; the log is trimmed by the line limit for now. Re-run update.sh or install.sh.', dep_flock: 'Makes sure only one run happens at a time.', dep_flock_x: 'No protection against overlapping runs.', dep_timeout: 'Puts a time limit on commands the plugin runs.', dep_timeout_x: 'A stuck command can keep the page waiting.', dep_git: 'Updating from the plugin.', dep_git_x: 'The update check and the Update button don\'t work.', dep_imunify: 'The Imunify tab in the providers card.', dep_imunify_x: 'The Imunify tab is hidden; nothing else is affected.', k_logfile: 'Log file', log_rot: 'logrotate: rotated past {2} MB, the last {3} archives are kept · now {0} · {1} archives.', k_LOG_ROTATE_MB: 'Log size (MB)', h_LOG_ROTATE_MB: 'The log is rotated once it grows past this size (logrotate checks daily).', k_LOG_ROTATE_KEEP: 'Archives kept', h_LOG_ROTATE_KEEP: 'How many rotated logs are kept, compressed.', log_lines: 'Now {0} / {1} lines.', no_cfglog: 'No settings changes yet.', ev_config: 'Settings changed', ev_test_mail: 'Test email',
+      tab_overview: 'Overview', tab_settings: 'Settings', tab_history: 'History', show_less: 'Show less', s_cfglog: 'Settings history', st_upd: 'Version and updates', upd_check: 'Check for updates', upd_checking: 'Checking…', upd_cur: 'Installed version', upd_ok: 'Up to date', upd_new: 'New version available: v{0}', upd_last: 'Last checked: {0}', upd_never: 'Not checked yet', upd_auto: 'While the page is open it also checks every half hour; a notice appears at the top when a new version is out.', upd_err_not_git: 'The install is not a git checkout; it can\'t be updated from the plugin (update.sh won\'t work either).', upd_err_unreachable: 'Could not reach GitHub; try again in a moment.', upd_err_detached: 'The repository is not on a branch; update over SSH.', c_expire: 'Old block bans', c_auto_on: 'removed automatically', c_auto_off: 'removed manually', hc_csf: 'CSF', hc_lfd: 'LFD', hc_cron: 'Cron', hc_csf_ok: 'Firewall rules are loaded', hc_csf_off: 'CSF is disabled (csf.disable)', hc_csf_testing: 'CSF is in testing mode (TESTING = 1)', hc_csf_norules: 'CSF rules are not loaded', hc_csf_unknown: 'Status unknown (no iptables)', hc_lfd_ok: 'LFD is running', hc_lfd_down: 'LFD is not running: no new bans will arrive', hc_cron_ok: 'Runs happen on schedule', hc_cron_late: 'A run is overdue', sb_fw: 'There is a problem with the firewall', f_old: 'Old', old_h: '{0} block bans are older than {1} days.', old_auto: 'Automatic removal is on; they will be removed on the next run.', old_manual: 'Automatic removal is off (Settings → Retention).', old_rm: 'Remove old ones ({0})', m_exp_t: 'Remove {0} old block bans?', m_exp_b: '{0} block bans older than {1} days are removed from csf.deny (do not delete ones too). If attacks come from them again they are banned again. csf.deny is backed up first.', ev_expire: 'Old block removed', exp_age: 'added {0} days ago', rep_n: 'repeating · {0} days', k_BLOCK_EXPIRE_DAYS: 'Old block ban limit (days)', h_BLOCK_EXPIRE_DAYS: 'Block bans older than this are grouped under the "Old" filter in the active block bans table.', k_BLOCK_EXPIRE_AUTO: 'Remove old block bans automatically', h_BLOCK_EXPIRE_AUTO: 'When on, block bans older than this are removed on every run and reported by email. Manual bans are left alone.', from_log: 'from the log', sn_server: 'Server', sn_server_h: 'CSF\'s list limits and the tools the plugin uses.', st_deps: 'Server requirements', st_deps_h: 'Tools the plugin uses and what happens when one is missing.', dep_ok: 'Found', dep_missing: 'Missing', dep_warn: 'Incomplete', dep_opt: 'optional', dep_csf: 'The firewall; it applies the bans.', dep_csf_x: 'Required: nothing works without CSF.', dep_crontab: 'Runs the job on schedule.', dep_crontab_x: 'Runs don\'t happen automatically; the schedule can\'t be changed from Settings.', dep_mail: 'Alert emails and the weekly summary.', dep_mail_x: 'No alert emails or weekly summary are sent.', dep_dns: 'Owner and hostname lookups.', dep_dns_x: 'No owner or hostname info; CC_IGNORE / CC_ALLOW and csf.rignore can\'t be checked, so blocks relying on them aren\'t banned.', dep_logrotate: 'Rotates the log file.', dep_logrotate_x: 'The log is trimmed by a line limit instead (fallback).', dep_logrotate_w: 'Installed, but our config file is missing; the log is trimmed by the line limit for now. Re-run update.sh or install.sh.', dep_flock: 'Makes sure only one run happens at a time.', dep_flock_x: 'No protection against overlapping runs.', dep_timeout: 'Puts a time limit on commands the plugin runs.', dep_timeout_x: 'A stuck command can keep the page waiting.', dep_git: 'Updating from the plugin.', dep_git_x: 'The update check and the Update button don\'t work.', dep_imunify: 'The Imunify tab in the providers card.', dep_imunify_x: 'The Imunify tab is hidden; nothing else is affected.', k_logfile: 'Log file', log_rot: 'logrotate: rotated past {2} MB, the last {3} archives are kept · now {0} · {1} archives.', k_LOG_ROTATE_MB: 'Log size (MB)', h_LOG_ROTATE_MB: 'The log is rotated once it grows past this size (logrotate checks daily).', k_LOG_ROTATE_KEEP: 'Archives kept', h_LOG_ROTATE_KEEP: 'How many rotated logs are kept, compressed.', log_lines: 'Now {0} / {1} lines.', no_cfglog: 'No settings changes yet.', ev_config: 'Settings changed', ev_test_mail: 'Test email',
       st_notify: 'Notifications', st_mail: 'Alert email address', st_mail_h: 'Block bans, suspicious range warnings and limit emails go here. On cPanel, root@localhost is forwarded to the server contact address.',
       st_lang: 'Language', st_lang_h: 'Language of the log, emails and this panel.', st_test: 'Send test email', st_test_h: 'Sent to the saved address.',
-      st_test_dirty: 'Save the new address first.', st_thr: 'Thresholds', st_thr_h: 'How many single bans trigger an action.',
-      k_THRESHOLD_24: 'Block ban (/24)', h_THRESHOLD_24: 'A /24 is banned once it holds this many permanent singles.',
-      k_THRESHOLD_24_PERMANENT: 'Do not delete at', h_THRESHOLD_24_PERMANENT: 'At this many singles the /24 also gets "do not delete". Can\'t be lower than the /24 threshold.',
-      k_THRESHOLD_16: 'Suspicious range (/16)', h_THRESHOLD_16: 'Emails when this many singles come from at least 2 distinct /24s. Never auto-bans.',
-      k_THRESHOLD_TEMP_24: 'Temp block ban (/24)', h_THRESHOLD_TEMP_24: 'This many temp singles: 12-hour temp ban the first time, permanent the second.',
-      k_THRESHOLD_TEMP_16: 'Suspicious range, temp (/16)', h_THRESHOLD_TEMP_16: 'Warning threshold for /16 density in the temp list.',
-      st_sched: 'Schedule', st_sched_h: 'How often cron runs the script.', cron_5: '5 min', cron_10: '10 min', cron_15: '15 min', cron_30: '30 min', cron_0: 'Hourly',
+      st_test_dirty: 'Save the new address first.', st_thr: 'Thresholds', st_thr_h: 'How many single bans trigger each action.',
+      k_THRESHOLD_24: 'Block ban (/24)', h_THRESHOLD_24: 'A block (/24) is banned once it holds this many permanent singles.',
+      k_THRESHOLD_24_PERMANENT: 'Do not delete at', h_THRESHOLD_24_PERMANENT: 'At this many singles the block ban also gets "do not delete". Can\'t be lower than the block ban threshold.',
+      k_THRESHOLD_16: 'Suspicious range (/16)', h_THRESHOLD_16: 'A range (/16) is reported as suspicious when this many permanent singles come from at least 2 distinct blocks. The range is not banned.',
+      k_THRESHOLD_TEMP_24: 'Temp block ban (/24)', h_THRESHOLD_TEMP_24: 'At this many temp singles in a block: a 12-hour temp block ban the first time, permanent if it comes back.',
+      k_THRESHOLD_TEMP_16: 'Suspicious range, temp (/16)', h_THRESHOLD_TEMP_16: 'A range (/16) is reported as suspicious when this many temp singles come from at least 2 distinct blocks. The range is not banned.',
+      st_sched: 'Schedule', st_sched_h: 'How often cron runs.', cron_5: '5 min', cron_10: '10 min', cron_15: '15 min', cron_30: '30 min', cron_0: 'Hourly',
       st_lookup: 'Lookups', k_LOOKUP: 'Owner and hostname lookups', h_LOOKUP: 'Shows ASN, organisation and hostname in emails and here; CC_IGNORE and csf.rignore checks rely on it.',
       k_LOOKUP_TIMEOUT: 'DNS timeout (s)', h_LOOKUP_TIMEOUT: 'How long to wait for each query.', st_nodns: 'Neither dig nor host is installed; lookups won\'t work (dnf install bind-utils).',
       on: 'On', off: 'Off', st_keep: 'Retention', k_SAYAC_RETENTION_DAYS: 'Watch period (days)',
-      h_SAYAC_RETENTION_DAYS: 'A temp-banned /24 that returns within this time becomes permanent.', k_REVIEW_DAYS: 'To review (days)',
-      h_REVIEW_DAYS: 'How long warnings and skips stay on the list.', k_LOG_MAX_LINES: 'Log line limit', h_LOG_MAX_LINES: 'The log is trimmed to this many lines.',
+      h_SAYAC_RETENTION_DAYS: 'A temp-banned block that returns within this time becomes permanent.', k_REVIEW_DAYS: 'To review (days)',
+      h_REVIEW_DAYS: 'How long suspicious ranges and skipped blocks stay on the To review list.', k_LOG_MAX_LINES: 'Log line limit', h_LOG_MAX_LINES: 'The log is trimmed to this many lines (only when logrotate is missing).',
       st_csf: 'CSF list limits', st_csf_h: 'These are CSF\'s own settings; change them in CSF, not here.',
       csf_deny: 'Permanent list (DENY_IP_LIMIT)', csf_temp: 'Temp list (DENY_TEMP_IP_LIMIT)', csf_open: 'Open CSF settings',
       default_v: 'default {0}', range_v: 'a whole number from {0} to {1}', mail_bad: 'Enter a valid email address.',
-      rule_dnd: 'The do not delete threshold can\'t be lower than the /24 threshold.', dirty_n: '{0} unsaved changes', discard: 'Discard',
+      rule_dnd: 'The do not delete threshold can\'t be lower than the block ban threshold.', dirty_n: '{0} unsaved changes', discard: 'Discard',
       try_save: 'Try before saving', save: 'Save', m_save_t: 'Save settings?', m_save_b: 'These changes will be written to config.env (a backup is kept):',
       m_try_t: 'Dry run with the new thresholds', m_try_b: 'Uses the unsaved settings; nothing is changed.', show_pending_all: 'Show all ({0})',
       panel_bad: 'Use the form https://server:2087.', auto: 'automatic', focus_gone: '{0} is no longer on the list; showing its current state.',
       new_badge: 'New since your last visit', actions: 'Actions', overdue: 'Run overdue · last run {0} (expected every {1})',
       since_visit: 'Since your last visit ({0}):', sn_add: '{0} block bans', sn_temp: '{0} temp block bans', sn_warn: '{0} suspicious ranges',
-      sn_skip: '{0} whitelist skips', show_new: 'Show', e_new: 'Since last visit', ch_title: 'Last 30 days', ch_total: '{0} events', ch_title_n: 'Last {0} days', ch_d: '{0} days', sb_ok: 'Protection is running', sb_run: 'A run is in progress', sb_late: 'Protection stopped', sb_every: 'Cron every {0}', sb_24: '{0}/{1} runs in the last 24 h', sb_none: 'no runs yet', sb_last: 'Last run', sb_dur: 'Run time', sb_avg: 'avg {0}', sb_next: 'Next', sb_now: 'now', sb_spark: 'Last {0} run times', pg_prev: 'Previous page', pg_next: 'Next page', dirty_leave: '{0} unsaved changes. Switch tabs anyway?', conn_net: 'Can\'t reach the server; what you see was fetched {0}. Retrying…', conn_session: 'Your session has expired.', upd_busy: 'An update is already running.', sec: '{0} s', k_week: '▲ {0} this week', lk_recent: 'Recently viewed',
+      sn_skip: '{0} skipped blocks', show_new: 'Show', e_new: 'Since last visit', ch_title: 'Last 30 days', ch_total: '{0} events', ch_title_n: 'Last {0} days', ch_d: '{0} days', sb_ok: 'Protection is running', sb_run: 'A run is in progress', sb_late: 'Protection stopped', sb_every: 'Cron every {0}', sb_24: '{0}/{1} runs in the last 24 h', sb_none: 'no runs yet', sb_last: 'Last run', sb_dur: 'Run time', sb_avg: 'avg {0}', sb_next: 'Next', sb_now: 'now', sb_spark: 'Last {0} run times', pg_prev: 'Previous page', pg_next: 'Next page', dirty_leave: '{0} unsaved changes. Switch tabs anyway?', conn_net: 'Can\'t reach the server; what you see was fetched {0}. Retrying…', conn_session: 'Your session has expired.', upd_busy: 'An update is already running.', sec: '{0} s', k_week: '▲ {0} this week', lk_recent: 'Recently viewed',
       ch_add: 'Block ban', ch_promote: 'Made permanent', ch_temp: 'Temp block ban', ch_warn: 'Suspicious range', ch_skip: 'Skipped',
-      ch_empty: 'Nothing in the last 30 days; the chart fills as the event log grows.', ipcard: 'IP card', col_block: 'Block', col_owner: 'Owner', col_since: 'Since', col_left: 'Left', col_state: 'State', left_short: '{0} left', r_hist: 'before the event log started · details come from the lfd log', h_btn: 'Details', h_loading: 'Loading…', h_none: 'no records for this block are left in the lfd log', h_src: 'from the lfd log',
+      ch_empty: 'Nothing in the last 30 days; the chart fills as the event log grows.', ipcard: 'IP card', col_block: 'Block', col_owner: 'Owner', col_since: 'Since', col_left: 'Left', col_state: 'State', left_short: '{0} left', r_hist: 'before the event log started · details come from the LFD log', h_btn: 'Details', h_loading: 'Loading…', h_none: 'no records for this block are left in the LFD log', h_src: 'from the LFD log',
       col_singles: 'Singles', col_added: 'Added', of_n: '{0}–{1} of {2}', s_asn: 'Top attacking providers',
       s_asn_h: 'Ranked by block bans and single bans; other ranges in csf.deny are noted separately · owner known for {0} blocks', p_g: '{0} blocks', p_b: '+{0} blocks from other sources', p_t: '{0} singles', p_bn: '{0} blocks',
       at_atk: 'Attackers', at_blk: 'Other blocks', blk_h: 'Ranges in csf.deny added outside CSF Auto-Group (by hand or other tools); already blocked.',
@@ -226,7 +227,7 @@
       asn_nolookup: 'Owner lookups are off (Settings → Lookups).', m_asn_t: 'Block all of AS{0} in CSF',
       m_asn_b: '{0} separate block bans were added for {1}; each means at least 3 attackers in the same block. If attacks keep coming from this provider, closing the whole provider (ASN) with CSF\'s own country/ASN block is more durable.',
       m_asn_w: 'This also blocks legitimate users of that provider (e.g. customers hosted there). Be careful with large cloud providers.',
-      m_asn_s: 'How: CSF → Firewall Configuration → add {0} to CC_DENY (comma separated), save and restart csf and lfd. This plugin never changes csf.conf.',
+      m_asn_s: 'How: CSF → Firewall Configuration → add {0} to CC_DENY (comma separated), save and restart csf and LFD. This plugin never changes csf.conf.',
       copy_asn: 'Copy {0}', csf_open2: 'Open CSF', edit: 'Edit', st_digest: 'Weekly summary',
       st_digest_h: 'Sent with the first run after 09:00 on the chosen day: new block bans, top attacking providers, watched blocks about to expire.',
       st_digest_day: 'Day', d1: 'Mon', d2: 'Tue', d3: 'Wed', d4: 'Thu', d5: 'Fri', d6: 'Sat', d7: 'Sun',
@@ -259,6 +260,21 @@
     return p(d.getDate()) + '.' + p(d.getMonth() + 1) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
   var DEP_NAMES = { csf: 'CSF', crontab: 'cron', mail: 'mail', dns: 'dig / host', logrotate: 'logrotate', flock: 'flock', timeout: 'timeout', git: 'git', imunify: 'Imunify360' };
+  function updCard() {
+    var u = UPD, has = u && u.ok && !u.uptodate, blocked = has && (u.dirty || u.diverged);
+    var state = !u ? '<span class="ag-muted">' + t('upd_never') + '</span>'
+      : !u.ok ? '<span class="ag-upd-bad">' + esc(t('upd_err_' + u.error) !== 'upd_err_' + u.error ? t('upd_err_' + u.error) : t('t_err', u.error || '?')) + '</span>'
+      : u.uptodate ? '<span class="ag-pill ag-pill-ok">' + t('upd_ok') + '</span>'
+      : '<span class="ag-pill ag-pill-acc">' + esc(t('upd_new', u.latest)) + '</span>';
+    var commits = has ? '<ul class="ag-commits ag-upd-commits">' + (u.commits || []).map(function (c) { return '<li><code>' + esc(c.hash) + '</code>' + esc(c.subject) + '</li>'; }).join('') + '</ul>' : '';
+    var acts = '<button class="ag-btn" data-act="updcheck"' + (UPD_BUSY ? ' disabled' : '') + '>' + (UPD_BUSY ? '<span class="ag-spin ag-spin-sm"></span> ' + t('upd_checking') : IC.download + t('upd_check')) + '</button>' +
+      (has && !blocked ? '<button class="ag-btn ag-btn-primary" data-act="update">' + t('upd_apply') + '</button>' : '');
+    return '<section class="ag-card" id="ag-updcard"><div class="ag-card-h"><h2>' + IC.download + t('st_upd') + '</h2></div><div class="ag-upd">' +
+      '<div class="ag-upd-row"><div><div class="ag-upd-l">' + t('upd_cur') + '</div><div class="ag-upd-v">v' + esc(S.version) + (BOOT.commit ? ' <span class="ag-muted ag-mono">' + esc(BOOT.commit) + '</span>' : '') + '</div></div>' +
+      '<div class="ag-upd-st">' + state + '</div></div>' + commits +
+      (blocked ? '<div class="ag-warnbox">' + esc(u.dirty ? t('upd_dirty') : t('upd_diverged')) + '</div>' : '') +
+      '<div class="ag-upd-f"><div class="ag-upd-acts">' + acts + '</div><span class="ag-sub">' + (UPD_T ? esc(t('upd_last', rel(UPD_T))) + ' · ' : '') + esc(t('upd_auto')) + '</span></div></div></section>';
+  }
   function depsCard() {
     var D = (CFG && CFG.deps) || [];
     if (!D.length) return '';
@@ -957,7 +973,7 @@
       : cur.k === 'sched' ? card('clock', t('st_sched'), '', sched)
       : cur.k === 'look' ? card('search', t('st_lookup'), '', look)
       : cur.k === 'keep' ? card('hour', t('st_keep'), '', keep)
-      : cur.k === 'server' ? card('shield', t('st_csf'), t('st_csf_h'), csf) + depsCard()
+      : cur.k === 'server' ? updCard() + card('shield', t('st_csf'), t('st_csf_h'), csf) + depsCard()
       : events(true);
     var nav = secs.map(function (x) {
       return '<button class="ag-setnav-i' + (x.k === cur.k ? ' on' : '') + '" data-act="st" data-s="' + x.k + '"' + (x.k === cur.k ? ' aria-current="page"' : '') + '>' +
@@ -983,6 +999,7 @@
     var errs = cfgErrors(), ch = changedKeys();
     if (x.keys.some(function (k) { return errs[k]; })) return ' bad';
     if (x.k === 'server' && ((CFG && CFG.deps) || []).some(function (d) { return d.s !== 'ok' && d.k !== 'imunify'; })) return ' warn';
+    if (x.k === 'server' && UPD && UPD.ok && !UPD.uptodate) return ' dirty';
     return x.keys.some(function (k) { return ch.indexOf(k) >= 0; }) ? ' dirty' : '';
   }
   function refreshSaveBar() {
@@ -1208,6 +1225,7 @@
         typed: String(n), okText: t('old_rm', num(n)), okClass: 'ag-btn-danger-solid' })
         .then(function (m) { if (m.ok) doAction('expire', d); });
     },
+    updcheck: function () { checkUpdate(true); },
     asnall: function () { UI.asnAll = !UI.asnAll; render(); },
     ef: function (el) { UI.ef = el.getAttribute('data-f'); UI.evLimit = 40; render(); },
     cd: function (el) { UI.cd = +el.getAttribute('data-d'); render(); },
@@ -1528,9 +1546,25 @@
     }
   }
 
+  /* Güncelleme denetimi: fresh = GitHub'a hemen sor (Ayarlar'daki düğme); değilse sunucudaki 5 dk önbellek */
+  function checkUpdate(fresh) {
+    if (UPD_BUSY) return;
+    UPD_BUSY = true; if (fresh) render();
+    api('update_check', fresh ? { fresh: '1' } : {}).then(function (u) {
+      UPD_BUSY = false;
+      if (u && (u.ok || u.error !== 'session')) { UPD = u; UPD_T = Date.now() / 1000; }
+      if (!busy && !(UI.tab === 'settings' && CFG && changedKeys().length)) render();
+      else if (UI.tab === 'settings') { var c = document.getElementById('ag-updcard'); if (c) c.outerHTML = updCard(); }
+    });
+  }
+
   /* ── Başlangıç ─────────────────────────────────────────────────── */
   refresh().then(function () {
     if (S) applyFocus();
-    api('update_check').then(function (u) { UPD = u; if (u && u.ok && !u.uptodate) render(); }).catch(function () {});
+    checkUpdate(false);
+  });
+  setInterval(function () { if (!document.hidden) checkUpdate(false); }, 30 * 60 * 1000);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && UPD_T && Date.now() / 1000 - UPD_T > 30 * 60) checkUpdate(false);
   });
 })();

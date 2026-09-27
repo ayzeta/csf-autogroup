@@ -157,7 +157,8 @@ switch ($a) {
         ag_json(['ok' => true, 'log' => is_file(AG_RUN_LOG) ? (string) @file_get_contents(AG_RUN_LOG) : '']);
 
     case 'update_check':
-        ag_json(ag_update_check());
+        // fresh=1: Ayarlar'daki "Güncellemeleri denetle" düğmesi — 5 dakikalık önbellek atlanır
+        ag_json(ag_update_check(($_POST['fresh'] ?? '') === '1'));
 
     case 'update_apply':
         $chk = ag_update_check(true);

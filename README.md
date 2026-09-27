@@ -68,7 +68,10 @@ Resellers can't.
 ## Updating
 
 When GitHub has a newer version, the plugin shows a banner: **Update** runs
-`update.sh` and **Reload page** loads the new version. From SSH:
+`update.sh` and **Reload page** loads the new version. The page checks on its
+own every half hour while it is open, and **Settings → Server → Check for
+updates** asks GitHub right away. The weekly summary email also mentions a new
+version. From SSH:
 
 ```bash
 cd csf-autogroup
