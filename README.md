@@ -22,7 +22,7 @@ is escalated to a **permanent** ban. `/16` ranges are only flagged for review
 - **English / Türkçe** — the plugin, logs and emails.
 - **Works on phones** — the page adapts to small screens.
 
-**Version 1.7.7** · root-only WHM plugin on cPanel servers. On servers without
+**Version 1.7.10** · root-only WHM plugin on cPanel servers. On servers without
 cPanel the same engine runs from cron and the command line
 ([details](#without-cpanel)).
 
@@ -97,7 +97,7 @@ settings, with no prompts. `config.env` is left untouched.
 - **Look up an IP** — hostname (forward-confirmed), owner, announced prefix,
   registry, whether CSF blocks it and which list whitelists it, with links to
   bgp.he.net and AbuseIPDB. Recently viewed IPs stay one click away.
-- **Top attacking networks** — three tabs:
+- **Top attacking providers** (by ASN) — three tabs:
   - *Attackers* — ranked by group bans and single bans. A network with 5+ group
     bans gets a suggestion explaining how to block the whole ASN with CSF's own
     `CC_DENY`. The plugin never edits `csf.conf`.
@@ -133,7 +133,7 @@ The same settings as `config.env`, with validation, grouped into sections
 history):
 
 - **Notifications** — alert email (with *Send test email*), language, and the
-  **weekly summary**: new groups, top attacking networks, watched blocks about to
+  **weekly summary**: new block bans, top attacking providers, watched blocks about to
   expire, list usage and run count. Sent with the first run after 09:00 on the
   chosen day (default Monday).
 - **Thresholds** — `/24` ban, `do not delete`, `/16` warning, temp `/24` and temp
