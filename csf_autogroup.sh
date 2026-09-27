@@ -39,7 +39,7 @@
 # ============================================================================
 set -o pipefail
 
-VERSION="1.7.10"   # sürüm — başlangıç log satırında görünür
+VERSION="1.8.0"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -66,6 +66,9 @@ LOOKUP_TIMEOUT="${LOOKUP_TIMEOUT:-2}"            # seconds per DNS query
 LOG_MAX_LINES="${LOG_MAX_LINES:-5000}"         # yalnız logrotate yoksa (yedek yöntem)
 LOG_ROTATE_MB="${LOG_ROTATE_MB:-1}"             # logrotate: günlük bu boyutu geçince döndürülür
 LOG_ROTATE_KEEP="${LOG_ROTATE_KEEP:-5}"         # logrotate: saklanan sıkıştırılmış arşiv sayısı
+BLOCK_EXPIRE_DAYS="${BLOCK_EXPIRE_DAYS:-365}"   # bu süreden eski blok banları "eski" sayılır
+BLOCK_EXPIRE_AUTO="${BLOCK_EXPIRE_AUTO:-0}"     # 1 = eski blok banları her turda kaldırılır
+REPEAT16_MIN="${REPEAT16_MIN:-3}"               # şüpheli ağ, kontrol süresi içinde bu kadar ayrı günde işaretlenirse "tekrar eden"
 SAYAC_RETENTION_DAYS="${SAYAC_RETENTION_DAYS:-180}"
 EVENTS_FILE="${EVENTS_FILE:-$(dirname "$SAYAC_FILE")/events.jsonl}"   # WHM eklentisi / --status okur
 EVENTS_MAX="${EVENTS_MAX:-5000}"   # banlar/uyarılar/elle işlemler; tur kayıtları ayrıca son RUNS_MAX
@@ -149,14 +152,14 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_ADD24_FAIL="HATA blok banı eklenemedi: %s.0/24"
   M_24_DONE="Blok turu bitti. %s yeni blok banı."
   M_MAIL24_BODY="Aşağıdaki bloklar (/24) kalıcı banlandı, içlerindeki tekil banlar silindi:"
-  M_MAIL24_SUBJ="CSF Auto-Group: %s blok banı"
+  M_MAIL24_SUBJ="%s blok banı"
   M_OWNER="   Sahibi: %s"
   M_WARN16="ŞÜPHELİ AĞ: %s.0.0/16 - kalıcı banlardan %s IP, %s farklı blok - elle bakın"
   M_WARN16_B="%s.0.0/16 -> %s IP, %s farklı bloktan"
   M_SKIP16="ATLANDI şüpheli ağ: %s.0.0/16 bugün zaten bildirildi"
   M_16_DONE="Şüpheli ağ turu bitti. %s bildirim."
   M_MAIL16_BODY="Aşağıdaki ağlarda (/16) çok sayıda kalıcı ban birikti. Ağ banlanmadı;\nelle bakmanız önerilir:"
-  M_MAIL16_SUBJ="CSF Auto-Group: %s şüpheli ağ"
+  M_MAIL16_SUBJ="%s şüpheli ağ"
   M_TCLEAN="Temizlendi: %s (kalıcı ban kapsamında)"
   M_TSKIP24="ATLANDI geçici blok: %s.0/24 zaten kalıcı banlı"
   M_TC24_PERM="Auto-grouped from temp /24: %s geçici tekil, 2. kez grup saldırısı nedeniyle kalıcı banlandı - do not delete"
@@ -169,15 +172,15 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_TC24="Auto-grouped temp /24: %s geçici tekil (12 saat)"
   M_T24_DONE="Geçici blok turu bitti. %s yeni geçici blok banı, %s kalıcıya alındı."
   M_MAILT24_BODY="Aşağıdaki bloklar (/24) 12 saatliğine geçici banlandı:"
-  M_MAILT24_SUBJ="CSF Auto-Group: %s geçici blok banı"
+  M_MAILT24_SUBJ="%s geçici blok banı"
   M_MAILT24P_BODY="Aşağıdaki bloklar (/24) daha önce geçici banlanmıştı; tekrar geldikleri için kalıcı banlandı (do not delete):"
-  M_MAILT24P_SUBJ="CSF Auto-Group: %s blok kalıcıya alındı"
+  M_MAILT24P_SUBJ="%s blok kalıcıya alındı"
   M_TWARN16="ŞÜPHELİ AĞ: %s.0.0/16 - geçici banlardan %s IP, %s farklı blok - elle bakın"
   M_TSKIP16="ATLANDI şüpheli ağ: %s.0.0/16 zaten kalıcı banlı"
   M_TSKIP16D="ATLANDI şüpheli ağ (geçici): %s.0.0/16 bugün zaten bildirildi"
   M_T16_DONE="Şüpheli ağ turu (geçici banlar) bitti. %s bildirim."
   M_MAILT16_BODY="Aşağıdaki ağlarda (/16) çok sayıda geçici ban birikti. Ağ banlanmadı;\nelle bakmanız önerilir:"
-  M_MAILT16_SUBJ="CSF Auto-Group: %s şüpheli ağ (geçici banlar)"
+  M_MAILT16_SUBJ="%s şüpheli ağ (geçici banlar)"
   M_WL_LOADED="Beyaz liste yüklendi: %s aralık, %s rignore alan adı"
   M_WL_SELF="sunucu IP'si"
   M_WL_SKIP="ATLANDI %s: beyaz listeyle çakışıyor (%s)"
@@ -186,16 +189,31 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_WL_B="%s -> %s tekil, BANLANMADI. Beyaz liste: %s"
   M_WL_NOTE="   Not: içinde beyaz listede kayıt var (%s)"
   M_MAILWL_BODY="Aşağıdaki bloklar ban eşiğine ulaştı ama CSF beyaz listeleriyle çakıştığı için banlanmadı.\nTekil banlar yerinde duruyor:"
-  M_MAILWL_SUBJ="CSF Auto-Group: %s blok atlandı (beyaz liste)"
+  M_MAILWL_SUBJ="%s blok atlandı (beyaz liste)"
   M_CC_NOLOOKUP="UYARI: CC_IGNORE/CC_ALLOW veya csf.rignore tanımlı ama DNS sorgusu yapılamıyor (LOOKUP=0 ya da dig/host yok); bu kontroller atlandı"
   M_LOOKUP_OFF="UYARI: DNS sorguları art arda zaman aşımına uğradı, bu turda kapatıldı"
   M_CLEANCNT="Sayaç temizliği yapıldı (%s günden eski kayıtlar silindi)"
   M_LOGTRIM="Log %s satırda tutuldu (önceki: %s satır)"
-  M_MAIL_PERMFULL_SUBJ="!!! CSF Limit Uyarısı: %%%s doluluk !!!"
+  M_MAIL_PERMFULL_SUBJ="kalıcı liste %%%s dolu"
   M_MAIL_PERMFULL_BODY="CSF deny listesi limite yaklaşıyor!"
-  M_MAIL_TEMPFULL_SUBJ="!!! CSF Temp Limit Uyarısı: %%%s doluluk !!!"
+  M_MAIL_TEMPFULL_SUBJ="geçici liste %%%s dolu"
   M_MAIL_TEMPFULL_BODY="CSF geçici ban listesi limite yaklaşıyor!"
   M_MAIL_DETAIL="Detay için: tail -100 %s"
+  M_SUBJ_PREFIX="CSF Auto-Group: "
+  M_EXP_SUBJ="%s eski blok banı kaldırıldı"
+  M_EXP_BODY="Aşağıdaki blok banları %s günden eski olduğu için kaldırıldı (Ayarlar → Saklama):"
+  M_EXP_LINE="%s -> %s gün önce eklenmişti"
+  M_EXP_LOG="ESKİ BLOK KALDIRILDI: %s (%s gün)"
+  M_EXP_FAIL="HATA eski blok kaldırılamadı: %s"
+  M_A_EXPIRED="%s eski blok banı kaldırıldı"
+  M_A_EXPNONE="Kaldırılacak eski blok banı yok"
+  M_DG_UPD="Yeni sürüm var: v%s → v%s. Eklentideki Güncelle düğmesiyle ya da update.sh ile kurulabilir."
+  M_H_LFD="lfd çalışmıyor"
+  M_H_CSF_OFF="CSF devre dışı (csf.disable)"
+  M_H_CSF_TEST="CSF test modunda (TESTING = 1)"
+  M_H_CSF_RULES="CSF kuralları yüklü değil"
+  M_H_BODY="Güvenlik duvarında sorun var; CSF Auto-Group bu durumda işini yapamaz. Günde bir kez bildirilir:"
+  M_H_LOG="SORUN: %s"
   M_PANEL_GEN="Panel: %s → Eklentiler → CSF Auto-Group"
   M_DRY_ON="KURU ÇALIŞTIRMA — hiçbir şey değiştirilmeyecek, mail gönderilmeyecek"
   M_DRY_MAIL="[gönderilmeyecek mail] Kime: %s — Konu: %s"
@@ -293,14 +311,14 @@ else
   M_ADD24_FAIL="ERROR could not add block ban: %s.0/24"
   M_24_DONE="Block pass done. %s new block ban(s)."
   M_MAIL24_BODY="The following blocks (/24) were permanently banned and the single bans inside them removed:"
-  M_MAIL24_SUBJ="CSF Auto-Group: %s block ban(s)"
+  M_MAIL24_SUBJ="%s block ban(s)"
   M_OWNER="   Owner: %s"
   M_WARN16="SUSPICIOUS RANGE: %s.0.0/16 - %s IPs from permanent bans, %s distinct blocks - review manually"
   M_WARN16_B="%s.0.0/16 -> %s IPs across %s distinct blocks"
   M_SKIP16="SKIPPED suspicious range: %s.0.0/16 already reported today"
   M_16_DONE="Suspicious range pass done. %s report(s)."
   M_MAIL16_BODY="Many permanent bans have piled up in the following ranges (/16). The range was not banned;\nmanual review recommended:"
-  M_MAIL16_SUBJ="CSF Auto-Group: %s suspicious range(s)"
+  M_MAIL16_SUBJ="%s suspicious range(s)"
   M_TCLEAN="Cleaned: %s (covered by a permanent ban)"
   M_TSKIP24="SKIPPED temp block: %s.0/24 already permanently banned"
   M_TC24_PERM="Auto-grouped from temp /24: %s temp singles, 2nd group attack -> permanent ban - do not delete"
@@ -313,15 +331,15 @@ else
   M_TC24="Auto-grouped temp /24: %s temp singles (12h)"
   M_T24_DONE="Temp block pass done. %s new temp block ban(s), %s made permanent."
   M_MAILT24_BODY="The following blocks (/24) were temp-banned for 12 hours:"
-  M_MAILT24_SUBJ="CSF Auto-Group: %s temp block ban(s)"
+  M_MAILT24_SUBJ="%s temp block ban(s)"
   M_MAILT24P_BODY="The following blocks (/24) had been temp-banned before and came back, so they are now permanently banned (do not delete):"
-  M_MAILT24P_SUBJ="CSF Auto-Group: %s block(s) made permanent"
+  M_MAILT24P_SUBJ="%s block(s) made permanent"
   M_TWARN16="SUSPICIOUS RANGE: %s.0.0/16 - %s IPs from temp bans, %s distinct blocks - review manually"
   M_TSKIP16="SKIPPED suspicious range: %s.0.0/16 already permanently banned"
   M_TSKIP16D="SKIPPED suspicious range (temp): %s.0.0/16 already reported today"
   M_T16_DONE="Suspicious range pass (temp bans) done. %s report(s)."
   M_MAILT16_BODY="Many temp bans have piled up in the following ranges (/16). The range was not banned;\nmanual review recommended:"
-  M_MAILT16_SUBJ="CSF Auto-Group: %s suspicious range(s) (temp bans)"
+  M_MAILT16_SUBJ="%s suspicious range(s) (temp bans)"
   M_WL_LOADED="Whitelist loaded: %s ranges, %s rignore domains"
   M_WL_SELF="server IP"
   M_WL_SKIP="SKIPPED %s: overlaps a whitelist entry (%s)"
@@ -330,16 +348,31 @@ else
   M_WL_B="%s -> %s singles, NOT banned. Whitelist: %s"
   M_WL_NOTE="   Note: contains a whitelist entry (%s)"
   M_MAILWL_BODY="The following blocks reached the ban threshold but were NOT banned because they overlap a CSF whitelist.\nThe single bans stay in place:"
-  M_MAILWL_SUBJ="CSF Auto-Group: %s block(s) skipped (whitelist)"
+  M_MAILWL_SUBJ="%s block(s) skipped (whitelist)"
   M_CC_NOLOOKUP="WARNING: CC_IGNORE/CC_ALLOW or csf.rignore is set but DNS lookups are unavailable (LOOKUP=0 or no dig/host); those checks were skipped"
   M_LOOKUP_OFF="WARNING: DNS lookups timed out repeatedly, disabled for this run"
   M_CLEANCNT="Counter cleaned (records older than %s days removed)"
   M_LOGTRIM="Log trimmed to %s lines (was: %s lines)"
-  M_MAIL_PERMFULL_SUBJ="!!! CSF limit warning: %s%% full !!!"
+  M_MAIL_PERMFULL_SUBJ="permanent list %s%% full"
   M_MAIL_PERMFULL_BODY="CSF deny list is approaching its limit!"
-  M_MAIL_TEMPFULL_SUBJ="!!! CSF temp limit warning: %s%% full !!!"
+  M_MAIL_TEMPFULL_SUBJ="temp list %s%% full"
   M_MAIL_TEMPFULL_BODY="CSF temp ban list is approaching its limit!"
   M_MAIL_DETAIL="Details: tail -100 %s"
+  M_SUBJ_PREFIX="CSF Auto-Group: "
+  M_EXP_SUBJ="%s old block ban(s) removed"
+  M_EXP_BODY="The following block bans were removed because they are older than %s days (Settings → Retention):"
+  M_EXP_LINE="%s -> added %s days ago"
+  M_EXP_LOG="OLD BLOCK REMOVED: %s (%s days)"
+  M_EXP_FAIL="ERROR could not remove old block: %s"
+  M_A_EXPIRED="%s old block ban(s) removed"
+  M_A_EXPNONE="No old block bans to remove"
+  M_DG_UPD="A new version is available: v%s → v%s. Install it with the Update button in the plugin or update.sh."
+  M_H_LFD="lfd is not running"
+  M_H_CSF_OFF="CSF is disabled (csf.disable)"
+  M_H_CSF_TEST="CSF is in testing mode (TESTING = 1)"
+  M_H_CSF_RULES="CSF rules are not loaded"
+  M_H_BODY="There is a problem with the firewall; CSF Auto-Group can't do its job like this. Reported once a day:"
+  M_H_LOG="PROBLEM: %s"
   M_PANEL_GEN="Panel: %s → Plugins → CSF Auto-Group"
   M_DRY_ON="DRY RUN — nothing will be changed, no email will be sent"
   M_DRY_MAIL="[email not sent] To: %s — Subject: %s"
@@ -451,7 +484,7 @@ mail() {
 
 # ── Settings: validation (panel + --config set + --dry-run --set) ──────────
 # Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
-CFG_KEYS="MSG_LANG ALERT_MAIL DIGEST DIGEST_DAY THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES LOG_ROTATE_MB LOG_ROTATE_KEEP CRON_MIN"
+CFG_KEYS="MSG_LANG ALERT_MAIL DIGEST DIGEST_DAY THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN"
 CFG_TRY_KEYS="THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS"
 logrotate_write() { # [MB] [ARŞİV] → /etc/logrotate.d/csf_autogroup (geçici dosya + mv)
     local mb="${1:-$LOG_ROTATE_MB}" keep="${2:-$LOG_ROTATE_KEEP}" tmp
@@ -484,6 +517,8 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
         LOG_MAX_LINES) lo=500; hi=100000 ;;
         LOG_ROTATE_MB) lo=1; hi=100 ;;
         LOG_ROTATE_KEEP) lo=1; hi=52 ;;
+        BLOCK_EXPIRE_DAYS) lo=30; hi=3650 ;;
+        BLOCK_EXPIRE_AUTO) opts="0 1" ;;
         *) CFG_ERR=$(m "$M_CFG_UNKNOWN" "$k"); return 1 ;;
     esac
     if [ -n "$opts" ]; then
@@ -584,6 +619,73 @@ ev() {           # TYPE CIDR [anahtar=HAZIR_JSON ...]
     shift 2
     for kv in "$@"; do line+=",\"${kv%%=*}\":${kv#*=}"; done
     printf '%s}\n' "$line" >> "$EVENTS_FILE" 2>/dev/null
+}
+# Tek mail: tur içindeki tüm bildirimler (blok banları, şüpheli ağlar, atlamalar, limit, sağlık) tek
+# mailde bölüm bölüm gider; konu satırı bölümlerin özetidir.
+MAIL_PARTS=(); MAIL_BODY=""; MAIL_URGENT=0
+mail_add() {     # KONU-PARÇASI GÖVDE
+    MAIL_PARTS+=("$1")
+    MAIL_BODY+="${MAIL_BODY:+$NL────────────────────────────────────────$NL$NL}$2$NL"
+}
+mail_flush() {
+    [ ${#MAIL_PARTS[@]} -gt 0 ] || return 0
+    local subj="" pp
+    for pp in "${MAIL_PARTS[@]}"; do subj+="${subj:+ · }$pp"; done
+    { printf '%s\n' "$MAIL_BODY"
+      [ -n "$doluluk_satiri" ] && printf '%s\n' "$doluluk_satiri"
+      [ -n "$temp_doluluk_satiri" ] && printf '%s\n' "$temp_doluluk_satiri"
+      printf '\n%s%s\n' "$PANEL_FOOT" "$(m "$M_MAIL_DETAIL" "$LOG_FILE")"; } | mail -s "$([ "$MAIL_URGENT" = 1 ] && printf '!!! ')$M_SUBJ_PREFIX$subj" "$ALERT_MAIL"
+    MAIL_PARTS=(); MAIL_BODY=""; MAIL_URGENT=0
+}
+perm_remove() {  # CIDR → csf.deny'den kaldır ("do not delete" ise önce işaret silinir); 0 = kaldırıldı
+    local line; line=$(deny_line "$1"); [ -n "$line" ] || return 1
+    [ "$DRY" = 1 ] && { echo "      [dry-run] csf -dr $1"; return 0; }
+    if is_dnd "$line"; then strip_dnd "$1" || return 1; fi
+    csf_run -dr "$1"
+    ! deny_has "$1"
+}
+expire_blocks() { # KİM → BLOCK_EXPIRE_DAYS'ten eski blok banlarını kaldır (yalnız otomatik eklenenler) → EXP_N, EXP_BODY
+    local line tok ds ep age now re_d='- ([A-Z][a-z]{2} [A-Z][a-z]{2} +[0-9]{1,2} [0-9:]{8} [0-9]{4})[[:space:]]*$' list=()
+    EXP_N=0; EXP_BODY=""
+    now=$(date +%s)
+    while IFS= read -r line; do
+        tok="${line%%[[:space:]]*}"
+        [[ "$tok" =~ $CIDR4_RE && "$tok" == */24 ]] || continue
+        [[ "$line" == *Auto-grouped* ]] || continue          # elle eklenenlere (csf_autogroup:) dokunulmaz
+        [[ "$line" =~ $re_d ]] || continue
+        ds="${BASH_REMATCH[1]}"
+        ep=$(LC_ALL=C date -d "$ds" +%s 2>/dev/null) || continue
+        age=$(( (now - ep) / 86400 ))
+        [ "$age" -ge "$BLOCK_EXPIRE_DAYS" ] && list+=("$tok $age")
+    done < "$DENY_FILE"
+    for line in "${list[@]}"; do
+        tok="${line% *}"; age="${line#* }"
+        if perm_remove "$tok"; then
+            log "$(m "$M_EXP_LOG" "$tok" "$age")"
+            EXP_N=$((EXP_N + 1)); EXP_BODY+="$(m "$M_EXP_LINE" "$tok" "$age")$NL"
+            jstr "$1"; ev expire "$tok" "age=$age" "by=$REPLY"
+        else
+            log "$(m "$M_EXP_FAIL" "$tok")"
+        fi
+    done
+}
+# Güvenlik duvarının durumu. systemd'nin "csf" servisine bakılmaz: kurallar yüklüyken bile "failed"
+# görünebiliyor (sunucuda görüldü). → H_CSF: ok|off|testing|norules|unknown, H_LFD: ok|down
+health_check() {
+    local pid="" ipt
+    H_CSF=ok; H_LFD=down
+    if [ -f "${CSF_CONF%/*}/csf.disable" ]; then H_CSF=off
+    elif [ "$(conf_val TESTING)" = 1 ]; then H_CSF=testing
+    else
+        ipt=$(command -v iptables 2>/dev/null)
+        if [ -z "$ipt" ]; then H_CSF=unknown
+        elif ! { "$ipt" -S LOCALINPUT >/dev/null 2>&1 || { command -v iptables-legacy >/dev/null 2>&1 && iptables-legacy -S LOCALINPUT >/dev/null 2>&1; }; }; then H_CSF=norules
+        fi
+    fi
+    [ -r /var/run/lfd.pid ] && read -r pid < /var/run/lfd.pid 2>/dev/null
+    if [[ "$pid" =~ ^[0-9]+$ ]] && [ -r "/proc/$pid/cmdline" ] && tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -q '^lfd'; then H_LFD=ok
+    elif command -v pgrep >/dev/null 2>&1 && pgrep -f '^lfd' >/dev/null 2>&1; then H_LFD=ok
+    fi
 }
 owner_kv() {     # son owner_lookup sonucunu ev() argümanlarına çevirir → OKV dizisi
     OKV=()
@@ -1099,7 +1201,13 @@ do_status() {
     # Kontrol edilecekler: son REVIEW_DAYS gündeki /16 uyarıları ve beyaz liste atlamaları,
     # blok başına en yenisi; yoksayılanlar ve o arada banlanmış olanlar düşülür.
     local review=() rtext=() t ty
-    local -A seen=()
+    local -A seen=() W16D=()
+    # tekrar eden şüpheli ağ: kontrol süresi içinde kaç ayrı günde işaretlendi (sayaçtaki günlük kayıtlar)
+    if [ -r "$SAYAC_FILE" ]; then
+        while read -r k u; do [ -n "$k" ] && W16D[$k]="$u"; done < <(awk -v s="$(date -d "$REVIEW_DAYS days ago" +%Y-%m-%d)" '
+            $1 ~ /^(WARN16_|WARN_TEMP16_)/ && $2 >= s { p = $1; sub(/^WARN(_TEMP)?16_/, "", p); if (!((p, $2) in d)) { d[p, $2] = 1; c[p]++ } }
+            END { for (p in c) print p ".0.0/16", c[p] }' "$SAYAC_FILE")
+    fi
     if [ -r "$EVENTS_FILE" ]; then
         while IFS= read -r line; do
             [[ "$line" =~ ^\{\"t\":([0-9]+),.*\}$ ]] || continue; t="${BASH_REMATCH[1]}"   # yarım satırlar atlanır
@@ -1109,6 +1217,7 @@ do_status() {
             [ -n "${seen[$c]}" ] && continue; seen[$c]=1
             ign_until "$c" && continue
             cidr_range "$c" && perm_covers "$R_LO" "$R_HI" && continue
+            [ -n "${W16D[$c]}" ] && line="${line%\}},\"rep\":${W16D[$c]}}"
             review+=("$line")
             rtext+=("$(printf '%-18s %s · %s' "$c" "$ty" "$(date -d "@$t" '+%d.%m %H:%M')")")
         done < <(tac "$EVENTS_FILE")
@@ -1134,7 +1243,7 @@ do_status() {
             local hc=""
             [ -r "$HIST_FILE" ] && hc=$(grep -F "{\"cidr\":\"$c\",\"day\":\"$u\"," "$HIST_FILE" | grep -E '^\{"cidr":.*\}$' | tail -1)
             day_epoch "$u"
-            review+=("{\"t\":$REPLY,\"type\":\"$ty\",\"cidr\":\"$c\",\"day\":\"$u\",\"hist\":true${hc:+,\"cached\":$hc}}")
+            review+=("{\"t\":$REPLY,\"type\":\"$ty\",\"cidr\":\"$c\",\"day\":\"$u\",\"hist\":true${W16D[$c]:+,\"rep\":${W16D[$c]}}${hc:+,\"cached\":$hc}}")
             rtext+=("$(printf '%-18s %s · %s' "$c" "$ty" "$(date -d "$u" '+%d.%m')")")
         done < <(sort -k2,2r "$SAYAC_FILE")        # blok başına en yeni tarih
     fi
@@ -1250,6 +1359,8 @@ do_status() {
     if [ "$JSON" = 1 ]; then
         local IFS=,
         printf '{"ok":true,"version":"%s","lang":"%s","now":%s,"running":%s,' "$VERSION" "$MSG_LANG" "$now" "$running"
+        health_check
+        printf '"health":{"csf":"%s","lfd":"%s"},"expire":{"days":%s,"auto":%s},"repeat_min":%s,' "$H_CSF" "$H_LFD" "$(num "$BLOCK_EXPIRE_DAYS")" "$([ "$BLOCK_EXPIRE_AUTO" = 1 ] && echo true || echo false)" "$(num "$REPEAT16_MIN")"
         printf '"config":{"t24":%s,"t24p":%s,"t16":%s,"tt24":%s,"tt16":%s,"retention":%s,"review_days":%s,"lookup":%s},' \
             "$(num "$THRESHOLD_24")" "$(num "$THRESHOLD_24_PERMANENT")" "$(num "$THRESHOLD_16")" "$(num "$THRESHOLD_TEMP_24")" \
             "$(num "$THRESHOLD_TEMP_16")" "$(num "$SAYAC_RETENTION_DAYS")" "$(num "$REVIEW_DAYS")" "$([ "$LOOK_INIT" = 1 ] && echo true || echo false)"
@@ -1506,6 +1617,11 @@ do_action() {    # NAME TARGET [DAYS]
             log "$(m "$M_A_LOG" "$AG_BY" "$(m "$M_A_UNBANNED" "$t")")"
             ev manual_unban "$t" "by=\"$AG_BY\""
             act_out 0 "$(m "$M_A_UNBANNED" "$t")" ;;
+        expire)
+            # hedef = arayüzün gördüğü gün sayısı; ayar arada değiştiyse işlem yapılmaz
+            [ "$t" = "$BLOCK_EXPIRE_DAYS" ] || { act_out 2 "$(m "$M_BAD_TARGET" "$t")"; return; }
+            expire_blocks "$AG_BY"
+            if [ "$EXP_N" -gt 0 ]; then act_out 0 "$(m "$M_A_EXPIRED" "$EXP_N")"; else act_out 0 "$M_A_EXPNONE"; fi ;;
         ignore|unignore)
             [[ "$t" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/(16|24)$ ]] && cidr_range "$t" \
                 || { act_out 2 "$(m "$M_BAD_TARGET" "$t")"; return; }
@@ -1657,6 +1773,18 @@ digest_build() { # → DG_SUBJ, DG_BODY
     tc=$("$CSF_BIN" -t 2>/dev/null 9>&- | grep -c "^DENY")
     DG_SUBJ=$(m "$M_DG_SUBJ" "$(hostname 2>/dev/null || echo "$HOSTNAME")")
     DG_BODY="$(m "$M_DG_HEAD" "$(date -d "@$since" '+%d.%m')" "$(date -d "@$now" '+%d.%m')")$NL$NL"
+    # yeni sürüm var mı (GitHub; en çok 30 sn, ulaşılamazsa satır eklenmez)
+    local br rv to=""
+    command -v timeout >/dev/null 2>&1 && to="timeout 30"
+    if command -v git >/dev/null 2>&1 && [ -d "$SELF_DIR/.git" ]; then
+        br=$(git -C "$SELF_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null)
+        if [ -n "$br" ] && [ "$br" != HEAD ] && GIT_TERMINAL_PROMPT=0 $to git -C "$SELF_DIR" fetch --quiet origin "$br" >/dev/null 2>&1 9>&-; then
+            rv=$(git -C "$SELF_DIR" show "origin/$br:csf_autogroup.sh" 2>/dev/null | sed -n 's/^VERSION="\([^"]*\)".*/\1/p' | awk 'NR == 1')
+            if [ -n "$rv" ] && [ "$rv" != "$VERSION" ] && [ "$(git -C "$SELF_DIR" rev-parse @ 2>/dev/null)" != "$(git -C "$SELF_DIR" rev-parse "origin/$br" 2>/dev/null)" ]; then
+                DG_BODY+="$(m "$M_DG_UPD" "$VERSION" "$rv")$NL$NL"
+            fi
+        fi
+    fi
     DG_BODY+="$(m "$M_DG_COUNTS" "${C[add24]:-0}" "${C[temp24]:-0}" "${C[promote]:-0}" "${C[warn16]:-0}" "${C[skip_wl]:-0}" "${C[manual]:-0}")$NL"
     DG_BODY+="$(m "$M_DG_USAGE" "$pc" "$limit" "$([ "$limit" -gt 0 ] && echo $(( pc * 100 / limit )) || echo 0)" "$perm0")$NL"
     DG_BODY+="$(m "$M_DG_TUSAGE" "$tc" "$tlimit")$NL$NL"
@@ -1774,7 +1902,7 @@ do_config() {
                 o="{\"ok\":true,\"values\":{"
                 i=0
                 for k in $CFG_KEYS; do jstr "$(cfg_value "$k")"; o+="$([ $i -gt 0 ] && echo ,)\"$k\":$REPLY"; i=1; done
-                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"root@localhost\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_MAX_LINES\":\"5000\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"CRON_MIN\":\"*/10\"}"
+                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"root@localhost\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_MAX_LINES\":\"5000\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"BLOCK_EXPIRE_DAYS\":\"365\",\"BLOCK_EXPIRE_AUTO\":\"0\",\"CRON_MIN\":\"*/10\"}"
                 o+=",\"csf\":{\"deny_limit\":$(num "$(conf_val DENY_IP_LIMIT)"),\"temp_limit\":$(num "$(conf_val DENY_TEMP_IP_LIMIT)")}"
                 local lb=0 la=0 ll=0
                 [ -f "$LOG_FILE" ] && { lb=$(wc -c < "$LOG_FILE"); ll=$(wc -l < "$LOG_FILE"); }
@@ -1888,8 +2016,9 @@ if [ -n "$limit" ] && [ "$limit" -gt 0 ] 2>/dev/null; then
     if [ "$percent" -ge 80 ]; then
         log "$(m "$M_PERM_WARN")"
         doluluk_satiri=$(m "$M_PERM_FULL" "$current_count" "$limit" "$percent")
-        printf '%s\n\n%s\n\n%s%s\n' "$(m "$M_MAIL_PERMFULL_BODY")" "$doluluk_satiri" "$PANEL_FOOT" "$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
-            mail -s "$(m "$M_MAIL_PERMFULL_SUBJ" "$percent")" "$ALERT_MAIL"
+        if ! grep -qF "LIMIT_PERM $TODAY" "$SAYAC_FILE"; then      # günde bir kez (her turda değil)
+            MAIL_URGENT=1; mail_add "$(m "$M_MAIL_PERMFULL_SUBJ" "$percent")" "$(m "$M_MAIL_PERMFULL_BODY")"; cnt_add "LIMIT_PERM $TODAY"
+        fi
     else
         doluluk_satiri=$(m "$M_PERM_USAGE" "$current_count" "$limit" "$percent")
     fi
@@ -1906,8 +2035,9 @@ if [ -n "$temp_limit" ] && [ "$temp_limit" -gt 0 ] 2>/dev/null; then
     if [ "$temp_percent" -ge 80 ]; then
         log "$(m "$M_TEMP_WARN")"
         temp_doluluk_satiri=$(m "$M_TEMP_FULL" "$temp_current" "$temp_limit" "$temp_percent")
-        printf '%s\n\n%s\n\n%s%s\n' "$(m "$M_MAIL_TEMPFULL_BODY")" "$temp_doluluk_satiri" "$PANEL_FOOT" "$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
-            mail -s "$(m "$M_MAIL_TEMPFULL_SUBJ" "$temp_percent")" "$ALERT_MAIL"
+        if ! grep -qF "LIMIT_TEMP $TODAY" "$SAYAC_FILE"; then
+            MAIL_URGENT=1; mail_add "$(m "$M_MAIL_TEMPFULL_SUBJ" "$temp_percent")" "$(m "$M_MAIL_TEMPFULL_BODY")"; cnt_add "LIMIT_TEMP $TODAY"
+        fi
     else
         temp_doluluk_satiri=$(m "$M_TEMP_USAGE" "$temp_current" "$temp_limit" "$temp_percent")
     fi
@@ -1964,8 +2094,7 @@ for prefix in $(printf '%s\n' "${!count24[@]}" | sort -V); do
     ev add24 "${prefix}.0/24" "n=$n" "dnd=$([ "$n" -ge "$THRESHOLD_24_PERMANENT" ] && echo true || echo false)" "${OKV[@]}" "ips=[$addj]"
 done
 if [ "$added24" -gt 0 ]; then
-    printf '%s\n\n%s\n%s\n%s\n' "$(m "$M_MAIL24_BODY")" "$added24_body" "$doluluk_satiri" "$PANEL_FOOT$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
-        mail -s "$(m "$M_MAIL24_SUBJ" "$added24")" "$ALERT_MAIL"
+    mail_add "$(m "$M_MAIL24_SUBJ" "$added24")" "$(m "$M_MAIL24_BODY")$NL$NL$added24_body"
 fi
 logr "$(m "$M_24_DONE" "$added24")"
 
@@ -1998,8 +2127,7 @@ for prefix in $(printf '%s\n' "${!count16[@]}" | sort -V); do
     fi
 done
 if [ "$warn16" -gt 0 ]; then
-    printf '%b\n\n%s\n%s\n%s\n' "$(m "$M_MAIL16_BODY")" "$warn_body" "$doluluk_satiri" "$PANEL_FOOT$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
-        mail -s "$(m "$M_MAIL16_SUBJ" "$warn16")" "$ALERT_MAIL"
+    mail_add "$(m "$M_MAIL16_SUBJ" "$warn16")" "$(printf '%b' "$(m "$M_MAIL16_BODY")")$NL$NL$warn_body"
 fi
 logr "$(m "$M_16_DONE" "$warn16")"
 
@@ -2076,12 +2204,10 @@ for prefix in $(printf '%s\n' "${!temp_count24[@]}" | sort -V); do
     fi
 done
 if [ "$temp_added24" -gt 0 ]; then
-    printf '%s\n\n%s\n%s\n%s\n' "$(m "$M_MAILT24_BODY")" "$temp_added24_body" "$temp_doluluk_satiri" "$PANEL_FOOT$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
-        mail -s "$(m "$M_MAILT24_SUBJ" "$temp_added24")" "$ALERT_MAIL"
+    mail_add "$(m "$M_MAILT24_SUBJ" "$temp_added24")" "$(m "$M_MAILT24_BODY")$NL$NL$temp_added24_body"
 fi
 if [ "$temp_perm_added24" -gt 0 ]; then
-    printf '%s\n\n%s\n%s\n%s\n' "$(m "$M_MAILT24P_BODY")" "$temp_perm_added24_body" "$doluluk_satiri" "$PANEL_FOOT$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
-        mail -s "$(m "$M_MAILT24P_SUBJ" "$temp_perm_added24")" "$ALERT_MAIL"
+    mail_add "$(m "$M_MAILT24P_SUBJ" "$temp_perm_added24")" "$(m "$M_MAILT24P_BODY")$NL$NL$temp_perm_added24_body"
 fi
 logr "$(m "$M_T24_DONE" "$temp_added24" "$temp_perm_added24")"
 
@@ -2111,16 +2237,38 @@ for prefix in $(printf '%s\n' "${!temp_count16[@]}" | sort -V); do
     fi
 done
 if [ "$temp_warn16" -gt 0 ]; then
-    printf '%b\n\n%s\n%s\n%s\n' "$(m "$M_MAILT16_BODY")" "$temp_warn_body" "$temp_doluluk_satiri" "$PANEL_FOOT$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
-        mail -s "$(m "$M_MAILT16_SUBJ" "$temp_warn16")" "$ALERT_MAIL"
+    mail_add "$(m "$M_MAILT16_SUBJ" "$temp_warn16")" "$(printf '%b' "$(m "$M_MAILT16_BODY")")$NL$NL$temp_warn_body"
 fi
 logr "$(m "$M_T16_DONE" "$temp_warn16")"
 
 # ── Whitelist skips: one email per run (each block once per day) ────────────
 if [ "$wl_skipped" -gt 0 ]; then
-    printf '%b\n\n%s\n%s\n' "$(m "$M_MAILWL_BODY")" "$wl_skip_body" "$PANEL_FOOT$(m "$M_MAIL_DETAIL" "$LOG_FILE")" | \
-        mail -s "$(m "$M_MAILWL_SUBJ" "$wl_skipped")" "$ALERT_MAIL"
+    mail_add "$(m "$M_MAILWL_SUBJ" "$wl_skipped")" "$(printf '%b' "$(m "$M_MAILWL_BODY")")$NL$NL$wl_skip_body"
 fi
+
+# ── Eski blok banları (Ayarlar → Saklama; varsayılan kapalı) ────────────────
+if [ "$BLOCK_EXPIRE_AUTO" = 1 ]; then
+    expire_blocks cron
+    [ "$EXP_N" -gt 0 ] && mail_add "$(m "$M_EXP_SUBJ" "$EXP_N")" "$(m "$M_EXP_BODY" "$BLOCK_EXPIRE_DAYS")$NL$NL$EXP_BODY"
+fi
+
+# ── Güvenlik duvarı sağlığı: sorun varsa günde bir kez bildirilir ───────────
+health_check
+h_msgs=()
+[ "$H_LFD" = down ] && h_msgs+=("$M_H_LFD")
+case "$H_CSF" in off) h_msgs+=("$M_H_CSF_OFF") ;; testing) h_msgs+=("$M_H_CSF_TEST") ;; norules) h_msgs+=("$M_H_CSF_RULES") ;; esac
+if [ ${#h_msgs[@]} -gt 0 ]; then
+    if ! grep -qF "HEALTH $TODAY" "$SAYAC_FILE"; then
+        for hm in "${h_msgs[@]}"; do log "$(m "$M_H_LOG" "$hm")"; done          # günlüğe de günde bir kez
+        MAIL_URGENT=1
+        h_body="$M_H_BODY$NL"; for hm in "${h_msgs[@]}"; do h_body+="  - $hm$NL"; done
+        h_subj=""; for hm in "${h_msgs[@]}"; do h_subj+="${h_subj:+, }$hm"; done
+        mail_add "$h_subj" "$h_body"; cnt_add "HEALTH $TODAY"
+    fi
+fi
+
+# ── Bu turun bildirimleri: tek mail ─────────────────────────────────────────
+mail_flush
 
 # ── Counter retention + log rotation ────────────────────────────────────────
 if [ "$DRY" != 1 ] && [ -f "$SAYAC_FILE" ]; then

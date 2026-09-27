@@ -589,3 +589,16 @@
   .ag-setform .ag-field > :not(.ag-field-l):not(.ag-field-h) { margin-top: 8px; justify-self: start; max-width: 100%; }
 }
 .ag-ev-x { flex: none; display: flex; align-items: center; font-size: 12px; }
+
+/* durum bandı: CSF · lfd · Cron */
+.ag-hchips { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.ag-hc { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; border-radius: 20px; font-size: 11px; font-weight: 650; border: 1px solid transparent; }
+.ag-hc svg { width: 11px; height: 11px; }
+.ag-hc.ok { background: var(--ag-ok-soft); color: var(--ag-ok); border-color: var(--ag-ok-line); }
+.ag-hc.warn { background: var(--ag-warn-soft); color: var(--ag-warn); border-color: var(--ag-warn-line); }
+.ag-hc.bad { background: var(--ag-bad-soft); color: var(--ag-bad); border-color: var(--ag-bad-line); }
+/* eski blok banları çubuğu */
+.ag-oldbar { display: flex; align-items: center; gap: 10px; padding: 10px 18px; background: var(--ag-warn-soft); border-bottom: 1px solid var(--ag-warn-line); color: var(--ag-warn); font-size: 12.5px; font-weight: 550; flex-wrap: wrap; }
+.ag-oldbar svg { width: 16px; height: 16px; flex: none; }
+.ag-oldbar span { flex: 1; min-width: 200px; }
+.ag-rep { font-size: 11px; }

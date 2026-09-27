@@ -97,7 +97,7 @@
       l_perm_cover: 'Kalıcı (blok)', l_temp: 'Geçici', l_nolookup: 'Sahip ve hostname sorguları kapalı (LOOKUP=0).',
       l_abuse: 'AbuseIPDB', l_bgp: 'bgp.he.net', l_copy: 'Kopyala', bad_ip: 'Geçerli bir IPv4 adresi yazın.',
       foot: 'CSF Auto-Group v{0} · {1} olarak oturum açıldı',
-      tab_overview: 'Genel bakış', tab_settings: 'Ayarlar', tab_history: 'Geçmiş', show_less: 'Daha az göster', s_cfglog: 'Ayar geçmişi', from_log: 'günlükten', sn_server: 'Sunucu', sn_server_h: 'CSF\'in liste sınırları ve eklentinin kullandığı araçlar.', st_deps: 'Sunucu gereksinimleri', st_deps_h: 'Eklentinin kullandığı araçlar ve eksik olduğunda ne olduğu.', dep_ok: 'Var', dep_missing: 'Yok', dep_warn: 'Eksik', dep_opt: 'isteğe bağlı', dep_csf: 'Güvenlik duvarı; banları o uygular.', dep_csf_x: 'Zorunlu: CSF olmadan hiçbir şey çalışmaz.', dep_crontab: 'Turları zamanında çalıştırır.', dep_crontab_x: 'Turlar otomatik çalışmaz; zamanlama Ayarlar\'dan değiştirilemez.', dep_mail: 'Uyarı mailleri ve haftalık özet.', dep_mail_x: 'Uyarı mailleri ve haftalık özet gönderilmez.', dep_dns: 'Sahip ve hostname sorguları.', dep_dns_x: 'Sahip ve hostname bilgisi olmaz; CC_IGNORE / CC_ALLOW ve csf.rignore kontrol edilemez, bu listelere dayanan bloklar banlanmaz.', dep_logrotate: 'Günlük dosyasını döndürür.', dep_logrotate_x: 'Günlük, satır sınırıyla kesilir (yedek yöntem).', dep_logrotate_w: 'Kurulu ama ayar dosyası yok; günlük şimdilik satır sınırıyla kesiliyor. update.sh ya da install.sh ile yeniden kurun.', dep_flock: 'Aynı anda tek tur çalışmasını sağlar.', dep_flock_x: 'Üst üste binen turlara karşı koruma olmaz.', dep_timeout: 'Eklentinin çalıştırdığı komutlara zaman sınırı koyar.', dep_timeout_x: 'Takılan bir komut sayfayı bekletebilir.', dep_git: 'Arayüzden güncelleme.', dep_git_x: 'Güncelleme kontrolü ve Güncelle düğmesi çalışmaz.', dep_imunify: 'Sağlayıcılar kartındaki Imunify sekmesi.', dep_imunify_x: 'Imunify sekmesi görünmez; başka etkisi yok.', k_logfile: 'Günlük dosyası', log_rot: 'logrotate: {2} MB\'ı geçince döndürülür, son {3} arşiv saklanır · şu an {0} · {1} arşiv.', k_LOG_ROTATE_MB: 'Günlük boyutu (MB)', h_LOG_ROTATE_MB: 'Günlük bu boyutu geçince döndürülür (logrotate günde bir kontrol eder).', k_LOG_ROTATE_KEEP: 'Arşiv sayısı', h_LOG_ROTATE_KEEP: 'Döndürülen günlüklerden kaç tanesi sıkıştırılarak saklanır.', log_lines: 'Şu an {0} / {1} satır.', no_cfglog: 'Henüz ayar değişikliği yok.', ev_config: 'Ayar değişti', ev_test_mail: 'Test maili',
+      tab_overview: 'Genel bakış', tab_settings: 'Ayarlar', tab_history: 'Geçmiş', show_less: 'Daha az göster', s_cfglog: 'Ayar geçmişi', c_expire: 'Eski blok banı', c_auto_on: 'otomatik kaldırılır', c_auto_off: 'elle kaldırılır', hc_csf: 'CSF', hc_lfd: 'lfd', hc_cron: 'Cron', hc_csf_ok: 'Güvenlik duvarı kuralları yüklü', hc_csf_off: 'CSF devre dışı (csf.disable)', hc_csf_testing: 'CSF test modunda (TESTING = 1)', hc_csf_norules: 'CSF kuralları yüklü değil', hc_csf_unknown: 'Durum okunamadı (iptables yok)', hc_lfd_ok: 'lfd çalışıyor', hc_lfd_down: 'lfd çalışmıyor: yeni ban gelmez', hc_cron_ok: 'Turlar zamanında çalışıyor', hc_cron_late: 'Tur gecikti', sb_fw: 'Güvenlik duvarında sorun var', f_old: 'Eski', old_h: '{0} blok banı {1} günden eski.', old_auto: 'Otomatik kaldırma açık; sıradaki turda kaldırılacaklar.', old_manual: 'Otomatik kaldırma kapalı (Ayarlar → Saklama).', old_rm: 'Eskileri kaldır ({0})', m_exp_t: '{0} eski blok banı kaldırılsın mı?', m_exp_b: '{1} günden eski {0} blok banı csf.deny\'den kaldırılır (do not delete olanlar da). Bu bloklardan tekrar saldırı gelirse yeniden banlanırlar. csf.deny önce yedeklenir.', ev_expire: 'Eski blok kaldırıldı', exp_age: '{0} gün önce eklenmişti', rep_n: 'tekrar ediyor · {0} gün', k_BLOCK_EXPIRE_DAYS: 'Eski blok banı sınırı (gün)', h_BLOCK_EXPIRE_DAYS: 'Bu süreden eski blok banları Aktif blok banları tablosunda "Eski" filtresinde toplanır.', k_BLOCK_EXPIRE_AUTO: 'Eski blok banlarını otomatik kaldır', h_BLOCK_EXPIRE_AUTO: 'Açıksa her turda bu süreden eski blok banları kaldırılır ve mailde bildirilir. Elle eklenen banlara dokunulmaz.', from_log: 'günlükten', sn_server: 'Sunucu', sn_server_h: 'CSF\'in liste sınırları ve eklentinin kullandığı araçlar.', st_deps: 'Sunucu gereksinimleri', st_deps_h: 'Eklentinin kullandığı araçlar ve eksik olduğunda ne olduğu.', dep_ok: 'Var', dep_missing: 'Yok', dep_warn: 'Eksik', dep_opt: 'isteğe bağlı', dep_csf: 'Güvenlik duvarı; banları o uygular.', dep_csf_x: 'Zorunlu: CSF olmadan hiçbir şey çalışmaz.', dep_crontab: 'Turları zamanında çalıştırır.', dep_crontab_x: 'Turlar otomatik çalışmaz; zamanlama Ayarlar\'dan değiştirilemez.', dep_mail: 'Uyarı mailleri ve haftalık özet.', dep_mail_x: 'Uyarı mailleri ve haftalık özet gönderilmez.', dep_dns: 'Sahip ve hostname sorguları.', dep_dns_x: 'Sahip ve hostname bilgisi olmaz; CC_IGNORE / CC_ALLOW ve csf.rignore kontrol edilemez, bu listelere dayanan bloklar banlanmaz.', dep_logrotate: 'Günlük dosyasını döndürür.', dep_logrotate_x: 'Günlük, satır sınırıyla kesilir (yedek yöntem).', dep_logrotate_w: 'Kurulu ama ayar dosyası yok; günlük şimdilik satır sınırıyla kesiliyor. update.sh ya da install.sh ile yeniden kurun.', dep_flock: 'Aynı anda tek tur çalışmasını sağlar.', dep_flock_x: 'Üst üste binen turlara karşı koruma olmaz.', dep_timeout: 'Eklentinin çalıştırdığı komutlara zaman sınırı koyar.', dep_timeout_x: 'Takılan bir komut sayfayı bekletebilir.', dep_git: 'Arayüzden güncelleme.', dep_git_x: 'Güncelleme kontrolü ve Güncelle düğmesi çalışmaz.', dep_imunify: 'Sağlayıcılar kartındaki Imunify sekmesi.', dep_imunify_x: 'Imunify sekmesi görünmez; başka etkisi yok.', k_logfile: 'Günlük dosyası', log_rot: 'logrotate: {2} MB\'ı geçince döndürülür, son {3} arşiv saklanır · şu an {0} · {1} arşiv.', k_LOG_ROTATE_MB: 'Günlük boyutu (MB)', h_LOG_ROTATE_MB: 'Günlük bu boyutu geçince döndürülür (logrotate günde bir kontrol eder).', k_LOG_ROTATE_KEEP: 'Arşiv sayısı', h_LOG_ROTATE_KEEP: 'Döndürülen günlüklerden kaç tanesi sıkıştırılarak saklanır.', log_lines: 'Şu an {0} / {1} satır.', no_cfglog: 'Henüz ayar değişikliği yok.', ev_config: 'Ayar değişti', ev_test_mail: 'Test maili',
       st_notify: 'Bildirim', st_mail: 'Uyarı maili adresi', st_mail_h: 'Blok banları, şüpheli ağ uyarıları ve limit mailleri buraya gider. root@localhost, cPanel\'de sunucunun iletişim adresine yönlenir.',
       st_lang: 'Dil', st_lang_h: 'Log, mail ve bu panelin dili.', st_test: 'Test maili gönder', st_test_h: 'Kayıtlı adrese gönderilir.',
       st_test_dirty: 'Önce yeni adresi kaydedin.', st_thr: 'Eşikler', st_thr_h: 'Kaç tekil ban bir işlemi tetikler.',
@@ -189,7 +189,7 @@
       l_perm_cover: 'Permanent (block)', l_temp: 'Temp', l_nolookup: 'Owner and hostname lookups are off (LOOKUP=0).',
       l_abuse: 'AbuseIPDB', l_bgp: 'bgp.he.net', l_copy: 'Copy', bad_ip: 'Enter a valid IPv4 address.',
       foot: 'CSF Auto-Group v{0} · signed in as {1}',
-      tab_overview: 'Overview', tab_settings: 'Settings', tab_history: 'History', show_less: 'Show less', s_cfglog: 'Settings history', from_log: 'from the log', sn_server: 'Server', sn_server_h: 'CSF\'s list limits and the tools the plugin uses.', st_deps: 'Server requirements', st_deps_h: 'Tools the plugin uses and what happens when one is missing.', dep_ok: 'Found', dep_missing: 'Missing', dep_warn: 'Incomplete', dep_opt: 'optional', dep_csf: 'The firewall; it applies the bans.', dep_csf_x: 'Required: nothing works without CSF.', dep_crontab: 'Runs the job on schedule.', dep_crontab_x: 'Runs don\'t happen automatically; the schedule can\'t be changed from Settings.', dep_mail: 'Alert emails and the weekly summary.', dep_mail_x: 'No alert emails or weekly summary are sent.', dep_dns: 'Owner and hostname lookups.', dep_dns_x: 'No owner or hostname info; CC_IGNORE / CC_ALLOW and csf.rignore can\'t be checked, so blocks relying on them aren\'t banned.', dep_logrotate: 'Rotates the log file.', dep_logrotate_x: 'The log is trimmed by a line limit instead (fallback).', dep_logrotate_w: 'Installed, but our config file is missing; the log is trimmed by the line limit for now. Re-run update.sh or install.sh.', dep_flock: 'Makes sure only one run happens at a time.', dep_flock_x: 'No protection against overlapping runs.', dep_timeout: 'Puts a time limit on commands the plugin runs.', dep_timeout_x: 'A stuck command can keep the page waiting.', dep_git: 'Updating from the plugin.', dep_git_x: 'The update check and the Update button don\'t work.', dep_imunify: 'The Imunify tab in the providers card.', dep_imunify_x: 'The Imunify tab is hidden; nothing else is affected.', k_logfile: 'Log file', log_rot: 'logrotate: rotated past {2} MB, the last {3} archives are kept · now {0} · {1} archives.', k_LOG_ROTATE_MB: 'Log size (MB)', h_LOG_ROTATE_MB: 'The log is rotated once it grows past this size (logrotate checks daily).', k_LOG_ROTATE_KEEP: 'Archives kept', h_LOG_ROTATE_KEEP: 'How many rotated logs are kept, compressed.', log_lines: 'Now {0} / {1} lines.', no_cfglog: 'No settings changes yet.', ev_config: 'Settings changed', ev_test_mail: 'Test email',
+      tab_overview: 'Overview', tab_settings: 'Settings', tab_history: 'History', show_less: 'Show less', s_cfglog: 'Settings history', c_expire: 'Old block bans', c_auto_on: 'removed automatically', c_auto_off: 'removed manually', hc_csf: 'CSF', hc_lfd: 'lfd', hc_cron: 'Cron', hc_csf_ok: 'Firewall rules are loaded', hc_csf_off: 'CSF is disabled (csf.disable)', hc_csf_testing: 'CSF is in testing mode (TESTING = 1)', hc_csf_norules: 'CSF rules are not loaded', hc_csf_unknown: 'Status unknown (no iptables)', hc_lfd_ok: 'lfd is running', hc_lfd_down: 'lfd is not running: no new bans will arrive', hc_cron_ok: 'Runs happen on schedule', hc_cron_late: 'A run is overdue', sb_fw: 'There is a problem with the firewall', f_old: 'Old', old_h: '{0} block bans are older than {1} days.', old_auto: 'Automatic removal is on; they will be removed on the next run.', old_manual: 'Automatic removal is off (Settings → Retention).', old_rm: 'Remove old ones ({0})', m_exp_t: 'Remove {0} old block bans?', m_exp_b: '{0} block bans older than {1} days are removed from csf.deny (do not delete ones too). If attacks come from them again they are banned again. csf.deny is backed up first.', ev_expire: 'Old block removed', exp_age: 'added {0} days ago', rep_n: 'repeating · {0} days', k_BLOCK_EXPIRE_DAYS: 'Old block ban limit (days)', h_BLOCK_EXPIRE_DAYS: 'Block bans older than this are grouped under the "Old" filter in the active block bans table.', k_BLOCK_EXPIRE_AUTO: 'Remove old block bans automatically', h_BLOCK_EXPIRE_AUTO: 'When on, block bans older than this are removed on every run and reported by email. Manual bans are left alone.', from_log: 'from the log', sn_server: 'Server', sn_server_h: 'CSF\'s list limits and the tools the plugin uses.', st_deps: 'Server requirements', st_deps_h: 'Tools the plugin uses and what happens when one is missing.', dep_ok: 'Found', dep_missing: 'Missing', dep_warn: 'Incomplete', dep_opt: 'optional', dep_csf: 'The firewall; it applies the bans.', dep_csf_x: 'Required: nothing works without CSF.', dep_crontab: 'Runs the job on schedule.', dep_crontab_x: 'Runs don\'t happen automatically; the schedule can\'t be changed from Settings.', dep_mail: 'Alert emails and the weekly summary.', dep_mail_x: 'No alert emails or weekly summary are sent.', dep_dns: 'Owner and hostname lookups.', dep_dns_x: 'No owner or hostname info; CC_IGNORE / CC_ALLOW and csf.rignore can\'t be checked, so blocks relying on them aren\'t banned.', dep_logrotate: 'Rotates the log file.', dep_logrotate_x: 'The log is trimmed by a line limit instead (fallback).', dep_logrotate_w: 'Installed, but our config file is missing; the log is trimmed by the line limit for now. Re-run update.sh or install.sh.', dep_flock: 'Makes sure only one run happens at a time.', dep_flock_x: 'No protection against overlapping runs.', dep_timeout: 'Puts a time limit on commands the plugin runs.', dep_timeout_x: 'A stuck command can keep the page waiting.', dep_git: 'Updating from the plugin.', dep_git_x: 'The update check and the Update button don\'t work.', dep_imunify: 'The Imunify tab in the providers card.', dep_imunify_x: 'The Imunify tab is hidden; nothing else is affected.', k_logfile: 'Log file', log_rot: 'logrotate: rotated past {2} MB, the last {3} archives are kept · now {0} · {1} archives.', k_LOG_ROTATE_MB: 'Log size (MB)', h_LOG_ROTATE_MB: 'The log is rotated once it grows past this size (logrotate checks daily).', k_LOG_ROTATE_KEEP: 'Archives kept', h_LOG_ROTATE_KEEP: 'How many rotated logs are kept, compressed.', log_lines: 'Now {0} / {1} lines.', no_cfglog: 'No settings changes yet.', ev_config: 'Settings changed', ev_test_mail: 'Test email',
       st_notify: 'Notifications', st_mail: 'Alert email address', st_mail_h: 'Block bans, suspicious range warnings and limit emails go here. On cPanel, root@localhost is forwarded to the server contact address.',
       st_lang: 'Language', st_lang_h: 'Language of the log, emails and this panel.', st_test: 'Send test email', st_test_h: 'Sent to the saved address.',
       st_test_dirty: 'Save the new address first.', st_thr: 'Thresholds', st_thr_h: 'How many single bans trigger an action.',
@@ -387,14 +387,24 @@
     left = Math.max(0, left);
     return Math.floor(left / 60) + ':' + ('0' + (left % 60)).slice(-2);
   }
+  function healthChips(HL, late) {
+    function chip(name, cls, tip) { return '<span class="ag-hc ' + cls + '" title="' + esc(tip) + '">' + (cls === 'ok' ? IC.check : IC.alert) + esc(name) + '</span>'; }
+    var c = HL.csf || 'unknown', l = HL.lfd || 'down';
+    return '<div class="ag-hchips">' +
+      chip(t('hc_csf'), c === 'ok' ? 'ok' : c === 'testing' || c === 'unknown' ? 'warn' : 'bad', t('hc_csf_' + c)) +
+      chip(t('hc_lfd'), l === 'ok' ? 'ok' : 'bad', t('hc_lfd_' + l)) +
+      chip(t('hc_cron'), late ? 'bad' : 'ok', t(late ? 'hc_cron_late' : 'hc_cron_ok')) + '</div>';
+  }
   function statusBand() {
     var lr = S.last_run, run = S.running, late = !run && overdue(), iv = S.cron_interval || 0;
     var R = S.runs || {}, L = R.list || [], ds = L.map(function (x) { return x[1] || 0; });
     var avg = ds.length ? Math.round(ds.reduce(function (a, b) { return a + b; }, 0) / ds.length) : 0;
     var exp = iv > 0 && R.first ? Math.max(1, Math.round(Math.min(86400, nowSec() - R.first) / iv)) : 0;
     exp = Math.max(exp, R.n24 || 0);
-    var st = run ? 'run' : late ? 'bad' : 'ok';
-    var sub = late ? t('overdue', lr ? rel(lr.t) : '?', dur(iv))
+    var HL = S.health || {}, fwBad = HL.lfd === 'down' || HL.csf === 'off' || HL.csf === 'norules';
+    var st = run ? 'run' : (late || fwBad) ? 'bad' : 'ok';
+    var sub = fwBad && !run ? [HL.csf !== 'ok' && HL.csf !== 'unknown' ? t('hc_csf_' + HL.csf) : '', HL.lfd === 'down' ? t('hc_lfd_down') : ''].filter(Boolean).join(' · ')
+      : late ? t('overdue', lr ? rel(lr.t) : '?', dur(iv))
       : !lr ? t('sb_none') : [iv ? t('sb_every', dur(iv)) : '', exp ? t('sb_24', num(R.n24 || 0), num(exp)) : ''].filter(Boolean).join(' · ');
     var sorted = ds.slice().sort(function (a, b) { return a - b; }), med = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
     var mx = Math.max.apply(null, ds.concat([1]));
@@ -406,7 +416,7 @@
       return '<div class="ag-band-m"><small>' + label + '</small><b' + (id ? ' id="' + id + '"' : '') + '>' + big + '</b>' + (small ? '<span>' + small + '</span>' : '') + '</div>';
     }
     return '<section class="ag-band st-' + st + '"><div class="ag-band-s"><span class="ag-pulse"><i></i></span><div><b>' +
-      t(run ? 'sb_run' : late ? 'sb_late' : 'sb_ok') + '</b><span>' + esc(sub) + '</span></div></div>' +
+      t(run ? 'sb_run' : fwBad ? 'sb_fw' : late ? 'sb_late' : 'sb_ok') + '</b><span>' + esc(sub) + '</span>' + healthChips(HL, late) + '</div></div>' +
       m(t('sb_last'), lr ? esc(rel(lr.t)) : '—') +
       m(t('sb_dur'), ds.length ? esc(sec(ds[ds.length - 1])) : '—', ds.length > 1 ? esc(t('sb_avg', sec(avg))) : '') +
       m(t('sb_next'), run ? t('sb_now') : (nextIn() || '—'), '', 'ag-next') +
@@ -524,7 +534,9 @@
     if (!S.review.length) {
       return '<div class="ag-okbar">' + IC.check + '<b>' + t('no_review') + '</b><span>' + t('k_review_m', num(S.config.review_days)) + '</span></div>';
     }
-    var items = S.review.slice().sort(function (a, b) { return b.t - a.t; }).map(function (e) {
+    var RM = S.repeat_min || 3;
+    function repOf(e) { return (e.rep || 0) >= RM ? 1 : 0; }
+    var items = S.review.slice().sort(function (a, b) { return (repOf(b) - repOf(a)) || (b.t - a.t); }).map(function (e) {
       var key = 'r:' + e.cidr, open = UI.open[key], is16 = /\/16$/.test(e.cidr), hasIps = e.ips && e.ips.length;
       var pill = e.type === 'skip_wl' ? '<span class="ag-pill ag-pill-info">' + t('ev_skip_wl') + '</span>'
         : '<span class="ag-pill ag-pill-warn">' + esc(t('ev_' + e.type)) + '</span>';
@@ -545,7 +557,8 @@
       acts += menu('rm:' + e.cidr, [{ act: 'ignore', label: t('ignore'), icon: 'mute', attrs: 'data-c="' + esc(e.cidr) + '"' },
                                     { act: 'ipcard', label: t('ipcard'), icon: 'search', attrs: 'data-ip="' + esc(first) + '"' }]);
       return '<div class="ag-item" data-row="' + esc(e.cidr) + '"><div class="ag-row">' + pill +
-        '<div class="ag-row-main"><div class="ag-row-t">' + newDot(e.hist ? 0 : e.t) + '<span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(e.cidr) + '</span></div>' +
+        '<div class="ag-row-main"><div class="ag-row-t">' + newDot(e.hist ? 0 : e.t) + '<span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(e.cidr) + '</span>' +
+        (repOf(e) ? '<span class="ag-pill ag-pill-bad ag-rep">' + esc(t('rep_n', num(e.rep))) + '</span>' : '') + '</div>' +
         '<div class="ag-row-s">' + meta.join(' · ') + '</div></div>' +
         '<div class="ag-row-x">' + (e.hist ? esc(e.day.slice(8, 10) + '.' + e.day.slice(5, 7)) : rel(e.t)) + '</div><div class="ag-row-a">' + acts + '</div></div>' +
         (open ? ipTable(e.ips, e.total) : '') + '</div>';
@@ -558,11 +571,16 @@
 
   /* Aktif grup banları: sıralanabilir, sayfalı tablo */
   var PAGE = 10;       // iki tablo da (gruplar, izlenenler) aynı sayfa boyunda
+  function isOld(g) {           // otomatik eklenmiş ve "eski" gün sınırını geçmiş blok banı
+    var d = (S.expire && S.expire.days) || 365;
+    return (g.kind === 'perm' || g.kind === 'promoted') && g.added > 0 && nowSec() - g.added >= d * 86400;
+  }
   function kindMatch(g, f) {
     if (f === 'perm') return g.kind === 'perm' || g.kind === 'promoted';
     if (f === 'dnd') return g.dnd;
     if (f === 'temp') return g.kind === 'temp';
     if (f === 'manual') return g.kind === 'manual';
+    if (f === 'old') return isOld(g);
     return true;
   }
   function groupMatches(g) {
@@ -622,12 +640,19 @@
     return '<div class="ag-thead">' + th('cidr', t('col_block'), 'ag-td-main') + th('kind', t('col_state')) + th('owner', t('col_owner'), 'ag-td-own') +
       th('n', t('col_singles'), 'ag-num-c ag-th-r') + th('added', t('col_added'), 'ag-when') + '<span></span></div>' + rows + pager;
   }
+  function oldBar() {
+    if (UI.gf !== 'old') return '';
+    var n = S.groups.filter(isOld).length, E = S.expire || {};
+    if (!n) return '';
+    return '<div class="ag-oldbar">' + IC.hour + '<span>' + esc(t('old_h', num(n), num(E.days || 365))) + ' ' + esc(t(E.auto ? 'old_auto' : 'old_manual')) + '</span>' +
+      '<button class="ag-btn ag-btn-sm ag-btn-danger" data-act="expireall" data-n="' + n + '">' + t('old_rm', num(n)) + '</button></div>';
+  }
   function groupCount() {
     var n = S.groups.filter(groupMatches).length;
     return n === S.groups.length ? num(n) : num(n) + ' / ' + num(S.groups.length);
   }
   function groups() {
-    var chips = ['all', 'perm', 'dnd', 'temp', 'manual'].map(function (f) {
+    var chips = ['all', 'perm', 'dnd', 'temp', 'manual', 'old'].map(function (f) {
       var n = S.groups.filter(function (g) { return kindMatch(g, f); }).length;
       return '<button class="ag-chip' + (UI.gf === f ? ' on' : '') + (n ? '' : ' zero') + '" data-act="gf" data-f="' + f + '">' + t('f_' + f) +
         '<span class="ag-chip-n">' + num(n) + '</span></button>';
@@ -635,7 +660,7 @@
     return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.ban + t('s_groups') + '</h2>' +
       '<span class="ag-count" id="ag-gcount">' + groupCount() + '</span><div class="ag-tools"><div class="ag-chips">' + chips + '</div>' +
       '<input class="ag-input" id="ag-gq" type="search" placeholder="' + esc(t('g_search')) + '" value="' + esc(UI.gq) + '" style="width:180px"></div></div>' +
-      '<div class="ag-card-b ag-tbl" id="ag-groups-b">' + groupRows() + '</div></section>';
+      oldBar() + '<div class="ag-card-b ag-tbl" id="ag-groups-b">' + groupRows() + '</div></section>';
   }
 
   var EV_CLASS = {
@@ -645,7 +670,7 @@
   };
   var EV_GROUP = {
     bans: ['add24', 'promote', 'temp24', 'manual_ban'], warn: ['warn16', 'warn16t'], skip: ['skip_wl'],
-    manual: ['manual_ban', 'manual_unban', 'manual_forget', 'manual_ignore', 'manual_unignore'], clean: ['clean_temp']
+    manual: ['manual_ban', 'manual_unban', 'manual_forget', 'manual_ignore', 'manual_unignore'], clean: ['clean_temp', 'expire']
   };
   function evDetail(e) {
     var d = [];
@@ -662,11 +687,12 @@
     if (e.by) d.push(t('by', e.by));
     if (e.src === 'log') d.push(t('from_log'));
     if (e.until) d.push(t('until', e.until));
+    if (e.type === 'expire' && e.age != null) d.push(t('exp_age', num(e.age)));
     return esc(d.join(' · '));
   }
   var EV_ICON = {
     add24: ['ban', 'acc'], manual_ban: ['ban', 'bad'], promote: ['lock', 'vio'], temp24: ['clock', 'warn'], warn16: ['alert', 'warn'], warn16t: ['alert', 'warn'],
-    skip_wl: ['check', 'info'], clean_temp: ['x', 'n'], config: ['sliders', 'acc'], test_mail: ['inbox', 'n'], digest: ['inbox', 'n']
+    skip_wl: ['check', 'info'], clean_temp: ['x', 'n'], expire: ['hour', 'n'], config: ['sliders', 'acc'], test_mail: ['inbox', 'n'], digest: ['inbox', 'n']
   };
   /* Geçmiş sekmesi: eklentinin işleri · Ayarlar sekmesi (cfg): ayar değişiklikleri, test maili, özet */
   var CFG_TYPES = ['config', 'test_mail', 'digest'];
@@ -834,13 +860,14 @@
       '<div class="ag-tools"><button class="ag-link" data-act="tab" data-tab="settings">' + t('edit') + '</button></div></div><div class="ag-rules">' +
       kv(t('c_t24'), t('c_singles', c.t24)) + kv(t('c_t24p'), t('c_singles', c.t24p)) + kv(t('c_t16'), t('c_singles', c.t16)) +
       kv(t('c_tt24'), t('c_singles', c.tt24)) + kv(t('c_tt16'), t('c_singles', c.tt16)) + kv(t('c_ret'), t('c_days', c.retention)) +
-      '</div><div class="ag-rules-f">' + esc(t('c_lookup')) + ': <b>' + (c.lookup ? t('c_on') : t('c_off')) + '</b></div></section>';
+      '</div><div class="ag-rules-f">' + esc(t('c_lookup')) + ': <b>' + (c.lookup ? t('c_on') : t('c_off')) + '</b>' +
+      (S.expire ? ' · ' + esc(t('c_expire')) + ': <b>' + esc(t('c_days', num(S.expire.days))) + ', ' + (S.expire.auto ? t('c_auto_on') : t('c_auto_off')) + '</b>' : '') + '</div></section>';
   }
 
   /* ── Ayarlar sekmesi ───────────────────────────────────────────── */
   var RANGES = {
     THRESHOLD_24: [2, 50], THRESHOLD_24_PERMANENT: [2, 100], THRESHOLD_16: [2, 500], THRESHOLD_TEMP_24: [2, 50],
-    THRESHOLD_TEMP_16: [2, 500], LOOKUP_TIMEOUT: [1, 10], SAYAC_RETENTION_DAYS: [7, 730], REVIEW_DAYS: [1, 90], LOG_ROTATE_MB: [1, 100], LOG_ROTATE_KEEP: [1, 52], LOG_MAX_LINES: [500, 100000]
+    THRESHOLD_TEMP_16: [2, 500], LOOKUP_TIMEOUT: [1, 10], SAYAC_RETENTION_DAYS: [7, 730], REVIEW_DAYS: [1, 90], BLOCK_EXPIRE_DAYS: [30, 3650], LOG_ROTATE_MB: [1, 100], LOG_ROTATE_KEEP: [1, 52], LOG_MAX_LINES: [500, 100000]
   };
   var TRY_KEYS = ['THRESHOLD_24', 'THRESHOLD_24_PERMANENT', 'THRESHOLD_16', 'THRESHOLD_TEMP_24', 'THRESHOLD_TEMP_16', 'LOOKUP', 'LOOKUP_TIMEOUT', 'SAYAC_RETENTION_DAYS', 'REVIEW_DAYS'];
   function cv(k) { return DRAFT[k] !== undefined ? DRAFT[k] : (CFG ? CFG.values[k] : ''); }
@@ -915,6 +942,9 @@
       '<div class="ag-field-h">' + (CFG.dns_tool ? t('h_LOOKUP') : '<span style="color:var(--ag-warn)">' + t('st_nodns') + '</span>') + '</div></div>' + field('LOOKUP_TIMEOUT', errs);
     var LG = CFG.log || {}, rot = !!LG.rotate;
     var keep = (rot ? ['SAYAC_RETENTION_DAYS', 'REVIEW_DAYS', 'LOG_ROTATE_MB', 'LOG_ROTATE_KEEP'] : ['SAYAC_RETENTION_DAYS', 'REVIEW_DAYS', 'LOG_MAX_LINES']).map(function (k) { return field(k, errs); }).join('') +
+      field('BLOCK_EXPIRE_DAYS', errs) +
+      '<div class="ag-field"><div class="ag-field-l"><label>' + t('k_BLOCK_EXPIRE_AUTO') + '</label></div>' + seg('BLOCK_EXPIRE_AUTO', [['1', t('on')], ['0', t('off')]]) +
+      '<div class="ag-field-h">' + t('h_BLOCK_EXPIRE_AUTO') + '</div></div>' +
       '<div class="ag-field"><div class="ag-field-l"><label>' + t('k_logfile') + '</label></div><div class="ag-loginfo">' +
       (rot ? t('log_rot', esc(bytes(LG.bytes)), num(LG.archives), num(CFG.values.LOG_ROTATE_MB || 1), num(CFG.values.LOG_ROTATE_KEEP || 5)) : t('log_lines', num(LG.lines), num(cv('LOG_MAX_LINES')))) + '</div></div>';
     var csf = '<dl class="ag-kv" style="padding:0">' +
@@ -944,7 +974,7 @@
       { k: 'thr', icon: 'sliders', label: t('st_thr'), keys: ['THRESHOLD_24', 'THRESHOLD_24_PERMANENT', 'THRESHOLD_16', 'THRESHOLD_TEMP_24', 'THRESHOLD_TEMP_16'] },
       { k: 'sched', icon: 'clock', label: t('st_sched'), keys: ['CRON_MIN'] },
       { k: 'look', icon: 'search', label: t('st_lookup'), keys: ['LOOKUP', 'LOOKUP_TIMEOUT'] },
-      { k: 'keep', icon: 'hour', label: t('st_keep'), keys: ['SAYAC_RETENTION_DAYS', 'REVIEW_DAYS', 'LOG_ROTATE_MB', 'LOG_ROTATE_KEEP', 'LOG_MAX_LINES'] },
+      { k: 'keep', icon: 'hour', label: t('st_keep'), keys: ['SAYAC_RETENTION_DAYS', 'REVIEW_DAYS', 'BLOCK_EXPIRE_DAYS', 'BLOCK_EXPIRE_AUTO', 'LOG_ROTATE_MB', 'LOG_ROTATE_KEEP', 'LOG_MAX_LINES'] },
       { k: 'server', icon: 'shield', label: t('sn_server'), keys: [] },
       { k: 'hist', icon: 'list', label: t('s_cfglog'), keys: [] }
     ];
@@ -1172,6 +1202,12 @@
     ppage: function (el) { UI.pp = Math.max(0, UI.pp + (+el.getAttribute('data-d'))); render(); },
     at: function (el) { UI.at = el.getAttribute('data-t'); render(); },
     st: function (el) { UI.st = el.getAttribute('data-s'); render(); window.scrollTo(0, 0); },
+    expireall: function (el) {
+      var n = +el.getAttribute('data-n'), d = String((S.expire && S.expire.days) || 365);
+      modal({ icon: 'alert', tone: 'bad', title: t('m_exp_t', num(n)), html: '<p>' + esc(t('m_exp_b', num(n), d)) + '</p>',
+        typed: String(n), okText: t('old_rm', num(n)), okClass: 'ag-btn-danger-solid' })
+        .then(function (m) { if (m.ok) doAction('expire', d); });
+    },
     asnall: function () { UI.asnAll = !UI.asnAll; render(); },
     ef: function (el) { UI.ef = el.getAttribute('data-f'); UI.evLimit = 40; render(); },
     cd: function (el) { UI.cd = +el.getAttribute('data-d'); render(); },

@@ -19,12 +19,20 @@ is escalated to a **permanent** ban. `/16` ranges are only flagged for review
   country) and hostname, in the page and in alert emails.
 - **Safe by default** — never bans a range that touches any CSF whitelist, and
   every manual action asks for confirmation.
+- **One email per run** — everything a run did (block bans, suspicious
+  ranges, skips, limit and firewall alerts) arrives in a single email.
+- **Watches the firewall itself** — shows whether CSF and lfd are working and
+  emails once a day if one of them stops.
 - **English / Türkçe** — the plugin, logs and emails.
 - **Works on phones** — the page adapts to small screens.
 
-**Version 1.7.10** · root-only WHM plugin on cPanel servers. On servers without
+**Version 1.8.0** · root-only WHM plugin on cPanel servers. On servers without
 cPanel the same engine runs from cron and the command line
 ([details](#without-cpanel)).
+
+**Terms used everywhere** (plugin, emails, log): a *single* is one banned IP, a
+*block* is a `/24` (banned automatically), a *range* is a `/16` (never banned,
+only flagged as *suspicious*), a *provider* is an ASN.
 
 ---
 
@@ -77,18 +85,23 @@ settings, with no prompts. `config.env` is left untouched.
 ### Overview
 
 - **Status** — whether protection is running, when the last run was and how long
-  it took, a countdown to the next run and the durations of the last 36 runs.
-  Turns red when cron has stopped.
-- **Summary cards** — active group bans (with this week's change), items to
+  it took, a countdown to the next run and the durations of the last 36 runs,
+  plus three markers: **CSF** (rules loaded, not disabled, not in testing mode),
+  **lfd** (running) and **Cron** (runs on time). Turns red when any of them has
+  a problem.
+- **Summary cards** — active block bans (with this week's change), items to
   review, and how full CSF's permanent and temp lists are.
-- **Activity** — a daily chart of group bans, blocks made permanent, temp groups,
-  `/16` warnings and whitelist skips over the last 7 or 30 days. Hover a day for
-  its breakdown.
-- **To review** — `/16` warnings and whitelist-skipped `/24`s from the last 7
-  days, with every IP's hostname, owner and ban reason.
-- **Active group bans** — a sortable, paged table with each block's owner,
+- **Activity** — a daily chart of block bans, blocks made permanent, temp block
+  bans, suspicious ranges and whitelist skips over the last 7 or 30 days. Hover
+  a day for its breakdown.
+- **To review** — suspicious ranges and whitelist-skipped blocks from the last 7
+  days, with every IP's hostname, owner and ban reason. A range flagged on 3 or
+  more separate days is marked *repeating* and moves to the top.
+- **Active block bans** — a sortable, paged table with each block's owner,
   searchable by CIDR, AS number or organisation. Filters show their counts.
-  Blocks that became permanent on a second attack are tagged *repeat*.
+  Blocks that became permanent on a second attack are tagged *repeat*. The
+  *Old* filter lists block bans older than the old-block limit (default 365
+  days), with a button to remove them all.
 - **Watched** — `/24`s that were temp-banned once. If one comes back, it becomes
   permanent + `do not delete`. Sorted by days left.
 - **History** (its own tab) — every ban, promotion, skip, warning and manual
@@ -98,11 +111,11 @@ settings, with no prompts. `config.env` is left untouched.
   registry, whether CSF blocks it and which list whitelists it, with links to
   bgp.he.net and AbuseIPDB. Recently viewed IPs stay one click away.
 - **Top attacking providers** (by ASN) — three tabs:
-  - *Attackers* — ranked by group bans and single bans. A network with 5+ group
+  - *Attackers* — ranked by block bans and single bans. A provider with 5+ block
     bans gets a suggestion explaining how to block the whole ASN with CSF's own
     `CC_DENY`. The plugin never edits `csf.conf`.
   - *Other blocks* — ranges in `csf.deny` added outside CSF Auto-Group.
-  - *Imunify* (only with Imunify360) — networks in Imunify360's **own** block
+  - *Imunify* (only with Imunify360) — providers in Imunify360's **own** block
     list on this server, with the block reasons. Read-only.
 - **Since your last visit** — what happened since you last opened the page; new
   rows carry a dot.
@@ -118,7 +131,8 @@ whitelist, removing a `do not delete` block) make you type the target.
 | Ban anyway | ban a whitelist-skipped `/24` (overrides the whitelist) |
 | Make permanent | make a watched `/24` permanent right away |
 | Stop watching | forget a watched `/24` (next attack counts as the first) |
-| Remove | lift a group ban (`do not delete` blocks too; `csf.deny` is backed up first) |
+| Remove | lift a block ban (`do not delete` blocks too; `csf.deny` is backed up first) |
+| Remove old ones | on the *Old* filter: remove every block ban older than the old-block limit |
 | Ignore | hide an item from review for 7/30/90 days (stops `/16` warning emails too) |
 | Details | for warnings older than the event log: that day's IPs and reasons from the lfd log |
 | Dry run | show what a run would do; changes nothing, sends nothing |
@@ -134,13 +148,15 @@ history):
 
 - **Notifications** — alert email (with *Send test email*), language, and the
   **weekly summary**: new block bans, top attacking providers, watched blocks about to
-  expire, list usage and run count. Sent with the first run after 09:00 on the
-  chosen day (default Monday).
-- **Thresholds** — `/24` ban, `do not delete`, `/16` warning, temp `/24` and temp
-  `/16`.
+  expire, list usage, run count, and a note when a new version is available.
+  Sent with the first run after 09:00 on the chosen day (default Monday).
+- **Thresholds** — block ban (`/24`), `do not delete`, suspicious range (`/16`),
+  temp block ban (`/24`) and suspicious range from temp bans (`/16`).
 - **Schedule** — cron every 5 / 10 / 15 / 30 minutes or hourly.
 - **Lookups** — owner/hostname lookups on or off, DNS timeout.
-- **Retention** — watch period, review days, log size and archive count. The
+- **Retention** — watch period, review days, old-block limit (default 365 days)
+  and whether old block bans are removed automatically (default off; manual bans
+  are never touched), log size and archive count. The
   log is rotated by the system's logrotate (`/etc/logrotate.d/csf_autogroup`,
   written from these settings; default 1 MB, 5 compressed archives); where
   logrotate is missing, a log line limit is used instead. A run where
@@ -164,11 +180,13 @@ range that comes back turns into a permanent one.
 |--------|--------|
 | `/24` with **≥3** permanent single bans | permanently ban the `/24`, remove the singles |
 | `/24` with **≥5** permanent singles | ban `/24` + `do not delete` |
-| `/16` with **≥5** singles across **≥2** `/24`s | warn by email (once/day), no auto-ban |
+| `/16` with **≥5** singles across **≥2** `/24`s | flag as suspicious range by email (once/day), no auto-ban |
 | `/24` with **≥3** temp bans (first time) | temp-ban the `/24` for 12h, watch it |
 | same `/24` seen again | permanent ban + `do not delete` |
-| temp `/16` with **≥5** singles / **≥2** `/24`s | warn by email (once/day) |
-| deny list **≥80%** of its limit | email alert |
+| temp `/16` with **≥5** singles / **≥2** `/24`s | flag as suspicious range by email (once/day) |
+| deny list **≥80%** of its limit | email alert (once/day) |
+| CSF disabled / in testing mode / rules not loaded, or lfd not running | email alert (once/day) |
+| block ban older than the old-block limit (optional) | remove it |
 
 Temp bans already covered by a permanent block are cleared, watch records expire
 after 180 days (configurable), and the log is capped. Singles marked
@@ -178,8 +196,11 @@ keeps `csf.deny` from overflowing its line limit.
 
 ### Owner info
 
+Each run sends at most one email; its subject sums up the run, e.g.
+`CSF Auto-Group: 2 block bans · 1 suspicious range · 1 temp block ban`.
+
 ```
-185.220.101.0/24 -> 4 permanent singles, permanent ban
+185.220.101.0/24 -> 4 permanent singles, permanent block ban
    Owner: AS60729 ARTIKEL10, DE
    - 185.220.101.12   berlin01.tor-exit.artikel10.org  (sshd) Failed SSH login
    - 185.220.101.47   tor-exit-47.artikel10.org  (smtpauth) Failed SMTP AUTH login
