@@ -82,6 +82,22 @@ CRON_LINE="$CRON_MIN * * * * $SCRIPT >/dev/null 2>&1"
 EXISTING="$(crontab -l 2>/dev/null | grep -vF "$SCRIPT" || true)"
 printf '%s\n%s\n' "$EXISTING" "$CRON_LINE" | crontab -
 
+# ── Log rotation (logrotate varsa) ──────────────────────────────────
+# Günlük 1 MB'ı geçince döndürülür, son 5 arşiv sıkıştırılmış saklanır. Betik bu dosyayı görünce
+# kendi satır sınırıyla kesmeyi bırakır; logrotate yoksa LOG_MAX_LINES kullanılır.
+ROTATE="skipped (logrotate not found)"
+if [ -d /etc/logrotate.d ] && command -v logrotate >/dev/null 2>&1; then
+    LOGF="$(sed -n 's/^LOG_FILE=//p' "$SRC/config.env" 2>/dev/null | tr -d "\"'" | awk 'END { print }')"
+    LOGF="${LOGF:-/var/log/csf_autogroup.log}"
+    if [[ "$LOGF" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
+        printf '%s {\n    size 1M\n    rotate 5\n    compress\n    delaycompress\n    missingok\n    notifempty\n    create 0600 root root\n}\n' "$LOGF" \
+            > /etc/logrotate.d/csf_autogroup.new && chmod 0644 /etc/logrotate.d/csf_autogroup.new \
+            && mv -f /etc/logrotate.d/csf_autogroup.new /etc/logrotate.d/csf_autogroup && ROTATE="$LOGF (1 MB, 5 archives)"
+    else
+        ROTATE="skipped (unusual LOG_FILE path: $LOGF)"
+    fi
+fi
+
 # ── WHM plugin (cPanel servers only) ────────────────────────────────
 # Page + JSON endpoints under WHM → Plugins. Root / "all"-privileged WHM users only.
 # Files are written next to their target and renamed into place, so a request
@@ -139,6 +155,7 @@ echo
 echo "── Done ──"
 echo "Installed cron: $CRON_LINE"
 echo "WHM plugin: $PLUGIN"
+echo "Log rotation: $ROTATE"
 echo "Config: $SRC/config.env   ·   Log: /var/log/csf_autogroup.log"
 echo
 echo "⚠️  This auto-bans /24 subnets. Make sure your own IPs are in csf.allow,"

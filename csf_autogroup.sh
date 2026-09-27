@@ -39,7 +39,7 @@
 # ============================================================================
 set -o pipefail
 
-VERSION="1.7.4"   # sürüm — başlangıç log satırında görünür
+VERSION="1.7.5"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -53,6 +53,7 @@ CSF_BIN="${CSF_BIN:-/sbin/csf}"
 CSF_DIR="${CSF_DIR:-$(dirname "$CSF_CONF")}"     # csf.allow / csf.ignore / csf.rignore
 CSF_VAR="${CSF_VAR:-/var/lib/csf}"               # csf.tempban / csf.tempallow / csf.g*
 LOG_FILE="${LOG_FILE:-/var/log/csf_autogroup.log}"
+LOGROTATE_CONF="${LOGROTATE_CONF:-/etc/logrotate.d/csf_autogroup}"   # varsa günlüğü logrotate döndürür (install.sh yazar)
 SAYAC_FILE="${SAYAC_FILE:-/var/lib/csf_autogroup/counter}"
 LOCK_FILE="${LOCK_FILE:-${SAYAC_FILE}.lock}"
 THRESHOLD_24="${THRESHOLD_24:-3}"
@@ -1700,6 +1701,10 @@ do_config() {
                 for k in $CFG_KEYS; do jstr "$(cfg_value "$k")"; o+="$([ $i -gt 0 ] && echo ,)\"$k\":$REPLY"; i=1; done
                 o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"root@localhost\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_MAX_LINES\":\"5000\",\"CRON_MIN\":\"*/10\"}"
                 o+=",\"csf\":{\"deny_limit\":$(num "$(conf_val DENY_IP_LIMIT)"),\"temp_limit\":$(num "$(conf_val DENY_TEMP_IP_LIMIT)")}"
+                local lb=0 la=0 ll=0
+                [ -f "$LOG_FILE" ] && { lb=$(wc -c < "$LOG_FILE"); ll=$(wc -l < "$LOG_FILE"); }
+                la=$(ls -1 "$LOG_FILE".[0-9]* 2>/dev/null | grep -c .)
+                o+=",\"log\":{\"rotate\":$([ -f "$LOGROTATE_CONF" ] && echo true || echo false),\"bytes\":$(num "$lb"),\"lines\":$(num "$ll"),\"archives\":$(num "$la")}"
                 o+=",\"dns_tool\":$([ -n "$DIG_BIN$HOST_BIN" ] && echo true || echo false),\"crontab\":$(command -v crontab >/dev/null 2>&1 && echo true || echo false)}"
                 echo "$o"
             else
@@ -2028,7 +2033,9 @@ if [ "$DRY" != 1 ] && [ -f "$SAYAC_FILE" ]; then
     awk -v d="$cutoff" '$2 >= d' "$SAYAC_FILE" > "${SAYAC_FILE}.tmp" && mv "${SAYAC_FILE}.tmp" "$SAYAC_FILE"
     logr "$(m "$M_CLEANCNT" "$SAYAC_RETENTION_DAYS")"
 fi
-if [ "$DRY" != 1 ] && [ -f "$LOG_FILE" ]; then
+# Günlüğü sistemin logrotate'i döndürüyorsa (1 MB, 5 sıkıştırılmış arşiv) burada kesilmez; logrotate
+# yoksa eski yöntem: son LOG_MAX_LINES satır tutulur.
+if [ "$DRY" != 1 ] && [ -f "$LOG_FILE" ] && [ ! -f "$LOGROTATE_CONF" ]; then
     line_count=$(wc -l < "$LOG_FILE")
     if [ "$line_count" -gt "$LOG_MAX_LINES" ]; then
         tail -"$LOG_MAX_LINES" "$LOG_FILE" > "${LOG_FILE}.tmp" && mv "${LOG_FILE}.tmp" "$LOG_FILE"

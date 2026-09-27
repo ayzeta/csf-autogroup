@@ -97,7 +97,7 @@
       l_perm_cover: 'Kalıcı (blok)', l_temp: 'Geçici', l_nolookup: 'Sahip ve hostname sorguları kapalı (LOOKUP=0).',
       l_abuse: 'AbuseIPDB', l_bgp: 'bgp.he.net', l_copy: 'Kopyala', bad_ip: 'Geçerli bir IPv4 adresi yazın.',
       foot: 'CSF Auto-Group v{0} · {1} olarak oturum açıldı',
-      tab_overview: 'Genel bakış', tab_settings: 'Ayarlar', tab_history: 'Geçmiş', show_less: 'Daha az göster', s_cfglog: 'Ayar geçmişi', no_cfglog: 'Henüz ayar değişikliği yok.', ev_config: 'Ayar değişti', ev_test_mail: 'Test maili',
+      tab_overview: 'Genel bakış', tab_settings: 'Ayarlar', tab_history: 'Geçmiş', show_less: 'Daha az göster', s_cfglog: 'Ayar geçmişi', k_logfile: 'Günlük dosyası', log_rot: 'logrotate döndürüyor: 1 MB\'ı geçince, son 5 arşiv sıkıştırılarak saklanır. Şu an {0} · {1} arşiv.', log_lines: 'Şu an {0} / {1} satır.', no_cfglog: 'Henüz ayar değişikliği yok.', ev_config: 'Ayar değişti', ev_test_mail: 'Test maili',
       st_notify: 'Bildirim', st_mail: 'Uyarı maili adresi', st_mail_h: 'Gruplama, /16 uyarısı ve limit mailleri buraya gider. root@localhost, cPanel\'de sunucunun iletişim adresine yönlenir.',
       st_lang: 'Dil', st_lang_h: 'Log, mail ve bu panelin dili.', st_test: 'Test maili gönder', st_test_h: 'Kayıtlı adrese gönderilir.',
       st_test_dirty: 'Önce yeni adresi kaydedin.', st_thr: 'Eşikler', st_thr_h: 'Kaç tekil ban bir işlemi tetikler.',
@@ -189,7 +189,7 @@
       l_perm_cover: 'Permanent (block)', l_temp: 'Temp', l_nolookup: 'Owner and hostname lookups are off (LOOKUP=0).',
       l_abuse: 'AbuseIPDB', l_bgp: 'bgp.he.net', l_copy: 'Copy', bad_ip: 'Enter a valid IPv4 address.',
       foot: 'CSF Auto-Group v{0} · signed in as {1}',
-      tab_overview: 'Overview', tab_settings: 'Settings', tab_history: 'History', show_less: 'Show less', s_cfglog: 'Settings history', no_cfglog: 'No settings changes yet.', ev_config: 'Settings changed', ev_test_mail: 'Test email',
+      tab_overview: 'Overview', tab_settings: 'Settings', tab_history: 'History', show_less: 'Show less', s_cfglog: 'Settings history', k_logfile: 'Log file', log_rot: 'Rotated by logrotate: at 1 MB, the last 5 archives are kept compressed. Now {0} · {1} archives.', log_lines: 'Now {0} / {1} lines.', no_cfglog: 'No settings changes yet.', ev_config: 'Settings changed', ev_test_mail: 'Test email',
       st_notify: 'Notifications', st_mail: 'Alert email address', st_mail_h: 'Grouping, /16 warning and limit emails go here. On cPanel, root@localhost is forwarded to the server contact address.',
       st_lang: 'Language', st_lang_h: 'Language of the log, emails and this panel.', st_test: 'Send test email', st_test_h: 'Sent to the saved address.',
       st_test_dirty: 'Save the new address first.', st_thr: 'Thresholds', st_thr_h: 'How many single bans trigger an action.',
@@ -258,6 +258,7 @@
     if (LANG !== 'tr') return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
     return p(d.getDate()) + '.' + p(d.getMonth() + 1) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
+  function bytes(n) { n = +n || 0; return n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(0) + ' KB' : (n / 1048576).toFixed(1) + ' MB'; }
   function loc() { return LANG === 'tr' ? 'tr-TR' : 'en-US'; }
   function dur(s) {
     s = Math.max(0, s | 0);
@@ -886,7 +887,10 @@
       '<div class="ag-field-h">' + t('st_sched_h') + (cronCur && ['*/5', '*/10', '*/15', '*/30', '0'].indexOf(cronCur) < 0 ? ' (' + esc(cronCur) + ')' : '') + '</div></div>';
     var look = '<div class="ag-field"><div class="ag-field-l"><label>' + t('k_LOOKUP') + '</label></div>' + seg('LOOKUP', [['1', t('on')], ['0', t('off')]]) +
       '<div class="ag-field-h">' + (CFG.dns_tool ? t('h_LOOKUP') : '<span style="color:var(--ag-warn)">' + t('st_nodns') + '</span>') + '</div></div>' + field('LOOKUP_TIMEOUT', errs);
-    var keep = ['SAYAC_RETENTION_DAYS', 'REVIEW_DAYS', 'LOG_MAX_LINES'].map(function (k) { return field(k, errs); }).join('');
+    var LG = CFG.log || {}, rot = !!LG.rotate;
+    var keep = (rot ? ['SAYAC_RETENTION_DAYS', 'REVIEW_DAYS'] : ['SAYAC_RETENTION_DAYS', 'REVIEW_DAYS', 'LOG_MAX_LINES']).map(function (k) { return field(k, errs); }).join('') +
+      '<div class="ag-field"><div class="ag-field-l"><label>' + t('k_logfile') + '</label></div><div class="ag-loginfo">' +
+      (rot ? t('log_rot', esc(bytes(LG.bytes)), num(LG.archives)) : t('log_lines', num(LG.lines), num(cv('LOG_MAX_LINES')))) + '</div></div>';
     var csf = '<dl class="ag-kv" style="padding:0">' +
       '<dt>' + t('csf_deny') + '</dt><dd>' + (CFG.csf.deny_limit ? num(CFG.csf.deny_limit) : '—') + '</dd>' +
       '<dt>' + t('csf_temp') + '</dt><dd>' + (CFG.csf.temp_limit ? num(CFG.csf.temp_limit) : '—') + '</dd></dl>' +

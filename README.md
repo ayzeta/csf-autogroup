@@ -22,7 +22,7 @@ is escalated to a **permanent** ban. `/16` ranges are only flagged for review
 - **English / Türkçe** — the plugin, logs and emails.
 - **Works on phones** — the page adapts to small screens.
 
-**Version 1.7.4** · root-only WHM plugin on cPanel servers. On servers without
+**Version 1.7.5** · root-only WHM plugin on cPanel servers. On servers without
 cPanel the same engine runs from cron and the command line
 ([details](#without-cpanel)).
 
@@ -136,7 +136,10 @@ The same settings as `config.env`, with validation:
   `/16`.
 - **Schedule** — cron every 5 / 10 / 15 / 30 minutes or hourly.
 - **Lookups** — owner/hostname lookups on or off, DNS timeout.
-- **Retention** — watch period, review days, log line limit.
+- **Retention** — watch period, review days. The log is rotated by the system's
+  logrotate (`/etc/logrotate.d/csf_autogroup`: at 1 MB, 5 compressed archives);
+  where logrotate is missing, a log line limit is used instead. A run where
+  nothing happened leaves a single line in the log.
 
 *Try before saving* runs a dry run with the unsaved thresholds. Saving writes
 `config.env` (previous file kept as `config.env.bak`), updates the crontab and
@@ -248,6 +251,7 @@ crontab -l | grep -v 'csf_autogroup.sh' | crontab -
 /usr/local/cpanel/bin/unregister_appconfig csf_autogroup
 rm -rf /usr/local/cpanel/whostmgr/docroot/cgi/csf_autogroup /var/cpanel/csf_autogroup
 rm -f /var/cpanel/apps/csf_autogroup.conf /usr/local/cpanel/whostmgr/docroot/addon_plugins/csf_autogroup.svg
+rm -f /etc/logrotate.d/csf_autogroup
 # optional:
 rm -f /var/log/csf_autogroup.log
 rm -rf /var/lib/csf_autogroup
