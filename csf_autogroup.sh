@@ -84,6 +84,8 @@ HIST_FILE="${HIST_FILE:-$(dirname "$SAYAC_FILE")/history.jsonl}"
 LOGHIST_FILE="${LOGHIST_FILE:-$(dirname "$SAYAC_FILE")/loghist.v2.jsonl}"   # günlükten çıkarılan, olay kaydından önceki işler      # "Ayrıntı" ile getirilen eski uyarılar (bir kez)
 IMUNIFY_FILE="${IMUNIFY_FILE:-$(dirname "$SAYAC_FILE")/imunify}"         # yerel kara liste önbelleği
 IMUNIFY_WL_FILE="${IMUNIFY_WL_FILE:-$(dirname "$SAYAC_FILE")/imunify_white}"  # yerel beyaz liste önbelleği
+MODSEC_DB="${MODSEC_DB:-/var/cpanel/modsec/modsec.sqlite}"      # cPanel'in ModSecurity eşleşme kaydı (kural mesajları)
+MODSEC_CACHE="${MODSEC_CACHE:-$(dirname "$SAYAC_FILE")/modsec_msgs}"   # kural no → mesaj önbelleği
 LFD_LOG="${LFD_LOG:-/var/log/lfd.log}"         # eski uyarıların ayrıntısı için okunur (lfd.log, .1, .gz)
 IMUNIFY_REFRESH_MIN="${IMUNIFY_REFRESH_MIN:-60}"   # liste en çok bu kadar dakikada bir yeniden alınır (yalnız panelde gösterilir)
 IMUNIFY_BACKFILL="${IMUNIFY_BACKFILL:-200}"   # Imunify IP'leri için turda ayrıca bu kadar /24 sorgulanır
@@ -270,7 +272,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_DG_USAGE="Kalıcı liste: %s / %s satır (%%%s) · 7 gün önce: %s"
   M_DG_TUSAGE="Geçici liste: %s / %s satır"
   M_DG_NEW="Yeni blok banları:"
-  M_DG_TOP="En çok saldıran sağlayıcılar (ASN; blok banları ve tekil banlara göre):"
+  M_DG_TOP="CSF'in en çok engellediği sağlayıcılar (ASN; blok banları ve tekil banlara göre):"
   M_DG_TOPL="   %-9s %-44s %s"
   M_DG_PG="%s blok"; M_DG_PB="+%s blok başka kaynaklı"; M_DG_PT="%s tekil"
   M_DG_EXP="14 gün içinde izlemesi bitecek bloklar (tekrar gelirlerse kalıcı olurlar):"
@@ -280,6 +282,19 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_DG_IML="   %-9s %-44s %s IP%s"
   M_DG_NONE="   yok"
   M_DG_SENT="Haftalık özet gönderildi: %s"
+  M_H_IP="IP"; M_H_HOST="Hostname"; M_H_WHY="Sebep"; M_H_MORE="ve %s IP daha"
+  M_H_PANEL="Paneli aç"; M_H_PANELP="WHM → Eklentiler → CSF Auto-Group"
+  M_H_PERM="Kalıcı liste"; M_H_TEMP="Geçici liste"; M_H_LINES="%s / %s satır · %%%s"; M_H_AGO="7 gün önce %s"
+  M_H_ALERT="Uyarı"; M_H_WEEK="Haftalık özet"; M_H_NONE="Bu hafta yok."
+  M_H_CNT="blok banı|geçici blok banı|kalıcıya alındı|şüpheli ağ|atlandı|elle işlem|ayar değişikliği"
+  M_H_NEWT="Yeni blok banları"; M_H_BLOCK="Blok"; M_H_OWNER="Sahip"; M_H_STATE="Durum"
+  M_H_K_add24="kalıcı"; M_H_K_promote="tekrar eden"; M_H_K_manual_ban="elle"
+  M_H_TOPT="CSF'in en çok engellediği sağlayıcılar"; M_H_TOPS="csf.deny'deki blok banlarına ve tekil banlara göre"
+  M_H_PROV="Sağlayıcı"; M_H_BLK="Blok"; M_H_SGL="Tekil"; M_H_OTH="Başka kaynaklı"; M_H_OTHV="+%s blok"
+  M_H_IMT="Imunify360'ın en çok engellediği sağlayıcılar"; M_H_IMS="Sunucunun kendi kara listesi · %s IP"; M_H_IPS="IP"; M_H_RSN="Sebep"
+  M_H_EXPT="İzlemesi bitecek bloklar"; M_H_EXPS="14 gün içinde; tekrar gelirlerse kalıcı olurlar"; M_H_DAYS="%s gün"; M_H_NONE_S="Yok"
+  M_H_RUNS="Tur sağlığı"; M_H_RUNSS="son 7 gün"; M_H_RUNSV="%s tur · beklenen ~%s"
+  M_H_TMT="Test maili"; M_H_TMS="Mail ayarların çalışıyor"
 else
   M_START="--- Started ---";                                       M_END="--- Done ---"
   M_END_T="--- Done (%s s total) ---"
@@ -429,7 +444,7 @@ else
   M_DG_USAGE="Permanent list: %s / %s lines (%s%%) · 7 days ago: %s"
   M_DG_TUSAGE="Temp list: %s / %s lines"
   M_DG_NEW="New block bans:"
-  M_DG_TOP="Top attacking providers (ASN; by block bans and single bans):"
+  M_DG_TOP="Providers CSF blocks most (ASN; by block bans and single bans):"
   M_DG_TOPL="   %-9s %-44s %s"
   M_DG_PG="%s blocks"; M_DG_PB="+%s blocks from other sources"; M_DG_PT="%s singles"
   M_DG_EXP="Watched blocks expiring within 14 days (become permanent if they return):"
@@ -439,6 +454,19 @@ else
   M_DG_IML="   %-9s %-44s %s IPs%s"
   M_DG_NONE="   none"
   M_DG_SENT="Weekly summary sent: %s"
+  M_H_IP="IP"; M_H_HOST="Hostname"; M_H_WHY="Reason"; M_H_MORE="and %s more IPs"
+  M_H_PANEL="Open the panel"; M_H_PANELP="WHM → Plugins → CSF Auto-Group"
+  M_H_PERM="Permanent list"; M_H_TEMP="Temp list"; M_H_LINES="%s / %s lines · %s%%"; M_H_AGO="7 days ago %s"
+  M_H_ALERT="Alert"; M_H_WEEK="Weekly summary"; M_H_NONE="None this week."
+  M_H_CNT="block bans|temp block bans|made permanent|suspicious ranges|skipped|manual actions|settings changes"
+  M_H_NEWT="New block bans"; M_H_BLOCK="Block"; M_H_OWNER="Owner"; M_H_STATE="State"
+  M_H_K_add24="permanent"; M_H_K_promote="repeat"; M_H_K_manual_ban="manual"
+  M_H_TOPT="Providers CSF blocks most"; M_H_TOPS="by block bans and single bans in csf.deny"
+  M_H_PROV="Provider"; M_H_BLK="Blocks"; M_H_SGL="Singles"; M_H_OTH="Other sources"; M_H_OTHV="+%s blocks"
+  M_H_IMT="Providers Imunify360 blocks most"; M_H_IMS="This server's own blacklist · %s IPs"; M_H_IPS="IPs"; M_H_RSN="Reason"
+  M_H_EXPT="Watched blocks expiring"; M_H_EXPS="within 14 days; they become permanent if they return"; M_H_DAYS="%s days"; M_H_NONE_S="None"
+  M_H_RUNS="Run health"; M_H_RUNSS="last 7 days"; M_H_RUNSV="%s runs · ~%s expected"
+  M_H_TMT="Test email"; M_H_TMS="Your mail settings work"
 fi
 m() { local f="$1"; shift; printf -- "$f" "$@"; }   # "--" : "--- Bitti …" gibi şablonlar seçenek sanılmasın
 
@@ -555,7 +583,7 @@ panel_init() {   # yalnız eklenti kuruluysa: maillerin sonuna eklenecek satır 
     local base
     [ -d "$PLUGIN_DIR" ] || return
     base="$(panel_auto)"      # sunucu adından otomatik: https://$(hostname -f):2087
-    [ -n "$base" ] && PANEL_FOOT="$(m "$M_PANEL_GEN" "$base/")$NL"
+    [ -n "$base" ] && { PANEL_FOOT="$(m "$M_PANEL_GEN" "$base/")$NL"; PANEL_BASE="$base/"; }
 }
 
 # ── IPv4 / CIDR helpers ─────────────────────────────────────────────────────
@@ -621,22 +649,144 @@ ev() {           # TYPE CIDR [anahtar=HAZIR_JSON ...]
     for kv in "$@"; do line+=",\"${kv%%=*}\":${kv#*=}"; done
     printf '%s}\n' "$line" >> "$EVENTS_FILE" 2>/dev/null
 }
+# ── HTML mail ───────────────────────────────────────────────────────────────
+# Bütün mailler HTML + düz metin (multipart/alternative, UTF-8) olarak sendmail'e verilir; HTML
+# göstermeyen istemci düz metni gösterir. sendmail ya da base64 yoksa eskisi gibi "mail" ile
+# yalnız düz metin gider. HTML tablolarla ve satır içi stille yazılır (Outlook / Gmail bozmasın).
+SENDMAIL_BIN="${SENDMAIL_BIN:-/usr/sbin/sendmail}"
+PANEL_BASE=""
+H_FONT="-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
+H_MONO="Consolas,Menlo,monospace"
+h_esc() { local s="$1"; s="${s//&/&amp;}"; s="${s//</&lt;}"; s="${s//>/&gt;}"; s="${s//\"/&quot;}"; REPLY="$s"; }
+h_card() {       # BAŞLIK İÇ_HTML [bad|warn|acc] [ALT_BAŞLIK] → REPLY = kart
+    local bd="#e6e8ef" tc="#111827" t s="" pb=10px
+    case "$3" in bad) bd="#fecaca"; tc="#b91c1c" ;; warn) bd="#fde68a"; tc="#b45309" ;; esac
+    h_esc "$1"; t="$REPLY"
+    if [ -n "$4" ]; then pb=2px; h_esc "$4"; s="<div style=\"padding:0 18px 10px;font-size:12px;color:#5f6776;\">$REPLY</div>"; fi
+    REPLY="<tr><td style=\"background:#fff;border:1px solid $bd;border-radius:12px;\"><div style=\"padding:14px 18px $pb;font-size:14px;font-weight:700;color:$tc;\">$t</div>$s<div style=\"border-top:1px solid #eef0f3;\"></div>$2</td></tr><tr><td style=\"height:12px;\"></td></tr>"
+}
+h_usage() {      # KALICI_DOLU KALICI_SINIR GEÇİCİ_DOLU GEÇİCİ_SINIR [7_GÜN_ÖNCE] → REPLY = doluluk kartı
+    local out="" i used lim lab pc col note pt
+    for i in 1 2; do
+        if [ "$i" = 1 ]; then used=$(num "$1"); lim=$(num "$2"); lab="$M_H_PERM"; col="#4338ca"; note="${5:+ · $(m "$M_H_AGO" "$5")}"
+        else used=$(num "$3"); lim=$(num "$4"); lab="$M_H_TEMP"; col="#b45309"; note=""; fi
+        [ "$lim" -gt 0 ] || continue
+        pt=0; [ -n "$out" ] && pt=12px
+        pc=$(( used * 100 / lim )); [ "$pc" -ge 80 ] && col="#b91c1c"
+        out+="<tr><td style=\"font-size:13px;font-weight:600;padding:$pt 0 6px;\">$lab</td><td align=\"right\" style=\"font-size:13px;color:#4b5563;padding:$pt 0 6px;\">$(m "$M_H_LINES" "$used" "$lim" "$pc")<span style=\"color:#5f6776;\">$note</span></td></tr>"
+        out+="<tr><td colspan=\"2\"><div style=\"height:8px;background:#f3f4f6;border-radius:4px;\"><div style=\"width:$(( pc > 100 ? 100 : (pc < 1 && used > 0 ? 1 : pc) ))%;height:8px;background:$col;border-radius:4px;\"></div></div></td></tr>"
+    done
+    REPLY=""
+    [ -n "$out" ] && REPLY="<tr><td style=\"background:#fff;border:1px solid #e6e8ef;border-radius:12px;padding:16px 18px;\"><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">$out</table></td></tr><tr><td style=\"height:12px;\"></td></tr>"
+}
+h_doc() {        # BAŞLIK ALT_BAŞLIK GÖVDE(kart satırları) → REPLY = tam belge
+    local t s foot=""
+    h_esc "$1"; t="$REPLY"; h_esc "$2"; s="$REPLY"
+    if [ -n "$PANEL_BASE" ]; then
+        h_esc "$PANEL_BASE"
+        foot="<a href=\"$REPLY\" style=\"display:inline-block;background:#4338ca;color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:10px 18px;border-radius:9px;\">$M_H_PANEL</a><div style=\"font-size:12px;color:#5f6776;padding-top:10px;\">$M_H_PANELP · v$VERSION</div>"
+    else
+        foot="<div style=\"font-size:12px;color:#5f6776;\">CSF Auto-Group v$VERSION</div>"
+    fi
+    REPLY="<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>$t</title></head>"
+    REPLY+="<body style=\"margin:0;padding:0;background:#f4f5f9;font-family:$H_FONT;color:#111827;\">"
+    REPLY+="<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f4f5f9;padding:24px 12px;\"><tr><td align=\"center\">"
+    REPLY+="<table role=\"presentation\" width=\"640\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:640px;width:100%;\">"
+    REPLY+="<tr><td style=\"padding:0 4px 16px;\"><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"><tr>"
+    REPLY+="<td width=\"44\" valign=\"middle\"><div style=\"width:40px;height:40px;border-radius:11px;background:#4338ca;color:#fff;font-size:20px;line-height:40px;text-align:center;\">&#x1F6E1;</div></td>"
+    REPLY+="<td valign=\"middle\" style=\"padding-left:12px;\"><div style=\"font-size:18px;font-weight:700;\">$t</div><div style=\"font-size:13px;color:#5f6776;\">$s</div></td></tr></table></td></tr>"
+    REPLY+="$3<tr><td align=\"center\" style=\"padding:8px 4px 4px;\">$foot</td></tr></table></td></tr></table></body></html>"
+}
+h_text() {       # BÖLÜM_METNİ → REPLY = kartın içi. Uyarı mailinin metin biçimini okur:
+    # giriş paragrafı · "BLOK -> açıklama" başlıkları · "   Sahibi:/Not:" satırları · "   - IP  host  [sahip]  sebep  [etiket]"
+    REPLY=$(printf '%s\n' "$1" | awk -v tk="[$M_TAG_KEPT]" -v tf="[$M_TAG_FAIL]" -v hi="$M_H_IP" -v hh="$M_H_HOST" -v hw="$M_H_WHY" \
+                                     -v more="$M_H_MORE" -v mono="$H_MONO" '
+        function esc(s) { gsub(/&/, "\\&amp;", s); gsub(/</, "\\&lt;", s); gsub(/>/, "\\&gt;", s); gsub(/"/, "\\&quot;", s); return s }
+        function closet() { if (tb) { o = o "</table>"; tb = 0 } }
+        function openb() { if (!inb) { o = o "<div style=\"padding:4px 0 10px;\">"; inb = 1 } }
+        function closeb() { closet(); if (inb) { o = o "</div>"; inb = 0 } }
+        function opent() { if (!tb) { o = o "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"font-size:12.5px;margin-top:6px;\"><tr style=\"color:#5f6776;font-size:11px;text-transform:uppercase;letter-spacing:.04em;\"><td width=\"130\" style=\"padding:4px 8px 4px 18px;\">" hi "</td><td width=\"34%\" style=\"padding:4px 8px;\">" hh "</td><td style=\"padding:4px 18px 4px 8px;\">" hw "</td></tr>"; tb = 1; zr = 0 } }
+        BEGIN { intro = 1; o = ""; ip = "" }
+        {
+            l = $0; sub(/\r$/, "", l)
+            if (l ~ /^[ \t]*$/) { if (intro && ip != "") { o = o "<div style=\"padding:12px 18px 4px;font-size:13px;color:#4b5563;line-height:1.5;\">" ip "</div>"; ip = "" } intro = 0; closeb(); next }
+            if (intro) { ip = ip (ip != "" ? "<br>" : "") esc(l); next }
+            if (l ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\/[0-9]+ -> /) {
+                closeb(); openb(); i = index(l, " -> ")
+                o = o "<div style=\"padding:8px 18px 0;\"><span style=\"font-family:" mono ";font-size:14px;font-weight:700;\">" esc(substr(l, 1, i - 1)) "</span> <span style=\"font-size:13px;color:#4b5563;\">" esc(substr(l, i + 4)) "</span></div>"
+                next }
+            if (l ~ /^   - /) {
+                openb(); opent(); s = substr(l, 6); n = split(s, f, /  +/)
+                own = ""; why = ""; tag = ""
+                for (k = 3; k <= n; k++) {
+                    if (f[k] ~ /^\[/) { if (f[k] == tk || f[k] == tf) tag = f[k]; else own = f[k] }
+                    else why = why (why != "" ? "  " : "") f[k] }
+                h = (f[2] == "-" || f[2] == "") ? "<span style=\"color:#9aa1ad;\">—</span>" : esc(f[2])
+                if (own != "") h = h "<div style=\"font-size:11.5px;color:#5f6776;\">" esc(substr(own, 2, length(own) - 2)) "</div>"
+                w = esc(why)
+                if (tag != "") w = w " <span style=\"background:" (tag == tf ? "#fef2f2;color:#b91c1c;border:1px solid #fecaca" : "#f3f4f6;color:#4b5563;border:1px solid #e6e8ef") ";border-radius:10px;padding:1px 7px;font-size:11px;white-space:nowrap;\">" esc(substr(tag, 2, length(tag) - 2)) "</span>"
+                o = o "<tr" (zr % 2 ? " style=\"background:#f7f8fa;\"" : "") "><td valign=\"top\" style=\"padding:6px 8px 6px 18px;font-family:" mono ";color:#4338ca;white-space:nowrap;\">" esc(f[1]) "</td><td valign=\"top\" style=\"padding:6px 8px;color:#4b5563;word-break:break-all;\">" h "</td><td valign=\"top\" style=\"padding:6px 18px 6px 8px;\">" w "</td></tr>"
+                zr++; next }
+            if (l ~ /^   \(\+[0-9]+\)/) { openb(); opent(); m2 = l; gsub(/[^0-9]/, "", m2); o = o "<tr><td colspan=\"3\" style=\"padding:6px 18px;color:#5f6776;font-size:12px;\">" sprintf(more, m2) "</td></tr>"; next }
+            if (l ~ /^  - /) { closet(); o = o "<div style=\"padding:4px 18px;font-size:13px;\">&#8226; " esc(substr(l, 5)) "</div>"; next }
+            if (l ~ /^   /) { closet(); sub(/^ +/, "", l); o = o "<div style=\"padding:3px 18px 0;font-size:12.5px;color:#5f6776;\">" esc(l) "</div>"; next }
+            closeb(); o = o "<div style=\"padding:8px 18px;font-size:13px;\">" esc(l) "</div>"
+        }
+        END { if (intro && ip != "") o = o "<div style=\"padding:12px 18px 8px;font-size:13px;color:#4b5563;line-height:1.5;\">" ip "</div>"; closeb(); print o "<div style=\"height:8px;\"></div>" }')
+}
+h_subj() {       # KONU → REPLY = RFC 2047 kodlu konu (kelime sınırında ~40 baytlık parçalar, katlanmış)
+    local LC_ALL=C IFS=$' \t\n' w chunk="" out="" words
+    read -ra words <<< "$1"
+    for w in "${words[@]}"; do
+        if [ -n "$chunk" ] && [ $(( ${#chunk} + ${#w} + 1 )) -gt 40 ]; then
+            out+="${out:+$NL }=?UTF-8?B?$(printf '%s' "$chunk" | base64 -w0)?="; chunk=" $w"
+        else chunk+="${chunk:+ }$w"; fi
+    done
+    [ -n "$chunk" ] && out+="${out:+$NL }=?UTF-8?B?$(printf '%s' "$chunk" | base64 -w0)?="
+    REPLY="$out"
+}
+send_mail() {    # KONU DÜZ_METİN [HTML] → çıkış kodu; SM_OUT = komutun çıktısı
+    local b rc
+    # kuru çalıştırma: gönderme, düz metni göster (mail() sarmalayıcısı)
+    if [ "$DRY" = 1 ]; then printf '%s\n' "$2" | mail -s "$1" "$ALERT_MAIL"; SM_OUT=""; return 0; fi
+    if [ -n "$3" ] && [ -x "$SENDMAIL_BIN" ] && command -v base64 >/dev/null 2>&1; then
+        b="=_csfag_$(date +%s)_$$"; h_subj "$1"
+        SM_OUT=$( { printf 'To: %s\nSubject: %s\nMIME-Version: 1.0\nX-Mailer: CSF Auto-Group %s\n' "$ALERT_MAIL" "$REPLY" "$VERSION"
+                    printf 'Content-Type: multipart/alternative; boundary="%s"\n\n' "$b"
+                    printf -- '--%s\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: base64\n\n' "$b"
+                    printf '%s\n' "$2" | base64
+                    printf -- '--%s\nContent-Type: text/html; charset=UTF-8\nContent-Transfer-Encoding: base64\n\n' "$b"
+                    printf '%s\n' "$3" | base64
+                    printf -- '--%s--\n' "$b"; } | "$SENDMAIL_BIN" -t -i 2>&1 9>&-); rc=$?
+    else
+        SM_OUT=$(printf '%s\n' "$2" | mail -s "$1" "$ALERT_MAIL" 2>&1); rc=$?
+    fi
+    return $rc
+}
 # Tek mail: tur içindeki tüm bildirimler (blok banları, şüpheli ağlar, atlamalar, limit, sağlık) tek
 # mailde bölüm bölüm gider; konu satırı bölümlerin özetidir.
-MAIL_PARTS=(); MAIL_BODY=""; MAIL_URGENT=0
-mail_add() {     # KONU-PARÇASI GÖVDE
-    MAIL_PARTS+=("$1")
+MAIL_PARTS=(); MAIL_BODY=""; MAIL_URGENT=0; MAIL_TEXTS=(); MAIL_TONES=()
+mail_add() {     # KONU-PARÇASI GÖVDE [bad] (bad: HTML'de kırmızı kart — liste doluyor, güvenlik duvarı sorunu)
+    MAIL_PARTS+=("$1"); MAIL_TEXTS+=("$2"); MAIL_TONES+=("${3:-}")
     MAIL_BODY+="${MAIL_BODY:+$NL────────────────────────────────────────$NL$NL}$2$NL"
 }
 mail_flush() {
     [ ${#MAIL_PARTS[@]} -gt 0 ] || return 0
-    local subj="" pp
+    local subj="" pp i txt html="" hs
     for pp in "${MAIL_PARTS[@]}"; do subj+="${subj:+ · }$pp"; done
-    { printf '%s\n' "$MAIL_BODY"
-      [ -n "$doluluk_satiri" ] && printf '%s\n' "$doluluk_satiri"
-      [ -n "$temp_doluluk_satiri" ] && printf '%s\n' "$temp_doluluk_satiri"
-      printf '\n%s%s\n' "$PANEL_FOOT" "$(m "$M_MAIL_DETAIL" "$LOG_FILE")"; } | mail -s "$([ "$MAIL_URGENT" = 1 ] && printf '!!! ')$M_SUBJ_PREFIX$subj" "$ALERT_MAIL"
-    MAIL_PARTS=(); MAIL_BODY=""; MAIL_URGENT=0
+    txt=$( printf '%s\n' "$MAIL_BODY"
+           [ -n "$doluluk_satiri" ] && printf '%s\n' "$doluluk_satiri"
+           [ -n "$temp_doluluk_satiri" ] && printf '%s\n' "$temp_doluluk_satiri"
+           printf '\n%s%s\n' "$PANEL_FOOT" "$(m "$M_MAIL_DETAIL" "$LOG_FILE")" )
+    # HTML: her bölüm bir kart, altta liste doluluğu
+    for i in "${!MAIL_PARTS[@]}"; do
+        h_text "${MAIL_TEXTS[i]}"; h_card "${MAIL_PARTS[i]}" "$REPLY" "${MAIL_TONES[i]}"; html+="$REPLY"
+    done
+    h_usage "${current_count:-0}" "${limit:-0}" "${temp_current:-0}" "${temp_limit:-0}"; html+="$REPLY"
+    printf -v hs '%s · %(%d.%m.%Y %H:%M)T' "$(hostname 2>/dev/null || echo "$HOSTNAME")" -1
+    h_doc "CSF Auto-Group" "$hs" "$html"
+    send_mail "$([ "$MAIL_URGENT" = 1 ] && printf '!!! ')$M_SUBJ_PREFIX$subj" "$txt" "$REPLY"
+    MAIL_PARTS=(); MAIL_BODY=""; MAIL_URGENT=0; MAIL_TEXTS=(); MAIL_TONES=()
 }
 perm_remove() {  # CIDR → csf.deny'den kaldır ("do not delete" ise önce işaret silinir); 0 = kaldırıldı
     local line; line=$(deny_line "$1"); [ -n "$line" ] || return 1
@@ -830,13 +980,18 @@ resolve_a() {    # HOSTNAME → REPLY = IPv4 adresleri (satır satır)
 }
 short_reason() { # "# lfd: (sshd) Failed SSH login from IP (CC/..): 5 in ... - Sat Sep 26 ..." → "(sshd) Failed SSH login"
     local r="$1" w
-    r="${r#"${r%%[![:space:]]*}"}"; r="${r#\#}"; r="${r#"${r%%[![:space:]]*}"}"; r="${r#lfd: }"
+    r="${r#"${r%%[![:space:]]*}"}"; r="${r#\#}"; r="${r#"${r%%[![:space:]]*}"}"; r="${r#lfd: }"; r="${r#lfd - }"
     r="${r% - [A-Z][a-z][a-z] [A-Z][a-z][a-z] *}"
     [[ "$r" == *"$2"* ]] && [ -n "${r%%"$2"*}" ] && r="${r%%"$2"*}"
     r="${r%"${r##*[![:space:]]}"}"
     for w in " from" " by" " for" ":" " -"; do [[ "$r" == *"$w" ]] && r="${r%"$w"}"; done
     r="${r%"${r##*[![:space:]]}"}"
-    (( ${#r} > 70 )) && r="${r:0:67}..."
+    # "(mod_security) mod_security (id:1302) triggered" → "ModSecurity 1302: WP LOGIN VIEW RATE LIMIT: …"
+    if [[ "$r" =~ mod_security\ \(id:([0-9]+)\) ]]; then
+        w="${BASH_REMATCH[1]}"; modsec_msg "$w"
+        r="ModSecurity $w${REPLY:+: $REPLY}"
+    fi
+    (( ${#r} > 100 )) && r="${r:0:97}..."
     REPLY="$r"
 }
 ip_line() {      # IP NOTE WITH_OWNER(0|1) → REPLY = "   - IP  hostname  [ASN CC]  sebep"
@@ -883,6 +1038,64 @@ owner_line() {   # "IP IP ..." → REPLY = ilk IP'nin /24'ü için "   Sahibi: .
 # lfd'nin "banlama" dediği her şey + güvenlik duvarının izin verdiği her şey.
 # Bir /24 bunlardan biriyle çakışıyorsa banlanmaz, maille bildirilir.
 WL_LOADED=0; WL_LO=(); WL_HI=(); WL_TXT=(); RIGNORE=(); CC_LIST=""; CC_WARNED=0
+# ── ModSecurity kural mesajı ────────────────────────────────────────────────
+# lfd sebebi yalnız "mod_security (id:1302) triggered" diyor. Mesaj cPanel'in eşleşme kaydında
+# (WHM → ModSecurity Araçları → Uyuşanlar Listesi ile aynı kaynak; Imunify kuralları dahil).
+# Salt okunur sorgu, sonuç 7 gün önbellekte ("NO|zaman|mesaj"); bulunamayan tur içinde bir kez sorulur.
+declare -A MS_MSG=() MS_DONE=(); MS_LOADED=0
+modsec_file_msg() { # KURAL_NO → REPLY; yedek yol: ModSecurity günlüğünde kuralın satırı → mesaj ya da kural dosyası
+    local id="$1" log line f
+    REPLY=""
+    log=$(conf_val MODSEC_LOG); [ -r "$log" ] || return
+    line=$(grep -m1 -F "[id \"$id\"]" "$log" 2>/dev/null)
+    [ -n "$line" ] || return
+    # Apache biçimi mesajı satırda taşır: [msg "..."]
+    if [[ "$line" =~ \[msg\ \"([^\"]*)\"\] ]]; then REPLY="${BASH_REMATCH[1]}"; return; fi
+    # LiteSpeed biçimi yalnız yeri verir: ... rule [id "1302"] at [/etc/.../modsec2.user.conf:88] triggered!
+    f=$(printf '%s\n' "$line" | sed -n 's/.*\] at \[\(\/[^]]*\):[0-9]*\].*/\1/p')
+    [ -r "$f" ] || { [[ "$line" =~ \[file\ \"([^\"]*)\"\] ]] && f="${BASH_REMATCH[1]}"; }
+    [ -r "$f" ] || return
+    # Kural dosyası: ters bölüyle süren satırlar birleştirilir, id'yi içeren kuralın msg:'...' alanı alınır
+    REPLY=$(awk -v id="$id" -v q="'" '
+        { l = $0; sub(/\r$/, "", l); buf = (buf == "" ? l : buf " " l)
+          if (l ~ /\\[ \t]*$/) { sub(/\\[ \t]*$/, "", buf); next }
+          if (buf ~ ("id:[ \t]*" id "([^0-9]|$)")) {
+              if (match(buf, "msg:" q "[^" q "]*" q)) print substr(buf, RSTART + 5, RLENGTH - 6)
+              else if (match(buf, /msg:"[^"]*"/)) print substr(buf, RSTART + 5, RLENGTH - 6)
+              exit }
+          buf = "" }' "$f" 2>/dev/null)
+}
+modsec_msg() {   # KURAL_NO → REPLY = mesaj (yoksa boş)
+    local id="$1" now t m line
+    REPLY=""
+    [[ "$id" =~ ^[0-9]{1,12}$ ]] || return
+    now=$(date +%s)
+    if [ "$MS_LOADED" = 0 ]; then
+        MS_LOADED=1
+        if [ -r "$MODSEC_CACHE" ]; then
+            # bulunan mesaj 7 gün, bulunamayan 1 gün geçerli (günlük her turda baştan taranmasın)
+            while IFS='|' read -r line t m; do
+                [[ "$line" =~ ^[0-9]+$ && "$t" =~ ^[0-9]+$ ]] || continue
+                if [ -n "$m" ]; then [ $(( now - t )) -lt 604800 ] || continue
+                else [ $(( now - t )) -lt 86400 ] || continue; fi
+                MS_MSG[$line]="$m"; MS_DONE[$line]=1
+            done < "$MODSEC_CACHE"
+        fi
+    fi
+    if [ -z "${MS_DONE[$id]}" ]; then
+        MS_DONE[$id]=1; m=""
+        if [ -r "$MODSEC_DB" ] && command -v sqlite3 >/dev/null 2>&1; then
+            m=$(timeout 10 sqlite3 -readonly "$MODSEC_DB" "SELECT meta_msg FROM hits WHERE meta_id=$id AND meta_msg IS NOT NULL AND meta_msg <> '' ORDER BY id DESC LIMIT 1;" 2>/dev/null 9>&- | awk 'NR == 1')
+        fi
+        [ -z "$m" ] && { modsec_file_msg "$id"; m="$REPLY"; }
+        m="${m%%||*}"; m="${m//|//}"; m="${m%"${m##*[![:space:]]}"}"
+        MS_MSG[$id]="$m"
+        { [ -r "$MODSEC_CACHE" ] && grep -v "^$id|" "$MODSEC_CACHE" | tail -n 499; printf '%s|%s|%s\n' "$id" "$now" "$m"; } > "$MODSEC_CACHE.tmp.$$" 2>/dev/null \
+            && mv -f "$MODSEC_CACHE.tmp.$$" "$MODSEC_CACHE"
+        rm -f "$MODSEC_CACHE.tmp.$$"
+    fi
+    REPLY="${MS_MSG[$id]}"
+}
 conf_val() { grep -E "^[[:space:]]*$1[[:space:]]*=" "$CSF_CONF" | tail -1 | cut -d= -f2- | tr -d ' "\r'; }
 wl_add() {       # CIDR LABEL
     cidr_range "$1" || return
@@ -1083,7 +1296,7 @@ ign_until() {    # CIDR → 0 = süresi dolmamış bir yoksayma var (IGN_UNTIL)
 }
 
 # ── Temp group bans: csf.tempban içinde bizim eklediğimiz /24'ler ────────────
-declare -A TG_TTL TG_NOTE
+declare -A TG_TTL TG_NOTE TG_T
 read_temp_groups() {
     local t ip port dir to note now p
     now=$(date +%s)
@@ -1093,7 +1306,7 @@ read_temp_groups() {
         # Yorumdan (v1.2+) ya da sayaç kaydından (daha eski sürümlerin eklediği) tanınır.
         p="${ip%.0/24}"
         if [[ "$note" == *Auto-grouped* ]] || grep -qE "^${p//./\\.} " "$SAYAC_FILE" 2>/dev/null; then
-            TG_TTL[$ip]=$(( $(num "$t") + $(num "$to") - now )); TG_NOTE[$ip]="$note"
+            TG_TTL[$ip]=$(( $(num "$t") + $(num "$to") - now )); TG_NOTE[$ip]="$note"; TG_T[$ip]=$(num "$t")
         fi
     done < "$CSF_VAR/csf.tempban"
 }
@@ -1199,7 +1412,7 @@ do_status() {
     for c in "${!TG_TTL[@]}"; do
         [ "${TG_TTL[$c]}" -gt 0 ] || continue
         n=0; [[ "${TG_NOTE[$c]}" =~ $re_n ]] && n="${BASH_REMATCH[1]}"
-        groups+=("{\"cidr\":\"$c\",\"kind\":\"temp\",\"dnd\":false,\"n\":$n,\"added\":0,\"ttl\":${TG_TTL[$c]}}")
+        groups+=("{\"cidr\":\"$c\",\"kind\":\"temp\",\"dnd\":false,\"n\":$n,\"added\":${TG_T[$c]:-0},\"ttl\":${TG_TTL[$c]}}")
         [ "$JSON" = 1 ] || gtext+=("$(printf '%-18s %-9s %s' "$c" "temp" "$(m "$M_S_TTL" "$(( TG_TTL[$c] / 3600 ))h")")")
     done
 
@@ -1404,6 +1617,13 @@ do_status() {
         jstr "$cronm"; printf '"cron_min":%s,"runs":%s,' "$REPLY" "$runsj"
         printf '"cron_interval":%s,"daily":{"start":%s,%s},"owners":{%s},"asn_top":[%s],"blocks_top":[%s],"imunify":%s,' \
             "$(cron_interval "$cronm")" "$dstart" "$daily" "${owners[*]}" "${tops[*]}" "${btops[*]}" "$imj"
+        local msj=() msid
+        # (burada IFS=, olduğu için liste satır satır okunur, kelimelere bölünmez)
+        while read -r msid; do
+            modsec_msg "$msid"; [ -n "$REPLY" ] && { jstr "$REPLY"; msj+=("\"$msid\":$REPLY"); }
+        done < <( { cat "$EVENTS_FILE" "$HIST_FILE" "$CSF_VAR/csf.tempban" 2>/dev/null; grep -F 'mod_security' "$DENY_FILE" 2>/dev/null; } |
+                  grep -oE 'mod_security \(id:[0-9]+\)' | grep -oE '[0-9]+' | sort -u | head -n 100)
+        printf '"modsec":{%s},' "${msj[*]}"
         printf '"groups":[%s],"pending":[%s],"review":[%s],"ignored":[%s],"hist_cache":[%s],"events":[%s]}\n' \
             "${groups[*]}" "${pending[*]}" "${review[*]}" "${ignored[*]}" "${hcache[*]}" "${recent[*]}"
         return 0
@@ -1821,6 +2041,9 @@ digest_build() { # → DG_SUBJ, DG_BODY
     tc=$("$CSF_BIN" -t 2>/dev/null 9>&- | grep -c "^DENY")
     DG_SUBJ=$(m "$M_DG_SUBJ" "$(hostname 2>/dev/null || echo "$HOSTNAME")")
     DG_BODY="$(m "$M_DG_HEAD" "$(date -d "@$since" '+%d.%m')" "$(date -d "@$now" '+%d.%m')")$NL$NL"
+    local DGH="" hr hi hlab hv hk hcls
+    DG_HTML=""
+    DG_HSUB="$(hostname 2>/dev/null || echo "$HOSTNAME") · $(date -d "@$since" '+%d.%m') – $(date -d "@$now" '+%d.%m')"
     # yeni sürüm var mı (GitHub; en çok 30 sn, ulaşılamazsa satır eklenmez)
     local br rv to=""
     command -v timeout >/dev/null 2>&1 && to="timeout 30"
@@ -1830,41 +2053,75 @@ digest_build() { # → DG_SUBJ, DG_BODY
             rv=$(git -C "$SELF_DIR" show "origin/$br:csf_autogroup.sh" 2>/dev/null | sed -n 's/^VERSION="\([^"]*\)".*/\1/p' | awk 'NR == 1')
             if [ -n "$rv" ] && [ "$rv" != "$VERSION" ] && [ "$(git -C "$SELF_DIR" rev-parse @ 2>/dev/null)" != "$(git -C "$SELF_DIR" rev-parse "origin/$br" 2>/dev/null)" ]; then
                 DG_BODY+="$(m "$M_DG_UPD" "$VERSION" "$rv")$NL$NL"
+                h_esc "$(m "$M_DG_UPD" "$VERSION" "$rv")"
+                DGH+="<tr><td style=\"background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:12px 18px;font-size:13px;color:#3730a3;\">$REPLY</td></tr><tr><td style=\"height:12px;\"></td></tr>"
             fi
         fi
     fi
     DG_BODY+="$(m "$M_DG_COUNTS" "${C[add24]:-0}" "${C[temp24]:-0}" "${C[promote]:-0}" "${C[warn16]:-0}" "${C[skip_wl]:-0}" "${C[manual]:-0}" "${C[config]:-0}")$NL"
     DG_BODY+="$(m "$M_DG_USAGE" "$pc" "$limit" "$([ "$limit" -gt 0 ] && echo $(( pc * 100 / limit )) || echo 0)" "$perm0")$NL"
     DG_BODY+="$(m "$M_DG_TUSAGE" "$tc" "$tlimit")$NL$NL"
+    # HTML: sayılar (yedi hücre) + liste doluluğu
+    hr=""; hi=0; IFS='|' read -ra hlab <<< "$M_H_CNT"
+    for hv in "${C[add24]:-0}" "${C[temp24]:-0}" "${C[promote]:-0}" "${C[warn16]:-0}" "${C[skip_wl]:-0}" "${C[manual]:-0}" "${C[config]:-0}"; do
+        hr+="<td align=\"center\" style=\"padding:12px 4px;width:14%;${hr:+border-left:1px solid #eef0f3;}\"><div style=\"font-size:22px;font-weight:700;$([ "$hi" = 3 ] && [ "$hv" -gt 0 ] && echo 'color:#b45309;')\">$hv</div><div style=\"font-size:11.5px;color:#5f6776;\">${hlab[hi]}</div></td>"
+        hi=$((hi + 1))
+    done
+    DGH+="<tr><td style=\"background:#fff;border:1px solid #e6e8ef;border-radius:12px;padding:6px;\"><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"><tr>$hr</tr></table></td></tr><tr><td style=\"height:12px;\"></td></tr>"
+    h_usage "$pc" "$limit" "$tc" "$tlimit" "$([[ "$perm0" =~ ^[0-9]+$ ]] && echo "$perm0")"; DGH+="$REPLY"
+    hr=""
     # yeni grup banları (7 gün): add24 / promote / manual_ban
     DG_BODY+="$M_DG_NEW$NL"
     if [ -r "$EVENTS_FILE" ]; then
-        while IFS='|' read -r cidr owner; do
+        while IFS='|' read -r cidr owner hk; do
             DG_BODY+="   $(printf '%-18s' "$cidr") ${owner:--}$NL"; n=$((n + 1))
+            hv="M_H_K_$hk"; h_esc "${owner:-—}"
+            hcls="background:#f3f4f6;color:#4b5563;border:1px solid #e6e8ef"
+            [ "$hk" = promote ] && hcls="background:#f3edff;color:#7c3aed;border:1px solid #ddd0fb"
+            [ "$hk" = manual_ban ] && hcls="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca"
+            hr+="<tr$([ $((n % 2)) = 0 ] && echo ' style="background:#f7f8fa;"')><td style=\"padding:8px 8px 8px 18px;font-family:$H_MONO;font-weight:600;\">$cidr</td><td style=\"padding:8px;color:#4b5563;\">$REPLY</td><td align=\"right\" style=\"padding:8px 18px 8px 8px;\"><span style=\"$hcls;border-radius:10px;padding:2px 8px;font-size:11.5px;font-weight:600;white-space:nowrap;\">${!hv:-$hk}</span></td></tr>"
         done < <(awk -v s="$since" '
             match($0, /"t":[0-9]+/) { t = substr($0, RSTART + 4, RLENGTH - 4) + 0 } t < s { next }
             /"type":"(add24|promote|manual_ban)"/ {
                 c = ""; o = ""
                 if (match($0, /"cidr":"[0-9.\/]+"/)) c = substr($0, RSTART + 8, RLENGTH - 9)
                 if (match($0, /"owner":"[^"]*"/)) o = substr($0, RSTART + 9, RLENGTH - 10)
-                print c "|" o }' "$EVENTS_FILE" | tail -n 25)
+                if (match($0, /"type":"[a-z0-9_]+"/)) ty = substr($0, RSTART + 8, RLENGTH - 9)
+                print c "|" o "|" ty }' "$EVENTS_FILE" | tail -n 25)
     fi
     [ "$n" -eq 0 ] && DG_BODY+="$M_DG_NONE$NL"
+    if [ -n "$hr" ]; then
+        hr="<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"font-size:13px;\"><tr style=\"color:#5f6776;font-size:11px;text-transform:uppercase;letter-spacing:.04em;\"><td style=\"padding:10px 8px 6px 18px;\">$M_H_BLOCK</td><td style=\"padding:10px 8px 6px;\">$M_H_OWNER</td><td align=\"right\" style=\"padding:10px 18px 6px 8px;\">$M_H_STATE</td></tr>$hr</table><div style=\"height:8px;\"></div>"
+    else hr="<div style=\"padding:12px 18px 14px;font-size:13px;color:#5f6776;\">$M_H_NONE</div>"; fi
+    h_card "$M_H_NEWT" "$hr"; DGH+="$REPLY"; hr=""; hi=0
     # en çok saldıran ağlar
     DG_BODY+="$NL$M_DG_TOP$NL"
     asn_top 5
     if [ -n "$ASN_TOP" ]; then
         while IFS='|' read -r a owner k b bl line den; do
             DG_BODY+="$(m "$M_DG_TOPL" "AS$a" "${owner:0:44}" "$(asn_parts "$b" "$bl" "$line")")$NL"   # kurum adı ülkeyle bitiyor
+            h_esc "$owner"; hi=$((hi + 1))
+            hr+="<tr$([ $((hi % 2)) = 0 ] && echo ' style="background:#f7f8fa;"')><td style=\"padding:8px 8px 8px 18px;\"><b style=\"font-family:$H_MONO;color:#4338ca;\">AS$a</b> $REPLY</td>"
+            hr+="<td align=\"right\" style=\"padding:8px;$([ "$b" -gt 0 ] && echo 'font-weight:600;' || echo 'color:#5f6776;')\">$([ "$b" -gt 0 ] && echo "$b" || echo '—')</td>"
+            hr+="<td align=\"right\" style=\"padding:8px;$([ "$line" -gt 0 ] && echo 'font-weight:600;' || echo 'color:#5f6776;')\">$([ "$line" -gt 0 ] && echo "$line" || echo '—')</td>"
+            hr+="<td align=\"right\" style=\"padding:8px 18px 8px 8px;color:#5f6776;\">$([ "$bl" -gt 0 ] && m "$M_H_OTHV" "$bl" || echo '—')</td></tr>"
         done <<< "$ASN_TOP"
     else DG_BODY+="$M_DG_NONE$NL"; fi
+    if [ -n "$hr" ]; then
+        hr="<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"font-size:13px;\"><tr style=\"color:#5f6776;font-size:11px;text-transform:uppercase;letter-spacing:.04em;\"><td style=\"padding:10px 8px 6px 18px;\">$M_H_PROV</td><td align=\"right\" style=\"padding:10px 8px 6px;\">$M_H_BLK</td><td align=\"right\" style=\"padding:10px 8px 6px;\">$M_H_SGL</td><td align=\"right\" style=\"padding:10px 18px 6px 8px;\">$M_H_OTH</td></tr>$hr</table><div style=\"height:8px;\"></div>"
+    else hr="<div style=\"padding:12px 18px 14px;font-size:13px;color:#5f6776;\">$M_H_NONE</div>"; fi
+    h_card "$M_H_TOPT" "$hr" "" "$M_H_TOPS"; DGH+="$REPLY"; hr=""; hi=0
     # Imunify360: sunucunun kendi kara listesi
     if imunify_top 5 && [ -n "$IM_TOP" ]; then
         DG_BODY+="$NL$(m "$M_DG_IM" "$IM_TOTAL")$NL"
         while IFS='|' read -r a owner k b line; do
             line="${line//:/ }"; line="${line//,/, }"          # "CAPTCHA_DOS_ALERT 900, WAF 12"
             DG_BODY+="$(m "$M_DG_IML" "AS$a" "${owner:0:44}" "$b" "${line:+ ($line)}")$NL"
+            h_esc "$owner"; hi=$((hi + 1)); hv="$REPLY"; h_esc "$line"
+            hr+="<tr$([ $((hi % 2)) = 0 ] && echo ' style="background:#f7f8fa;"')><td style=\"padding:8px 8px 8px 18px;\"><b style=\"font-family:$H_MONO;color:#4338ca;\">AS$a</b> $hv</td><td align=\"right\" style=\"padding:8px;font-weight:600;\">$b</td><td align=\"right\" style=\"padding:8px 18px 8px 8px;color:#5f6776;font-size:12px;\">$REPLY</td></tr>"
         done <<< "$IM_TOP"
+        hr="<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"font-size:13px;\"><tr style=\"color:#5f6776;font-size:11px;text-transform:uppercase;letter-spacing:.04em;\"><td style=\"padding:10px 8px 6px 18px;\">$M_H_PROV</td><td align=\"right\" style=\"padding:10px 8px 6px;\">$M_H_IPS</td><td align=\"right\" style=\"padding:10px 18px 6px 8px;\">$M_H_RSN</td></tr>$hr</table><div style=\"height:8px;\"></div>"
+        h_card "$M_H_IMT" "$hr" "" "$(m "$M_H_IMS" "$IM_TOTAL")"; DGH+="$REPLY"; hr=""
     fi
     # süresi dolacak terfi kayıtları
     DG_BODY+="$NL$M_DG_EXP$NL"
@@ -1873,6 +2130,7 @@ digest_build() { # → DG_SUBJ, DG_BODY
         age=$(( (now - $(date -d "$u" +%s)) / 86400 )); left=$(( SAYAC_RETENTION_DAYS - age ))
         [ "$left" -le 14 ] || continue
         DG_BODY+="$(m "$M_DG_EXPL" "$p.0/24" "$left")$NL"; exp=$((exp + 1))
+        hr+="<div style=\"padding:3px 0;\"><span style=\"font-family:$H_MONO;\">$p.0/24</span> <span style=\"color:#5f6776;\">· $(m "$M_H_DAYS" "$left")</span></div>"
     done < "$SAYAC_FILE"
     [ "$exp" -eq 0 ] && DG_BODY+="$M_DG_NONE$NL"
     # Beklenen tur sayısı, olay kaydının başladığı andan itibaren hesaplanır: kayıt yeni başladıysa
@@ -1883,6 +2141,14 @@ digest_build() { # → DG_SUBJ, DG_BODY
     win=$(( now - since )); [ -n "$first" ] && [ "$first" -gt "$since" ] && win=$(( now - first ))
     DG_BODY+="$NL$(m "$M_DG_RUNS" "$runs" "$([ "$iv" -gt 0 ] && echo $(( win / iv + 1 )) || echo '?')")$NL"
     [ -n "$PANEL_FOOT" ] && DG_BODY+="$NL${PANEL_FOOT%$NL}"
+    # HTML: izleme + tur sağlığı tek kartta; turlar beklenenin %90'ının altındaysa rozet turuncu
+    hv="?"; [ "$iv" -gt 0 ] && hv=$(( win / iv + 1 ))
+    hcls="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0"
+    [[ "$hv" =~ ^[0-9]+$ ]] && [ $(( runs * 10 )) -lt $(( hv * 9 )) ] && hcls="background:#fffbeb;color:#b45309;border:1px solid #fde68a"
+    DGH+="<tr><td style=\"background:#fff;border:1px solid #e6e8ef;border-radius:12px;padding:14px 18px;font-size:13px;\"><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">"
+    DGH+="<tr><td valign=\"top\" style=\"padding-bottom:10px;\"><b>$M_H_EXPT</b> <span style=\"color:#5f6776;\">· $M_H_EXPS</span>${hr:+<div style=\"padding-top:6px;\">$hr</div>}</td><td align=\"right\" valign=\"top\" style=\"padding-bottom:10px;color:#5f6776;\">$([ -z "$hr" ] && echo "$M_H_NONE_S")</td></tr>"
+    DGH+="<tr><td style=\"border-top:1px solid #eef0f3;padding-top:10px;\"><b>$M_H_RUNS</b> <span style=\"color:#5f6776;\">· $M_H_RUNSS</span></td><td align=\"right\" style=\"border-top:1px solid #eef0f3;padding-top:10px;\"><span style=\"$hcls;border-radius:10px;padding:2px 8px;font-size:12px;font-weight:600;white-space:nowrap;\">$(m "$M_H_RUNSV" "$runs" "$hv")</span></td></tr></table></td></tr><tr><td style=\"height:12px;\"></td></tr>"
+    h_doc "$M_H_WEEK" "$DG_HSUB" "$DGH"; DG_HTML="$REPLY"
     return 0
 }
 digest_maybe() { # çalışma sonunda: seçilen gün, 09:00'dan sonra, haftada bir kez
@@ -1893,7 +2159,7 @@ digest_maybe() { # çalışma sonunda: seçilen gün, 09:00'dan sonra, haftada b
     wk="DIGEST_$(date +%G-W%V)"
     grep -q "^$wk " "$SAYAC_FILE" && return 0
     digest_build
-    printf '%s\n' "$DG_BODY" | mail -s "$DG_SUBJ" "$ALERT_MAIL"
+    send_mail "$DG_SUBJ" "$DG_BODY" "$DG_HTML"
     cnt_add "$wk $TODAY"
     log "$(m "$M_DG_SENT" "$ALERT_MAIL")"
     ev digest ""
@@ -1958,12 +2224,14 @@ do_config() {
                 o+=",\"log\":{\"rotate\":$([ -f "$LOGROTATE_CONF" ] && echo true || echo false),\"bytes\":$(num "$lb"),\"lines\":$(num "$ll"),\"archives\":$(num "$la")}"
                 # Sunucu gereksinimleri (Ayarlar sekmesindeki kart): ok | missing | warn
                 local dp="" dk ds
-                for dk in csf crontab mail dns logrotate flock timeout git imunify; do
+                for dk in csf crontab mail dns logrotate flock timeout git imunify modsec sqlite3; do
                     ds=missing
                     case "$dk" in
                         csf)       { [ -x "$CSF_BIN" ] || command -v csf >/dev/null 2>&1; } && ds=ok ;;
                         dns)       [ -n "$DIG_BIN$HOST_BIN" ] && ds=ok ;;
                         imunify)   [ -n "$IMUNIFY_BIN" ] && [ -x "$IMUNIFY_BIN" ] && ds=ok ;;
+                        # ModSecurity: cPanel'in eşleşme kaydı var → ok; yalnız günlük var → warn (kural dosyasından okunur)
+                        modsec)    if [ -r "$MODSEC_DB" ]; then ds=ok; elif [ -r "$(conf_val MODSEC_LOG)" ]; then ds=warn; fi ;;
                         logrotate) if command -v logrotate >/dev/null 2>&1 && [ -d "$(dirname "$LOGROTATE_CONF")" ]; then
                                        ds=ok; [ -f "$LOGROTATE_CONF" ] || ds=warn      # kurulu ama bizim dosyamız yok
                                    fi ;;
@@ -2015,7 +2283,11 @@ do_config() {
             local out rc
             # Panel bağlantısı test mailinde de var: gerçek bir uyarı beklemeden bağlantı denenebilsin.
             panel_init; local plink="$PANEL_FOOT"
-            out=$( { m "$M_TM_BODY" "$(hostname 2>/dev/null || echo "$HOSTNAME")" "$AG_BY"; printf '\n\n%s' "$plink"; } | command mail -s "$M_TM_SUBJ" "$ALERT_MAIL" 2>&1 9>&-); rc=$?
+            local tmt tmh
+            tmt=$( m "$M_TM_BODY" "$(hostname 2>/dev/null || echo "$HOSTNAME")" "$AG_BY"; printf '\n\n%s' "$plink" )
+            h_text "$(m "$M_TM_BODY" "$(hostname 2>/dev/null || echo "$HOSTNAME")" "$AG_BY")"; h_card "$M_H_TMT" "$REPLY"; tmh="$REPLY"
+            h_doc "CSF Auto-Group" "$M_H_TMS" "$tmh"
+            send_mail "$M_TM_SUBJ" "$tmt" "$REPLY"; rc=$?; out="$SM_OUT"
             if [ "$rc" -eq 0 ]; then
                 log "$(m "$M_A_LOG" "$AG_BY" "$(m "$M_TM_SENT" "$ALERT_MAIL")")"
                 jstr "$ALERT_MAIL"; ev test_mail "" "by=\"$AG_BY\"" "to=$REPLY"
@@ -2040,7 +2312,7 @@ case "$MODE" in
     history) LOG_MODE=quiet; do_history "${ARGS[0]}" "${ARGS[1]}" "${ARGS[2]:-2}"; exit $? ;;
     logrotate) logrotate_write && { echo "$LOGROTATE_CONF"; exit 0; }; exit 1 ;;   # install.sh çağırır   # eklenti "Şimdi çalıştır"dan önce sorar
     digest) LOG_MODE=file; owners_load; parse_deny "$DENY_FILE" 1; panel_init; digest_build
-            if [ "$SEND" = 1 ]; then printf '%s\n' "$DG_BODY" | mail -s "$DG_SUBJ" "$ALERT_MAIL"; log "$(m "$M_DG_SENT" "$ALERT_MAIL")"; ev digest "" "by=\"$AG_BY\""
+            if [ "$SEND" = 1 ]; then send_mail "$DG_SUBJ" "$DG_BODY" "$DG_HTML"; log "$(m "$M_DG_SENT" "$ALERT_MAIL")"; ev digest "" "by=\"$AG_BY\""
             else printf '%s\n\n%s\n' "$DG_SUBJ" "$DG_BODY"; fi
             exit 0 ;;
 esac
@@ -2065,7 +2337,7 @@ if [ -n "$limit" ] && [ "$limit" -gt 0 ] 2>/dev/null; then
         log "$(m "$M_PERM_WARN")"
         doluluk_satiri=$(m "$M_PERM_FULL" "$current_count" "$limit" "$percent")
         if ! grep -qF "LIMIT_PERM $TODAY" "$SAYAC_FILE"; then      # günde bir kez (her turda değil)
-            MAIL_URGENT=1; mail_add "$(m "$M_MAIL_PERMFULL_SUBJ" "$percent")" "$(m "$M_MAIL_PERMFULL_BODY")"; cnt_add "LIMIT_PERM $TODAY"
+            MAIL_URGENT=1; mail_add "$(m "$M_MAIL_PERMFULL_SUBJ" "$percent")" "$(m "$M_MAIL_PERMFULL_BODY")" bad; cnt_add "LIMIT_PERM $TODAY"
         fi
     else
         doluluk_satiri=$(m "$M_PERM_USAGE" "$current_count" "$limit" "$percent")
@@ -2084,7 +2356,7 @@ if [ -n "$temp_limit" ] && [ "$temp_limit" -gt 0 ] 2>/dev/null; then
         log "$(m "$M_TEMP_WARN")"
         temp_doluluk_satiri=$(m "$M_TEMP_FULL" "$temp_current" "$temp_limit" "$temp_percent")
         if ! grep -qF "LIMIT_TEMP $TODAY" "$SAYAC_FILE"; then
-            MAIL_URGENT=1; mail_add "$(m "$M_MAIL_TEMPFULL_SUBJ" "$temp_percent")" "$(m "$M_MAIL_TEMPFULL_BODY")"; cnt_add "LIMIT_TEMP $TODAY"
+            MAIL_URGENT=1; mail_add "$(m "$M_MAIL_TEMPFULL_SUBJ" "$temp_percent")" "$(m "$M_MAIL_TEMPFULL_BODY")" bad; cnt_add "LIMIT_TEMP $TODAY"
         fi
     else
         temp_doluluk_satiri=$(m "$M_TEMP_USAGE" "$temp_current" "$temp_limit" "$temp_percent")
@@ -2311,7 +2583,7 @@ if [ ${#h_msgs[@]} -gt 0 ]; then
         MAIL_URGENT=1
         h_body="$M_H_BODY$NL"; for hm in "${h_msgs[@]}"; do h_body+="  - $hm$NL"; done
         h_subj=""; for hm in "${h_msgs[@]}"; do h_subj+="${h_subj:+, }$hm"; done
-        mail_add "$h_subj" "$h_body"; cnt_add "HEALTH $TODAY"
+        mail_add "$h_subj" "$h_body" bad; cnt_add "HEALTH $TODAY"
     fi
 fi
 

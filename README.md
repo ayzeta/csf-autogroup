@@ -113,8 +113,8 @@ settings, with no prompts. `config.env` is left untouched.
 - **Look up an IP** — hostname (forward-confirmed), owner, announced prefix,
   registry, whether CSF blocks it and which list whitelists it, with links to
   bgp.he.net and AbuseIPDB. Recently viewed IPs stay one click away.
-- **Top attacking providers** (by ASN) — three tabs:
-  - *Attackers* — ranked by block bans and single bans. A provider with 5+ block
+- **Most blocked providers** (by ASN) — three tabs:
+  - *CSF* — ranked by block bans and single bans. A provider with 5+ block
     bans gets a suggestion explaining how to block the whole ASN with CSF's own
     `CC_DENY`. The plugin never edits `csf.conf`.
   - *Other blocks* — ranges in `csf.deny` added outside CSF Auto-Group.
@@ -150,7 +150,7 @@ The same settings as `config.env`, with validation, grouped into sections
 history):
 
 - **Notifications** — alert email (with *Send test email*), language, and the
-  **weekly summary**: new block bans, top attacking providers, watched blocks about to
+  **weekly summary**: new block bans, providers CSF and Imunify360 block most, watched blocks about to
   expire, list usage, run count, and a note when a new version is available.
   Sent with the first run after 09:00 on the chosen day (default Monday).
 - **Thresholds** — block ban (`/24`), `do not delete`, suspicious range (`/16`),
@@ -255,7 +255,7 @@ the page shows is available from the command line:
 ./csf_autogroup.sh --help
 ```
 
-Requirements: CSF and a working `mail` command; `dig` or `host` for lookups.
+Requirements: CSF and a working `sendmail` (HTML emails) or `mail` command (plain text); `dig` or `host` for lookups. Optional: `sqlite3`, to show ModSecurity rule messages in ban reasons.
 
 ### Manual install
 
