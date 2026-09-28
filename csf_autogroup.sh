@@ -652,18 +652,35 @@ ev() {           # TYPE CIDR [anahtar=HAZIR_JSON ...]
 # ── HTML mail ───────────────────────────────────────────────────────────────
 # Bütün mailler HTML + düz metin (multipart/alternative, UTF-8) olarak sendmail'e verilir; HTML
 # göstermeyen istemci düz metni gösterir. sendmail ya da base64 yoksa eskisi gibi "mail" ile
-# yalnız düz metin gider. HTML tablolarla ve satır içi stille yazılır (Outlook / Gmail bozmasın).
+# yalnız düz metin gider. Masaüstü Outlook HTML'i Word motoruyla çizer: div boşluklarını ve
+# yuvarlak köşeleri yok sayar. Bu yüzden boşluklar hep tablo hücresinde, düğme ve çubuklar tabloyla.
+# Başlıktaki ikon maile gömülü PNG (cid:), dışarıdan resim indirilmez.
 SENDMAIL_BIN="${SENDMAIL_BIN:-/usr/sbin/sendmail}"
+MAIL_ICON="${MAIL_ICON:-$SELF_DIR/whm/assets/mail-icon.png}"
 PANEL_BASE=""
 H_FONT="-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
 H_MONO="Consolas,Menlo,monospace"
+H_TH="color:#5f6776;font-size:11px;text-transform:uppercase;letter-spacing:.04em"
+H_SP="<tr><td height=\"12\" style=\"height:12px;font-size:0;line-height:0;\">&nbsp;</td></tr>"
 h_esc() { local s="$1"; s="${s//&/&amp;}"; s="${s//</&lt;}"; s="${s//>/&gt;}"; s="${s//\"/&quot;}"; REPLY="$s"; }
-h_card() {       # BAŞLIK İÇ_HTML [bad|warn|acc] [ALT_BAŞLIK] → REPLY = kart
-    local bd="#e6e8ef" tc="#111827" t s="" pb=10px
+h_box() {        # STİL İÇERİK → REPLY = tam genişlikte tek hücre (boşluk Outlook'ta da çalışsın diye td'de)
+    REPLY="<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"><tr><td style=\"font-family:$H_FONT;$1\">$2</td></tr></table>"
+}
+h_card() {       # BAŞLIK İÇ_HTML [bad|warn] [ALT_BAŞLIK] → REPLY = kart
+    local bd="#e6e8ef" tc="#111827" t out pb=10px
     case "$3" in bad) bd="#fecaca"; tc="#b91c1c" ;; warn) bd="#fde68a"; tc="#b45309" ;; esac
-    h_esc "$1"; t="$REPLY"
-    if [ -n "$4" ]; then pb=2px; h_esc "$4"; s="<div style=\"padding:0 18px 10px;font-size:12px;color:#5f6776;\">$REPLY</div>"; fi
-    REPLY="<tr><td style=\"background:#fff;border:1px solid $bd;border-radius:12px;\"><div style=\"padding:14px 18px $pb;font-size:14px;font-weight:700;color:$tc;\">$t</div>$s<div style=\"border-top:1px solid #eef0f3;\"></div>$2</td></tr><tr><td style=\"height:12px;\"></td></tr>"
+    [ -n "$4" ] && pb=2px
+    h_esc "$1"; h_box "padding:14px 18px $pb;font-size:14px;font-weight:700;color:$tc;" "$REPLY"; out="$REPLY"
+    if [ -n "$4" ]; then h_esc "$4"; h_box "padding:0 18px 10px;font-size:12px;color:#5f6776;" "$REPLY"; out+="$REPLY"; fi
+    out+="<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"><tr><td height=\"1\" style=\"height:1px;border-top:1px solid #eef0f3;font-size:0;line-height:0;\">&nbsp;</td></tr></table>"
+    REPLY="<tr><td bgcolor=\"#ffffff\" style=\"background:#ffffff;border:1px solid $bd;border-radius:12px;\">$out$2</td></tr>$H_SP"
+}
+h_bar() {        # YÜZDE RENK → REPLY = 8 px yüksekliğinde doluluk çubuğu (iki hücre)
+    local pc="$1" c=""
+    [ "$pc" -gt 100 ] && pc=100
+    [ "$pc" -gt 0 ] && c+="<td width=\"$pc%\" bgcolor=\"$2\" style=\"background:$2;height:8px;font-size:0;line-height:0;\">&nbsp;</td>"
+    [ "$pc" -lt 100 ] && c+="<td bgcolor=\"#f3f4f6\" style=\"background:#f3f4f6;height:8px;font-size:0;line-height:0;\">&nbsp;</td>"
+    REPLY="<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"><tr>$c</tr></table>"
 }
 h_usage() {      # KALICI_DOLU KALICI_SINIR GEÇİCİ_DOLU GEÇİCİ_SINIR [7_GÜN_ÖNCE] → REPLY = doluluk kartı
     local out="" i used lim lab pc col note pt
@@ -671,68 +688,73 @@ h_usage() {      # KALICI_DOLU KALICI_SINIR GEÇİCİ_DOLU GEÇİCİ_SINIR [7_G�
         if [ "$i" = 1 ]; then used=$(num "$1"); lim=$(num "$2"); lab="$M_H_PERM"; col="#4338ca"; note="${5:+ · $(m "$M_H_AGO" "$5")}"
         else used=$(num "$3"); lim=$(num "$4"); lab="$M_H_TEMP"; col="#b45309"; note=""; fi
         [ "$lim" -gt 0 ] || continue
-        pt=0; [ -n "$out" ] && pt=12px
+        pt=0; [ -n "$out" ] && pt=14px
         pc=$(( used * 100 / lim )); [ "$pc" -ge 80 ] && col="#b91c1c"
-        out+="<tr><td style=\"font-size:13px;font-weight:600;padding:$pt 0 6px;\">$lab</td><td align=\"right\" style=\"font-size:13px;color:#4b5563;padding:$pt 0 6px;\">$(m "$M_H_LINES" "$used" "$lim" "$pc")<span style=\"color:#5f6776;\">$note</span></td></tr>"
-        out+="<tr><td colspan=\"2\"><div style=\"height:8px;background:#f3f4f6;border-radius:4px;\"><div style=\"width:$(( pc > 100 ? 100 : (pc < 1 && used > 0 ? 1 : pc) ))%;height:8px;background:$col;border-radius:4px;\"></div></div></td></tr>"
+        [ "$pc" -lt 1 ] && [ "$used" -gt 0 ] && pc=1
+        out+="<tr><td style=\"font-family:$H_FONT;font-size:13px;font-weight:600;padding:$pt 0 6px;\">$lab</td><td align=\"right\" style=\"font-family:$H_FONT;font-size:13px;color:#4b5563;padding:$pt 0 6px;\">$(m "$M_H_LINES" "$used" "$lim" "$(( used * 100 / lim ))")<span style=\"color:#5f6776;\">$note</span></td></tr>"
+        h_bar "$pc" "$col"; out+="<tr><td colspan=\"2\">$REPLY</td></tr>"
     done
     REPLY=""
-    [ -n "$out" ] && REPLY="<tr><td style=\"background:#fff;border:1px solid #e6e8ef;border-radius:12px;padding:16px 18px;\"><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">$out</table></td></tr><tr><td style=\"height:12px;\"></td></tr>"
+    [ -n "$out" ] && REPLY="<tr><td bgcolor=\"#ffffff\" style=\"background:#ffffff;border:1px solid #e6e8ef;border-radius:12px;padding:16px 18px;\"><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">$out</table></td></tr>$H_SP"
 }
 h_doc() {        # BAŞLIK ALT_BAŞLIK GÖVDE(kart satırları) → REPLY = tam belge
-    local t s foot=""
+    local t s foot="" ic
     h_esc "$1"; t="$REPLY"; h_esc "$2"; s="$REPLY"
+    if [ -r "$MAIL_ICON" ]; then ic="<img src=\"cid:agicon\" width=\"40\" height=\"40\" alt=\"\" style=\"display:block;border:0;width:40px;height:40px;\">"
+    else ic="<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\"><tr><td width=\"40\" height=\"40\" bgcolor=\"#4338ca\" style=\"background:#4338ca;border-radius:11px;font-size:0;\">&nbsp;</td></tr></table>"; fi
     if [ -n "$PANEL_BASE" ]; then
         h_esc "$PANEL_BASE"
-        foot="<a href=\"$REPLY\" style=\"display:inline-block;background:#4338ca;color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:10px 18px;border-radius:9px;\">$M_H_PANEL</a><div style=\"font-size:12px;color:#5f6776;padding-top:10px;\">$M_H_PANELP · v$VERSION</div>"
+        foot="<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" align=\"center\"><tr><td bgcolor=\"#4338ca\" style=\"background:#4338ca;border-radius:9px;padding:10px 20px;\"><a href=\"$REPLY\" style=\"font-family:$H_FONT;color:#ffffff;text-decoration:none;font-size:13px;font-weight:600;\">$M_H_PANEL</a></td></tr></table>"
+        h_box "padding:10px 0 0;font-size:12px;color:#5f6776;text-align:center;" "$M_H_PANELP · v$VERSION"; foot+="$REPLY"
     else
-        foot="<div style=\"font-size:12px;color:#5f6776;\">CSF Auto-Group v$VERSION</div>"
+        h_box "font-size:12px;color:#5f6776;text-align:center;" "CSF Auto-Group v$VERSION"; foot="$REPLY"
     fi
-    REPLY="<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>$t</title></head>"
-    REPLY+="<body style=\"margin:0;padding:0;background:#f4f5f9;font-family:$H_FONT;color:#111827;\">"
-    REPLY+="<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f4f5f9;padding:24px 12px;\"><tr><td align=\"center\">"
+    REPLY="<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>$t</title><style>td,div,span,a,b{font-family:$H_FONT;}</style></head>"
+    REPLY+="<body style=\"margin:0;padding:0;background:#f4f5f9;font-family:$H_FONT;color:#111827;\" bgcolor=\"#f4f5f9\">"
+    REPLY+="<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" bgcolor=\"#f4f5f9\" style=\"background:#f4f5f9;\"><tr><td align=\"center\" style=\"padding:24px 12px;\">"
     REPLY+="<table role=\"presentation\" width=\"640\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:640px;width:100%;\">"
     REPLY+="<tr><td style=\"padding:0 4px 16px;\"><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"><tr>"
-    REPLY+="<td width=\"44\" valign=\"middle\"><div style=\"width:40px;height:40px;border-radius:11px;background:#4338ca;color:#fff;font-size:20px;line-height:40px;text-align:center;\">&#x1F6E1;</div></td>"
-    REPLY+="<td valign=\"middle\" style=\"padding-left:12px;\"><div style=\"font-size:18px;font-weight:700;\">$t</div><div style=\"font-size:13px;color:#5f6776;\">$s</div></td></tr></table></td></tr>"
+    REPLY+="<td width=\"40\" valign=\"middle\">$ic</td>"
+    REPLY+="<td valign=\"middle\" style=\"padding-left:12px;font-family:$H_FONT;\"><div style=\"font-size:18px;font-weight:700;color:#111827;\">$t</div><div style=\"font-size:13px;color:#5f6776;\">$s</div></td></tr></table></td></tr>"
     REPLY+="$3<tr><td align=\"center\" style=\"padding:8px 4px 4px;\">$foot</td></tr></table></td></tr></table></body></html>"
 }
 h_text() {       # BÖLÜM_METNİ → REPLY = kartın içi. Uyarı mailinin metin biçimini okur:
     # giriş paragrafı · "BLOK -> açıklama" başlıkları · "   Sahibi:/Not:" satırları · "   - IP  host  [sahip]  sebep  [etiket]"
     REPLY=$(printf '%s\n' "$1" | awk -v tk="[$M_TAG_KEPT]" -v tf="[$M_TAG_FAIL]" -v hi="$M_H_IP" -v hh="$M_H_HOST" -v hw="$M_H_WHY" \
-                                     -v more="$M_H_MORE" -v mono="$H_MONO" '
+                                     -v more="$M_H_MORE" -v mono="$H_MONO" -v ff="$H_FONT" '
         function esc(s) { gsub(/&/, "\\&amp;", s); gsub(/</, "\\&lt;", s); gsub(/>/, "\\&gt;", s); gsub(/"/, "\\&quot;", s); return s }
+        function box(st, c) { return "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"><tr><td style=\"font-family:" ff ";" st "\">" c "</td></tr></table>" }
         function closet() { if (tb) { o = o "</table>"; tb = 0 } }
-        function openb() { if (!inb) { o = o "<div style=\"padding:4px 0 10px;\">"; inb = 1 } }
-        function closeb() { closet(); if (inb) { o = o "</div>"; inb = 0 } }
-        function opent() { if (!tb) { o = o "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"font-size:12.5px;margin-top:6px;\"><tr style=\"color:#5f6776;font-size:11px;text-transform:uppercase;letter-spacing:.04em;\"><td width=\"130\" style=\"padding:4px 8px 4px 18px;\">" hi "</td><td width=\"34%\" style=\"padding:4px 8px;\">" hh "</td><td style=\"padding:4px 18px 4px 8px;\">" hw "</td></tr>"; tb = 1; zr = 0 } }
+        function closeb() { closet(); if (inb) { o = o box("height:10px;font-size:0;line-height:0;", "&nbsp;"); inb = 0 } }
+        function opent() { if (!tb) { o = o "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"><tr><td width=\"130\" style=\"font-family:" ff ";padding:8px 8px 4px 18px;color:#5f6776;font-size:11px;text-transform:uppercase;letter-spacing:.04em;\">" hi "</td><td width=\"30%\" style=\"font-family:" ff ";padding:8px 8px 4px;color:#5f6776;font-size:11px;text-transform:uppercase;letter-spacing:.04em;\">" hh "</td><td style=\"font-family:" ff ";padding:8px 18px 4px 8px;color:#5f6776;font-size:11px;text-transform:uppercase;letter-spacing:.04em;\">" hw "</td></tr>"; tb = 1; zr = 0 } }
         BEGIN { intro = 1; o = ""; ip = "" }
         {
             l = $0; sub(/\r$/, "", l)
-            if (l ~ /^[ \t]*$/) { if (intro && ip != "") { o = o "<div style=\"padding:12px 18px 4px;font-size:13px;color:#4b5563;line-height:1.5;\">" ip "</div>"; ip = "" } intro = 0; closeb(); next }
+            if (l ~ /^[ \t]*$/) { if (intro && ip != "") { o = o box("padding:12px 18px 4px;font-size:13px;color:#4b5563;line-height:1.5;", ip); ip = "" } intro = 0; closeb(); next }
             if (intro) { ip = ip (ip != "" ? "<br>" : "") esc(l); next }
             if (l ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\/[0-9]+ -> /) {
-                closeb(); openb(); i = index(l, " -> ")
-                o = o "<div style=\"padding:8px 18px 0;\"><span style=\"font-family:" mono ";font-size:14px;font-weight:700;\">" esc(substr(l, 1, i - 1)) "</span> <span style=\"font-size:13px;color:#4b5563;\">" esc(substr(l, i + 4)) "</span></div>"
+                closeb(); inb = 1; i = index(l, " -> ")
+                o = o box("padding:10px 18px 0;", "<span style=\"font-family:" mono ";font-size:14px;font-weight:700;color:#111827;\">" esc(substr(l, 1, i - 1)) "</span> <span style=\"font-size:13px;color:#4b5563;\">" esc(substr(l, i + 4)) "</span>")
                 next }
             if (l ~ /^   - /) {
-                openb(); opent(); s = substr(l, 6); n = split(s, f, /  +/)
+                inb = 1; opent(); s = substr(l, 6); n = split(s, f, /  +/)
                 own = ""; why = ""; tag = ""
                 for (k = 3; k <= n; k++) {
                     if (f[k] ~ /^\[/) { if (f[k] == tk || f[k] == tf) tag = f[k]; else own = f[k] }
                     else why = why (why != "" ? "  " : "") f[k] }
                 h = (f[2] == "-" || f[2] == "") ? "<span style=\"color:#9aa1ad;\">—</span>" : esc(f[2])
-                if (own != "") h = h "<div style=\"font-size:11.5px;color:#5f6776;\">" esc(substr(own, 2, length(own) - 2)) "</div>"
+                if (own != "") h = h "<br><span style=\"font-size:11.5px;color:#5f6776;\">" esc(substr(own, 2, length(own) - 2)) "</span>"
                 w = esc(why)
-                if (tag != "") w = w " <span style=\"background:" (tag == tf ? "#fef2f2;color:#b91c1c;border:1px solid #fecaca" : "#f3f4f6;color:#4b5563;border:1px solid #e6e8ef") ";border-radius:10px;padding:1px 7px;font-size:11px;white-space:nowrap;\">" esc(substr(tag, 2, length(tag) - 2)) "</span>"
-                o = o "<tr" (zr % 2 ? " style=\"background:#f7f8fa;\"" : "") "><td valign=\"top\" style=\"padding:6px 8px 6px 18px;font-family:" mono ";color:#4338ca;white-space:nowrap;\">" esc(f[1]) "</td><td valign=\"top\" style=\"padding:6px 8px;color:#4b5563;word-break:break-all;\">" h "</td><td valign=\"top\" style=\"padding:6px 18px 6px 8px;\">" w "</td></tr>"
+                if (tag != "") w = w " <span style=\"background:" (tag == tf ? "#fef2f2;color:#b91c1c" : "#f3f4f6;color:#4b5563") ";font-size:11px;white-space:nowrap;\">&nbsp;" esc(substr(tag, 2, length(tag) - 2)) "&nbsp;</span>"
+                bg = (zr % 2) ? " bgcolor=\"#f7f8fa\"" : ""
+                o = o "<tr><td valign=\"top\"" bg " style=\"padding:6px 8px 6px 18px;font-family:" mono ";font-size:12.5px;color:#4338ca;white-space:nowrap;\">" esc(f[1]) "</td><td valign=\"top\"" bg " style=\"padding:6px 8px;font-family:" ff ";font-size:12.5px;color:#4b5563;word-break:break-all;\">" h "</td><td valign=\"top\"" bg " style=\"padding:6px 18px 6px 8px;font-family:" ff ";font-size:12.5px;color:#111827;\">" w "</td></tr>"
                 zr++; next }
-            if (l ~ /^   \(\+[0-9]+\)/) { openb(); opent(); m2 = l; gsub(/[^0-9]/, "", m2); o = o "<tr><td colspan=\"3\" style=\"padding:6px 18px;color:#5f6776;font-size:12px;\">" sprintf(more, m2) "</td></tr>"; next }
-            if (l ~ /^  - /) { closet(); o = o "<div style=\"padding:4px 18px;font-size:13px;\">&#8226; " esc(substr(l, 5)) "</div>"; next }
-            if (l ~ /^   /) { closet(); sub(/^ +/, "", l); o = o "<div style=\"padding:3px 18px 0;font-size:12.5px;color:#5f6776;\">" esc(l) "</div>"; next }
-            closeb(); o = o "<div style=\"padding:8px 18px;font-size:13px;\">" esc(l) "</div>"
+            if (l ~ /^   \(\+[0-9]+\)/) { inb = 1; opent(); m2 = l; gsub(/[^0-9]/, "", m2); o = o "<tr><td colspan=\"3\" style=\"padding:6px 18px;font-family:" ff ";color:#5f6776;font-size:12px;\">" sprintf(more, m2) "</td></tr>"; next }
+            if (l ~ /^  - /) { closet(); o = o box("padding:4px 18px;font-size:13px;", "&#8226; " esc(substr(l, 5))); next }
+            if (l ~ /^   /) { closet(); sub(/^ +/, "", l); o = o box("padding:3px 18px 0;font-size:12.5px;color:#5f6776;", esc(l)); next }
+            closeb(); o = o box("padding:8px 18px;font-size:13px;", esc(l))
         }
-        END { if (intro && ip != "") o = o "<div style=\"padding:12px 18px 8px;font-size:13px;color:#4b5563;line-height:1.5;\">" ip "</div>"; closeb(); print o "<div style=\"height:8px;\"></div>" }')
+        END { if (intro && ip != "") o = o box("padding:12px 18px 12px;font-size:13px;color:#4b5563;line-height:1.5;", ip); closeb(); print o box("height:8px;font-size:0;line-height:0;", "&nbsp;") }')
 }
 h_subj() {       # KONU → REPLY = RFC 2047 kodlu konu (kelime sınırında ~40 baytlık parçalar, katlanmış)
     local LC_ALL=C IFS=$' \t\n' w chunk="" out="" words
@@ -746,18 +768,28 @@ h_subj() {       # KONU → REPLY = RFC 2047 kodlu konu (kelime sınırında ~40
     REPLY="$out"
 }
 send_mail() {    # KONU DÜZ_METİN [HTML] → çıkış kodu; SM_OUT = komutun çıktısı
-    local b rc
+    local b r rc icon=0
     # kuru çalıştırma: gönderme, düz metni göster (mail() sarmalayıcısı)
     if [ "$DRY" = 1 ]; then printf '%s\n' "$2" | mail -s "$1" "$ALERT_MAIL"; SM_OUT=""; return 0; fi
     if [ -n "$3" ] && [ -x "$SENDMAIL_BIN" ] && command -v base64 >/dev/null 2>&1; then
-        b="=_csfag_$(date +%s)_$$"; h_subj "$1"
+        b="=_csfag_a_$(date +%s)_$$"; r="=_csfag_r_$(date +%s)_$$"; h_subj "$1"
+        [[ "$3" == *cid:agicon* ]] && [ -r "$MAIL_ICON" ] && icon=1
+        # yapı: multipart/related [ multipart/alternative (metin, HTML) + ikon ] — ikon yoksa yalnız alternative
         SM_OUT=$( { printf 'To: %s\nSubject: %s\nMIME-Version: 1.0\nX-Mailer: CSF Auto-Group %s\n' "$ALERT_MAIL" "$REPLY" "$VERSION"
+                    if [ "$icon" = 1 ]; then
+                        printf 'Content-Type: multipart/related; type="multipart/alternative"; boundary="%s"\n\n--%s\n' "$r" "$r"
+                    fi
                     printf 'Content-Type: multipart/alternative; boundary="%s"\n\n' "$b"
                     printf -- '--%s\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: base64\n\n' "$b"
                     printf '%s\n' "$2" | base64
                     printf -- '--%s\nContent-Type: text/html; charset=UTF-8\nContent-Transfer-Encoding: base64\n\n' "$b"
                     printf '%s\n' "$3" | base64
-                    printf -- '--%s--\n' "$b"; } | "$SENDMAIL_BIN" -t -i 2>&1 9>&-); rc=$?
+                    printf -- '--%s--\n' "$b"
+                    if [ "$icon" = 1 ]; then
+                        printf -- '\n--%s\nContent-Type: image/png; name="csf-autogroup.png"\nContent-Transfer-Encoding: base64\nContent-ID: <agicon>\nContent-Disposition: inline; filename="csf-autogroup.png"\n\n' "$r"
+                        base64 < "$MAIL_ICON"
+                        printf -- '--%s--\n' "$r"
+                    fi; } | "$SENDMAIL_BIN" -t -i 2>&1 9>&-); rc=$?
     else
         SM_OUT=$(printf '%s\n' "$2" | mail -s "$1" "$ALERT_MAIL" 2>&1); rc=$?
     fi
@@ -2054,7 +2086,7 @@ digest_build() { # → DG_SUBJ, DG_BODY
             if [ -n "$rv" ] && [ "$rv" != "$VERSION" ] && [ "$(git -C "$SELF_DIR" rev-parse @ 2>/dev/null)" != "$(git -C "$SELF_DIR" rev-parse "origin/$br" 2>/dev/null)" ]; then
                 DG_BODY+="$(m "$M_DG_UPD" "$VERSION" "$rv")$NL$NL"
                 h_esc "$(m "$M_DG_UPD" "$VERSION" "$rv")"
-                DGH+="<tr><td style=\"background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:12px 18px;font-size:13px;color:#3730a3;\">$REPLY</td></tr><tr><td style=\"height:12px;\"></td></tr>"
+                DGH+="<tr><td bgcolor=\"#eef2ff\" style=\"background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:12px 18px;font-family:$H_FONT;font-size:13px;color:#3730a3;\">$REPLY</td></tr>$H_SP"
             fi
         fi
     fi
@@ -2067,7 +2099,7 @@ digest_build() { # → DG_SUBJ, DG_BODY
         hr+="<td align=\"center\" style=\"padding:12px 4px;width:14%;${hr:+border-left:1px solid #eef0f3;}\"><div style=\"font-size:22px;font-weight:700;$([ "$hi" = 3 ] && [ "$hv" -gt 0 ] && echo 'color:#b45309;')\">$hv</div><div style=\"font-size:11.5px;color:#5f6776;\">${hlab[hi]}</div></td>"
         hi=$((hi + 1))
     done
-    DGH+="<tr><td style=\"background:#fff;border:1px solid #e6e8ef;border-radius:12px;padding:6px;\"><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"><tr>$hr</tr></table></td></tr><tr><td style=\"height:12px;\"></td></tr>"
+    DGH+="<tr><td bgcolor=\"#ffffff\" style=\"background:#ffffff;border:1px solid #e6e8ef;border-radius:12px;padding:6px;font-family:$H_FONT;\"><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"><tr>$hr</tr></table></td></tr>$H_SP"
     h_usage "$pc" "$limit" "$tc" "$tlimit" "$([[ "$perm0" =~ ^[0-9]+$ ]] && echo "$perm0")"; DGH+="$REPLY"
     hr=""
     # yeni grup banları (7 gün): add24 / promote / manual_ban
@@ -2079,7 +2111,7 @@ digest_build() { # → DG_SUBJ, DG_BODY
             hcls="background:#f3f4f6;color:#4b5563;border:1px solid #e6e8ef"
             [ "$hk" = promote ] && hcls="background:#f3edff;color:#7c3aed;border:1px solid #ddd0fb"
             [ "$hk" = manual_ban ] && hcls="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca"
-            hr+="<tr$([ $((n % 2)) = 0 ] && echo ' style="background:#f7f8fa;"')><td style=\"padding:8px 8px 8px 18px;font-family:$H_MONO;font-weight:600;\">$cidr</td><td style=\"padding:8px;color:#4b5563;\">$REPLY</td><td align=\"right\" style=\"padding:8px 18px 8px 8px;\"><span style=\"$hcls;border-radius:10px;padding:2px 8px;font-size:11.5px;font-weight:600;white-space:nowrap;\">${!hv:-$hk}</span></td></tr>"
+            hr+="<tr$([ $((n % 2)) = 0 ] && echo ' bgcolor="#f7f8fa" style="background:#f7f8fa;"')><td style=\"padding:8px 8px 8px 18px;font-family:$H_MONO;font-weight:600;\">$cidr</td><td style=\"padding:8px;color:#4b5563;\">$REPLY</td><td align=\"right\" style=\"padding:8px 18px 8px 8px;\"><span style=\"$hcls;border-radius:10px;padding:2px 8px;font-size:11.5px;font-weight:600;white-space:nowrap;\">${!hv:-$hk}</span></td></tr>"
         done < <(awk -v s="$since" '
             match($0, /"t":[0-9]+/) { t = substr($0, RSTART + 4, RLENGTH - 4) + 0 } t < s { next }
             /"type":"(add24|promote|manual_ban)"/ {
@@ -2091,8 +2123,8 @@ digest_build() { # → DG_SUBJ, DG_BODY
     fi
     [ "$n" -eq 0 ] && DG_BODY+="$M_DG_NONE$NL"
     if [ -n "$hr" ]; then
-        hr="<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"font-size:13px;\"><tr style=\"color:#5f6776;font-size:11px;text-transform:uppercase;letter-spacing:.04em;\"><td style=\"padding:10px 8px 6px 18px;\">$M_H_BLOCK</td><td style=\"padding:10px 8px 6px;\">$M_H_OWNER</td><td align=\"right\" style=\"padding:10px 18px 6px 8px;\">$M_H_STATE</td></tr>$hr</table><div style=\"height:8px;\"></div>"
-    else hr="<div style=\"padding:12px 18px 14px;font-size:13px;color:#5f6776;\">$M_H_NONE</div>"; fi
+        hr="<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"font-size:13px;\"><tr><td style=\"$H_TH;padding:10px 8px 6px 18px;\">$M_H_BLOCK</td><td style=\"$H_TH;padding:10px 8px 6px;\">$M_H_OWNER</td><td align=\"right\" style=\"$H_TH;padding:10px 18px 6px 8px;\">$M_H_STATE</td></tr>$hr</table><div style=\"height:8px;\"></div>"
+    else h_box "padding:12px 18px 14px;font-size:13px;color:#5f6776;" "$M_H_NONE"; hr="$REPLY"; fi
     h_card "$M_H_NEWT" "$hr"; DGH+="$REPLY"; hr=""; hi=0
     # en çok saldıran ağlar
     DG_BODY+="$NL$M_DG_TOP$NL"
@@ -2101,15 +2133,15 @@ digest_build() { # → DG_SUBJ, DG_BODY
         while IFS='|' read -r a owner k b bl line den; do
             DG_BODY+="$(m "$M_DG_TOPL" "AS$a" "${owner:0:44}" "$(asn_parts "$b" "$bl" "$line")")$NL"   # kurum adı ülkeyle bitiyor
             h_esc "$owner"; hi=$((hi + 1))
-            hr+="<tr$([ $((hi % 2)) = 0 ] && echo ' style="background:#f7f8fa;"')><td style=\"padding:8px 8px 8px 18px;\"><b style=\"font-family:$H_MONO;color:#4338ca;\">AS$a</b> $REPLY</td>"
+            hr+="<tr$([ $((hi % 2)) = 0 ] && echo ' bgcolor="#f7f8fa" style="background:#f7f8fa;"')><td style=\"padding:8px 8px 8px 18px;\"><b style=\"font-family:$H_MONO;color:#4338ca;\">AS$a</b> $REPLY</td>"
             hr+="<td align=\"right\" style=\"padding:8px;$([ "$b" -gt 0 ] && echo 'font-weight:600;' || echo 'color:#5f6776;')\">$([ "$b" -gt 0 ] && echo "$b" || echo '—')</td>"
             hr+="<td align=\"right\" style=\"padding:8px;$([ "$line" -gt 0 ] && echo 'font-weight:600;' || echo 'color:#5f6776;')\">$([ "$line" -gt 0 ] && echo "$line" || echo '—')</td>"
             hr+="<td align=\"right\" style=\"padding:8px 18px 8px 8px;color:#5f6776;\">$([ "$bl" -gt 0 ] && m "$M_H_OTHV" "$bl" || echo '—')</td></tr>"
         done <<< "$ASN_TOP"
     else DG_BODY+="$M_DG_NONE$NL"; fi
     if [ -n "$hr" ]; then
-        hr="<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"font-size:13px;\"><tr style=\"color:#5f6776;font-size:11px;text-transform:uppercase;letter-spacing:.04em;\"><td style=\"padding:10px 8px 6px 18px;\">$M_H_PROV</td><td align=\"right\" style=\"padding:10px 8px 6px;\">$M_H_BLK</td><td align=\"right\" style=\"padding:10px 8px 6px;\">$M_H_SGL</td><td align=\"right\" style=\"padding:10px 18px 6px 8px;\">$M_H_OTH</td></tr>$hr</table><div style=\"height:8px;\"></div>"
-    else hr="<div style=\"padding:12px 18px 14px;font-size:13px;color:#5f6776;\">$M_H_NONE</div>"; fi
+        hr="<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"font-size:13px;\"><tr><td style=\"$H_TH;padding:10px 8px 6px 18px;\">$M_H_PROV</td><td align=\"right\" style=\"$H_TH;padding:10px 8px 6px;\">$M_H_BLK</td><td align=\"right\" style=\"$H_TH;padding:10px 8px 6px;\">$M_H_SGL</td><td align=\"right\" style=\"$H_TH;padding:10px 18px 6px 8px;\">$M_H_OTH</td></tr>$hr</table><div style=\"height:8px;\"></div>"
+    else h_box "padding:12px 18px 14px;font-size:13px;color:#5f6776;" "$M_H_NONE"; hr="$REPLY"; fi
     h_card "$M_H_TOPT" "$hr" "" "$M_H_TOPS"; DGH+="$REPLY"; hr=""; hi=0
     # Imunify360: sunucunun kendi kara listesi
     if imunify_top 5 && [ -n "$IM_TOP" ]; then
@@ -2118,9 +2150,9 @@ digest_build() { # → DG_SUBJ, DG_BODY
             line="${line//:/ }"; line="${line//,/, }"          # "CAPTCHA_DOS_ALERT 900, WAF 12"
             DG_BODY+="$(m "$M_DG_IML" "AS$a" "${owner:0:44}" "$b" "${line:+ ($line)}")$NL"
             h_esc "$owner"; hi=$((hi + 1)); hv="$REPLY"; h_esc "$line"
-            hr+="<tr$([ $((hi % 2)) = 0 ] && echo ' style="background:#f7f8fa;"')><td style=\"padding:8px 8px 8px 18px;\"><b style=\"font-family:$H_MONO;color:#4338ca;\">AS$a</b> $hv</td><td align=\"right\" style=\"padding:8px;font-weight:600;\">$b</td><td align=\"right\" style=\"padding:8px 18px 8px 8px;color:#5f6776;font-size:12px;\">$REPLY</td></tr>"
+            hr+="<tr$([ $((hi % 2)) = 0 ] && echo ' bgcolor="#f7f8fa" style="background:#f7f8fa;"')><td style=\"padding:8px 8px 8px 18px;\"><b style=\"font-family:$H_MONO;color:#4338ca;\">AS$a</b> $hv</td><td align=\"right\" style=\"padding:8px;font-weight:600;\">$b</td><td align=\"right\" style=\"padding:8px 18px 8px 8px;color:#5f6776;font-size:12px;\">$REPLY</td></tr>"
         done <<< "$IM_TOP"
-        hr="<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"font-size:13px;\"><tr style=\"color:#5f6776;font-size:11px;text-transform:uppercase;letter-spacing:.04em;\"><td style=\"padding:10px 8px 6px 18px;\">$M_H_PROV</td><td align=\"right\" style=\"padding:10px 8px 6px;\">$M_H_IPS</td><td align=\"right\" style=\"padding:10px 18px 6px 8px;\">$M_H_RSN</td></tr>$hr</table><div style=\"height:8px;\"></div>"
+        hr="<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"font-size:13px;\"><tr><td style=\"$H_TH;padding:10px 8px 6px 18px;\">$M_H_PROV</td><td align=\"right\" style=\"$H_TH;padding:10px 8px 6px;\">$M_H_IPS</td><td align=\"right\" style=\"$H_TH;padding:10px 18px 6px 8px;\">$M_H_RSN</td></tr>$hr</table><div style=\"height:8px;\"></div>"
         h_card "$M_H_IMT" "$hr" "" "$(m "$M_H_IMS" "$IM_TOTAL")"; DGH+="$REPLY"; hr=""
     fi
     # süresi dolacak terfi kayıtları
@@ -2130,7 +2162,7 @@ digest_build() { # → DG_SUBJ, DG_BODY
         age=$(( (now - $(date -d "$u" +%s)) / 86400 )); left=$(( SAYAC_RETENTION_DAYS - age ))
         [ "$left" -le 14 ] || continue
         DG_BODY+="$(m "$M_DG_EXPL" "$p.0/24" "$left")$NL"; exp=$((exp + 1))
-        hr+="<div style=\"padding:3px 0;\"><span style=\"font-family:$H_MONO;\">$p.0/24</span> <span style=\"color:#5f6776;\">· $(m "$M_H_DAYS" "$left")</span></div>"
+        hr+="${hr:+<br>}<span style=\"font-family:$H_MONO;\">$p.0/24</span> <span style=\"color:#5f6776;\">· $(m "$M_H_DAYS" "$left")</span>"
     done < "$SAYAC_FILE"
     [ "$exp" -eq 0 ] && DG_BODY+="$M_DG_NONE$NL"
     # Beklenen tur sayısı, olay kaydının başladığı andan itibaren hesaplanır: kayıt yeni başladıysa
@@ -2145,9 +2177,9 @@ digest_build() { # → DG_SUBJ, DG_BODY
     hv="?"; [ "$iv" -gt 0 ] && hv=$(( win / iv + 1 ))
     hcls="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0"
     [[ "$hv" =~ ^[0-9]+$ ]] && [ $(( runs * 10 )) -lt $(( hv * 9 )) ] && hcls="background:#fffbeb;color:#b45309;border:1px solid #fde68a"
-    DGH+="<tr><td style=\"background:#fff;border:1px solid #e6e8ef;border-radius:12px;padding:14px 18px;font-size:13px;\"><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">"
-    DGH+="<tr><td valign=\"top\" style=\"padding-bottom:10px;\"><b>$M_H_EXPT</b> <span style=\"color:#5f6776;\">· $M_H_EXPS</span>${hr:+<div style=\"padding-top:6px;\">$hr</div>}</td><td align=\"right\" valign=\"top\" style=\"padding-bottom:10px;color:#5f6776;\">$([ -z "$hr" ] && echo "$M_H_NONE_S")</td></tr>"
-    DGH+="<tr><td style=\"border-top:1px solid #eef0f3;padding-top:10px;\"><b>$M_H_RUNS</b> <span style=\"color:#5f6776;\">· $M_H_RUNSS</span></td><td align=\"right\" style=\"border-top:1px solid #eef0f3;padding-top:10px;\"><span style=\"$hcls;border-radius:10px;padding:2px 8px;font-size:12px;font-weight:600;white-space:nowrap;\">$(m "$M_H_RUNSV" "$runs" "$hv")</span></td></tr></table></td></tr><tr><td style=\"height:12px;\"></td></tr>"
+    DGH+="<tr><td bgcolor=\"#ffffff\" style=\"background:#ffffff;border:1px solid #e6e8ef;border-radius:12px;padding:14px 18px;font-family:$H_FONT;font-size:13px;\"><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">"
+    DGH+="<tr><td valign=\"top\" style=\"padding-bottom:10px;\"><b>$M_H_EXPT</b> <span style=\"color:#5f6776;\">· $M_H_EXPS</span>${hr:+<br>$hr}</td><td align=\"right\" valign=\"top\" style=\"padding-bottom:10px;color:#5f6776;\">$([ -z "$hr" ] && echo "$M_H_NONE_S")</td></tr>"
+    DGH+="<tr><td style=\"border-top:1px solid #eef0f3;padding-top:10px;\"><b>$M_H_RUNS</b> <span style=\"color:#5f6776;\">· $M_H_RUNSS</span></td><td align=\"right\" style=\"border-top:1px solid #eef0f3;padding-top:10px;\"><span style=\"$hcls;border-radius:10px;padding:2px 8px;font-size:12px;font-weight:600;white-space:nowrap;\">$(m "$M_H_RUNSV" "$runs" "$hv")</span></td></tr></table></td></tr>$H_SP"
     h_doc "$M_H_WEEK" "$DG_HSUB" "$DGH"; DG_HTML="$REPLY"
     return 0
 }
