@@ -137,7 +137,7 @@
       m_asn_w: 'Bu, o sağlayıcıdaki meşru kullanıcıları da (ör. o sağlayıcıda sunucusu olan müşterileri) engeller. Büyük bulut sağlayıcılarında dikkatli olun.',
       m_asn_s: 'Nasıl: CSF → Firewall Configuration → CC_DENY alanına {0} ekleyin (virgülle ayırarak), kaydedip csf ve LFD\'yi yeniden başlatın. Bu eklenti csf.conf\'u değiştirmez.',
       copy_asn: '{0} kopyala', csf_open2: 'CSF\'yi aç', edit: 'Düzenle', st_digest: 'Haftalık özet',
-      st_digest_h: 'Seçilen gün 09:00\'dan sonraki ilk turda gönderilir: yeni blok banları, en çok saldıran sağlayıcılar, izlemesi bitecek bloklar.',
+      st_digest_h: 'Seçilen gün 09:00\'dan sonraki ilk turda gönderilir: yeni blok banları, en çok engellenen sağlayıcılar, izlemesi bitecek bloklar.',
       st_digest_day: 'Gönderim günü', d1: 'Pzt', d2: 'Sal', d3: 'Çar', d4: 'Per', d5: 'Cum', d6: 'Cmt', d7: 'Paz',
       digest_prev: 'Özeti önizle', m_digest_t: 'Haftalık özet önizlemesi', ev_digest: 'Haftalık özet'
     },
@@ -229,7 +229,7 @@
       m_asn_w: 'This also blocks legitimate users of that provider (e.g. customers hosted there). Be careful with large cloud providers.',
       m_asn_s: 'How: CSF → Firewall Configuration → add {0} to CC_DENY (comma separated), save and restart csf and LFD. This plugin never changes csf.conf.',
       copy_asn: 'Copy {0}', csf_open2: 'Open CSF', edit: 'Edit', st_digest: 'Weekly summary',
-      st_digest_h: 'Sent with the first run after 09:00 on the chosen day: new block bans, top attacking providers, watched blocks about to expire.',
+      st_digest_h: 'Sent with the first run after 09:00 on the chosen day: new block bans, most blocked providers, watched blocks about to expire.',
       st_digest_day: 'Day', d1: 'Mon', d2: 'Tue', d3: 'Wed', d4: 'Thu', d5: 'Fri', d6: 'Sat', d7: 'Sun',
       digest_prev: 'Preview summary', m_digest_t: 'Weekly summary preview', ev_digest: 'Weekly summary'
     }
@@ -807,7 +807,7 @@
         : '<p>' + t('lookup_hint') + '</p>') + '</div></section>';
   }
 
-  /* En çok saldıran ağlar: üç sekme — saldıranlar / csf.deny'deki diğer bloklar / Imunify */
+  /* En çok engellenen sağlayıcılar: üç sekme — CSF / csf.deny'deki diğer bloklar / Imunify */
   function asnRow(i, a, w, sub, w2) {
     var name = String(a.name || '').replace(/,\s*[A-Z]{2}$/, '');
     return '<div class="ag-asn-r"><span class="ag-rank">' + (i + 1) + '</span><div class="ag-asn-m">' +
@@ -1055,7 +1055,18 @@
       var x = settingsSections().filter(function (s) { return s.k === b.getAttribute('data-s'); })[0];
       var dot = b.querySelector('.ag-setnav-dot'); if (x && dot) dot.className = 'ag-setnav-dot' + secState(x);
     });
-    var slot = document.getElementById('ag-savebar-slot'); if (slot) slot.innerHTML = saveBar();
+    // Kaydet çubuğu: her tuşta baştan çizilirse belirme animasyonu her harfte yeniden oynar ("zıplar").
+    // Çubuk zaten görünüyorsa yalnız içi güncellenir; yalnız ilk görünüş/kayboluşta yeniden çizilir.
+    var slot = document.getElementById('ag-savebar-slot');
+    if (slot) {
+      var html = saveBar();
+      if (slot._h !== html) {
+        var cur = slot.querySelector('.ag-savebar'), tmp = document.createElement('div'); tmp.innerHTML = html;
+        var nb = tmp.querySelector('.ag-savebar');
+        if (cur && nb) cur.innerHTML = nb.innerHTML; else slot.innerHTML = html;
+        slot._h = html;
+      }
+    }
     // alan hata/değişti işaretleri: yeniden çizmeden güncelle (yazarken odak kaybolmasın)
     var errs = cfgErrors();
     document.querySelectorAll('#ag-app [data-cfg]').forEach(function (inp) {

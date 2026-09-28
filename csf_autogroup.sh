@@ -123,7 +123,9 @@ AG_BY="${AG_BY:-root}"; [[ "$AG_BY" =~ ^[A-Za-z0-9._-]{1,32}$ ]] || AG_BY="root"
 
 # ── Messages (printf templates; %s placeholders) ────────────────────────────
 if [ "$MSG_LANG" = "tr" ]; then
-  export LANG=tr_TR.UTF-8 LC_ALL=tr_TR.UTF-8
+  # Türkçe tarih/metin; ama sıralama kuralı C: tr_TR'de "i" [a-z] aralığına girmiyor (ı/i ayrı harf),
+  # e-posta, alan adı ve tarih denetimleri "gmail" gibi değerleri reddediyordu (sunucuda doğrulandı).
+  unset LC_ALL; export LANG=tr_TR.UTF-8 LC_COLLATE=C
   M_START="--- Başladı ---";                                       M_END="--- Bitti ---"
   M_END_T="--- Bitti (toplam %s sn) ---"
   M_CFG_ROTFAIL="UYARI: logrotate ayarı yazılamadı (/etc/logrotate.d)"
