@@ -13,7 +13,7 @@
   var UPD_T = 0, UPD_BUSY = false; // son denetim zamanı (sn), denetim sürüyor mu
   var LANG = 'en';
   var CLOCK = 0;                // sunucu saati - istemci saati (sn)
-  var UI = { gf: 'all', gq: '', ef: 'all', open: {}, evLimit: 40, commits: false, st: 'notify', gs: 'added', gd: -1, gp: 0, pp: 0, hist: {}, cd: 30, menu: null, at: 'atk',
+  var UI = { gf: 'all', gq: '', ef: 'all', cf: 'all', open: {}, evLimit: 40, commits: false, st: 'notify', gs: 'added', gd: -1, gp: 0, pp: 0, hist: {}, cd: 30, menu: null, at: 'atk',
              tab: location.hash === '#settings' ? 'settings' : location.hash === '#history' ? 'history' : 'overview', asnAll: false };
   var CFG = null, DRAFT = {}, cfgLoading = false;
   var pollTimer = null, wasRunning = false, busy = false, CONN = null, LAST_OK = 0, HIDDEN_DUE = false;
@@ -62,7 +62,7 @@
       s_pending_h: 'Bir kez geçici banlandı; bu blok tekrar gelirse kalıcı + do not delete olur', s_ignored: 'Yoksayılanlar', s_config: 'Kurallar',
       lookup_ph: '185.220.101.12', lookup_btn: 'Sorgula', lookup_hint: 'Hostname, sahip (ASN), duyurulan aralık, kayıt ve CSF listelerindeki durumu.',
       f_all: 'Tümü', f_perm: 'Kalıcı', f_dnd: 'Do not delete', f_temp: 'Geçici', f_manual: 'Elle', g_search: 'CIDR, AS ya da kurum',
-      e_all: 'Tümü', e_bans: 'Banlar', e_warn: 'Şüpheli ağlar', e_skip: 'Atlananlar', e_manual: 'Elle işlemler', e_clean: 'Temizlik',
+      e_all: 'Tümü', e_bans: 'Banlar', e_warn: 'Şüpheli ağlar', e_skip: 'Atlananlar', e_manual: 'Elle işlemler', e_clean: 'Temizlik', cf_all: 'Tümü', cf_config: 'Ayar değişiklikleri', cf_test_mail: 'Test mailleri', cf_digest: 'Haftalık özetler',
       ev_add24: 'Blok banı', ev_promote: 'Kalıcıya alındı', ev_temp24: 'Geçici blok banı', ev_skip_wl: 'Atlandı', ev_warn16: 'Şüpheli ağ',
       ev_warn16t: 'Şüpheli ağ', ev_clean_temp: 'Temizlendi', ev_manual_ban: 'Elle ban', ev_manual_unban: 'Kaldırıldı',
       ev_manual_forget: 'İzlemeden çıkarıldı', ev_manual_ignore: 'Yoksayıldı', ev_manual_unignore: 'Yoksayma kalktı',
@@ -154,7 +154,7 @@
       s_pending_h: 'Temp-banned once; if this block comes back it becomes permanent + do not delete', s_ignored: 'Ignored', s_config: 'Rules',
       lookup_ph: '185.220.101.12', lookup_btn: 'Look up', lookup_hint: 'Hostname, owner (ASN), announced range, registry and status in the CSF lists.',
       f_all: 'All', f_perm: 'Permanent', f_dnd: 'Do not delete', f_temp: 'Temp', f_manual: 'Manual', g_search: 'CIDR, AS or org',
-      e_all: 'All', e_bans: 'Bans', e_warn: 'Suspicious', e_skip: 'Skipped', e_manual: 'Manual', e_clean: 'Cleanup',
+      e_all: 'All', e_bans: 'Bans', e_warn: 'Suspicious', e_skip: 'Skipped', e_manual: 'Manual', e_clean: 'Cleanup', cf_all: 'All', cf_config: 'Settings changes', cf_test_mail: 'Test emails', cf_digest: 'Weekly summaries',
       ev_add24: 'Block ban', ev_promote: 'Made permanent', ev_temp24: 'Temp block ban', ev_skip_wl: 'Skipped', ev_warn16: 'Suspicious range',
       ev_warn16t: 'Suspicious range', ev_clean_temp: 'Cleaned', ev_manual_ban: 'Manual ban', ev_manual_unban: 'Removed',
       ev_manual_forget: 'Unwatched', ev_manual_ignore: 'Ignored', ev_manual_unignore: 'Unignored',
@@ -745,9 +745,16 @@
   function events(cfg) {
     var all = (S.events || []).slice().reverse().filter(function (e) { return (CFG_TYPES.indexOf(e.type) >= 0) === !!cfg; });
     function match(e, f) { return f === 'all' ? true : f === 'new' ? isNew(e.t) && NEW_TYPES.indexOf(e.type) >= 0 : EV_GROUP[f].indexOf(e.type) >= 0; }
-    var list = cfg ? all : all.filter(function (e) { return match(e, UI.ef); });
+    function cmatch(e, f) { return f === 'all' || e.type === f; }
+    var list = all.filter(function (e) { return cfg ? cmatch(e, UI.cf) : match(e, UI.ef); });
     var shown = list.slice(0, UI.evLimit);
-    var chips = cfg ? '' : '<div class="ag-chips">' + (SEEN0 > 0 ? ['all', 'new'] : ['all']).concat(['bans', 'warn', 'skip', 'manual', 'clean']).map(function (f) {
+    // ayar geçmişinde de Geçmiş sekmesindeki filtreler: ayar değişiklikleri / test mailleri / haftalık özetler
+    var chips = cfg ? '<div class="ag-chips">' + ['all'].concat(CFG_TYPES).map(function (f) {
+      var n = all.filter(function (e) { return cmatch(e, f); }).length;
+      if (!n && f !== 'all' && f !== UI.cf) return '';
+      return '<button class="ag-chip' + (UI.cf === f ? ' on' : '') + '" data-act="cf" data-f="' + f + '">' + t('cf_' + f) + '<span class="ag-chip-n">' + num(n) + '</span></button>';
+    }).join('') + '</div>'
+      : '<div class="ag-chips">' + (SEEN0 > 0 ? ['all', 'new'] : ['all']).concat(['bans', 'warn', 'skip', 'manual', 'clean']).map(function (f) {
       var n = all.filter(function (e) { return match(e, f); }).length;
       if (!n && f !== 'all' && f !== UI.ef) return '';
       return '<button class="ag-chip' + (UI.ef === f ? ' on' : '') + '" data-act="ef" data-f="' + f + '">' + t('e_' + f) + '<span class="ag-chip-n">' + num(n) + '</span></button>';
@@ -1260,6 +1267,7 @@
     updcheck: function () { checkUpdate(true); },
     asnall: function () { UI.asnAll = !UI.asnAll; render(); },
     ef: function (el) { UI.ef = el.getAttribute('data-f'); UI.evLimit = 40; render(); },
+    cf: function (el) { UI.cf = el.getAttribute('data-f'); UI.evLimit = 40; render(); },
     cd: function (el) { UI.cd = +el.getAttribute('data-d'); render(); },
     menu: function (el) { var k = el.getAttribute('data-key'); UI.menu = UI.menu === k ? null : k; render(); },
     gsort: function (el) { var k = el.getAttribute('data-k'); if (UI.gs === k) UI.gd = -UI.gd; else { UI.gs = k; UI.gd = k === 'added' || k === 'n' ? -1 : 1; } UI.gp = 0; render(); },

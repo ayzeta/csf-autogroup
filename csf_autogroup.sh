@@ -266,7 +266,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_TM_FAIL="mail komutu hata verdi: %s"
   M_DG_SUBJ="CSF Auto-Group haftalık özet (%s)"
   M_DG_HEAD="Son 7 gün: %s – %s"
-  M_DG_COUNTS="%s blok banı · %s geçici blok banı · %s kalıcıya alındı · %s şüpheli ağ · %s atlandı (beyaz liste) · %s elle işlem"
+  M_DG_COUNTS="%s blok banı · %s geçici blok banı · %s kalıcıya alındı · %s şüpheli ağ · %s atlandı (beyaz liste) · %s elle işlem · %s ayar değişikliği"
   M_DG_USAGE="Kalıcı liste: %s / %s satır (%%%s) · 7 gün önce: %s"
   M_DG_TUSAGE="Geçici liste: %s / %s satır"
   M_DG_NEW="Yeni blok banları:"
@@ -425,7 +425,7 @@ else
   M_TM_FAIL="the mail command failed: %s"
   M_DG_SUBJ="CSF Auto-Group weekly summary (%s)"
   M_DG_HEAD="Last 7 days: %s – %s"
-  M_DG_COUNTS="%s block bans · %s temp block bans · %s made permanent · %s suspicious ranges · %s skipped (whitelist) · %s manual actions"
+  M_DG_COUNTS="%s block bans · %s temp block bans · %s made permanent · %s suspicious ranges · %s skipped (whitelist) · %s manual actions · %s settings changes"
   M_DG_USAGE="Permanent list: %s / %s lines (%s%%) · 7 days ago: %s"
   M_DG_TUSAGE="Temp list: %s / %s lines"
   M_DG_NEW="New block bans:"
@@ -963,7 +963,7 @@ wl_overlap() {   # LO HI → WL_HIT = çakışan beyaz liste kaydı
     return 1
 }
 wl_check() {     # PREFIX24 "IP IP ..." → 0 = banlama (WL_HIT dolu; WL_RETRY=1 ise doğrulanamadı, sonraki tur)
-    local lo hi ip host d entry name vals v first unk=0
+    local lo hi ip host d re entry name vals v first unk=0
     WL_RETRY=0
     read -r first _ <<< "$2"
     ip2int "$1.0"; lo=$REPLY; hi=$((lo + 255))
@@ -995,7 +995,10 @@ wl_check() {     # PREFIX24 "IP IP ..." → 0 = banlama (WL_HIT dolu; WL_RETRY=1
             [ -z "$host" ] && continue
             for d in "${RIGNORE[@]}"; do
                 d=$(printf '%s' "$d" | LC_ALL=C tr '[:upper:]' '[:lower:]')
-                if [ "$host" = "$d" ] || { [[ "$d" == *.* ]] && [[ "$host" == *"$d" ]]; }; then
+                # lfd ile aynı eşleme (lfd.pl ignoreip): noktalı kayıt SONA bağlı düzenli ifade
+                # (".googlebot.com" da ".*\.googlebot\.com$" da çalışır), noktasız kayıt tam eşitlik
+                re="${d}\$"
+                if [ "$host" = "$d" ] || { [[ "$d" == *.* ]] && [[ "$host" =~ $re ]]; }; then
                     resolve_a "$host" || { unk=1; continue; }
                     if printf '%s\n' "$REPLY" | grep -qxF "$ip"; then
                         WL_HIT="csf.rignore: $d ($ip = $host)"; return 0
@@ -1807,7 +1810,7 @@ digest_build() { # → DG_SUBJ, DG_BODY
             match($0, /"t":[0-9]+/) { t = substr($0, RSTART + 4, RLENGTH - 4) + 0 } t < s { next }
             match($0, /"type":"[a-z0-9_]+"/) { ty = substr($0, RSTART + 8, RLENGTH - 9)
                 if (ty == "warn16t") ty = "warn16"
-                if (ty ~ /^manual_/ || ty == "config") ty = "manual"
+                if (ty ~ /^manual_/) ty = "manual"     # panelden yapılan işlemler; ayar değişikliği (config) ayrı sayılır
                 c[ty]++
                 if (ty == "run" && p0 == "" && match($0, /"perm_used":[0-9]+/)) p0 = substr($0, RSTART + 12, RLENGTH - 12) }
             END { for (k in c) print k "|" c[k]; print "perm0|" p0 }' "$EVENTS_FILE")
@@ -1830,7 +1833,7 @@ digest_build() { # → DG_SUBJ, DG_BODY
             fi
         fi
     fi
-    DG_BODY+="$(m "$M_DG_COUNTS" "${C[add24]:-0}" "${C[temp24]:-0}" "${C[promote]:-0}" "${C[warn16]:-0}" "${C[skip_wl]:-0}" "${C[manual]:-0}")$NL"
+    DG_BODY+="$(m "$M_DG_COUNTS" "${C[add24]:-0}" "${C[temp24]:-0}" "${C[promote]:-0}" "${C[warn16]:-0}" "${C[skip_wl]:-0}" "${C[manual]:-0}" "${C[config]:-0}")$NL"
     DG_BODY+="$(m "$M_DG_USAGE" "$pc" "$limit" "$([ "$limit" -gt 0 ] && echo $(( pc * 100 / limit )) || echo 0)" "$perm0")$NL"
     DG_BODY+="$(m "$M_DG_TUSAGE" "$tc" "$tlimit")$NL$NL"
     # yeni grup banları (7 gün): add24 / promote / manual_ban
