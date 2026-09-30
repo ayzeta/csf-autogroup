@@ -782,7 +782,9 @@
       return '<div class="ag-item"><div class="ag-ev' + (has ? ' clickable" data-act="toggle" aria-expanded="' + !!open + '" data-key="' + esc(key) : '') + '">' +
         '<div class="ag-ev-ic ' + ic[1] + '">' + IC[ic[0]] + '</div>' +
         '<div class="ag-ev-b"><div class="ag-ev-t">' + newDot(NEW_TYPES.indexOf(e.type) >= 0 ? e.t : 0) +
-        (e.cidr ? '<span class="ag-cidr">' + esc(e.cidr) + '</span>' : '') + '<span class="ag-pill ' + (EV_CLASS[e.type] || 'ag-pill-n') + '">' + esc(t('ev_' + e.type)) + '</span></div>' +
+        // adres de IP kartını açsın (diğer tablolar gibi): tek IP kendisi, blok/ağ için ilk kayıtlı IP ya da ağın .1'i
+        (e.cidr ? '<span class="ag-cidr" data-ip="' + esc(e.ips && e.ips[0] && e.ips[0].ip ? e.ips[0].ip
+          : /\//.test(e.cidr) && !/\/32$/.test(e.cidr) ? String(e.cidr).replace(/\/\d+$/, '').replace(/\.0$/, '.1') : String(e.cidr).replace(/\/32$/, '')) + '">' + esc(e.cidr) + '</span>' : '') + '<span class="ag-pill ' + (EV_CLASS[e.type] || 'ag-pill-n') + '">' + esc(t('ev_' + e.type)) + '</span></div>' +
         '<div class="ag-ev-d">' + evDetail(e) + (hnone ? ' · ' + esc(t('h_none_s')) : '') + '</div></div>' +
         (hbtn ? '<div class="ag-ev-x">' + hbtn + '</div>' : '') +
         '<div class="ag-ev-time" title="' + esc(new Date(e.t * 1000).toLocaleString(loc())) + '">' + stamp(e.t) + (has ? '<span class="ag-chev">' + (open ? '−' : '+') + '</span>' : '') + '</div></div>' +
