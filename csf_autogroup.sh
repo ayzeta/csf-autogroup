@@ -296,7 +296,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_H_IMT="Imunify360'ın en çok engellediği sağlayıcılar"; M_H_IMS="Sunucunun kendi kara listesi · %s IP"; M_H_IPS="IP"; M_H_RSN="Sebep"
   M_H_EXPT="İzlemesi bitecek bloklar"; M_H_EXPS="14 gün içinde; tekrar gelirlerse kalıcı olurlar"; M_H_DAYS="%s gün"; M_H_NONE_S="Yok"
   M_H_RUNS="Tur sağlığı"; M_H_RUNSS="son 7 gün"; M_H_RUNSV="%s tur · beklenen ~%s"
-  M_H_TMT="Test maili"; M_H_TMS="Mail ayarların çalışıyor"
+  M_H_TMT="Test maili"; M_H_TMS="Mail ayarların çalışıyor"; M_H_RSUM="%s IP · %s"
 else
   M_START="--- Started ---";                                       M_END="--- Done ---"
   M_END_T="--- Done (%s s total) ---"
@@ -468,7 +468,7 @@ else
   M_H_IMT="Providers Imunify360 blocks most"; M_H_IMS="This server's own blacklist · %s IPs"; M_H_IPS="IPs"; M_H_RSN="Reason"
   M_H_EXPT="Watched blocks expiring"; M_H_EXPS="within 14 days; they become permanent if they return"; M_H_DAYS="%s days"; M_H_NONE_S="None"
   M_H_RUNS="Run health"; M_H_RUNSS="last 7 days"; M_H_RUNSV="%s runs · ~%s expected"
-  M_H_TMT="Test email"; M_H_TMS="Your mail settings work"
+  M_H_TMT="Test email"; M_H_TMS="Your mail settings work"; M_H_RSUM="%s IPs · %s"
 fi
 m() { local f="$1"; shift; printf -- "$f" "$@"; }   # "--" : "--- Bitti …" gibi şablonlar seçenek sanılmasın
 
@@ -2040,6 +2040,21 @@ imunify_top() {  # [N] → IM_TOP satırları "ASN|KURUM|CC|IP sayısı|SEBEP:n,
     IM_TOP="${IM_TOP%$'\n'}"
     return 0
 }
+ev_reason() {    # CIDR → REPLY = "3 IP · (sshd) Failed SSH login" (olay kaydından, yoksa "Ayrıntı"/IP'ler önbelleğinden; yoksa boş)
+    local id
+    REPLY=$( { grep -F "\"cidr\":\"$1\"" "$EVENTS_FILE" 2>/dev/null | grep -F '"ips":[{' | tail -n 1
+               [ -r "$HIST_FILE" ] && grep -F "{\"cidr\":\"$1\"," "$HIST_FILE" | tail -n 1; } | awk -v f="$M_H_RSUM" '
+        NR == 1 { s = $0; n = 0
+                  while (match(s, /"why":"[^"]*"/)) { w = substr(s, RSTART + 7, RLENGTH - 8); C[w]++; n++; s = substr(s, RSTART + RLENGTH) }
+                  if (n) { b = ""; bm = 0; for (w in C) if (C[w] > bm) { bm = C[w]; b = w }; printf f, n, b }
+                  exit }')
+    REPLY="${REPLY/lfd - /}"
+    # eski kayıtlarda ModSecurity sebebi yalnız numaralı: mesajı ekle
+    if [[ "$REPLY" =~ \(mod_security\)\ mod_security\ \(id:([0-9]+)\)\ triggered ]]; then
+        id="${BASH_REMATCH[1]}"; local pre="${REPLY%%(mod_security)*}"
+        modsec_msg "$id"; REPLY="${pre}ModSecurity $id${REPLY:+: $REPLY}"
+    fi
+}
 asn_parts() {    # grup blok tekil → "8 grup · 3 tekil · +2 blok başka kaynaklı" (sıfırlar atlanır)
     local out=""
     [ "$1" -gt 0 ] && out+="$(m "$M_DG_PG" "$1")"
@@ -2108,8 +2123,9 @@ digest_build() { # → DG_SUBJ, DG_BODY
     DG_BODY+="$M_DG_NEW$NL"
     if [ -r "$EVENTS_FILE" ]; then
         while IFS='|' read -r cidr owner hk; do
-            DG_BODY+="   $(printf '%-18s' "$cidr") ${owner:--}$NL"; n=$((n + 1))
-            hv="M_H_K_$hk"; h_esc "${owner:-—}"
+            ev_reason "$cidr"; local rs="$REPLY"
+            DG_BODY+="   $(printf '%-18s' "$cidr") ${owner:--}${rs:+ · $rs}$NL"; n=$((n + 1))
+            hv="M_H_K_$hk"; h_esc "${owner:-—}"; [ -n "$rs" ] && { local ho="$REPLY"; h_esc "$rs"; REPLY="$ho<br><span style=\"font-size:12px;color:#5f6776;\">$REPLY</span>"; }
             hcls="background:#f3f4f6;color:#4b5563;border:1px solid #e6e8ef"
             [ "$hk" = promote ] && hcls="background:#f3edff;color:#7c3aed;border:1px solid #ddd0fb"
             [ "$hk" = manual_ban ] && hcls="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca"
@@ -2163,8 +2179,10 @@ digest_build() { # → DG_SUBJ, DG_BODY
         [[ "$p" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ && "$u" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || continue
         age=$(( (now - $(date -d "$u" +%s)) / 86400 )); left=$(( SAYAC_RETENTION_DAYS - age ))
         [ "$left" -le 14 ] || continue
-        DG_BODY+="$(m "$M_DG_EXPL" "$p.0/24" "$left")$NL"; exp=$((exp + 1))
-        hr+="${hr:+<br>}<span style=\"font-family:$H_MONO;\">$p.0/24</span> <span style=\"color:#5f6776;\">· $(m "$M_H_DAYS" "$left")</span>"
+        ev_reason "$p.0/24"; local xr="$REPLY" xo="${OWN_L[$p]}"
+        DG_BODY+="$(m "$M_DG_EXPL" "$p.0/24" "$left")${xo:+ · $xo}${xr:+ · $xr}$NL"; exp=$((exp + 1))
+        h_esc "${xo}${xo:+${xr:+ · }}${xr}"
+        hr+="${hr:+<br>}<span style=\"font-family:$H_MONO;\">$p.0/24</span> <span style=\"color:#5f6776;\">· $(m "$M_H_DAYS" "$left")</span>${REPLY:+<br><span style=\"font-size:12px;color:#5f6776;\">$REPLY</span>}"
     done < "$SAYAC_FILE"
     [ "$exp" -eq 0 ] && DG_BODY+="$M_DG_NONE$NL"
     # Beklenen tur sayısı, olay kaydının başladığı andan itibaren hesaplanır: kayıt yeni başladıysa

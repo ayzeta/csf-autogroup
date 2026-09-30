@@ -881,7 +881,16 @@
     if (UI.pp >= pages) UI.pp = pages - 1;
     var from = UI.pp * PPAGE, shown = list.slice(from, from + PPAGE);
     var rows = shown.map(function (p) {
-      var cidr = p.prefix + '.0/24', o = ownerOf(cidr), ev = (OWNERS[cidr] || {}).ev;
+      var cidr = p.prefix + '.0/24', o = ownerOf(cidr), ev = (OWNERS[cidr] || {}).ev, key = 'p:' + cidr, open = UI.open[key];
+      // neden izleniyor: geçici blok banının IP'leri ve sebepleri — olay kaydında yoksa izlemenin başladığı gün
+      // (ve önceki gün) LFD günlüğünden getirilir ve saklanır (Aktif blok banları ile aynı mantık)
+      var pday = /^\d{4}-\d{2}-\d{2}$/.test(p.since || '') ? p.since : '';
+      var PH = pday ? (UI.hist[cidr + '|' + pday] || HCACHE[cidr + '|' + pday] || null) : null;
+      if (!(ev && ev.ips && ev.ips.length) && PH && PH.ips && PH.ips.length) ev = { ips: PH.ips, total: PH.total };
+      var pitems = [];
+      if (ev && ev.ips && ev.ips.length) pitems.push({ act: 'toggle', label: open ? t('hide') : t('ips'), icon: 'list', attrs: 'data-key="' + esc(key) + '"' });
+      else if (pday && !(PH && PH.ips)) pitems.push({ act: 'hist', label: PH === 'loading' ? t('h_loading') : t('ips'), icon: 'list',
+        attrs: 'data-c="' + esc(cidr) + '" data-d="' + pday + '" data-key="' + esc(key) + '"' });
       var left = Math.max(0, p.days_left), ret = S.config.retention || 180, pct = Math.max(0, Math.min(100, left * 100 / ret));
       var urg = left < 7 ? ' bad' : left < 30 ? ' warn' : '';
       var first = ev && ev.ips && ev.ips[0] ? ev.ips[0].ip : p.prefix + '.1';
@@ -891,9 +900,10 @@
         '<div class="ag-td ag-td-own" title="' + esc(o.label || '') + '">' + (o.asn ? flag(o.cc) + '<span class="ag-asn">AS' + esc(o.asn) + '</span><span class="ag-org">' + esc(o.name || '') + '</span>' : '<span class="ag-muted">—</span>') + '</div>' +
         '<div class="ag-td ag-when ag-td-since">' + esc(p.since) + '</div>' +
         '<div class="ag-td ag-td-left"><div class="ag-left' + urg + '"><div class="ag-days"><i style="width:' + pct + '%"></i></div><span>' + t('days_left', num(left)) + '</span></div></div>' +
-        '<div class="ag-td ag-td-act">' + menu('pm:' + p.prefix, [{ act: 'promote', label: t('promote'), icon: 'ban', attrs: 'data-t="' + esc(p.prefix) + '"' },
+        '<div class="ag-td ag-td-act">' + menu('pm:' + p.prefix, pitems.concat([{ act: 'promote', label: t('promote'), icon: 'ban', attrs: 'data-t="' + esc(p.prefix) + '"' },
                                 { act: 'forget', label: t('forget'), icon: 'x', attrs: 'data-t="' + esc(p.prefix) + '"' },
-                                { act: 'ipcard', label: t('ipcard'), icon: 'search', attrs: 'data-ip="' + esc(first) + '"' }]) + '</div></div></div>';
+                                { act: 'ipcard', label: t('ipcard'), icon: 'search', attrs: 'data-ip="' + esc(first) + '"' }])) + '</div></div>' +
+        (open && ev ? ipTable(ev.ips, ev.total) : '') + '</div>';
     }).join('');
     var pager = pages > 1 ? '<div class="ag-pager"><span>' + t('of_n', from + 1, from + shown.length, list.length) + '</span>' +
       '<button class="ag-iconbtn" data-act="ppage" data-d="-1"' + (UI.pp ? '' : ' disabled') + ' aria-label="' + t('pg_prev') + '">‹</button>' +
