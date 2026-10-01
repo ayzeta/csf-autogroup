@@ -27,7 +27,7 @@ is escalated to a **permanent** ban. `/16` ranges are only flagged for review
 - **English / Türkçe** — the plugin, logs and emails.
 - **Works on phones** — the page adapts to small screens.
 
-**Version 1.9.0** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
+**Version 1.9.1** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
 cPanel the same engine runs from cron and the command line
 ([details](#without-cpanel)).
 
@@ -144,8 +144,7 @@ whitelist, removing a `do not delete` block) make you type the target.
 | Remove | lift a block ban (`do not delete` blocks too; `csf.deny` is backed up first) |
 | Remove old ones | on the *Old* filter: remove every block ban older than the old-block limit |
 | Ignore | hide an item from review for 7/30/90 days (stops `/16` warning emails too) |
-| IPs | a block's IPs and ban reasons (older bans: fetched once from the LFD log) |
-| Details | for warnings older than the event log: that day's IPs and reasons from the LFD log |
+| IPs | a block's IPs and ban reasons; for bans and warnings older than the event log they are fetched once from the LFD log |
 | Dry run | show what a run would do; changes nothing, sends nothing |
 | Run now | run immediately instead of waiting for cron |
 

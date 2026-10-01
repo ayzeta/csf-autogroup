@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.9.1 — 2026-10-02
+
+- Same elements behave the same everywhere:
+  - every state badge explains itself on hover (Active block bans, To review,
+    History), including what "do not delete" and "repeating" mean;
+  - the button that fetches older IPs from the LFD log is called **IPs**
+    everywhere (it was "Details" in To review and History);
+  - addresses in Ignored open the IP card like everywhere else;
+  - relative times ("5 d ago") show the full date on hover.
+
 ## 1.9.0 — 2026-10-02
 
 ### Notifications

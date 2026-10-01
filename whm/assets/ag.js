@@ -66,7 +66,7 @@
       ev_add24: 'Blok banı', ev_promote: 'Kalıcıya alındı', ev_temp24: 'Geçici blok banı', ev_skip_wl: 'Atlandı', ev_warn16: 'Şüpheli ağ',
       ev_warn16t: 'Şüpheli ağ', ev_clean_temp: 'Geçici ban silindi', clean_d: 'zaten kalıcı listede (tekil ya da blok banı içinde)', ev_manual_ban: 'Elle ban', ev_manual_unban: 'Kaldırıldı',
       ev_manual_forget: 'İzlemeden çıkarıldı', ev_manual_ignore: 'Yoksayıldı', ev_manual_unignore: 'Yoksayma kalktı',
-      kind_perm: 'kalıcı', kind_promoted: 'tekrar gelen', kind_temp: 'geçici', kind_manual: 'elle',
+      kind_perm: 'kalıcı', kind_promoted: 'tekrar gelen', kind_temp: 'geçici', kind_manual: 'elle', kind_perm_h: 'Kalıcı blok banı: blokta yeterince kalıcı tekil ban (tek IP) birikince eklendi.', kind_promoted_h: 'Tekrar gelen: önce 12 saatlik geçici blok banı aldı, izleme süresi içinde tekrar saldırınca kalıcı yapıldı.', kind_temp_h: 'Geçici blok banı: süresi dolunca kalkar; izleme süresi içinde tekrar gelirse kalıcı olur.', kind_manual_h: 'Elle: panelden eklendi.', kind_dnd_h: 'do not delete: CSF, liste dolsa bile bu banı silmez.', evh_add24: 'Blok banı: blokta (/24) yeterince kalıcı tekil ban birikince blok kalıcı banlandı, tekiller silindi.', evh_promote: 'Kalıcıya alındı: daha önce geçici blok banı almış blok, izleme süresi içinde tekrar geldiği için kalıcı yapıldı.', evh_temp24: 'Geçici blok banı: blokta yeterince geçici tekil ban birikince 12 saatliğine banlandı ve izlemeye alındı.', evh_skip_wl: 'Atlandı: ban eşiğine ulaştı ama bir beyaz liste kaydıyla çakıştığı için banlanmadı.', evh_warn16: 'Şüpheli ağ: ağda (/16) birçok bloktan kalıcı tekil ban birikti. Ağ banlanmaz; bakmanız önerilir.', evh_warn16t: 'Şüpheli ağ: ağda (/16) birçok bloktan geçici tekil ban birikti. Ağ banlanmaz; bakmanız önerilir.', evh_clean_temp: 'Geçici ban silindi: IP zaten kalıcı listede olduğu için geçici banı gereksizdi.', evh_expire: 'Eski blok kaldırıldı: eski blok banı sınırını geçtiği için kaldırıldı.', evh_manual: 'Elle işlem: panelden biri tarafından yapıldı.', rep_h: 'Bu ağ son günlerde {0} ayrı gün şüpheli olarak işaretlendi.',
       ips: 'IP\'ler', hide: 'Gizle', ban16: 'Ağı banla (/16)', ban_anyway: 'Yine de banla', ignore: 'Yoksay', unban: 'Kaldır',
       promote: 'Kalıcı yap', forget: 'İzlemeden çıkar', unignore: 'Kaldır', show_all: 'Tümünü göster ({0})', more: 'Daha fazla',
       n_ip: '{0} IP', n_subnets: '{0} farklı blok', from_temp: 'geçici banlardan', from_perm: 'kalıcı banlardan', days_left: '{0} gün kaldı',
@@ -124,7 +124,7 @@
       since_visit: 'Son ziyaretinden beri ({0}):', sn_add: '{0} blok banı', sn_temp: '{0} geçici blok banı', sn_warn: '{0} şüpheli ağ',
       sn_skip: '{0} atlanan blok', show_new: 'Göster', e_new: 'Son ziyaretten beri', ch_total: '{0} olay', ch_title_n: 'Son {0} gün', ch_d: '{0} gün', sb_ok: 'Koruma çalışıyor', sb_run: 'Tur çalışıyor', sb_late: 'Turlar zamanında çalışmıyor', sb_every: 'Cron her {0}', sb_24: 'son 24 saatte {0}/{1} tur', sb_none: 'henüz tur yok', sb_last: 'Son tur', sb_dur: 'Tur süresi', sb_avg: 'ort. {0}', sb_next: 'Sıradaki', sb_now: 'şimdi', sb_spark: 'Son {0} turun süresi', pg_prev: 'Önceki sayfa', pg_next: 'Sonraki sayfa', dirty_leave: '{0} değişiklik kaydedilmedi. Yine de sekme değiştirilsin mi?', conn_net: 'Sunucuya ulaşılamıyor; gösterilenler {0} alındı. Yeniden deneniyor…', conn_session: 'Oturumun süresi doldu.', upd_busy: 'Bir güncelleme zaten çalışıyor.', sec: '{0} sn', lk_recent: 'Son bakılanlar',
       ch_add: 'Blok banı', ch_promote: 'Kalıcıya alındı', ch_temp: 'Geçici blok banı', ch_warn: 'Şüpheli ağ', ch_skip: 'Atlandı',
-      ch_empty: 'Son 30 günde kayıt yok; grafik olay kaydı biriktikçe dolacak.', ipcard: 'IP kartı', col_block: 'Blok', col_owner: 'Sahip', col_since: 'Başlangıç', col_left: 'Kalan', col_state: 'Durum', left_short: '{0} kaldı', r_hist: 'Eklenti kayıt tutmaya başlamadan önceki iş · "Ayrıntı" IP\'leri LFD günlüğünden getirir', h_btn: 'Ayrıntı', h_loading: 'Getiriliyor…', h_none: 'LFD günlüğünde bu bloğa ait kayıt kalmamış', h_src: 'LFD günlüğünden',
+      ch_empty: 'Son 30 günde kayıt yok; grafik olay kaydı biriktikçe dolacak.', ipcard: 'IP kartı', col_block: 'Blok', col_owner: 'Sahip', col_since: 'Başlangıç', col_left: 'Kalan', col_state: 'Durum', left_short: '{0} kaldı', r_hist: 'Eklenti kayıt tutmaya başlamadan önceki iş · "IP\'ler" düğmesi IP\'leri ve sebepleri LFD günlüğünden getirir', h_btn: 'IP\'ler', h_loading: 'Getiriliyor…', h_none: 'LFD günlüğünde bu bloğa ait kayıt kalmamış', h_src: 'LFD günlüğünden',
       col_singles: 'Tekil', col_added: 'Eklendi', of_n: '{0}–{1} / {2}', s_asn: 'En çok engellenen sağlayıcılar',
       s_asn_h: 'Blok banı ve tekil bana göre sıralı; csf.deny\'de CSF Auto-Group\'un eklemediği bloklar ayrıca belirtilir · {0} bloğun sahibi biliniyor', p_g: '{0} blok', p_b: '+{0} blok CSF Auto-Group dışından', p_t: '{0} tekil', p_bn: '{0} blok',
       at_atk: 'CSF', at_blk: 'Diğer bloklar', blk_h: 'csf.deny\'de CSF Auto-Group\'un eklemediği aralıklar (elle, LFD ya da başka bir araçla eklenmiş olabilir); zaten engelliler. csfpost.sh gibi doğrudan güvenlik duvarına yazılan kurallar burada görünmez.',
@@ -158,7 +158,7 @@
       ev_add24: 'Block ban', ev_promote: 'Made permanent', ev_temp24: 'Temp block ban', ev_skip_wl: 'Skipped', ev_warn16: 'Suspicious range',
       ev_warn16t: 'Suspicious range', ev_clean_temp: 'Temp ban removed', clean_d: 'already in the permanent list (single or inside a block ban)', ev_manual_ban: 'Manual ban', ev_manual_unban: 'Removed',
       ev_manual_forget: 'Unwatched', ev_manual_ignore: 'Ignored', ev_manual_unignore: 'Unignored',
-      kind_perm: 'permanent', kind_promoted: 'repeat offender', kind_temp: 'temp', kind_manual: 'manual',
+      kind_perm: 'permanent', kind_promoted: 'repeat offender', kind_temp: 'temp', kind_manual: 'manual', kind_perm_h: 'Permanent block ban: added once enough permanent single (one-IP) bans piled up in the block.', kind_promoted_h: 'Repeat offender: got a 12-hour temp block ban first, then attacked again within the watch period and was made permanent.', kind_temp_h: 'Temp block ban: lifted when it expires; becomes permanent if the block comes back within the watch period.', kind_manual_h: 'Manual: added from the plugin.', kind_dnd_h: 'do not delete: CSF keeps this ban even when the list is full.', evh_add24: 'Block ban: enough permanent single bans piled up in the block (/24), so it was banned permanently and the singles removed.', evh_promote: 'Made permanent: a block that had a temp block ban came back within the watch period, so it was made permanent.', evh_temp24: 'Temp block ban: enough temp single bans piled up in the block, so it was banned for 12 hours and is now watched.', evh_skip_wl: 'Skipped: reached the ban threshold but overlaps a whitelist entry, so it was not banned.', evh_warn16: 'Suspicious range: permanent single bans piled up across several blocks of the range (/16). Ranges are never banned; worth a look.', evh_warn16t: 'Suspicious range: temp single bans piled up across several blocks of the range (/16). Ranges are never banned; worth a look.', evh_clean_temp: 'Temp ban removed: the IP was already in the permanent list, so its temp ban was redundant.', evh_expire: 'Old block removed: it was older than the old block ban limit.', evh_manual: 'Manual action: done by someone from the plugin.', rep_h: 'This range was flagged as suspicious on {0} separate days recently.',
       ips: 'IPs', hide: 'Hide', ban16: 'Ban range (/16)', ban_anyway: 'Ban anyway', ignore: 'Ignore', unban: 'Remove',
       promote: 'Make permanent', forget: 'Stop watching', unignore: 'Remove', show_all: 'Show all ({0})', more: 'Show more',
       n_ip: '{0} IPs', n_subnets: '{0} distinct blocks', from_temp: 'from temp bans', from_perm: 'from permanent bans', days_left: '{0} days left',
@@ -216,7 +216,7 @@
       since_visit: 'Since your last visit ({0}):', sn_add: '{0} block bans', sn_temp: '{0} temp block bans', sn_warn: '{0} suspicious ranges',
       sn_skip: '{0} skipped blocks', show_new: 'Show', e_new: 'Since last visit', ch_total: '{0} events', ch_title_n: 'Last {0} days', ch_d: '{0} days', sb_ok: 'Protection is running', sb_run: 'A run is in progress', sb_late: 'Runs are not on schedule', sb_every: 'Cron every {0}', sb_24: '{0}/{1} runs in the last 24 h', sb_none: 'no runs yet', sb_last: 'Last run', sb_dur: 'Run time', sb_avg: 'avg {0}', sb_next: 'Next', sb_now: 'now', sb_spark: 'Last {0} run times', pg_prev: 'Previous page', pg_next: 'Next page', dirty_leave: '{0} unsaved changes. Switch tabs anyway?', conn_net: 'Can\'t reach the server; what you see was fetched {0}. Retrying…', conn_session: 'Your session has expired.', upd_busy: 'An update is already running.', sec: '{0} s', lk_recent: 'Recently viewed',
       ch_add: 'Block ban', ch_promote: 'Made permanent', ch_temp: 'Temp block ban', ch_warn: 'Suspicious range', ch_skip: 'Skipped',
-      ch_empty: 'Nothing in the last 30 days; the chart fills as the event log grows.', ipcard: 'IP card', col_block: 'Block', col_owner: 'Owner', col_since: 'Since', col_left: 'Left', col_state: 'State', left_short: '{0} left', r_hist: 'From before the plugin kept records · "Details" fetches the IPs from the LFD log', h_btn: 'Details', h_loading: 'Loading…', h_none: 'no records for this block are left in the LFD log', h_src: 'from the LFD log',
+      ch_empty: 'Nothing in the last 30 days; the chart fills as the event log grows.', ipcard: 'IP card', col_block: 'Block', col_owner: 'Owner', col_since: 'Since', col_left: 'Left', col_state: 'State', left_short: '{0} left', r_hist: 'From before the plugin kept records · "IPs" fetches the IPs and reasons from the LFD log', h_btn: 'IPs', h_loading: 'Loading…', h_none: 'no records for this block are left in the LFD log', h_src: 'from the LFD log',
       col_singles: 'Singles', col_added: 'Added', of_n: '{0}–{1} of {2}', s_asn: 'Most blocked providers',
       s_asn_h: 'Ranked by block bans and single bans; ranges in csf.deny not added by CSF Auto-Group are noted separately · owner known for {0} blocks', p_g: '{0} blocks', p_b: '+{0} blocks not from CSF Auto-Group', p_t: '{0} singles', p_bn: '{0} blocks',
       at_atk: 'CSF', at_blk: 'Other blocks', blk_h: 'Ranges in csf.deny that CSF Auto-Group did not add (by hand, LFD or another tool); already blocked. Rules written straight to the firewall, e.g. by csfpost.sh, are not shown here.',
@@ -253,6 +253,7 @@
     if (d < 86400) return t('h_ago', Math.floor(d / 3600));
     return t('d_ago', Math.floor(d / 86400));
   }
+  function relT(ts) { return '<span title="' + esc(new Date(ts * 1000).toLocaleString(loc())) + '">' + rel(ts) + '</span>'; }
   function stamp(ts) {
     var d = new Date(ts * 1000);
     function p(n) { return (n < 10 ? '0' : '') + n; }
@@ -588,8 +589,8 @@
     function repOf(e) { return (e.rep || 0) >= RM ? 1 : 0; }
     var items = S.review.slice().sort(function (a, b) { return (repOf(b) - repOf(a)) || (b.t - a.t); }).map(function (e) {
       var key = 'r:' + e.cidr, open = UI.open[key], is16 = /\/16$/.test(e.cidr), hasIps = e.ips && e.ips.length;
-      var pill = e.type === 'skip_wl' ? '<span class="ag-pill ag-pill-info">' + t('ev_skip_wl') + '</span>'
-        : '<span class="ag-pill ag-pill-warn">' + esc(t('ev_' + e.type)) + '</span>';
+      var pill = e.type === 'skip_wl' ? '<span class="ag-pill ag-pill-info"' + evTitle(e.type) + '>' + t('ev_skip_wl') + '</span>'
+        : '<span class="ag-pill ag-pill-warn"' + evTitle(e.type) + '>' + esc(t('ev_' + e.type)) + '</span>';
       var H = e.hist ? (UI.hist[e.cidr + '|' + e.day] || e.cached || null) : null, hd = H && H.ips ? H : null;   // e.cached: sunucuda saklanan sonuç
       var meta = e.hist ? (hd ? (hd.total ? (is16 ? [t('n_ip', num(hd.total)), t('n_subnets', num(hd.subnets))] : [t('n_ip', num(hd.total))]).concat([t('h_src')]) : [t('h_none')]) : [])
         : is16 ? [t('n_ip', num(e.n)), t('n_subnets', num(e.subnets))] : [t('n_ip', num(e.n))];
@@ -608,9 +609,9 @@
                                     { act: 'ipcard', label: t('ipcard'), icon: 'search', attrs: 'data-ip="' + esc(first) + '"' }]);
       return '<div class="ag-item" data-row="' + esc(e.cidr) + '"><div class="ag-row">' + pill +
         '<div class="ag-row-main"><div class="ag-row-t">' + newDot(e.hist ? 0 : e.t) + '<span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(e.cidr) + '</span>' +
-        (repOf(e) ? '<span class="ag-pill ag-pill-bad ag-rep">' + esc(t('rep_n', num(e.rep))) + '</span>' : '') + '</div>' +
+        (repOf(e) ? '<span class="ag-pill ag-pill-bad ag-rep" title="' + esc(t('rep_h', num(e.rep))) + '">' + esc(t('rep_n', num(e.rep))) + '</span>' : '') + '</div>' +
         '<div class="ag-row-s">' + meta.join(' · ') + '</div></div>' +
-        '<div class="ag-row-x">' + (e.hist ? esc(e.day.slice(8, 10) + '.' + e.day.slice(5, 7)) : rel(e.t)) + '</div><div class="ag-row-a">' + acts + '</div></div>' +
+        '<div class="ag-row-x">' + (e.hist ? esc(e.day.slice(8, 10) + '.' + e.day.slice(5, 7)) : relT(e.t)) + '</div><div class="ag-row-a">' + acts + '</div></div>' +
         (open ? ipTable(e.ips, e.total) : '') + '</div>';
     }).join('');
     return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.alert + t('s_review') + '</h2>' +
@@ -670,7 +671,7 @@
       var o = ownerOf(g.cidr), ev = (OWNERS[g.cidr] || {}).ev, key = 'g:' + g.cidr, open = UI.open[key];
       var kindCls = { perm: 'ag-pill-n', promoted: 'ag-pill-acc', temp: 'ag-pill-warn', manual: 'ag-pill-bad' }[g.kind] || 'ag-pill-n';
       var first = ev && ev.ips && ev.ips[0] ? ev.ips[0].ip : g.cidr.replace(/\/\d+$/, '').replace(/\.0$/, '.1');
-      var when = g.added ? rel(g.added) : '—';
+      var when = g.added ? relT(g.added) : '—';
       var items = [];
       // olay kaydında IP yoksa (eski ban): IP'ler ve sebepler LFD günlüğünden, eklendiği güne kadar 30 gün geriye bakılarak
       var gday = g.added ? (function (d) { function p(n) { return (n < 10 ? '0' : '') + n; } return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); })(new Date(g.added * 1000)) : '';
@@ -683,7 +684,7 @@
       items.push({ act: 'unban', label: t('unban'), icon: 'x', danger: true, attrs: 'data-c="' + esc(g.cidr) + '" data-dnd="' + (g.dnd ? 1 : 0) + '" data-kind="' + esc(g.kind) + '"' });
       return '<div class="ag-item" data-row="' + esc(g.cidr) + '"><div class="ag-tr">' +
         '<div class="ag-td ag-td-main">' + newDot(g.added) + '<span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(g.cidr) + '</span></div>' +
-        '<div class="ag-td ag-td-state"><span class="ag-pill ' + kindCls + '"' + (g.dnd ? ' title="do not delete"' : '') + '>' + (g.dnd ? IC.lock : '') + esc(t('kind_' + g.kind)) + (g.kind === 'temp' && g.ttl > 0 ? ' · ' + esc(t('left_short', dur(g.ttl))) : '') + '</span></div>' +
+        '<div class="ag-td ag-td-state"><span class="ag-pill ' + kindCls + '"' + ' title="' + esc(t('kind_' + g.kind + '_h') + (g.dnd ? ' ' + t('kind_dnd_h') : '')) + '"' + '>' + (g.dnd ? IC.lock : '') + esc(t('kind_' + g.kind)) + (g.kind === 'temp' && g.ttl > 0 ? ' · ' + esc(t('left_short', dur(g.ttl))) : '') + '</span></div>' +
         '<div class="ag-td ag-td-own" title="' + esc(o.label || '') + '">' + (o.asn ? flag(o.cc) + '<span class="ag-asn">AS' + esc(o.asn) + '</span><span class="ag-org">' + esc(o.name || '') + '</span>' : '<span class="ag-muted">—</span>') + '</div>' +
         '<div class="ag-td ag-num-c">' + (g.n ? num(g.n) + '<span class="ag-mob"> ' + esc(t('singles_s')) + '</span>' : '—') + '</div>' +
         '<div class="ag-td ag-when">' + when + '</div>' +
@@ -728,6 +729,11 @@
     bans: ['add24', 'promote', 'temp24', 'manual_ban'], warn: ['warn16', 'warn16t'], skip: ['skip_wl'],
     manual: ['manual_ban', 'manual_unban', 'manual_forget', 'manual_ignore', 'manual_unignore'], clean: ['clean_temp', 'expire']
   };
+  // olay rozeti açıklaması (üzerine gelince); elle işlemler tek açıklamayı paylaşır
+  function evTitle(type) {
+    var k = 'evh_' + (/^manual_/.test(type) ? 'manual' : type), v = t(k);
+    return v === k ? '' : ' title="' + esc(v) + '"';
+  }
   function evDetail(e) {
     var d = [];
     if (e.type === 'add24' || e.type === 'promote' || e.type === 'temp24') {
@@ -785,7 +791,7 @@
         '<div class="ag-ev-b"><div class="ag-ev-t">' + newDot(NEW_TYPES.indexOf(e.type) >= 0 ? e.t : 0) +
         // adres de IP kartını açsın (diğer tablolar gibi): tek IP kendisi, blok/ağ için ilk kayıtlı IP ya da ağın .1'i
         (e.cidr ? '<span class="ag-cidr" data-ip="' + esc(e.ips && e.ips[0] && e.ips[0].ip ? e.ips[0].ip
-          : /\//.test(e.cidr) && !/\/32$/.test(e.cidr) ? String(e.cidr).replace(/\/\d+$/, '').replace(/\.0$/, '.1') : String(e.cidr).replace(/\/32$/, '')) + '">' + esc(e.cidr) + '</span>' : '') + '<span class="ag-pill ' + (EV_CLASS[e.type] || 'ag-pill-n') + '">' + esc(t('ev_' + e.type)) + '</span></div>' +
+          : /\//.test(e.cidr) && !/\/32$/.test(e.cidr) ? String(e.cidr).replace(/\/\d+$/, '').replace(/\.0$/, '.1') : String(e.cidr).replace(/\/32$/, '')) + '">' + esc(e.cidr) + '</span>' : '') + '<span class="ag-pill ' + (EV_CLASS[e.type] || 'ag-pill-n') + '"' + evTitle(e.type) + '>' + esc(t('ev_' + e.type)) + '</span></div>' +
         '<div class="ag-ev-d">' + evDetail(e) + (hnone ? ' · ' + esc(t('h_none_s')) : '') + '</div></div>' +
         (hbtn ? '<div class="ag-ev-x">' + hbtn + '</div>' : '') +
         '<div class="ag-ev-time" title="' + esc(new Date(e.t * 1000).toLocaleString(loc())) + '">' + stamp(e.t) + (has ? '<span class="ag-chev">' + (open ? '−' : '+') + '</span>' : '') + '</div></div>' +
@@ -922,7 +928,7 @@
   function ignored() {
     if (!S.ignored.length) return '';
     var rows = S.ignored.map(function (g) {
-      return '<div class="ag-row"><div class="ag-row-main"><div class="ag-row-t"><span class="ag-mono" style="font-weight:600">' + esc(g.cidr) + '</span></div>' +
+      return '<div class="ag-row"><div class="ag-row-main"><div class="ag-row-t"><span class="ag-cidr" data-ip="' + esc(String(g.cidr).replace(/\/\d+$/, '').replace(/\.0$/, '.1')) + '">' + esc(g.cidr) + '</span></div>' +
         '<div class="ag-row-s">' + t('until', esc(g.until)) + ' · ' + t('by', esc(g.by)) + '</div></div>' +
         '<div class="ag-row-a"><button class="ag-btn ag-btn-sm ag-btn-ghost" data-act="unignore" data-c="' + esc(g.cidr) + '">' + t('unignore') + '</button></div></div>';
     }).join('');
