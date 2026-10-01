@@ -41,7 +41,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.9.2"   # sürüm — başlangıç log satırında görünür
+VERSION="1.9.3"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1790,6 +1790,16 @@ do_status() {
         done < <( { cat "$EVENTS_FILE" "$HIST_FILE" "$CSF_VAR/csf.tempban" 2>/dev/null; grep -F 'mod_security' "$DENY_FILE" 2>/dev/null; } |
                   grep -oE 'mod_security \(id:[0-9]+\)' | grep -oE '[0-9]+' | sort -u | head -n 100)
         printf '"modsec":{%s},' "${msj[*]}"
+        # Aktif ve izlenen blokların banı koyduran son kayıt (IP'ler + sebepler): son 300 olaya girmeyen eski
+        # bloklarda da panel IP'leri ve sebebi LFD günlüğüne gitmeden gösterebilsin. Yalnız bu bloklar → çıktı şişmez.
+        local evx=() want
+        want=$( { printf '%s\n' "${g_tok[@]}" "${!TG_TTL[@]}"; printf '%s\n' "${pending[@]}" | sed -n 's/.*"prefix":"\([0-9.]*\)".*/\1.0\/24/p'; } | sort -u | paste -sd' ' -)
+        [ -r "$EVENTS_FILE" ] && [ -n "$want" ] && mapfile -t evx < <(awk -v want="$want" '
+            BEGIN { n = split(want, w, " "); for (i = 1; i <= n; i++) W[w[i]] = 1 }
+            /"ips":\[\{/ && /"type":"(add24|promote|temp24|manual_ban)"/ && match($0, /"cidr":"[0-9.\/]+"/) {
+                c = substr($0, RSTART + 8, RLENGTH - 9); if (c in W) L[c] = $0 }
+            END { for (c in L) print L[c] }' "$EVENTS_FILE" | grep -E '^\{"t":[0-9]+,.*\}$')
+        printf '"evx":[%s],' "${evx[*]}"
         printf '"groups":[%s],"pending":[%s],"review":[%s],"ignored":[%s],"hist_cache":[%s],"events":[%s]}\n' \
             "${groups[*]}" "${pending[*]}" "${review[*]}" "${ignored[*]}" "${hcache[*]}" "${recent[*]}"
         return 0

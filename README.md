@@ -27,7 +27,7 @@ is escalated to a **permanent** ban. `/16` ranges are only flagged for review
 - **English / Türkçe** — the plugin, logs and emails.
 - **Works on phones** — the page adapts to small screens.
 
-**Version 1.9.2** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
+**Version 1.9.3** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
 cPanel the same engine runs from cron and the command line
 ([details](#without-cpanel)).
 
@@ -112,18 +112,19 @@ settings, with no prompts. `config.env` is left untouched.
   *Old* filter lists block bans older than the old-block limit (default 365
   days), with a button to remove them all.
 - **Watched** — `/24`s that were temp-banned once. If one comes back, it becomes
-  permanent + `do not delete`. Sorted by days left. Each row says why it is
-  watched (the temp block ban's IP count and main ban reason); **⋯ → IPs**
-  lists the IPs.
+  permanent + `do not delete`. Sorted by days left; **⋯ → IPs** shows the IPs
+  and reasons behind the temp block ban.
 - **History** (its own tab) — every ban, promotion, skip, warning and manual
   action. Work from before the event log existed is filled in from the log.
   Click an address to open its IP card.
   Settings changes are listed under Settings → Settings history.
 - **Look up an IP** — hostname (forward-confirmed), owner, announced prefix,
-  registry, whether CSF blocks it and which list whitelists it, with links to
+  registry, whether CSF blocks it (for an IP inside a block ban: the block's
+  state, date and main ban reason) and which list whitelists it, with links to
   bgp.he.net and AbuseIPDB. Recently viewed IPs stay one click away.
 - **Most blocked providers** (by ASN) — three tabs:
-  - *CSF* — ranked by block bans and single bans. A provider with 5+ block
+  - *CSF* — ranked by block bans and single bans, with each provider's most
+    common ban reason. A provider with 5+ block
     bans gets a suggestion explaining how to block the whole ASN with CSF's own
     `CC_DENY`. The plugin never edits `csf.conf`.
   - *Other blocks* — ranges in `csf.deny` added outside CSF Auto-Group.

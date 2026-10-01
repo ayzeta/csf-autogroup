@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.9.3 — 2026-10-02
+
+- The reason line under each Watched block is removed again (it made the table
+  busy). **Why a block is banned or watched** is shown where you look it up:
+  **⋯ → IPs** lists the IPs and reasons, and the IP card shows the covering
+  block's state, date and main ban reason (and the IP's own reason).
+- The ban records of older active and watched blocks are now read too (the
+  page used to read only the latest 300 entries of the event log), so their
+  IPs show up without going back to the LFD log.
+- **Most blocked providers → CSF** shows each provider's most common ban reason,
+  like the Imunify tab does.
+
 ## 1.9.2 — 2026-10-02
 
 - **Update check:** Settings → Server asks GitHub right away when its result is

@@ -66,7 +66,7 @@
       ev_add24: 'Blok banı', ev_promote: 'Kalıcıya alındı', ev_temp24: 'Geçici blok banı', ev_skip_wl: 'Atlandı', ev_warn16: 'Şüpheli ağ',
       ev_warn16t: 'Şüpheli ağ', ev_clean_temp: 'Geçici ban silindi', clean_d: 'zaten kalıcı listede (tekil ya da blok banı içinde)', ev_manual_ban: 'Elle ban', ev_manual_unban: 'Kaldırıldı',
       ev_manual_forget: 'İzlemeden çıkarıldı', ev_manual_ignore: 'Yoksayıldı', ev_manual_unignore: 'Yoksayma kalktı',
-      kind_perm: 'kalıcı', kind_promoted: 'tekrar gelen', kind_temp: 'geçici', kind_manual: 'elle', kind_perm_h: 'Kalıcı blok banı: blokta yeterince kalıcı tekil ban (tek IP) birikince eklendi.', kind_promoted_h: 'Tekrar gelen: önce 12 saatlik geçici blok banı aldı, izleme süresi içinde tekrar saldırınca kalıcı yapıldı.', kind_temp_h: 'Geçici blok banı: süresi dolunca kalkar; izleme süresi içinde tekrar gelirse kalıcı olur.', kind_manual_h: 'Elle: panelden eklendi.', kind_dnd_h: 'do not delete: CSF, liste dolsa bile bu banı silmez.', evh_add24: 'Blok banı: blokta (/24) yeterince kalıcı tekil ban birikince blok kalıcı banlandı, tekiller silindi.', evh_promote: 'Kalıcıya alındı: daha önce geçici blok banı almış blok, izleme süresi içinde tekrar geldiği için kalıcı yapıldı.', evh_temp24: 'Geçici blok banı: blokta yeterince geçici tekil ban birikince 12 saatliğine banlandı ve izlemeye alındı.', evh_skip_wl: 'Atlandı: ban eşiğine ulaştı ama bir beyaz liste kaydıyla çakıştığı için banlanmadı.', evh_warn16: 'Şüpheli ağ: ağda (/16) birçok bloktan kalıcı tekil ban birikti. Ağ banlanmaz; bakmanız önerilir.', evh_warn16t: 'Şüpheli ağ: ağda (/16) birçok bloktan geçici tekil ban birikti. Ağ banlanmaz; bakmanız önerilir.', evh_clean_temp: 'Geçici ban silindi: IP zaten kalıcı listede olduğu için geçici banı gereksizdi.', evh_expire: 'Eski blok kaldırıldı: eski blok banı sınırını geçtiği için kaldırıldı.', evh_manual: 'Elle işlem: panelden biri tarafından yapıldı.', rep_h: 'Bu ağ son günlerde {0} ayrı gün şüpheli olarak işaretlendi.', p_why: 'Geçici blok banı: {0}', p_why_none: 'sebebi kayıtlı değil · ⋯ → IP\'ler ile LFD günlüğünden getirilebilir',
+      kind_perm: 'kalıcı', kind_promoted: 'tekrar gelen', kind_temp: 'geçici', kind_manual: 'elle', kind_perm_h: 'Kalıcı blok banı: blokta yeterince kalıcı tekil ban (tek IP) birikince eklendi.', kind_promoted_h: 'Tekrar gelen: önce 12 saatlik geçici blok banı aldı, izleme süresi içinde tekrar saldırınca kalıcı yapıldı.', kind_temp_h: 'Geçici blok banı: süresi dolunca kalkar; izleme süresi içinde tekrar gelirse kalıcı olur.', kind_manual_h: 'Elle: panelden eklendi.', kind_dnd_h: 'do not delete: CSF, liste dolsa bile bu banı silmez.', evh_add24: 'Blok banı: blokta (/24) yeterince kalıcı tekil ban birikince blok kalıcı banlandı, tekiller silindi.', evh_promote: 'Kalıcıya alındı: daha önce geçici blok banı almış blok, izleme süresi içinde tekrar geldiği için kalıcı yapıldı.', evh_temp24: 'Geçici blok banı: blokta yeterince geçici tekil ban birikince 12 saatliğine banlandı ve izlemeye alındı.', evh_skip_wl: 'Atlandı: ban eşiğine ulaştı ama bir beyaz liste kaydıyla çakıştığı için banlanmadı.', evh_warn16: 'Şüpheli ağ: ağda (/16) birçok bloktan kalıcı tekil ban birikti. Ağ banlanmaz; bakmanız önerilir.', evh_warn16t: 'Şüpheli ağ: ağda (/16) birçok bloktan geçici tekil ban birikti. Ağ banlanmaz; bakmanız önerilir.', evh_clean_temp: 'Geçici ban silindi: IP zaten kalıcı listede olduğu için geçici banı gereksizdi.', evh_expire: 'Eski blok kaldırıldı: eski blok banı sınırını geçtiği için kaldırıldı.', evh_manual: 'Elle işlem: panelden biri tarafından yapıldı.', rep_h: 'Bu ağ son günlerde {0} ayrı gün şüpheli olarak işaretlendi.', p_why: 'Geçici blok banı: {0}', cov_info: '{0} · {1} eklendi', cov_why: 'Bloğun sebebi: {0}', own_why: 'Bu IP\'nin sebebi: {0}', asn_why: 'en sık: {0}',
       ips: 'IP\'ler', hide: 'Gizle', ban16: 'Ağı banla (/16)', ban_anyway: 'Yine de banla', ignore: 'Yoksay', unban: 'Kaldır',
       promote: 'Kalıcı yap', forget: 'İzlemeden çıkar', unignore: 'Kaldır', show_all: 'Tümünü göster ({0})', more: 'Daha fazla',
       n_ip: '{0} IP', n_subnets: '{0} farklı blok', from_temp: 'geçici banlardan', from_perm: 'kalıcı banlardan', days_left: '{0} gün kaldı',
@@ -158,7 +158,7 @@
       ev_add24: 'Block ban', ev_promote: 'Made permanent', ev_temp24: 'Temp block ban', ev_skip_wl: 'Skipped', ev_warn16: 'Suspicious range',
       ev_warn16t: 'Suspicious range', ev_clean_temp: 'Temp ban removed', clean_d: 'already in the permanent list (single or inside a block ban)', ev_manual_ban: 'Manual ban', ev_manual_unban: 'Removed',
       ev_manual_forget: 'Unwatched', ev_manual_ignore: 'Ignored', ev_manual_unignore: 'Unignored',
-      kind_perm: 'permanent', kind_promoted: 'repeat offender', kind_temp: 'temp', kind_manual: 'manual', kind_perm_h: 'Permanent block ban: added once enough permanent single (one-IP) bans piled up in the block.', kind_promoted_h: 'Repeat offender: got a 12-hour temp block ban first, then attacked again within the watch period and was made permanent.', kind_temp_h: 'Temp block ban: lifted when it expires; becomes permanent if the block comes back within the watch period.', kind_manual_h: 'Manual: added from the plugin.', kind_dnd_h: 'do not delete: CSF keeps this ban even when the list is full.', evh_add24: 'Block ban: enough permanent single bans piled up in the block (/24), so it was banned permanently and the singles removed.', evh_promote: 'Made permanent: a block that had a temp block ban came back within the watch period, so it was made permanent.', evh_temp24: 'Temp block ban: enough temp single bans piled up in the block, so it was banned for 12 hours and is now watched.', evh_skip_wl: 'Skipped: reached the ban threshold but overlaps a whitelist entry, so it was not banned.', evh_warn16: 'Suspicious range: permanent single bans piled up across several blocks of the range (/16). Ranges are never banned; worth a look.', evh_warn16t: 'Suspicious range: temp single bans piled up across several blocks of the range (/16). Ranges are never banned; worth a look.', evh_clean_temp: 'Temp ban removed: the IP was already in the permanent list, so its temp ban was redundant.', evh_expire: 'Old block removed: it was older than the old block ban limit.', evh_manual: 'Manual action: done by someone from the plugin.', rep_h: 'This range was flagged as suspicious on {0} separate days recently.', p_why: 'Temp block ban: {0}', p_why_none: 'reason not recorded · ⋯ → IPs fetches it from the LFD log',
+      kind_perm: 'permanent', kind_promoted: 'repeat offender', kind_temp: 'temp', kind_manual: 'manual', kind_perm_h: 'Permanent block ban: added once enough permanent single (one-IP) bans piled up in the block.', kind_promoted_h: 'Repeat offender: got a 12-hour temp block ban first, then attacked again within the watch period and was made permanent.', kind_temp_h: 'Temp block ban: lifted when it expires; becomes permanent if the block comes back within the watch period.', kind_manual_h: 'Manual: added from the plugin.', kind_dnd_h: 'do not delete: CSF keeps this ban even when the list is full.', evh_add24: 'Block ban: enough permanent single bans piled up in the block (/24), so it was banned permanently and the singles removed.', evh_promote: 'Made permanent: a block that had a temp block ban came back within the watch period, so it was made permanent.', evh_temp24: 'Temp block ban: enough temp single bans piled up in the block, so it was banned for 12 hours and is now watched.', evh_skip_wl: 'Skipped: reached the ban threshold but overlaps a whitelist entry, so it was not banned.', evh_warn16: 'Suspicious range: permanent single bans piled up across several blocks of the range (/16). Ranges are never banned; worth a look.', evh_warn16t: 'Suspicious range: temp single bans piled up across several blocks of the range (/16). Ranges are never banned; worth a look.', evh_clean_temp: 'Temp ban removed: the IP was already in the permanent list, so its temp ban was redundant.', evh_expire: 'Old block removed: it was older than the old block ban limit.', evh_manual: 'Manual action: done by someone from the plugin.', rep_h: 'This range was flagged as suspicious on {0} separate days recently.', p_why: 'Temp block ban: {0}', cov_info: '{0} · added {1}', cov_why: 'Block reason: {0}', own_why: 'This IP: {0}', asn_why: 'most often: {0}',
       ips: 'IPs', hide: 'Hide', ban16: 'Ban range (/16)', ban_anyway: 'Ban anyway', ignore: 'Ignore', unban: 'Remove',
       promote: 'Make permanent', forget: 'Stop watching', unignore: 'Remove', show_all: 'Show all ({0})', more: 'Show more',
       n_ip: '{0} IPs', n_subnets: '{0} distinct blocks', from_temp: 'from temp bans', from_perm: 'from permanent bans', days_left: '{0} days left',
@@ -339,7 +339,8 @@
   function indexOwners() {
     HCACHE = {}; (S.hist_cache || []).forEach(function (h) { if (h && h.cidr) HCACHE[h.cidr + '|' + h.day + (h.span && h.span !== 2 ? '|' + h.span : '')] = h; });
     OWNERS = {};
-    (S.events || []).forEach(function (e) {
+    // evx: aktif ve izlenen blokların ban kaydı (son 300 olaya girmeyen eskiler); önce gelir, yeni olaylar üzerine yazar
+    (S.evx || []).concat(S.events || []).forEach(function (e) {
       if (!e.cidr) return;
       var o = OWNERS[e.cidr] || (OWNERS[e.cidr] = {});
       if (e.owner) { o.owner = e.owner; o.asn = e.asn; o.cc = e.cc; }
@@ -830,7 +831,13 @@
   }
   function pct(v, max) { return v ? Math.max(4, Math.round(v * 100 / Math.max(1, max))) : 0; }
   function asnAttack() {        // sıralama: kendi grup banlarımız + tekiller (saldırı kanıtı)
-    var list = S.asn_top || [], max = 0;
+    var list = S.asn_top || [], max = 0, WHY = {};
+    (S.events || []).forEach(function (e) {   // ASN → sebep sayıları (Imunify sekmesindeki gibi sebep görünsün)
+      if (!e.asn || !e.ips) return;
+      var c = WHY[e.asn] || (WHY[e.asn] = {});
+      e.ips.forEach(function (i) { var w = whyText(i.why); if (w) c[w] = (c[w] || 0) + 1; });
+    });
+    function topWhy(asn) { var c = WHY[asn] || {}, b = ''; Object.keys(c).forEach(function (w) { if (!b || c[w] > c[b]) b = w; }); return b; }
     function wt(a) { return a.groups * 4 + a.singles; }
     list.forEach(function (a) { max = Math.max(max, wt(a) + (a.blocks || 0) * 4); });
     return list.slice(0, UI.asnAll ? list.length : 10).map(function (a, i) {
@@ -838,6 +845,7 @@
       if (a.groups) parts.push(t('p_g', num(a.groups)));
       if (a.singles) parts.push(t('p_t', num(a.singles)));
       if (a.blocks) parts.push('<span class="ag-muted">' + t('p_b', num(a.blocks)) + '</span>');
+      var tw = topWhy(String(a.asn)); if (tw) parts.push('<span class="ag-muted">' + esc(t('asn_why', tw)) + '</span>');
       // Öneri: en az 5 kendi grup banı (≥15 saldırgan, 5 ayrı blok) ve CC_DENY'de değilse.
       var tail = a.denied ? ' · <span class="ag-pill ag-pill-ok">' + t('asn_denied') + '</span>'
         : a.groups >= 5 ? ' · <button class="ag-link" data-act="asnhint" data-asn="' + esc(a.asn) + '" data-name="' + esc(name) + '" data-g="' + num(a.groups) + '">' + t('asn_hint') + '</button>' : '';
@@ -910,8 +918,7 @@
       var first = ev && ev.ips && ev.ips[0] ? ev.ips[0].ip : p.prefix + '.1';
       return '<div class="ag-item" data-row="' + esc(cidr) + '"><div class="ag-tr ag-tr-p">' +
         '<div class="ag-td ag-td-stack"><span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(cidr) + '</span>' +
-        (p.temp_ttl > 0 ? '<span class="ag-t-warn">' + t('ttl_left', dur(p.temp_ttl)) + '</span>' : '') +
-        '<span class="ag-why">' + esc(ev && ev.ips && ev.ips.length ? t('p_why', ipSummary(ev.ips, ev.total)) : t('p_why_none')) + '</span></div>' +
+        (p.temp_ttl > 0 ? '<span class="ag-t-warn">' + t('ttl_left', dur(p.temp_ttl)) + '</span>' : '') + '</div>' +
         '<div class="ag-td ag-td-own" title="' + esc(o.label || '') + '">' + (o.asn ? flag(o.cc) + '<span class="ag-asn">AS' + esc(o.asn) + '</span><span class="ag-org">' + esc(o.name || '') + '</span>' : '<span class="ag-muted">—</span>') + '</div>' +
         '<div class="ag-td ag-when ag-td-since">' + esc(p.since) + '</div>' +
         '<div class="ag-td ag-td-left"><div class="ag-left' + urg + '"><div class="ag-days"><i style="width:' + pct + '%"></i></div><span>' + t('days_left', num(left)) + '</span></div></div>' +
@@ -1584,7 +1591,18 @@
       var owner = d.asn ? '<b>AS' + esc(d.asn) + '</b> ' + esc(d.asname || '') : '';
       var fw = [];
       if (d.deny) fw.push('<span class="ag-pill ag-pill-bad">' + t('l_perm_single') + '</span><div class="ag-mono ag-muted" style="margin-top:4px">' + esc(d.deny) + '</div>');
-      if (d.cover) fw.push('<span class="ag-pill ag-pill-bad">' + t('l_perm_cover') + '</span><div class="ag-mono ag-muted" style="margin-top:4px">' + esc(d.cover) + '</div>');
+      if (d.cover) {
+        var cc = String(d.cover).split(/[\s#]/)[0];   // d.cover csf.deny satırının tamamı: "1.2.3.0/24 # Auto-grouped …"
+        var cg = (S.groups || []).filter(function (x) { return x.cidr === cc; })[0];
+        var ce = (OWNERS[cc] || {}).ev, cx = '';
+        if (cg) cx += '<div class="ag-muted" style="margin-top:2px">' + esc(t('cov_info', t('kind_' + cg.kind) + (cg.dnd ? ' · do not delete' : ''), cg.added ? new Date(cg.added * 1000).toLocaleDateString(loc()) : '—')) + '</div>';
+        if (ce && ce.ips && ce.ips.length) {
+          cx += '<div class="ag-muted" style="margin-top:2px">' + esc(t('cov_why', ipSummary(ce.ips, ce.total))) + '</div>';
+          var mine = ce.ips.filter(function (x) { return x.ip === ip; })[0];
+          if (mine && mine.why) cx += '<div style="margin-top:2px">' + esc(t('own_why', whyText(mine.why))) + '</div>';
+        }
+        fw.push('<span class="ag-pill ag-pill-bad">' + t('l_perm_cover') + '</span><div class="ag-mono ag-muted" style="margin-top:4px">' + esc(d.cover) + '</div>' + cx);
+      }
       if (d.temp) fw.push('<span class="ag-pill ag-pill-warn">' + t('l_temp') + '</span><div class="ag-mono ag-muted" style="margin-top:4px">' + esc(d.temp) + '</div>');
       var wl = [d.wl, d.rig ? 'csf.rignore: ' + d.rig : ''].filter(Boolean).map(esc).join('<br>');
       body.innerHTML = (d.lookup ? '' : '<div class="ag-fact ag-muted">' + t('l_nolookup') + '</div>') +
