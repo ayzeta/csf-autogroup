@@ -149,7 +149,7 @@ The same settings as `config.env`, with validation, grouped into sections
 (notifications, thresholds, schedule, lookups, retention, server, settings
 history):
 
-- **Notifications** — alert email (with *Send test email*), language, and the
+- **Notifications** — alert email: the contact address set in WHM (default, follows WHM) or any other address, with *Send test email*; **WHM notifications**: chosen events (firewall problem, list filling up, run notices, weekly summary) also go to WHM's own channels such as Slack via cPanel iContact, set up in WHM → Contact Manager, with *Send test notification*; language, and the
   **weekly summary**: new block bans, providers CSF and Imunify360 block most, watched blocks about to
   expire, list usage, run count, and a note when a new version is available.
   Sent with the first run after 09:00 on the chosen day (default Monday).

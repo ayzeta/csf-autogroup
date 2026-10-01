@@ -46,7 +46,12 @@ SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 
 # ── Config (overridable via config.env) ─────────────────────────────────────
 MSG_LANG="${MSG_LANG:-en}"                       # en | tr
-ALERT_MAIL="${ALERT_MAIL:-root@localhost}"
+ALERT_MAIL="${ALERT_MAIL:-whm}"                  # whm = WHM'deki iletişim adresi; ya da bir e-posta adresi
+ICONTACT="${ICONTACT:-0}"                        # WHM bildirimleri (iContact: Slack, e-posta … WHM → Contact Manager)
+IC_FIREWALL="${IC_FIREWALL:-1}"; IC_LISTFULL="${IC_LISTFULL:-1}"; IC_RUN="${IC_RUN:-0}"; IC_DIGEST="${IC_DIGEST:-0}"
+IC_PERL="${IC_PERL:-/usr/local/cpanel/3rdparty/bin/perl}"
+IC_MODULE="${IC_MODULE:-/usr/local/cpanel/Cpanel/iContact.pm}"
+WWWACCT_CONF="${WWWACCT_CONF:-/etc/wwwacct.conf}"
 DENY_FILE="${DENY_FILE:-/etc/csf/csf.deny}"
 CSF_CONF="${CSF_CONF:-/etc/csf/csf.conf}"
 CSF_BIN="${CSF_BIN:-/sbin/csf}"
@@ -84,6 +89,7 @@ HIST_FILE="${HIST_FILE:-$(dirname "$SAYAC_FILE")/history.jsonl}"
 LOGHIST_FILE="${LOGHIST_FILE:-$(dirname "$SAYAC_FILE")/loghist.v2.jsonl}"   # günlükten çıkarılan, olay kaydından önceki işler      # "Ayrıntı" ile getirilen eski uyarılar (bir kez)
 IMUNIFY_FILE="${IMUNIFY_FILE:-$(dirname "$SAYAC_FILE")/imunify}"         # yerel kara liste önbelleği
 IMUNIFY_WL_FILE="${IMUNIFY_WL_FILE:-$(dirname "$SAYAC_FILE")/imunify_white}"  # yerel beyaz liste önbelleği
+IC_STATE_FILE="${IC_STATE_FILE:-$(dirname "$SAYAC_FILE")/icontact_state}"   # WHM bildirimi gönderilmiş süren sorunlar
 MODSEC_DB="${MODSEC_DB:-/var/cpanel/modsec/modsec.sqlite}"      # cPanel'in ModSecurity eşleşme kaydı (kural mesajları)
 MODSEC_CACHE="${MODSEC_CACHE:-$(dirname "$SAYAC_FILE")/modsec_msgs}"   # kural no → mesaj önbelleği
 LFD_LOG="${LFD_LOG:-/var/log/lfd.log}"         # eski uyarıların ayrıntısı için okunur (lfd.log, .1, .gz)
@@ -137,12 +143,12 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_STEP_IMOWN="Imunify IP'lerinin sahip sorgusu: %s blok, %s sn"
   M_ERR_NOFILE="HATA: %s bulunamadı, çıkılıyor."
   M_LOCKED="ATLANDI: önceki çalışma hâlâ sürüyor"
-  M_PERM_USAGE="Kalıcı Doluluk: %s / %s satır (%%%s)"
+  M_PERM_USAGE="Kalıcı liste: %s / %s satır (%%%s)"
   M_PERM_WARN="UYARI: Kalıcı limit doluluk oranı %%80'i geçti!"
-  M_PERM_FULL="!!! UYARI !!! Doluluk: %s / %s satır (%%%s) - ACİL MANUEL TEMİZLİK GEREKİYOR !!!"
-  M_TEMP_USAGE="Geçici Doluluk: %s / %s satır (%%%s)"
+  M_PERM_FULL="Kalıcı liste: %s / %s satır (%%%s) — dolmak üzere"
+  M_TEMP_USAGE="Geçici liste: %s / %s satır (%%%s)"
   M_TEMP_WARN="UYARI: Geçici limit doluluk oranı %%80'i geçti!"
-  M_TEMP_FULL="!!! UYARI !!! Geçici Doluluk: %s / %s satır (%%%s) - ACİL MANUEL TEMİZLİK GEREKİYOR !!!"
+  M_TEMP_FULL="Geçici liste: %s / %s satır (%%%s) — dolmak üzere"
   M_NOLIMIT="ATLANDI: %s limiti bulunamadı/sıfır, doluluk kontrolü atlandı"
   M_C24_DND="Auto-grouped /24: %s kalıcı tekil nedeniyle kalıcı ban + do not delete - do not delete"
   M_C24_PERM="Auto-grouped /24: %s kalıcı tekil nedeniyle kalıcı banlandı"
@@ -191,7 +197,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_WL_SKIP="ATLANDI %s: beyaz listeyle çakışıyor (%s)"
   M_WL_SKIPD="ATLANDI %s: beyaz listede (%s), bugün zaten bildirildi"
   M_WL_RETRY="ATLANDI %s: beyaz liste (%s) DNS hatası nedeniyle doğrulanamadı, sonraki turda tekrar denenecek"
-  M_WL_B="%s -> %s tekil, BANLANMADI. Beyaz liste: %s"
+  M_WL_B="%s -> %s tekil, banlanmadı, beyaz listede: %s"
   M_WL_NOTE="   Not: içinde beyaz listede kayıt var (%s)"
   M_MAILWL_BODY="Aşağıdaki bloklar ban eşiğine ulaştı ama CSF beyaz listeleriyle çakıştığı için banlanmadı.\nTekil banlar yerinde duruyor:"
   M_MAILWL_SUBJ="%s blok atlandı (beyaz liste)"
@@ -200,9 +206,9 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_CLEANCNT="Sayaç temizliği yapıldı (%s günden eski kayıtlar silindi)"
   M_LOGTRIM="Günlük %s satırda tutuldu (önceki: %s satır)"
   M_MAIL_PERMFULL_SUBJ="kalıcı liste %%%s dolu"
-  M_MAIL_PERMFULL_BODY="CSF deny listesi limite yaklaşıyor!"
+  M_MAIL_PERMFULL_BODY="CSF'in kalıcı ban listesi (csf.deny) dolmak üzere. Dolunca CSF en eski banları kendisi siler; do not delete olmayan blok banları da gidebilir. Eski banları kaldırın ya da DENY_IP_LIMIT'i yükseltin."
   M_MAIL_TEMPFULL_SUBJ="geçici liste %%%s dolu"
-  M_MAIL_TEMPFULL_BODY="CSF geçici ban listesi limite yaklaşıyor!"
+  M_MAIL_TEMPFULL_BODY="CSF'in geçici ban listesi dolmak üzere. Dolunca yeni geçici banlar eklenemeyebilir. Geçici banların süresinin dolmasını bekleyin ya da DENY_TEMP_IP_LIMIT'i yükseltin."
   M_MAIL_DETAIL="Detay için: tail -100 %s"
   M_SUBJ_PREFIX="CSF Auto-Group: "
   M_EXP_SUBJ="%s eski blok banı kaldırıldı"
@@ -279,11 +285,17 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_DG_PG="%s blok"; M_DG_PB="+%s blok CSF Auto-Group dışından"; M_DG_PT="%s tekil"
   M_DG_EXP="14 gün içinde izlemesi bitecek bloklar (tekrar gelirlerse kalıcı olurlar):"
   M_DG_EXPL="   %-18s %s gün"
-  M_DG_RUNS="Tur sağlığı: son 7 günde %s tur çalıştı (cron aralığına göre beklenen ~%s)"
+  M_DG_RUNS="Tur sağlığı: son 7 günde %s tur çalıştı (%s çalıştığı için beklenen ~%s)"
+  M_DG_RUNS0="Tur sağlığı: son 7 günde %s tur çalıştı"; M_IV_MIN="%s dakikada bir"; M_IV_HOUR="saatte bir"; M_IV_HOURS="%s saatte bir"
   M_DG_IM="Imunify360'ın en çok engellediği sağlayıcılar (sunucunun kendi kara listesi, %s IP):"
   M_DG_IML="   %-9s %-44s %s IP%s"
   M_DG_NONE="   yok"
   M_DG_SENT="Haftalık özet gönderildi: %s"
+  M_IC_FAIL="WHM bildirimi gönderilemedi: %s"; M_IC_SENT="WHM bildirimi gönderildi (iContact kabul etti)"; M_IC_NA="Bu sunucuda cPanel bildirim altyapısı (iContact) yok"
+  M_IC_FW="Güvenlik duvarında sorun: %s"; M_IC_FW_OK="Güvenlik duvarı sorunu düzeldi"
+  M_IC_PERM="Kalıcı liste %%%s dolu"; M_IC_PERM_OK="Kalıcı liste doluluğu %%80'in altına indi"
+  M_IC_TEMP="Geçici liste %%%s dolu"; M_IC_TEMP_OK="Geçici liste doluluğu %%80'in altına indi"
+  M_IC_TEST_S="Deneme bildirimi"; M_IC_TEST_B="Bu bir deneme bildirimidir. %s sunucusundaki CSF Auto-Group uyarıları WHM'in bildirim kanallarına (e-posta, Slack …) bu şekilde gelecek.\nGönderen: %s"
   M_H_IP="IP"; M_H_HOST="Hostname"; M_H_WHY="Sebep"; M_H_MORE="ve %s IP daha"
   M_H_PANEL="Paneli aç"; M_H_PANELP="WHM → Eklentiler → CSF Auto-Group"
   M_H_PERM="Kalıcı liste"; M_H_TEMP="Geçici liste"; M_H_LINES="%s / %s satır · %%%s"; M_H_AGO="7 gün önce %s"
@@ -311,10 +323,10 @@ else
   M_LOCKED="SKIPPED: previous run still in progress"
   M_PERM_USAGE="Permanent deny usage: %s / %s lines (%s%%)"
   M_PERM_WARN="WARNING: permanent deny list is over 80%% full!"
-  M_PERM_FULL="!!! WARNING !!! Usage: %s / %s lines (%s%%) - MANUAL CLEANUP NEEDED !!!"
+  M_PERM_FULL="Permanent list: %s / %s lines (%s%%) — almost full"
   M_TEMP_USAGE="Temp deny usage: %s / %s lines (%s%%)"
   M_TEMP_WARN="WARNING: temp deny list is over 80%% full!"
-  M_TEMP_FULL="!!! WARNING !!! Temp usage: %s / %s lines (%s%%) - MANUAL CLEANUP NEEDED !!!"
+  M_TEMP_FULL="Temp list: %s / %s lines (%s%%) — almost full"
   M_NOLIMIT="SKIPPED: %s limit missing/zero, usage check skipped"
   M_C24_DND="Auto-grouped /24: %s permanent singles -> permanent ban + do not delete - do not delete"
   M_C24_PERM="Auto-grouped /24: %s permanent singles -> permanent ban"
@@ -363,7 +375,7 @@ else
   M_WL_SKIP="SKIPPED %s: overlaps a whitelist entry (%s)"
   M_WL_SKIPD="SKIPPED %s: whitelisted (%s), already reported today"
   M_WL_RETRY="SKIPPED %s: whitelist (%s) could not be verified (DNS failure), will retry next run"
-  M_WL_B="%s -> %s singles, NOT banned. Whitelist: %s"
+  M_WL_B="%s -> %s singles, not banned, whitelisted: %s"
   M_WL_NOTE="   Note: contains a whitelist entry (%s)"
   M_MAILWL_BODY="The following blocks reached the ban threshold but were NOT banned because they overlap a CSF whitelist.\nThe single bans stay in place:"
   M_MAILWL_SUBJ="%s block(s) skipped (whitelist)"
@@ -372,9 +384,9 @@ else
   M_CLEANCNT="Counter cleaned (records older than %s days removed)"
   M_LOGTRIM="Log trimmed to %s lines (was: %s lines)"
   M_MAIL_PERMFULL_SUBJ="permanent list %s%% full"
-  M_MAIL_PERMFULL_BODY="CSF deny list is approaching its limit!"
+  M_MAIL_PERMFULL_BODY="CSF's permanent ban list (csf.deny) is almost full. When it is full, CSF removes the oldest bans itself; block bans without do not delete can go too. Remove old bans or raise DENY_IP_LIMIT."
   M_MAIL_TEMPFULL_SUBJ="temp list %s%% full"
-  M_MAIL_TEMPFULL_BODY="CSF temp ban list is approaching its limit!"
+  M_MAIL_TEMPFULL_BODY="CSF's temp ban list is almost full. When it is full, new temp bans may not be added. Wait for temp bans to expire or raise DENY_TEMP_IP_LIMIT."
   M_MAIL_DETAIL="Details: tail -100 %s"
   M_SUBJ_PREFIX="CSF Auto-Group: "
   M_EXP_SUBJ="%s old block ban(s) removed"
@@ -451,11 +463,17 @@ else
   M_DG_PG="%s blocks"; M_DG_PB="+%s blocks not from CSF Auto-Group"; M_DG_PT="%s singles"
   M_DG_EXP="Watched blocks expiring within 14 days (become permanent if they return):"
   M_DG_EXPL="   %-18s %s days"
-  M_DG_RUNS="Run health: %s runs in the last 7 days (about %s expected from the cron interval)"
+  M_DG_RUNS="Run health: %s runs in the last 7 days (about %s expected, running %s)"
+  M_DG_RUNS0="Run health: %s runs in the last 7 days"; M_IV_MIN="every %s minutes"; M_IV_HOUR="every hour"; M_IV_HOURS="every %s hours"
   M_DG_IM="Providers Imunify360 blocks most (this server's own blacklist, %s IPs):"
   M_DG_IML="   %-9s %-44s %s IPs%s"
   M_DG_NONE="   none"
   M_DG_SENT="Weekly summary sent: %s"
+  M_IC_FAIL="WHM notification failed: %s"; M_IC_SENT="WHM notification sent (accepted by iContact)"; M_IC_NA="cPanel's notification system (iContact) is not available on this server"
+  M_IC_FW="Firewall problem: %s"; M_IC_FW_OK="Firewall problem resolved"
+  M_IC_PERM="Permanent list %s%% full"; M_IC_PERM_OK="Permanent list usage is back under 80%%"
+  M_IC_TEMP="Temp list %s%% full"; M_IC_TEMP_OK="Temp list usage is back under 80%%"
+  M_IC_TEST_S="Test notification"; M_IC_TEST_B="This is a test notification. CSF Auto-Group alerts from %s will reach WHM's notification channels (email, Slack …) like this.\nSent by: %s"
   M_H_IP="IP"; M_H_HOST="Hostname"; M_H_WHY="Reason"; M_H_MORE="and %s more IPs"
   M_H_PANEL="Open the panel"; M_H_PANELP="WHM → Plugins → CSF Auto-Group"
   M_H_PERM="Permanent list"; M_H_TEMP="Temp list"; M_H_LINES="%s / %s lines · %s%%"; M_H_AGO="7 days ago %s"
@@ -515,7 +533,7 @@ mail() {
 
 # ── Settings: validation (panel + --config set + --dry-run --set) ──────────
 # Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
-CFG_KEYS="MSG_LANG ALERT_MAIL DIGEST DIGEST_DAY THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN"
+CFG_KEYS="MSG_LANG ALERT_MAIL DIGEST DIGEST_DAY ICONTACT IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN"
 CFG_TRY_KEYS="THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS"
 logrotate_write() { # [MB] [ARŞİV] → /etc/logrotate.d/csf_autogroup (geçici dosya + mv)
     local mb="${1:-$LOG_ROTATE_MB}" keep="${2:-$LOG_ROTATE_KEEP}" tmp
@@ -532,11 +550,13 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
         MSG_LANG) opts="tr en" ;;
         LOOKUP) opts="0 1" ;;
         CRON_MIN) opts="*/5 */10 */15 */30 0" ;;
-        DIGEST) opts="0 1" ;;
+        DIGEST|ICONTACT|IC_FIREWALL|IC_LISTFULL|IC_RUN|IC_DIGEST) opts="0 1" ;;
         DIGEST_DAY) opts="1 2 3 4 5 6 7" ;;
         ALERT_MAIL)
             # Yerel adresler de geçerli: "root", "root@localhost" (cPanel root'un postasını
             # sunucunun iletişim adresine yönlendirir; script'in varsayılanı da budur).
+            # "whm": WHM'deki iletişim adresi (her gönderimde okunur)
+            [ "$v" = whm ] && return 0
             [[ "$v" =~ ^[A-Za-z0-9._%+-]+(@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*)?$ ]] && [ ${#v} -le 254 ] && return 0
             CFG_ERR=$(m "$M_CFG_BAD" "$k" "$v" "$M_CFG_EMAIL"); return 1 ;;
         THRESHOLD_24|THRESHOLD_TEMP_24) lo=2; hi=50 ;;
@@ -769,15 +789,53 @@ h_subj() {       # KONU → REPLY = RFC 2047 kodlu konu (kelime sınırında ~40
     [ -n "$chunk" ] && out+="${out:+$NL }=?UTF-8?B?$(printf '%s' "$chunk" | base64 -w0)?="
     REPLY="$out"
 }
+# ── WHM bildirimleri (cPanel iContact) ──────────────────────────────────────
+# Seçilen olaylar WHM'in kendi kanallarına da gider (root'un e-posta / Slack / SMS … ayarları; WHM →
+# Contact Manager). Kanal bilgisi eklentide tutulmaz. Olay adı "Application::CSFAutoGroup…": cPanel'in
+# EventImportance.pm listesinde "Application" yüksek önemde; tanımadığı adlar düşük sayılıp kanal eşiğinde
+# elenirdi (sunucuda doğrulandı, 2026-09-30). Konu/metin Perl'e ortam değişkeniyle geçer.
+ic_ok() { [ -x "$IC_PERL" ] && [ -r "$IC_MODULE" ]; }
+ic_send() {      # OLAY KONU METİN → 0 gönderildi (IC_OUT = çıktı)
+    local subj="[CSF Auto-Group] $2" txt="$3" rc
+    if [ "$DRY" = 1 ]; then echo "      [dry-run] WHM: $subj"; return 0; fi
+    ic_ok || { IC_OUT="$M_IC_NA"; return 1; }
+    subj="${subj//[$'\r\n\f']/ }"
+    (( ${#txt} > 3500 )) && txt="${txt:0:3500} …"
+    IC_OUT=$(CAG_EV="CSFAutoGroup$1" CAG_SUBJ="$subj" CAG_TEXT="$txt" timeout 60 "$IC_PERL" -e 'use strict; use Cpanel::iContact;
+        Cpanel::iContact::icontact(application => "Application", event_name => $ENV{CAG_EV}, subject => $ENV{CAG_SUBJ},
+                                   im_subject => $ENV{CAG_SUBJ}, message => $ENV{CAG_TEXT}); exit 0;' 2>&1 9>&-); rc=$?
+    [ "$rc" = 0 ] || log "$(m "$M_IC_FAIL" "${IC_OUT%%$NL*}")"
+    return $rc
+}
+ic_track() {     # AYAR DURUM_ANAHTARI SORUN(1|0) KONU METİN DÜZELDİ_KONUSU — başlayınca bir kez, düzelince bir kez
+    [ "$ICONTACT" = 1 ] && [ "${!1}" = 1 ] && [ "$DRY" != 1 ] || return 0
+    local had=0 tmp="$IC_STATE_FILE.tmp.$$"
+    grep -qx "$2" "$IC_STATE_FILE" 2>/dev/null && had=1
+    if [ "$3" = 1 ] && [ "$had" = 0 ]; then ic_send "$2" "$4" "$5" || return 0
+    elif [ "$3" = 0 ] && [ "$had" = 1 ]; then ic_send "${2}Resolved" "$6" "$6" || return 0
+    else return 0; fi
+    # durum ancak gönderim başarılıysa değişir: başarısızsa sonraki turda yeniden denenir
+    { grep -vx "$2" "$IC_STATE_FILE" 2>/dev/null; if [ "$3" = 1 ]; then echo "$2"; fi; true; } > "$tmp" && mv -f "$tmp" "$IC_STATE_FILE"
+    rm -f "$tmp"
+}
+mail_to() {      # → REPLY = uyarı maillerinin adresi (ALERT_MAIL=whm: WHM → Basic WebHost Manager Setup'taki iletişim adresi)
+    REPLY="$ALERT_MAIL"
+    if [ "$ALERT_MAIL" = whm ]; then
+        REPLY=$(awk '$1 == "CONTACTEMAIL" { $1 = ""; print; exit }' "$WWWACCT_CONF" 2>/dev/null)
+        REPLY="${REPLY//[[:space:]]/}"
+        [[ "$REPLY" =~ ^[A-Za-z0-9._%+@,-]+$ ]] || REPLY="root@localhost"
+    fi
+}
 send_mail() {    # KONU DÜZ_METİN [HTML] → çıkış kodu; SM_OUT = komutun çıktısı
     local b r rc icon=0
+    mail_to; SM_TO="$REPLY"
     # kuru çalıştırma: gönderme, düz metni göster (mail() sarmalayıcısı)
-    if [ "$DRY" = 1 ]; then printf '%s\n' "$2" | mail -s "$1" "$ALERT_MAIL"; SM_OUT=""; return 0; fi
+    if [ "$DRY" = 1 ]; then printf '%s\n' "$2" | mail -s "$1" "$SM_TO"; SM_OUT=""; return 0; fi
     if [ -n "$3" ] && [ -x "$SENDMAIL_BIN" ] && command -v base64 >/dev/null 2>&1; then
         b="=_csfag_a_$(date +%s)_$$"; r="=_csfag_r_$(date +%s)_$$"; h_subj "$1"
         [[ "$3" == *cid:agicon* ]] && [ -r "$MAIL_ICON" ] && icon=1
         # yapı: multipart/related [ multipart/alternative (metin, HTML) + ikon ] — ikon yoksa yalnız alternative
-        SM_OUT=$( { printf 'To: %s\nSubject: %s\nMIME-Version: 1.0\nX-Mailer: CSF Auto-Group %s\n' "$ALERT_MAIL" "$REPLY" "$VERSION"
+        SM_OUT=$( { printf 'To: %s\nSubject: %s\nMIME-Version: 1.0\nX-Mailer: CSF Auto-Group %s\n' "$SM_TO" "$REPLY" "$VERSION"
                     if [ "$icon" = 1 ]; then
                         printf 'Content-Type: multipart/related; type="multipart/alternative"; boundary="%s"\n\n--%s\n' "$r" "$r"
                     fi
@@ -793,7 +851,7 @@ send_mail() {    # KONU DÜZ_METİN [HTML] → çıkış kodu; SM_OUT = komutun 
                         printf -- '--%s--\n' "$r"
                     fi; } | "$SENDMAIL_BIN" -t -i 2>&1 9>&-); rc=$?
     else
-        SM_OUT=$(printf '%s\n' "$2" | mail -s "$1" "$ALERT_MAIL" 2>&1); rc=$?
+        SM_OUT=$(printf '%s\n' "$2" | mail -s "$1" "$SM_TO" 2>&1); rc=$?
     fi
     return $rc
 }
@@ -820,6 +878,14 @@ mail_flush() {
     printf -v hs '%s · %(%d.%m.%Y %H:%M)T' "$(hostname 2>/dev/null || echo "$HOSTNAME")" -1
     h_doc "CSF Auto-Group" "$hs" "$html"
     send_mail "$([ "$MAIL_URGENT" = 1 ] && printf '!!! ')$M_SUBJ_PREFIX$subj" "$txt" "$REPLY"
+    if [ "$ICONTACT" = 1 ] && [ "$IC_RUN" = 1 ]; then
+        local rs="" rt=""
+        for i in "${!MAIL_PARTS[@]}"; do
+            [ "${MAIL_TONES[i]}" = bad ] && continue
+            rs+="${rs:+ · }${MAIL_PARTS[i]}"; rt+="${rt:+$NL$NL}${MAIL_TEXTS[i]}"
+        done
+        [ -n "$rs" ] && ic_send Run "$rs" "$rt"
+    fi
     MAIL_PARTS=(); MAIL_BODY=""; MAIL_URGENT=0; MAIL_TEXTS=(); MAIL_TONES=()
 }
 perm_remove() {  # CIDR → csf.deny'den kaldır ("do not delete" ise önce işaret silinir); 0 = kaldırıldı
@@ -2191,7 +2257,12 @@ digest_build() { # → DG_SUBJ, DG_BODY
     local first win
     first=$(grep -m1 '"type":"run"' "$EVENTS_FILE" 2>/dev/null | grep -o '"t":[0-9]*' | cut -d: -f2)
     win=$(( now - since )); [ -n "$first" ] && [ "$first" -gt "$since" ] && win=$(( now - first ))
-    DG_BODY+="$NL$(m "$M_DG_RUNS" "$runs" "$([ "$iv" -gt 0 ] && echo $(( win / iv + 1 )) || echo '?')")$NL"
+    if [ "$iv" -gt 0 ]; then
+        local ivt; if [ $(( iv % 3600 )) -eq 0 ]; then [ "$iv" -eq 3600 ] && ivt="$M_IV_HOUR" || ivt=$(m "$M_IV_HOURS" $(( iv / 3600 )))
+                   else ivt=$(m "$M_IV_MIN" $(( iv / 60 ))); fi
+        if [ "$MSG_LANG" = tr ]; then DG_BODY+="$NL$(m "$M_DG_RUNS" "$runs" "$ivt" "$(( win / iv + 1 ))")$NL"
+        else DG_BODY+="$NL$(m "$M_DG_RUNS" "$runs" "$(( win / iv + 1 ))" "$ivt")$NL"; fi
+    else DG_BODY+="$NL$(m "$M_DG_RUNS0" "$runs")$NL"; fi
     [ -n "$PANEL_FOOT" ] && DG_BODY+="$NL${PANEL_FOOT%$NL}"
     # HTML: izleme + tur sağlığı tek kartta; turlar beklenenin %90'ının altındaysa rozet turuncu
     hv="?"; [ "$iv" -gt 0 ] && hv=$(( win / iv + 1 ))
@@ -2212,6 +2283,7 @@ digest_maybe() { # çalışma sonunda: seçilen gün, 09:00'dan sonra, haftada b
     grep -q "^$wk " "$SAYAC_FILE" && return 0
     digest_build
     send_mail "$DG_SUBJ" "$DG_BODY" "$DG_HTML"
+    [ "$ICONTACT" = 1 ] && [ "$IC_DIGEST" = 1 ] && ic_send Digest "$DG_SUBJ" "$DG_BODY"
     cnt_add "$wk $TODAY"
     log "$(m "$M_DG_SENT" "$ALERT_MAIL")"
     ev digest ""
@@ -2268,7 +2340,8 @@ do_config() {
                 o="{\"ok\":true,\"values\":{"
                 i=0
                 for k in $CFG_KEYS; do jstr "$(cfg_value "$k")"; o+="$([ $i -gt 0 ] && echo ,)\"$k\":$REPLY"; i=1; done
-                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"root@localhost\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_MAX_LINES\":\"5000\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"BLOCK_EXPIRE_DAYS\":\"365\",\"BLOCK_EXPIRE_AUTO\":\"0\",\"CRON_MIN\":\"*/10\"}"
+                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"whm\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"ICONTACT\":\"0\",\"IC_FIREWALL\":\"1\",\"IC_LISTFULL\":\"1\",\"IC_RUN\":\"0\",\"IC_DIGEST\":\"0\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_MAX_LINES\":\"5000\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"BLOCK_EXPIRE_DAYS\":\"365\",\"BLOCK_EXPIRE_AUTO\":\"0\",\"CRON_MIN\":\"*/10\"}"
+                ALERT_MAIL=whm mail_to; jstr "$REPLY"; o+=",\"whm_contact\":$REPLY,\"icontact\":$(ic_ok && echo true || echo false)"
                 o+=",\"csf\":{\"deny_limit\":$(num "$(conf_val DENY_IP_LIMIT)"),\"temp_limit\":$(num "$(conf_val DENY_TEMP_IP_LIMIT)")}"
                 local lb=0 la=0 ll=0
                 [ -f "$LOG_FILE" ] && { lb=$(wc -c < "$LOG_FILE"); ll=$(wc -l < "$LOG_FILE"); }
@@ -2276,12 +2349,13 @@ do_config() {
                 o+=",\"log\":{\"rotate\":$([ -f "$LOGROTATE_CONF" ] && echo true || echo false),\"bytes\":$(num "$lb"),\"lines\":$(num "$ll"),\"archives\":$(num "$la")}"
                 # Sunucu gereksinimleri (Ayarlar sekmesindeki kart): ok | missing | warn
                 local dp="" dk ds
-                for dk in csf crontab mail dns logrotate flock timeout git imunify modsec sqlite3; do
+                for dk in csf crontab mail dns logrotate flock timeout git imunify modsec sqlite3 icontact; do
                     ds=missing
                     case "$dk" in
                         csf)       { [ -x "$CSF_BIN" ] || command -v csf >/dev/null 2>&1; } && ds=ok ;;
                         dns)       [ -n "$DIG_BIN$HOST_BIN" ] && ds=ok ;;
                         imunify)   [ -n "$IMUNIFY_BIN" ] && [ -x "$IMUNIFY_BIN" ] && ds=ok ;;
+                        icontact)  ic_ok && ds=ok ;;
                         # ModSecurity: cPanel'in eşleşme kaydı var → ok; yalnız günlük var → warn (kural dosyasından okunur)
                         modsec)    if [ -r "$MODSEC_DB" ]; then ds=ok; elif [ -r "$(conf_val MODSEC_LOG)" ]; then ds=warn; fi ;;
                         logrotate) if command -v logrotate >/dev/null 2>&1 && [ -d "$(dirname "$LOGROTATE_CONF")" ]; then
@@ -2341,12 +2415,17 @@ do_config() {
             h_doc "CSF Auto-Group" "$M_H_TMS" "$tmh"
             send_mail "$M_TM_SUBJ" "$tmt" "$REPLY"; rc=$?; out="$SM_OUT"
             if [ "$rc" -eq 0 ]; then
-                log "$(m "$M_A_LOG" "$AG_BY" "$(m "$M_TM_SENT" "$ALERT_MAIL")")"
-                jstr "$ALERT_MAIL"; ev test_mail "" "by=\"$AG_BY\"" "to=$REPLY"
-                act_out 0 "$(m "$M_TM_SENT" "$ALERT_MAIL")"
+                log "$(m "$M_A_LOG" "$AG_BY" "$(m "$M_TM_SENT" "$SM_TO")")"
+                jstr "$SM_TO"; ev test_mail "" "by=\"$AG_BY\"" "to=$REPLY"
+                act_out 0 "$(m "$M_TM_SENT" "$SM_TO")"
             else
                 act_out 1 "$(m "$M_TM_FAIL" "${out%%$NL*}")"
             fi ;;
+        test-icontact)
+            # ayarlardan bağımsız: WHM kanallarını hemen dener
+            if ic_send Test "$M_IC_TEST_S" "$(m "$M_IC_TEST_B" "$(hostname 2>/dev/null || echo "$HOSTNAME")" "$AG_BY")"; then
+                log "$(m "$M_A_LOG" "$AG_BY" "$M_IC_SENT")"; act_out 0 "$M_IC_SENT"
+            else act_out 1 "$(m "$M_IC_FAIL" "${IC_OUT%%$NL*}")"; fi ;;
         *) act_out 2 "$(m "$M_A_UNKNOWN" "$sub")" ;;
     esac
 }
@@ -2364,7 +2443,7 @@ case "$MODE" in
     history) LOG_MODE=quiet; do_history "${ARGS[0]}" "${ARGS[1]}" "${ARGS[2]:-2}"; exit $? ;;
     logrotate) logrotate_write && { echo "$LOGROTATE_CONF"; exit 0; }; exit 1 ;;   # install.sh çağırır   # eklenti "Şimdi çalıştır"dan önce sorar
     digest) LOG_MODE=file; owners_load; parse_deny "$DENY_FILE" 1; panel_init; digest_build
-            if [ "$SEND" = 1 ]; then send_mail "$DG_SUBJ" "$DG_BODY" "$DG_HTML"; log "$(m "$M_DG_SENT" "$ALERT_MAIL")"; ev digest "" "by=\"$AG_BY\""
+            if [ "$SEND" = 1 ]; then send_mail "$DG_SUBJ" "$DG_BODY" "$DG_HTML"; [ "$ICONTACT" = 1 ] && [ "$IC_DIGEST" = 1 ] && ic_send Digest "$DG_SUBJ" "$DG_BODY"; log "$(m "$M_DG_SENT" "$ALERT_MAIL")"; ev digest "" "by=\"$AG_BY\""
             else printf '%s\n\n%s\n' "$DG_SUBJ" "$DG_BODY"; fi
             exit 0 ;;
 esac
@@ -2394,6 +2473,8 @@ if [ -n "$limit" ] && [ "$limit" -gt 0 ] 2>/dev/null; then
     else
         doluluk_satiri=$(m "$M_PERM_USAGE" "$current_count" "$limit" "$percent")
     fi
+    ic_track IC_LISTFULL ListPerm "$([ "$percent" -ge 80 ] && echo 1 || echo 0)" "$(m "$M_IC_PERM" "$percent")" \
+        "$(m "$M_PERM_FULL" "$current_count" "$limit" "$percent")$NL$(m "$M_MAIL_PERMFULL_BODY")" "$(m "$M_IC_PERM_OK")"
 else
     log "$(m "$M_NOLIMIT" "DENY_IP_LIMIT")"; doluluk_satiri=""
 fi
@@ -2413,6 +2494,8 @@ if [ -n "$temp_limit" ] && [ "$temp_limit" -gt 0 ] 2>/dev/null; then
     else
         temp_doluluk_satiri=$(m "$M_TEMP_USAGE" "$temp_current" "$temp_limit" "$temp_percent")
     fi
+    ic_track IC_LISTFULL ListTemp "$([ "$temp_percent" -ge 80 ] && echo 1 || echo 0)" "$(m "$M_IC_TEMP" "$temp_percent")" \
+        "$(m "$M_TEMP_FULL" "$temp_current" "$temp_limit" "$temp_percent")$NL$(m "$M_MAIL_TEMPFULL_BODY")" "$(m "$M_IC_TEMP_OK")"
 else
     log "$(m "$M_NOLIMIT" "DENY_TEMP_IP_LIMIT")"; temp_doluluk_satiri=""
 fi
@@ -2638,6 +2721,9 @@ if [ ${#h_msgs[@]} -gt 0 ]; then
         mail_add "$h_subj" "$h_body" bad; cnt_add "HEALTH $TODAY"
     fi
 fi
+
+h_all=""; for hm in "${h_msgs[@]}"; do h_all+="${h_all:+, }$hm"; done
+ic_track IC_FIREWALL Firewall "$([ ${#h_msgs[@]} -gt 0 ] && echo 1 || echo 0)" "$(m "$M_IC_FW" "$h_all")" "$M_H_BODY $h_all" "$M_IC_FW_OK"
 
 # ── Bu turun bildirimleri: tek mail ─────────────────────────────────────────
 mail_flush

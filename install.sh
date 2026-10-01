@@ -19,15 +19,16 @@ command -v dig >/dev/null 2>&1 || command -v host >/dev/null 2>&1 || \
     echo "NOTE: neither 'dig' nor 'host' found — install bind-utils (dnf install bind-utils) for owner/hostname info in emails and CC_IGNORE/csf.rignore checks."
 
 # Defaults (overridden by a previous run)
-MSG_LANG="en"; ALERT_MAIL="root@localhost"; CRON_MIN="*/10"
+MSG_LANG="en"; ALERT_MAIL="whm"; CRON_MIN="*/10"
 [ -f "$CONF" ] && . "$CONF"
 
 ask() { local p="$1" d="$2" v; read -r -p "$p [$d]: " v || true; echo "${v:-$d}"; }
 # .install.conf her güncellemede kabukta okunur: yalnız güvenli karakterlere izin verilir.
 valid() {   # KEY VALUE
+    local LC_ALL=C   # tr_TR'de "i" [a-z] aralığına girmez
     case "$1" in
         MSG_LANG)   [[ "$2" =~ ^(en|tr)$ ]] ;;
-        ALERT_MAIL) [[ "$2" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+$ ]] ;;
+        ALERT_MAIL) [ "$2" = whm ] || [[ "$2" =~ ^[A-Za-z0-9._%+-]+(@[A-Za-z0-9.-]+)?$ ]] ;;   # whm = WHM'deki iletişim adresi
         CRON_MIN)   [[ "$2" =~ ^(\*/[0-9]{1,2}|[0-9]{1,2})$ ]] ;;
     esac
 }
@@ -52,7 +53,7 @@ if [ $AUTO -eq 1 ]; then
 else
     echo "── CSF Auto-Group install ──"
     MSG_LANG="$(ask_valid MSG_LANG 'Language for logs/emails (en/tr)' "$MSG_LANG")"
-    ALERT_MAIL="$(ask_valid ALERT_MAIL 'Email address for alerts' "$ALERT_MAIL")"
+    ALERT_MAIL="$(ask_valid ALERT_MAIL 'Email address for alerts (whm = the contact address set in WHM)' "$ALERT_MAIL")"
     CRON_MIN="$(ask_valid CRON_MIN 'Cron minute field (e.g. */10)' "$CRON_MIN")"
 
     echo
