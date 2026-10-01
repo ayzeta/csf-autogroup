@@ -41,7 +41,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.9.3"   # sürüm — başlangıç log satırında görünür
+VERSION="1.9.4"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1800,6 +1800,16 @@ do_status() {
                 c = substr($0, RSTART + 8, RLENGTH - 9); if (c in W) L[c] = $0 }
             END { for (c in L) print L[c] }' "$EVENTS_FILE" | grep -E '^\{"t":[0-9]+,.*\}$')
         printf '"evx":[%s],' "${evx[*]}"
+        # LFD günlüğü ne kadar eskiye gidiyor (en eski arşivin ilk satırı): panel, günlüğün kapsamadığı tarihler için
+        # "IP'ler" (LFD'den getir) önermez — sonuç veremeyeceği belli
+        local lfdo="" lf ll
+        lf=$(ls -1tr "$LFD_LOG" "$LFD_LOG".* "$LFD_LOG"-* 2>/dev/null | head -n 1)
+        if [ -n "$lf" ]; then
+            case "$lf" in *.gz) ll=$(zcat "$lf" 2>/dev/null | head -n 1) ;; *) ll=$(head -n 1 "$lf" 2>/dev/null) ;; esac
+            lfdo=$(LC_ALL=C date -d "${ll:0:6}" +%F 2>/dev/null)
+            [ -n "$lfdo" ] && [[ "$lfdo" > "$(date +%F)" ]] && lfdo=$(LC_ALL=C date -d "${ll:0:6} $(( $(date +%Y) - 1 ))" +%F 2>/dev/null)
+        fi
+        printf '"lfd_oldest":"%s",' "$lfdo"
         printf '"groups":[%s],"pending":[%s],"review":[%s],"ignored":[%s],"hist_cache":[%s],"events":[%s]}\n' \
             "${groups[*]}" "${pending[*]}" "${review[*]}" "${ignored[*]}" "${hcache[*]}" "${recent[*]}"
         return 0

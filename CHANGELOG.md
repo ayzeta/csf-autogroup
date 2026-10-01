@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.4 — 2026-10-02
+
+- "IPs" (fetching a block's IPs from the LFD log) is offered only for dates the
+  LFD log still covers; for older blocks it used to end in "no records left in
+  the LFD log". This only affects installs upgraded from versions before the
+  event log; fresh installs record every ban with its IPs and reasons.
+
 ## 1.9.3 — 2026-10-02
 
 - The reason line under each Watched block is removed again (it made the table
