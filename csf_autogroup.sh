@@ -47,10 +47,11 @@ SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 # ── Config (overridable via config.env) ─────────────────────────────────────
 MSG_LANG="${MSG_LANG:-en}"                       # en | tr
 ALERT_MAIL="${ALERT_MAIL:-whm}"                  # whm = WHM'deki iletişim adresi; ya da bir e-posta adresi
-ICONTACT="${ICONTACT:-0}"                        # WHM bildirimleri (iContact: Slack, e-posta … WHM → Contact Manager)
-IC_FIREWALL="${IC_FIREWALL:-1}"; IC_LISTFULL="${IC_LISTFULL:-1}"; IC_RUN="${IC_RUN:-0}"; IC_DIGEST="${IC_DIGEST:-0}"
-IC_PERL="${IC_PERL:-/usr/local/cpanel/3rdparty/bin/perl}"
-IC_MODULE="${IC_MODULE:-/usr/local/cpanel/Cpanel/iContact.pm}"
+# Bildirim kanalları: all = WHM'de tanımlı kanalların hepsi (e-posta: bizim HTML mailimiz, adres WHM'den ·
+# Slack: WHM'deki Slack adresi) · email = yalnız e-posta · slack = yalnız Slack. IC_* = Slack'e gidecek olaylar.
+NOTIFY="${NOTIFY:-all}"
+IC_FIREWALL="${IC_FIREWALL:-1}"; IC_LISTFULL="${IC_LISTFULL:-1}"; IC_RUN="${IC_RUN:-1}"; IC_DIGEST="${IC_DIGEST:-1}"
+WWWACCT_SHADOW="${WWWACCT_SHADOW:-/etc/wwwacct.conf.shadow}"   # WHM'in Slack adresi burada (CONTACTSLACK); eklentide saklanmaz
 WWWACCT_CONF="${WWWACCT_CONF:-/etc/wwwacct.conf}"
 DENY_FILE="${DENY_FILE:-/etc/csf/csf.deny}"
 CSF_CONF="${CSF_CONF:-/etc/csf/csf.conf}"
@@ -89,7 +90,7 @@ HIST_FILE="${HIST_FILE:-$(dirname "$SAYAC_FILE")/history.jsonl}"
 LOGHIST_FILE="${LOGHIST_FILE:-$(dirname "$SAYAC_FILE")/loghist.v2.jsonl}"   # günlükten çıkarılan, olay kaydından önceki işler      # "Ayrıntı" ile getirilen eski uyarılar (bir kez)
 IMUNIFY_FILE="${IMUNIFY_FILE:-$(dirname "$SAYAC_FILE")/imunify}"         # yerel kara liste önbelleği
 IMUNIFY_WL_FILE="${IMUNIFY_WL_FILE:-$(dirname "$SAYAC_FILE")/imunify_white}"  # yerel beyaz liste önbelleği
-IC_STATE_FILE="${IC_STATE_FILE:-$(dirname "$SAYAC_FILE")/icontact_state}"   # WHM bildirimi gönderilmiş süren sorunlar
+IC_STATE_FILE="${IC_STATE_FILE:-$(dirname "$SAYAC_FILE")/slack_state}"   # Slack'e bildirilmiş, süren sorunlar
 MODSEC_DB="${MODSEC_DB:-/var/cpanel/modsec/modsec.sqlite}"      # cPanel'in ModSecurity eşleşme kaydı (kural mesajları)
 MODSEC_CACHE="${MODSEC_CACHE:-$(dirname "$SAYAC_FILE")/modsec_msgs}"   # kural no → mesaj önbelleği
 LFD_LOG="${LFD_LOG:-/var/log/lfd.log}"         # eski uyarıların ayrıntısı için okunur (lfd.log, .1, .gz)
@@ -291,11 +292,11 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_DG_IML="   %-9s %-44s %s IP%s"
   M_DG_NONE="   yok"
   M_DG_SENT="Haftalık özet gönderildi: %s"
-  M_IC_FAIL="WHM bildirimi gönderilemedi: %s"; M_IC_SENT="WHM bildirimi gönderildi (iContact kabul etti)"; M_IC_NA="Bu sunucuda cPanel bildirim altyapısı (iContact) yok"
+  M_IC_NOSLACK="WHM'de Slack adresi tanımlı değil"; M_IC_FAIL="Slack bildirimi gönderilemedi: %s"; M_IC_SENT="Slack bildirimi gönderildi"
   M_IC_FW="Güvenlik duvarında sorun: %s"; M_IC_FW_OK="Güvenlik duvarı sorunu düzeldi"
   M_IC_PERM="Kalıcı liste %%%s dolu"; M_IC_PERM_OK="Kalıcı liste doluluğu %%80'in altına indi"
   M_IC_TEMP="Geçici liste %%%s dolu"; M_IC_TEMP_OK="Geçici liste doluluğu %%80'in altına indi"
-  M_IC_TEST_S="Deneme bildirimi"; M_IC_TEST_B="Bu bir deneme bildirimidir. %s sunucusundaki CSF Auto-Group uyarıları WHM'in bildirim kanallarına (e-posta, Slack …) bu şekilde gelecek.\nGönderen: %s"
+  M_IC_TEST_S="Deneme bildirimi"; M_IC_TEST_B="Bu bir deneme bildirimidir. %s sunucusundaki CSF Auto-Group uyarıları WHM'de tanımlı Slack kanalına bu şekilde gelecek.\nGönderen: %s"
   M_H_IP="IP"; M_H_HOST="Hostname"; M_H_WHY="Sebep"; M_H_MORE="ve %s IP daha"
   M_H_PANEL="Paneli aç"; M_H_PANELP="WHM → Eklentiler → CSF Auto-Group"
   M_H_PERM="Kalıcı liste"; M_H_TEMP="Geçici liste"; M_H_LINES="%s / %s satır · %%%s"; M_H_AGO="7 gün önce %s"
@@ -469,11 +470,11 @@ else
   M_DG_IML="   %-9s %-44s %s IPs%s"
   M_DG_NONE="   none"
   M_DG_SENT="Weekly summary sent: %s"
-  M_IC_FAIL="WHM notification failed: %s"; M_IC_SENT="WHM notification sent (accepted by iContact)"; M_IC_NA="cPanel's notification system (iContact) is not available on this server"
+  M_IC_NOSLACK="No Slack address is set in WHM"; M_IC_FAIL="Slack notification failed: %s"; M_IC_SENT="Slack notification sent"
   M_IC_FW="Firewall problem: %s"; M_IC_FW_OK="Firewall problem resolved"
   M_IC_PERM="Permanent list %s%% full"; M_IC_PERM_OK="Permanent list usage is back under 80%%"
   M_IC_TEMP="Temp list %s%% full"; M_IC_TEMP_OK="Temp list usage is back under 80%%"
-  M_IC_TEST_S="Test notification"; M_IC_TEST_B="This is a test notification. CSF Auto-Group alerts from %s will reach WHM's notification channels (email, Slack …) like this.\nSent by: %s"
+  M_IC_TEST_S="Test notification"; M_IC_TEST_B="This is a test notification. CSF Auto-Group alerts from %s will reach the Slack channel set in WHM like this.\nSent by: %s"
   M_H_IP="IP"; M_H_HOST="Hostname"; M_H_WHY="Reason"; M_H_MORE="and %s more IPs"
   M_H_PANEL="Open the panel"; M_H_PANELP="WHM → Plugins → CSF Auto-Group"
   M_H_PERM="Permanent list"; M_H_TEMP="Temp list"; M_H_LINES="%s / %s lines · %s%%"; M_H_AGO="7 days ago %s"
@@ -533,7 +534,7 @@ mail() {
 
 # ── Settings: validation (panel + --config set + --dry-run --set) ──────────
 # Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
-CFG_KEYS="MSG_LANG ALERT_MAIL DIGEST DIGEST_DAY ICONTACT IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN"
+CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN"
 CFG_TRY_KEYS="THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS"
 logrotate_write() { # [MB] [ARŞİV] → /etc/logrotate.d/csf_autogroup (geçici dosya + mv)
     local mb="${1:-$LOG_ROTATE_MB}" keep="${2:-$LOG_ROTATE_KEEP}" tmp
@@ -550,7 +551,8 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
         MSG_LANG) opts="tr en" ;;
         LOOKUP) opts="0 1" ;;
         CRON_MIN) opts="*/5 */10 */15 */30 0" ;;
-        DIGEST|ICONTACT|IC_FIREWALL|IC_LISTFULL|IC_RUN|IC_DIGEST) opts="0 1" ;;
+        DIGEST|IC_FIREWALL|IC_LISTFULL|IC_RUN|IC_DIGEST) opts="0 1" ;;
+        NOTIFY) opts="all email slack" ;;
         DIGEST_DAY) opts="1 2 3 4 5 6 7" ;;
         ALERT_MAIL)
             # Yerel adresler de geçerli: "root", "root@localhost" (cPanel root'un postasını
@@ -789,26 +791,45 @@ h_subj() {       # KONU → REPLY = RFC 2047 kodlu konu (kelime sınırında ~40
     [ -n "$chunk" ] && out+="${out:+$NL }=?UTF-8?B?$(printf '%s' "$chunk" | base64 -w0)?="
     REPLY="$out"
 }
-# ── WHM bildirimleri (cPanel iContact) ──────────────────────────────────────
-# Seçilen olaylar WHM'in kendi kanallarına da gider (root'un e-posta / Slack / SMS … ayarları; WHM →
-# Contact Manager). Kanal bilgisi eklentide tutulmaz. Olay adı "Application::CSFAutoGroup…": cPanel'in
-# EventImportance.pm listesinde "Application" yüksek önemde; tanımadığı adlar düşük sayılıp kanal eşiğinde
-# elenirdi (sunucuda doğrulandı, 2026-09-30). Konu/metin Perl'e ortam değişkeniyle geçer.
-ic_ok() { [ -x "$IC_PERL" ] && [ -r "$IC_MODULE" ]; }
-ic_send() {      # OLAY KONU METİN → 0 gönderildi (IC_OUT = çıktı)
+# ── Slack (WHM'de tanımlı adres) ────────────────────────────────────────────
+# Adres her gönderimde WHM'in dosyasından okunur, eklentide saklanmaz. cPanel'in kendi gönderici altyapısı
+# (iContact) "e-posta hariç" seçeneği sunmadığı için kullanılmaz: e-posta zaten bizim HTML mailimizden gidiyor,
+# iContact aynı olayı WHM'in e-posta kanalına da gönderip çift mail üretirdi (sunucuda iContact.pm ile doğrulandı).
+slack_url() {    # → REPLY = WHM'deki Slack adresi (yalnız https://hooks.slack.com/ ile başlıyorsa), yoksa boş
+    REPLY=$(awk '$1 == "CONTACTSLACK" { print $2; exit }' "$WWWACCT_SHADOW" 2>/dev/null)
+    [[ "$REPLY" =~ ^https://hooks\.slack\.com/[A-Za-z0-9/_-]+$ ]] || REPLY=""
+}
+slack_send() {   # KONU METİN → 0 gönderildi. Adres komut satırına yazılmaz (ps'te görünmesin): curl -K - ile stdin'den
+    local url tmp rc
+    slack_url; url="$REPLY"
+    [ -n "$url" ] || { IC_OUT="$M_IC_NOSLACK"; return 1; }
+    command -v curl >/dev/null 2>&1 || { IC_OUT="curl yok"; return 1; }
+    tmp=$(mktemp) || return 1; chmod 600 "$tmp"
+    # Slack metni: & < > kaçışlanır (Slack biçimi), JSON için \ " ve satır sonu \n olur
+    local t="*[$(hostname 2>/dev/null || echo "$HOSTNAME")] $1*"$'\n'"$2"
+    t="${t//&/&amp;}"; t="${t//</&lt;}"; t="${t//>/&gt;}"
+    t="${t//\\/\\\\}"; t="${t//\"/\\\"}"; t="${t//$'\r'/}"; t="${t//$'\t'/  }"; t="${t//$'\n'/\\n}"; t="${t//[[:cntrl:]]/ }"
+    printf '{"text":"%s"}' "$t" > "$tmp"
+    IC_OUT=$(printf 'url = "%s"\n' "$url" | curl -sS -m 20 -X POST -H 'Content-Type: application/json' --data-binary "@$tmp" -K - 2>&1 9>&-); rc=$?
+    rm -f "$tmp"
+    [ "$rc" = 0 ] && [ "$IC_OUT" = ok ] && return 0
+    [ "$rc" = 0 ] && rc=1
+    return $rc
+}
+ic_send() {      # OLAY KONU METİN → 0 gönderildi (IC_OUT = çıktı). Olay adı şimdilik yalnız günlük için.
     local subj="[CSF Auto-Group] $2" txt="$3" rc
-    if [ "$DRY" = 1 ]; then echo "      [dry-run] WHM: $subj"; return 0; fi
-    ic_ok || { IC_OUT="$M_IC_NA"; return 1; }
+    if [ "$DRY" = 1 ]; then echo "      [dry-run] Slack: $subj"; return 0; fi
     subj="${subj//[$'\r\n\f']/ }"
     (( ${#txt} > 3500 )) && txt="${txt:0:3500} …"
-    IC_OUT=$(CAG_EV="CSFAutoGroup$1" CAG_SUBJ="$subj" CAG_TEXT="$txt" timeout 60 "$IC_PERL" -e 'use strict; use Cpanel::iContact;
-        Cpanel::iContact::icontact(application => "Application", event_name => $ENV{CAG_EV}, subject => $ENV{CAG_SUBJ},
-                                   im_subject => $ENV{CAG_SUBJ}, message => $ENV{CAG_TEXT}); exit 0;' 2>&1 9>&-); rc=$?
+    slack_send "$subj" "$txt"; rc=$?
     [ "$rc" = 0 ] || log "$(m "$M_IC_FAIL" "${IC_OUT%%$NL*}")"
     return $rc
 }
+slack_on() { [ "$NOTIFY" != email ]; }   # Slack kanalı seçili mi (all | slack)
+mail_on()  { [ "$NOTIFY" != slack ]; }   # e-posta kanalı seçili mi (all | email)
 ic_track() {     # AYAR DURUM_ANAHTARI SORUN(1|0) KONU METİN DÜZELDİ_KONUSU — başlayınca bir kez, düzelince bir kez
-    [ "$ICONTACT" = 1 ] && [ "${!1}" = 1 ] && [ "$DRY" != 1 ] || return 0
+    slack_on && [ "${!1}" = 1 ] && [ "$DRY" != 1 ] || return 0
+    slack_url; [ -n "$REPLY" ] || return 0
     local had=0 tmp="$IC_STATE_FILE.tmp.$$"
     grep -qx "$2" "$IC_STATE_FILE" 2>/dev/null && had=1
     if [ "$3" = 1 ] && [ "$had" = 0 ]; then ic_send "$2" "$4" "$5" || return 0
@@ -877,8 +898,8 @@ mail_flush() {
     h_usage "${current_count:-0}" "${limit:-0}" "${temp_current:-0}" "${temp_limit:-0}"; html+="$REPLY"
     printf -v hs '%s · %(%d.%m.%Y %H:%M)T' "$(hostname 2>/dev/null || echo "$HOSTNAME")" -1
     h_doc "CSF Auto-Group" "$hs" "$html"
-    send_mail "$([ "$MAIL_URGENT" = 1 ] && printf '!!! ')$M_SUBJ_PREFIX$subj" "$txt" "$REPLY"
-    if [ "$ICONTACT" = 1 ] && [ "$IC_RUN" = 1 ]; then
+    mail_on && send_mail "$([ "$MAIL_URGENT" = 1 ] && printf '!!! ')$M_SUBJ_PREFIX$subj" "$txt" "$REPLY"
+    if slack_on && [ "$IC_RUN" = 1 ]; then
         local rs="" rt=""
         for i in "${!MAIL_PARTS[@]}"; do
             [ "${MAIL_TONES[i]}" = bad ] && continue
@@ -2282,8 +2303,8 @@ digest_maybe() { # çalışma sonunda: seçilen gün, 09:00'dan sonra, haftada b
     wk="DIGEST_$(date +%G-W%V)"
     grep -q "^$wk " "$SAYAC_FILE" && return 0
     digest_build
-    send_mail "$DG_SUBJ" "$DG_BODY" "$DG_HTML"
-    [ "$ICONTACT" = 1 ] && [ "$IC_DIGEST" = 1 ] && ic_send Digest "$DG_SUBJ" "$DG_BODY"
+    mail_on && send_mail "$DG_SUBJ" "$DG_BODY" "$DG_HTML"
+    slack_on && [ "$IC_DIGEST" = 1 ] && ic_send Digest "$DG_SUBJ" "$DG_BODY"
     cnt_add "$wk $TODAY"
     log "$(m "$M_DG_SENT" "$ALERT_MAIL")"
     ev digest ""
@@ -2340,8 +2361,9 @@ do_config() {
                 o="{\"ok\":true,\"values\":{"
                 i=0
                 for k in $CFG_KEYS; do jstr "$(cfg_value "$k")"; o+="$([ $i -gt 0 ] && echo ,)\"$k\":$REPLY"; i=1; done
-                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"whm\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"ICONTACT\":\"0\",\"IC_FIREWALL\":\"1\",\"IC_LISTFULL\":\"1\",\"IC_RUN\":\"0\",\"IC_DIGEST\":\"0\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_MAX_LINES\":\"5000\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"BLOCK_EXPIRE_DAYS\":\"365\",\"BLOCK_EXPIRE_AUTO\":\"0\",\"CRON_MIN\":\"*/10\"}"
-                ALERT_MAIL=whm mail_to; jstr "$REPLY"; o+=",\"whm_contact\":$REPLY,\"icontact\":$(ic_ok && echo true || echo false)"
+                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"whm\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"NOTIFY\":\"all\",\"IC_FIREWALL\":\"1\",\"IC_LISTFULL\":\"1\",\"IC_RUN\":\"1\",\"IC_DIGEST\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_MAX_LINES\":\"5000\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"BLOCK_EXPIRE_DAYS\":\"365\",\"BLOCK_EXPIRE_AUTO\":\"0\",\"CRON_MIN\":\"*/10\"}"
+                ALERT_MAIL=whm mail_to; jstr "$REPLY"; o+=",\"whm_contact\":$REPLY"
+                slack_url; o+=",\"slack\":$([ -n "$REPLY" ] && echo true || echo false)"
                 o+=",\"csf\":{\"deny_limit\":$(num "$(conf_val DENY_IP_LIMIT)"),\"temp_limit\":$(num "$(conf_val DENY_TEMP_IP_LIMIT)")}"
                 local lb=0 la=0 ll=0
                 [ -f "$LOG_FILE" ] && { lb=$(wc -c < "$LOG_FILE"); ll=$(wc -l < "$LOG_FILE"); }
@@ -2349,13 +2371,12 @@ do_config() {
                 o+=",\"log\":{\"rotate\":$([ -f "$LOGROTATE_CONF" ] && echo true || echo false),\"bytes\":$(num "$lb"),\"lines\":$(num "$ll"),\"archives\":$(num "$la")}"
                 # Sunucu gereksinimleri (Ayarlar sekmesindeki kart): ok | missing | warn
                 local dp="" dk ds
-                for dk in csf crontab mail dns logrotate flock timeout git imunify modsec sqlite3 icontact; do
+                for dk in csf crontab mail dns logrotate flock timeout git imunify modsec sqlite3; do
                     ds=missing
                     case "$dk" in
                         csf)       { [ -x "$CSF_BIN" ] || command -v csf >/dev/null 2>&1; } && ds=ok ;;
                         dns)       [ -n "$DIG_BIN$HOST_BIN" ] && ds=ok ;;
                         imunify)   [ -n "$IMUNIFY_BIN" ] && [ -x "$IMUNIFY_BIN" ] && ds=ok ;;
-                        icontact)  ic_ok && ds=ok ;;
                         # ModSecurity: cPanel'in eşleşme kaydı var → ok; yalnız günlük var → warn (kural dosyasından okunur)
                         modsec)    if [ -r "$MODSEC_DB" ]; then ds=ok; elif [ -r "$(conf_val MODSEC_LOG)" ]; then ds=warn; fi ;;
                         logrotate) if command -v logrotate >/dev/null 2>&1 && [ -d "$(dirname "$LOGROTATE_CONF")" ]; then
@@ -2421,8 +2442,8 @@ do_config() {
             else
                 act_out 1 "$(m "$M_TM_FAIL" "${out%%$NL*}")"
             fi ;;
-        test-icontact)
-            # ayarlardan bağımsız: WHM kanallarını hemen dener
+        test-slack)
+            # ayarlardan bağımsız: WHM'deki Slack adresini hemen dener
             if ic_send Test "$M_IC_TEST_S" "$(m "$M_IC_TEST_B" "$(hostname 2>/dev/null || echo "$HOSTNAME")" "$AG_BY")"; then
                 log "$(m "$M_A_LOG" "$AG_BY" "$M_IC_SENT")"; act_out 0 "$M_IC_SENT"
             else act_out 1 "$(m "$M_IC_FAIL" "${IC_OUT%%$NL*}")"; fi ;;
@@ -2443,7 +2464,7 @@ case "$MODE" in
     history) LOG_MODE=quiet; do_history "${ARGS[0]}" "${ARGS[1]}" "${ARGS[2]:-2}"; exit $? ;;
     logrotate) logrotate_write && { echo "$LOGROTATE_CONF"; exit 0; }; exit 1 ;;   # install.sh çağırır   # eklenti "Şimdi çalıştır"dan önce sorar
     digest) LOG_MODE=file; owners_load; parse_deny "$DENY_FILE" 1; panel_init; digest_build
-            if [ "$SEND" = 1 ]; then send_mail "$DG_SUBJ" "$DG_BODY" "$DG_HTML"; [ "$ICONTACT" = 1 ] && [ "$IC_DIGEST" = 1 ] && ic_send Digest "$DG_SUBJ" "$DG_BODY"; log "$(m "$M_DG_SENT" "$ALERT_MAIL")"; ev digest "" "by=\"$AG_BY\""
+            if [ "$SEND" = 1 ]; then mail_on && send_mail "$DG_SUBJ" "$DG_BODY" "$DG_HTML"; slack_on && [ "$IC_DIGEST" = 1 ] && ic_send Digest "$DG_SUBJ" "$DG_BODY"; log "$(m "$M_DG_SENT" "$ALERT_MAIL")"; ev digest "" "by=\"$AG_BY\""
             else printf '%s\n\n%s\n' "$DG_SUBJ" "$DG_BODY"; fi
             exit 0 ;;
 esac

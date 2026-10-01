@@ -710,3 +710,8 @@
 }
 /* başlıkta yalnız bir bağlantı varsa (ör. Kurallar · Düzenle) telefonda da sağda kalsın */
 @media (max-width: 600px) { .ag-card-h .ag-tools:not(:has(.ag-chips, .ag-input)) { width: auto; margin-left: auto; } }
+
+/* WHM bildirimleri: olay düğmeleri sığmazsa alt satıra geçer; masaüstünde sağa, telefonda (diğer denetimler gibi) sola yaslı */
+.ag-icwrap { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
+.ag-chips.ag-icwrap { gap: 2px; }
+@media (max-width: 900px) { .ag-icwrap { justify-content: flex-start; } }
