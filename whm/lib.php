@@ -399,6 +399,7 @@ function ag_update_check(bool $fresh = false): array
     }
     return [
         'ok'             => true,
+        'checked'        => (int) @filemtime($stamp),   // GitHub'a en son gerçekten sorulan an (önbellekten değil)
         'current'        => ag_version()['version'],
         'current_commit' => substr($local, 0, 7),
         'latest'         => $latest !== '' ? $latest : '?',

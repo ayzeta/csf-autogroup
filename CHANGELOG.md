@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.9.2 — 2026-10-02
+
+- **Update check:** Settings → Server asks GitHub right away when its result is
+  older than two minutes; "Last checked" shows when GitHub was really asked; the
+  "Update available" banner appears without reloading the page, even while a run
+  is in progress or settings are unsaved.
+- **Watched:** each row says why the block is watched (temp block ban: number of
+  IPs and the most common ban reason); the IP card shows it too.
+- A row's ⋯ menu opens upwards when there is no room below (last rows of a
+  table no longer get cut off).
+- The hover underline of an address is only as wide as the address.
+
 ## 1.9.1 — 2026-10-02
 
 - Same elements behave the same everywhere:

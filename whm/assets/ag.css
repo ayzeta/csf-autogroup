@@ -718,3 +718,10 @@
 .ag-chips.ag-icwrap .ag-chip { border: 1px solid var(--ag-line); background: var(--ag-card); }
 .ag-chips.ag-icwrap .ag-chip.on { border-color: var(--ag-accent-line); background: var(--ag-accent-soft); color: var(--ag-accent); box-shadow: none; }
 @media (max-width: 900px) { .ag-icwrap { justify-content: flex-start; } }
+
+/* adresin altı çizgisi yalnız yazı kadar (sütun boyunca taşmasın) */
+.ag-td-stack .ag-cidr { align-self: flex-start; max-width: 100%; }
+/* aşağıda yer yoksa menü yukarı açılır */
+.ag-menu.ag-menu-up { top: auto; bottom: calc(100% + 4px); }
+/* izlenenler: neden izlendiği (adresin altında, tek satır) */
+.ag-why { font-size: 12px; color: var(--ag-text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }

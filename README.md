@@ -27,7 +27,7 @@ is escalated to a **permanent** ban. `/16` ranges are only flagged for review
 - **English / Türkçe** — the plugin, logs and emails.
 - **Works on phones** — the page adapts to small screens.
 
-**Version 1.9.1** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
+**Version 1.9.2** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
 cPanel the same engine runs from cron and the command line
 ([details](#without-cpanel)).
 
@@ -71,8 +71,9 @@ Resellers can't.
 
 When GitHub has a newer version, the plugin shows a banner: **Update** runs
 `update.sh` and **Reload page** loads the new version. The page checks on its
-own every half hour while it is open, and **Settings → Server → Check for
-updates** asks GitHub right away. The weekly summary email also mentions a new
+own every half hour while it is open; opening **Settings → Server** asks
+GitHub again if the last answer is older than two minutes, and **Check for
+updates** asks right away. The weekly summary email also mentions a new
 version. From SSH:
 
 ```bash
@@ -111,8 +112,9 @@ settings, with no prompts. `config.env` is left untouched.
   *Old* filter lists block bans older than the old-block limit (default 365
   days), with a button to remove them all.
 - **Watched** — `/24`s that were temp-banned once. If one comes back, it becomes
-  permanent + `do not delete`. Sorted by days left; **⋯ → IPs** shows why each
-  one is watched.
+  permanent + `do not delete`. Sorted by days left. Each row says why it is
+  watched (the temp block ban's IP count and main ban reason); **⋯ → IPs**
+  lists the IPs.
 - **History** (its own tab) — every ban, promotion, skip, warning and manual
   action. Work from before the event log existed is filled in from the log.
   Click an address to open its IP card.
