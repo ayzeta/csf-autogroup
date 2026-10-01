@@ -38,8 +38,10 @@
 #     own IPs in csf.allow, start with high thresholds, and watch the log.
 # ============================================================================
 set -o pipefail
+# Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
+shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.8.0"   # sürüm — başlangıç log satırında görünür
+VERSION="1.9.0"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -52,6 +54,7 @@ ALERT_MAIL="${ALERT_MAIL:-whm}"                  # whm = WHM'deki iletişim adre
 NOTIFY="${NOTIFY:-all}"
 IC_FIREWALL="${IC_FIREWALL:-1}"; IC_LISTFULL="${IC_LISTFULL:-1}"; IC_RUN="${IC_RUN:-1}"; IC_DIGEST="${IC_DIGEST:-1}"
 WWWACCT_SHADOW="${WWWACCT_SHADOW:-/etc/wwwacct.conf.shadow}"   # WHM'in Slack adresi burada (CONTACTSLACK); eklentide saklanmaz
+SLACK_BATCH_MIN="${SLACK_BATCH_MIN:-60}"         # tur bildirimleri Slack'e en fazla bu kadar dakikada bir (toplanarak) gider; acil olanlar hemen
 WWWACCT_CONF="${WWWACCT_CONF:-/etc/wwwacct.conf}"
 DENY_FILE="${DENY_FILE:-/etc/csf/csf.deny}"
 CSF_CONF="${CSF_CONF:-/etc/csf/csf.conf}"
@@ -91,6 +94,8 @@ LOGHIST_FILE="${LOGHIST_FILE:-$(dirname "$SAYAC_FILE")/loghist.v2.jsonl}"   # g�
 IMUNIFY_FILE="${IMUNIFY_FILE:-$(dirname "$SAYAC_FILE")/imunify}"         # yerel kara liste önbelleği
 IMUNIFY_WL_FILE="${IMUNIFY_WL_FILE:-$(dirname "$SAYAC_FILE")/imunify_white}"  # yerel beyaz liste önbelleği
 IC_STATE_FILE="${IC_STATE_FILE:-$(dirname "$SAYAC_FILE")/slack_state}"   # Slack'e bildirilmiş, süren sorunlar
+SLACK_QUEUE="${SLACK_QUEUE:-$(dirname "$SAYAC_FILE")/slack_queue}"   # Slack'e gitmeyi bekleyen tur bildirimleri
+SLACK_LAST="${SLACK_LAST:-$(dirname "$SAYAC_FILE")/slack_last}"      # son toplu tur bildiriminin zamanı
 MODSEC_DB="${MODSEC_DB:-/var/cpanel/modsec/modsec.sqlite}"      # cPanel'in ModSecurity eşleşme kaydı (kural mesajları)
 MODSEC_CACHE="${MODSEC_CACHE:-$(dirname "$SAYAC_FILE")/modsec_msgs}"   # kural no → mesaj önbelleği
 LFD_LOG="${LFD_LOG:-/var/log/lfd.log}"         # eski uyarıların ayrıntısı için okunur (lfd.log, .1, .gz)
@@ -133,7 +138,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   # Türkçe tarih/metin; ama sıralama kuralı C: tr_TR'de "i" [a-z] aralığına girmiyor (ı/i ayrı harf),
   # e-posta, alan adı ve tarih denetimleri "gmail" gibi değerleri reddediyordu (sunucuda doğrulandı).
   unset LC_ALL; export LANG=tr_TR.UTF-8 LC_COLLATE=C
-  M_START="--- Başladı ---";                                       M_END="--- Bitti ---"
+  M_START="--- Başladı ---"
   M_END_T="--- Bitti (toplam %s sn) ---"
   M_CFG_ROTFAIL="UYARI: logrotate ayarı yazılamadı (/etc/logrotate.d)"
   M_QUIET="Tur: değişiklik yok · kalıcı %s/%s · geçici %s/%s · %s sn"
@@ -300,18 +305,20 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_H_IP="IP"; M_H_HOST="Hostname"; M_H_WHY="Sebep"; M_H_MORE="ve %s IP daha"
   M_H_PANEL="Paneli aç"; M_H_PANELP="WHM → Eklentiler → CSF Auto-Group"
   M_H_PERM="Kalıcı liste"; M_H_TEMP="Geçici liste"; M_H_LINES="%s / %s satır · %%%s"; M_H_AGO="7 gün önce %s"
-  M_H_ALERT="Uyarı"; M_H_WEEK="Haftalık özet"; M_H_NONE="Bu hafta yok."
+  M_H_WEEK="Haftalık özet"; M_H_NONE="Bu hafta yok."
   M_H_CNT="blok banı|geçici blok banı|kalıcıya alındı|şüpheli ağ|atlandı|elle işlem|ayar değişikliği"
   M_H_NEWT="Yeni blok banları"; M_H_BLOCK="Blok"; M_H_OWNER="Sahip"; M_H_STATE="Durum"
-  M_H_K_add24="kalıcı"; M_H_K_promote="tekrar eden"; M_H_K_manual_ban="elle"
+  M_H_K_add24="kalıcı"; M_H_K_promote="tekrar gelen"; M_H_K_manual_ban="elle"
   M_H_TOPT="CSF'in en çok engellediği sağlayıcılar"; M_H_TOPS="csf.deny'deki blok banlarına ve tekil banlara göre"
   M_H_PROV="Sağlayıcı"; M_H_BLK="Blok"; M_H_SGL="Tekil"; M_H_OTH="CSF Auto-Group dışı"; M_H_OTHV="+%s blok"
   M_H_IMT="Imunify360'ın en çok engellediği sağlayıcılar"; M_H_IMS="Sunucunun kendi kara listesi · %s IP"; M_H_IPS="IP"; M_H_RSN="Sebep"
   M_H_EXPT="İzlemesi bitecek bloklar"; M_H_EXPS="14 gün içinde; tekrar gelirlerse kalıcı olurlar"; M_H_DAYS="%s gün"; M_H_NONE_S="Yok"
   M_H_RUNS="Tur sağlığı"; M_H_RUNSS="son 7 gün"; M_H_RUNSV="%s tur · beklenen ~%s"
+  M_H_GLOSS="tekil = tek IP banı · blok = /24 · ağ = /16 · do not delete = CSF liste dolsa da silmez"
+  M_SQ_SUBJ="%s tur bildirimi (son %s dk)"
   M_H_TMT="Test maili"; M_H_TMS="Mail ayarların çalışıyor"; M_H_RSUM="%s IP · %s"
 else
-  M_START="--- Started ---";                                       M_END="--- Done ---"
+  M_START="--- Started ---"
   M_END_T="--- Done (%s s total) ---"
   M_CFG_ROTFAIL="WARNING: could not write the logrotate config (/etc/logrotate.d)"
   M_QUIET="Run: no changes · permanent %s/%s · temp %s/%s · %s s"
@@ -478,18 +485,28 @@ else
   M_H_IP="IP"; M_H_HOST="Hostname"; M_H_WHY="Reason"; M_H_MORE="and %s more IPs"
   M_H_PANEL="Open the panel"; M_H_PANELP="WHM → Plugins → CSF Auto-Group"
   M_H_PERM="Permanent list"; M_H_TEMP="Temp list"; M_H_LINES="%s / %s lines · %s%%"; M_H_AGO="7 days ago %s"
-  M_H_ALERT="Alert"; M_H_WEEK="Weekly summary"; M_H_NONE="None this week."
+  M_H_WEEK="Weekly summary"; M_H_NONE="None this week."
   M_H_CNT="block bans|temp block bans|made permanent|suspicious ranges|skipped|manual actions|settings changes"
   M_H_NEWT="New block bans"; M_H_BLOCK="Block"; M_H_OWNER="Owner"; M_H_STATE="State"
-  M_H_K_add24="permanent"; M_H_K_promote="repeat"; M_H_K_manual_ban="manual"
+  M_H_K_add24="permanent"; M_H_K_promote="repeat offender"; M_H_K_manual_ban="manual"
   M_H_TOPT="Providers CSF blocks most"; M_H_TOPS="by block bans and single bans in csf.deny"
   M_H_PROV="Provider"; M_H_BLK="Blocks"; M_H_SGL="Singles"; M_H_OTH="Not from CSF Auto-Group"; M_H_OTHV="+%s blocks"
   M_H_IMT="Providers Imunify360 blocks most"; M_H_IMS="This server's own blacklist · %s IPs"; M_H_IPS="IPs"; M_H_RSN="Reason"
   M_H_EXPT="Watched blocks expiring"; M_H_EXPS="within 14 days; they become permanent if they return"; M_H_DAYS="%s days"; M_H_NONE_S="None"
   M_H_RUNS="Run health"; M_H_RUNSS="last 7 days"; M_H_RUNSV="%s runs · ~%s expected"
+  M_H_GLOSS="single = one-IP ban · block = /24 · range = /16 · do not delete = CSF keeps it even when the list is full"
+  M_SQ_SUBJ="%s run notices (last %s min)"
   M_H_TMT="Test email"; M_H_TMS="Your mail settings work"; M_H_RSUM="%s IPs · %s"
 fi
-m() { local f="$1"; shift; printf -- "$f" "$@"; }   # "--" : "--- Bitti …" gibi şablonlar seçenek sanılmasın
+# "--": "--- Bitti …" gibi şablonlar seçenek sanılmasın. İngilizce "(s)" çoğulu metindeki ilk sayıya göre
+# çözülür: "1 block ban(s)" → "1 block ban", "3 block ban(s)" → "3 block bans".
+m() {
+    local f="$1" r; shift; printf -v r -- "$f" "$@"
+    if [[ "$r" == *"(s)"* ]]; then
+        if [[ "$r" =~ ^[^0-9]*1([^0-9]|$) ]]; then r="${r//(s)/}"; else r="${r//(s)/s}"; fi
+    fi
+    printf '%s' "$r"
+}
 
 # LOG_MODE: tee = ekrana + dosyaya (normal çalışma) · file = yalnız dosyaya (--action, çıktı JSON'a
 # karışmasın) · quiet = hiçbir yere (--status/--lookup salt okur) · kuru çalıştırmada yalnız ekrana.
@@ -730,8 +747,10 @@ h_doc() {        # BAŞLIK ALT_BAŞLIK GÖVDE(kart satırları) → REPLY = tam 
         h_esc "$PANEL_BASE"
         foot="<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" align=\"center\"><tr><td bgcolor=\"#4338ca\" style=\"background:#4338ca;border-radius:9px;padding:10px 20px;\"><a href=\"$REPLY\" style=\"font-family:$H_FONT;color:#ffffff;text-decoration:none;font-size:13px;font-weight:600;\">$M_H_PANEL</a></td></tr></table>"
         h_box "padding:10px 0 0;font-size:12px;color:#5f6776;text-align:center;" "$M_H_PANELP · v$VERSION"; foot+="$REPLY"
+        h_esc "$M_H_GLOSS"; h_box "padding:6px 0 0;font-size:11px;color:#9aa1ad;text-align:center;" "$REPLY"; foot+="$REPLY"
     else
         h_box "font-size:12px;color:#5f6776;text-align:center;" "CSF Auto-Group v$VERSION"; foot="$REPLY"
+        h_esc "$M_H_GLOSS"; h_box "padding:6px 0 0;font-size:11px;color:#9aa1ad;text-align:center;" "$REPLY"; foot+="$REPLY"
     fi
     REPLY="<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>$t</title><style>td,div,span,a,b{font-family:$H_FONT;}</style></head>"
     REPLY+="<body style=\"margin:0;padding:0;background:#f4f5f9;font-family:$H_FONT;color:#111827;\" bgcolor=\"#f4f5f9\">"
@@ -836,6 +855,22 @@ ic_send() {      # OLAY KONU METİN → 0 gönderildi (IC_OUT = çıktı). Olay 
     return $rc
 }
 slack_on() { [ "$NOTIFY" != email ]; }   # Slack kanalı seçili mi (all | slack)
+# Tur bildirimleri kuyruğa yazılır, SLACK_BATCH_MIN dakikada en fazla bir mesajda toplanıp gönderilir (kanal
+# kalabalıklaşmasın). Kayıt ayırıcı \036; gönderim başarısızsa kuyruk kalır, sonraki turda yeniden denenir.
+slack_queue_add() { [ "$DRY" = 1 ] && return 0; printf '%s\n%s\n\036\n' "$1" "$2" >> "$SLACK_QUEUE" 2>/dev/null; }
+slack_queue_flush() {
+    [ "$DRY" = 1 ] && return 0
+    [ -s "$SLACK_QUEUE" ] || return 0
+    local now last n subj txt
+    now=$(date +%s); last=$(cat "$SLACK_LAST" 2>/dev/null); [[ "$last" =~ ^[0-9]+$ ]] || last=0
+    [ $(( now - last )) -ge $(( $(num "$SLACK_BATCH_MIN") * 60 )) ] || return 0
+    n=$(grep -c $'^\036$' "$SLACK_QUEUE")
+    subj=$(awk 'BEGIN { RS = "\036\n" } NF { split($0, a, "\n"); s = s (s != "" ? " · " : "") a[1] } END { print s }' "$SLACK_QUEUE")
+    txt=$(awk 'BEGIN { RS = "\036\n" } NF { i = index($0, "\n"); t = t (t != "" ? "\n\n" : "") substr($0, i + 1) } END { printf "%s", t }' "$SLACK_QUEUE")
+    [ "$n" -gt 1 ] && subj="$(m "$M_SQ_SUBJ" "$n" "$SLACK_BATCH_MIN"): $subj"
+    (( ${#subj} > 180 )) && subj="${subj:0:177}..."
+    if ic_send Run "$subj" "$txt"; then : > "$SLACK_QUEUE"; echo "$now" > "$SLACK_LAST"; fi
+}
 mail_on()  { [ "$NOTIFY" != slack ]; }   # e-posta kanalı seçili mi (all | email)
 ic_track() {     # AYAR DURUM_ANAHTARI SORUN(1|0) KONU METİN DÜZELDİ_KONUSU — başlayınca bir kez, düzelince bir kez
     slack_on && [ "${!1}" = 1 ] && [ "$DRY" != 1 ] || return 0
@@ -900,7 +935,7 @@ mail_flush() {
     txt=$( printf '%s\n' "$MAIL_BODY"
            [ -n "$doluluk_satiri" ] && printf '%s\n' "$doluluk_satiri"
            [ -n "$temp_doluluk_satiri" ] && printf '%s\n' "$temp_doluluk_satiri"
-           printf '\n%s%s\n' "$PANEL_FOOT" "$(m "$M_MAIL_DETAIL" "$LOG_FILE")" )
+           printf '\n%s%s\n%s\n' "$PANEL_FOOT" "$(m "$M_MAIL_DETAIL" "$LOG_FILE")" "$M_H_GLOSS" )
     # HTML: her bölüm bir kart, altta liste doluluğu
     for i in "${!MAIL_PARTS[@]}"; do
         h_text "${MAIL_TEXTS[i]}"; h_card "${MAIL_PARTS[i]}" "$REPLY" "${MAIL_TONES[i]}"; html+="$REPLY"
@@ -915,7 +950,7 @@ mail_flush() {
             [ "${MAIL_TONES[i]}" = bad ] && continue
             rs+="${rs:+ · }${MAIL_PARTS[i]}"; rt+="${rt:+$NL$NL}${MAIL_TEXTS[i]}"
         done
-        [ -n "$rs" ] && ic_send Run "$rs" "$rt"
+        [ -n "$rs" ] && slack_queue_add "$rs" "$rt"
     fi
     MAIL_PARTS=(); MAIL_BODY=""; MAIL_URGENT=0; MAIL_TEXTS=(); MAIL_TONES=()
 }
@@ -2758,6 +2793,7 @@ ic_track IC_FIREWALL Firewall "$([ ${#h_msgs[@]} -gt 0 ] && echo 1 || echo 0)" "
 
 # ── Bu turun bildirimleri: tek mail ─────────────────────────────────────────
 mail_flush
+slack_on && [ "$IC_RUN" = 1 ] && slack_queue_flush
 
 # ── Counter retention + log rotation ────────────────────────────────────────
 if [ "$DRY" != 1 ] && [ -f "$SAYAC_FILE" ]; then

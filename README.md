@@ -19,14 +19,15 @@ is escalated to a **permanent** ban. `/16` ranges are only flagged for review
   country) and hostname, in the page and in alert emails.
 - **Safe by default** — never bans a range that touches any CSF whitelist, and
   every manual action asks for confirmation.
-- **One email per run** — everything a run did (block bans, suspicious
-  ranges, skips, limit and firewall alerts) arrives in a single email.
-- **Watches the firewall itself** — shows whether CSF and lfd are working and
-  emails once a day if one of them stops.
+- **Email and Slack** — one HTML email per run with everything it did (block
+  bans, suspicious ranges, skips, limit and firewall alerts), plus Slack
+  messages. Both addresses come from WHM; nothing arrives twice.
+- **Watches the firewall itself** — shows whether CSF and LFD are working and
+  alerts you if one of them stops.
 - **English / Türkçe** — the plugin, logs and emails.
 - **Works on phones** — the page adapts to small screens.
 
-**Version 1.8.0** · root-only WHM plugin on cPanel servers. On servers without
+**Version 1.9.0** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
 cPanel the same engine runs from cron and the command line
 ([details](#without-cpanel)).
 
@@ -58,7 +59,8 @@ cd csf-autogroup
 sudo bash install.sh
 ```
 
-The installer asks for the language (`en`/`tr`), alert email and cron interval,
+The installer asks for the language (`en`/`tr`), alert email (`whm` = the
+contact address set in WHM, the default) and cron interval,
 writes `config.env`, installs the root cron job and, on cPanel, the plugin under
 **WHM → Plugins → CSF Auto-Group**. Re-run it any time.
 
@@ -90,7 +92,7 @@ settings, with no prompts. `config.env` is left untouched.
 - **Status** — whether protection is running, when the last run was and how long
   it took, a countdown to the next run and the durations of the last 36 runs,
   plus three markers: **CSF** (rules loaded, not disabled, not in testing mode),
-  **lfd** (running) and **Cron** (runs on time). Turns red when any of them has
+  **LFD** (running) and **Cron** (runs on time). Turns red when any of them has
   a problem.
 - **Summary cards** — active block bans (with this week's change), items to
   review, and how full CSF's permanent and temp lists are.
@@ -102,13 +104,18 @@ settings, with no prompts. `config.env` is left untouched.
   more separate days is marked *repeating* and moves to the top.
 - **Active block bans** — a sortable, paged table with each block's owner,
   searchable by CIDR, AS number or organisation. Filters show their counts.
-  Blocks that became permanent on a second attack are tagged *repeat*. The
+  Blocks that became permanent on a second attack are tagged *repeat
+  offender*; temp block bans show their time left. **⋯ → IPs** lists the IPs
+  and ban reasons behind any block (for older bans, fetched once from the LFD
+  log and kept). The
   *Old* filter lists block bans older than the old-block limit (default 365
   days), with a button to remove them all.
 - **Watched** — `/24`s that were temp-banned once. If one comes back, it becomes
-  permanent + `do not delete`. Sorted by days left.
+  permanent + `do not delete`. Sorted by days left; **⋯ → IPs** shows why each
+  one is watched.
 - **History** (its own tab) — every ban, promotion, skip, warning and manual
   action. Work from before the event log existed is filled in from the log.
+  Click an address to open its IP card.
   Settings changes are listed under Settings → Settings history.
 - **Look up an IP** — hostname (forward-confirmed), owner, announced prefix,
   registry, whether CSF blocks it and which list whitelists it, with links to
@@ -137,7 +144,8 @@ whitelist, removing a `do not delete` block) make you type the target.
 | Remove | lift a block ban (`do not delete` blocks too; `csf.deny` is backed up first) |
 | Remove old ones | on the *Old* filter: remove every block ban older than the old-block limit |
 | Ignore | hide an item from review for 7/30/90 days (stops `/16` warning emails too) |
-| Details | for warnings older than the event log: that day's IPs and reasons from the lfd log |
+| IPs | a block's IPs and ban reasons (older bans: fetched once from the LFD log) |
+| Details | for warnings older than the event log: that day's IPs and reasons from the LFD log |
 | Dry run | show what a run would do; changes nothing, sends nothing |
 | Run now | run immediately instead of waiting for cron |
 
@@ -149,10 +157,21 @@ The same settings as `config.env`, with validation, grouped into sections
 (notifications, thresholds, schedule, lookups, retention, server, settings
 history):
 
-- **Notifications** — channels: *all channels set in WHM* (default: email + Slack), *email only* or *Slack only*. Both addresses come from WHM (the contact email in Basic WebHost Manager Setup, or any other email address you type; the Slack address set in WHM, read at send time and never stored by the plugin); the plugin sends the HTML alert emails and the Slack messages itself, so nothing arrives twice. Choose which events go to Slack (firewall problem, list filling up, run notices, weekly summary); *Send test email* and *Send a Slack test*; language, and the
-  **weekly summary**: new block bans, providers CSF and Imunify360 block most, watched blocks about to
-  expire, list usage, run count, and a note when a new version is available.
+- **Notifications** — channels: *all channels set in WHM* (default: email +
+  Slack), *email only* or *Slack only*. Both addresses come from WHM: the
+  contact email in Basic WebHost Manager Setup (or any other address you type)
+  and the Slack address set there, which is read at send time and never stored
+  by the plugin. The plugin sends the HTML emails and Slack messages itself, so
+  nothing arrives twice. Choose which events go to Slack (firewall problem,
+  list filling up, run notices, weekly summary): urgent ones go right away,
+  run notices are collected into at most one Slack message per hour. *Send test
+  email*, *Send a Slack test*, language, and the **weekly summary**: new block
+  bans, providers CSF and Imunify360 block most, watched blocks about to
+  expire, list usage, run health, and a note when a new version is available.
   Sent with the first run after 09:00 on the chosen day (default Monday).
+
+![Notification settings](docs/settings.png)
+
 - **Thresholds** — block ban (`/24`), `do not delete`, suspicious range (`/16`),
   temp block ban (`/24`) and suspicious range from temp bans (`/16`).
 - **Schedule** — cron every 5 / 10 / 15 / 30 minutes or hourly.
@@ -166,8 +185,8 @@ history):
   nothing happened leaves a single line in the log.
 
 A **Server requirements** card lists the tools CSF Auto-Group uses (CSF, cron,
-mail, dig/host, logrotate, flock, timeout, git, Imunify360) and what happens when
-one of them is missing.
+mail, dig/host, logrotate, flock, timeout, git, Imunify360, ModSecurity hit log,
+sqlite3) and what happens when one of them is missing.
 
 *Try before saving* runs a dry run with the unsaved thresholds. Saving writes
 `config.env` (previous file kept as `config.env.bak`), updates the crontab and
@@ -187,8 +206,8 @@ range that comes back turns into a permanent one.
 | `/24` with **≥3** temp bans (first time) | temp-ban the `/24` for 12h, watch it |
 | same `/24` seen again | permanent ban + `do not delete` |
 | temp `/16` with **≥5** singles / **≥2** `/24`s | flag as suspicious range by email (once/day) |
-| deny list **≥80%** of its limit | email alert (once/day) |
-| CSF disabled / in testing mode / rules not loaded, or lfd not running | email alert (once/day) |
+| deny list **≥80%** of its limit | alert: email once a day; Slack once when it starts and once when resolved |
+| CSF disabled / in testing mode / rules not loaded, or LFD not running | alert: email once a day; Slack once when it starts and once when resolved |
 | block ban older than the old-block limit (optional) | remove it |
 
 Temp bans already covered by a permanent block are cleared, watch records expire
@@ -200,7 +219,13 @@ keeps `csf.deny` from overflowing its line limit.
 ### Owner info
 
 Each run sends at most one email; its subject sums up the run, e.g.
-`CSF Auto-Group: 2 block bans · 1 suspicious range · 1 temp block ban`.
+`CSF Auto-Group: 2 block bans · 1 suspicious range · 1 temp block ban`. Emails
+are HTML (cards and tables that also work in desktop Outlook) with a plain-text
+part for clients that don't show HTML.
+
+![An alert email](docs/email.png)
+
+The plain-text part looks like this:
 
 ```
 185.220.101.0/24 -> 4 permanent singles, permanent block ban
@@ -213,7 +238,10 @@ Each run sends at most one email; its subject sums up the run, e.g.
   [Team Cymru's](https://www.team-cymru.com/ip-asn-mapping) free DNS service (no
   account or API key). Cached for 30 days.
 - **Hostname** — each IP's reverse DNS.
-- **Reason** — why lfd banned it, from the ban's own comment.
+- **Reason** — why LFD banned it, from the ban's own comment. ModSecurity bans
+  show the rule's message (e.g. `ModSecurity 1302: WP LOGIN VIEW RATE LIMIT…`),
+  read from cPanel's ModSecurity hit log with `sqlite3`, or from the rule file
+  named in the ModSecurity log when that isn't available.
 
 Lookups are plain DNS queries (`dig` or `host`) with a short timeout. Set
 `LOOKUP=0` to turn them off. Alert emails end with a link to the plugin
@@ -232,11 +260,11 @@ every list CSF uses to say "don't block this". If **any** entry overlaps the
 | `GLOBAL_ALLOW`, `GLOBAL_IGNORE`, `DYNDNS`, temp allows (`csf -ta`) | CSF's cached lists in `/var/lib/csf` |
 | Server's own IPs | a `/24` containing one of this server's addresses |
 | `CC_IGNORE`, `CC_ALLOW` in `csf.conf` | the block's country code or `ASnnnn` |
-| `csf.rignore` | a banned IP whose reverse DNS matches (forward-confirmed, like lfd) |
+| `csf.rignore` | a banned IP whose reverse DNS matches (forward-confirmed, like LFD) |
 | Imunify360 whitelist (only with Imunify360) | the server's local whitelist: manual entries and search engine bots Imunify whitelisted; expired entries are ignored, refreshed hourly |
 
 This matters most for `csf.ignore`: CSF lets `csf.allow` addresses through even
-inside a banned range, but `csf.ignore` only stops lfd, so a `/24` ban would
+inside a banned range, but `csf.ignore` only stops LFD, so a `/24` ban would
 block those addresses. If a check can't be completed because DNS isn't
 answering, the block is retried on the next run instead of being banned.
 
@@ -255,7 +283,9 @@ the page shows is available from the command line:
 ./csf_autogroup.sh --help
 ```
 
-Requirements: CSF and a working `sendmail` (HTML emails) or `mail` command (plain text); `dig` or `host` for lookups. Optional: `sqlite3`, to show ModSecurity rule messages in ban reasons.
+Requirements: CSF and a working `sendmail` (HTML emails) or `mail` command
+(plain text); `dig` or `host` for lookups. Optional: `sqlite3` (ModSecurity rule
+messages in ban reasons) and `curl` (Slack).
 
 ### Manual install
 
@@ -272,7 +302,11 @@ All settings live in `config.env` next to the script (see
 tab. Key options:
 
 - `MSG_LANG` — `en` or `tr` (plugin, logs, emails and `csf.deny` comments).
-- `ALERT_MAIL` — where alerts go.
+- `ALERT_MAIL` — where alert emails go: `whm` (the contact address set in WHM,
+  default) or an email address.
+- `NOTIFY` — `all` (email + Slack, default), `email` or `slack`.
+- `IC_FIREWALL`, `IC_LISTFULL`, `IC_RUN`, `IC_DIGEST` — which events go to Slack;
+  `SLACK_BATCH_MIN` — run notices go to Slack at most this often (default 60).
 - `THRESHOLD_24`, `THRESHOLD_24_PERMANENT`, `THRESHOLD_16`, `THRESHOLD_TEMP_24`,
   `THRESHOLD_TEMP_16` — sensitivity.
 - `LOOKUP`, `LOOKUP_TIMEOUT` — owner/hostname lookups.

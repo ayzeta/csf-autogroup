@@ -713,5 +713,8 @@
 
 /* WHM bildirimleri: olay düğmeleri sığmazsa alt satıra geçer; masaüstünde sağa, telefonda (diğer denetimler gibi) sola yaslı */
 .ag-icwrap { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
-.ag-chips.ag-icwrap { gap: 2px; }
+/* çoklu seçim (Slack'e gidecekler): gri zemin yok, her düğme kendi çerçevesiyle; alt satıra geçince boşta zemin kalmaz */
+.ag-chips.ag-icwrap { gap: 6px; background: transparent; padding: 0; }
+.ag-chips.ag-icwrap .ag-chip { border: 1px solid var(--ag-line); background: var(--ag-card); }
+.ag-chips.ag-icwrap .ag-chip.on { border-color: var(--ag-accent-line); background: var(--ag-accent-soft); color: var(--ag-accent); box-shadow: none; }
 @media (max-width: 900px) { .ag-icwrap { justify-content: flex-start; } }
