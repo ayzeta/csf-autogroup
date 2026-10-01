@@ -799,17 +799,24 @@ slack_url() {    # → REPLY = WHM'deki Slack adresi (yalnız https://hooks.slac
     REPLY=$(awk '$1 == "CONTACTSLACK" { print $2; exit }' "$WWWACCT_SHADOW" 2>/dev/null)
     [[ "$REPLY" =~ ^https://hooks\.slack\.com/[A-Za-z0-9/_-]+$ ]] || REPLY=""
 }
-slack_send() {   # KONU METİN → 0 gönderildi. Adres komut satırına yazılmaz (ps'te görünmesin): curl -K - ile stdin'den
-    local url tmp rc
+slack_esc() {    # METİN → REPLY: Slack biçimi için & < > kaçışlanır, JSON için \ " ve satır sonu \n olur
+    local t="$1"
+    t="${t//&/&amp;}"; t="${t//</&lt;}"; t="${t//>/&gt;}"
+    t="${t//\\/\\\\}"; t="${t//\"/\\\"}"; t="${t//$'\r'/}"; t="${t//$'\t'/  }"; t="${t//$'\n'/\\n}"; t="${t//[[:cntrl:]]/ }"
+    REPLY="$t"
+}
+slack_send() {   # KONU METİN [RENK] → 0 gönderildi. Adres komut satırına yazılmaz (ps'te görünmesin): curl -K - ile stdin'den
+    # WHM'in kendi Slack mesajları gibi: solda renkli çizgili kart (attachment); bildirimde "fallback" görünür
+    local url tmp rc col="${3:-#4338ca}" ttl body fb
     slack_url; url="$REPLY"
     [ -n "$url" ] || { IC_OUT="$M_IC_NOSLACK"; return 1; }
     command -v curl >/dev/null 2>&1 || { IC_OUT="curl yok"; return 1; }
     tmp=$(mktemp) || return 1; chmod 600 "$tmp"
-    # Slack metni: & < > kaçışlanır (Slack biçimi), JSON için \ " ve satır sonu \n olur
-    local t="*[$(hostname 2>/dev/null || echo "$HOSTNAME")] $1*"$'\n'"$2"
-    t="${t//&/&amp;}"; t="${t//</&lt;}"; t="${t//>/&gt;}"
-    t="${t//\\/\\\\}"; t="${t//\"/\\\"}"; t="${t//$'\r'/}"; t="${t//$'\t'/  }"; t="${t//$'\n'/\\n}"; t="${t//[[:cntrl:]]/ }"
-    printf '{"text":"%s"}' "$t" > "$tmp"
+    slack_esc "*[$(hostname 2>/dev/null || echo "$HOSTNAME")] $1*"; ttl="$REPLY"
+    slack_esc "$2"; body="$REPLY"
+    slack_esc "[$(hostname 2>/dev/null || echo "$HOSTNAME")] $1"; fb="$REPLY"
+    [[ "$col" =~ ^#[0-9a-fA-F]{6}$ ]] || col="#4338ca"
+    printf '{"attachments":[{"color":"%s","fallback":"%s","text":"%s\\n%s","mrkdwn_in":["text"]}]}' "$col" "$fb" "$ttl" "$body" > "$tmp"
     IC_OUT=$(printf 'url = "%s"\n' "$url" | curl -sS -m 20 -X POST -H 'Content-Type: application/json' --data-binary "@$tmp" -K - 2>&1 9>&-); rc=$?
     rm -f "$tmp"
     [ "$rc" = 0 ] && [ "$IC_OUT" = ok ] && return 0
@@ -821,7 +828,10 @@ ic_send() {      # OLAY KONU METİN → 0 gönderildi (IC_OUT = çıktı). Olay 
     if [ "$DRY" = 1 ]; then echo "      [dry-run] Slack: $subj"; return 0; fi
     subj="${subj//[$'\r\n\f']/ }"
     (( ${#txt} > 3500 )) && txt="${txt:0:3500} …"
-    slack_send "$subj" "$txt"; rc=$?
+    # renk: sorun kırmızı (geçici liste turuncu), düzeldi yeşil, diğerleri lacivert
+    local col="#4338ca"
+    case "$1" in *Resolved) col="#047857" ;; ListTemp) col="#b45309" ;; Firewall|ListPerm) col="#b91c1c" ;; esac
+    slack_send "$subj" "$txt" "$col"; rc=$?
     [ "$rc" = 0 ] || log "$(m "$M_IC_FAIL" "${IC_OUT%%$NL*}")"
     return $rc
 }
