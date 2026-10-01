@@ -6,6 +6,8 @@
   busy). **Why a block is banned or watched** is shown where you look it up:
   **⋯ → IPs** lists the IPs and reasons, and the IP card shows the covering
   block's state, date and main ban reason (and the IP's own reason).
+  When the reason of a watched block isn't recorded (watched since before the
+  event log started), the IP card says so instead of showing only the date.
 - The ban records of older active and watched blocks are now read too (the
   page used to read only the latest 300 entries of the event log), so their
   IPs show up without going back to the LFD log.
