@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.9.6 — 2026-10-02
+
+- **History** and **Settings → Settings history** reach back to the start of
+  the event log. They used to see only the latest 300 entries; now the latest
+  300 load first, **Show more** loads the page before, and new entries are
+  added on each refresh. Entries that share a second at a page edge are never
+  lost or shown twice.
+- The page's status data no longer carries the IP lists of the latest events,
+  so it loads lighter. IP lists come with the History pages; active and
+  watched blocks still get theirs from their own ban records.
+- New command-line mode: `--events latest|after|before [TIME] [N]` prints a
+  page of the event log as JSON.
+
 ## 1.9.5 — 2026-10-02
 
 - Removed fetching IPs from the LFD log ("IPs" on blocks older than the event

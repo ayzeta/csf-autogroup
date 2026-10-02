@@ -23,6 +23,7 @@
 #   csf_autogroup.sh --dry-run            show what a run WOULD do; changes nothing
 #   csf_autogroup.sh --status [--json]    groups, watched blocks, items to review
 #   csf_autogroup.sh --lookup IP [--json] who is this IP? (owner, hostname, lists)
+#   csf_autogroup.sh --events latest|after|before [T] [N]   event log page as JSON (History tab)
 #   csf_autogroup.sh --action NAME TARGET [DAYS] [--force] [--json]
 #        ban16 A.B | ban24 A.B.C | forget A.B.C | unban CIDR
 #        ignore CIDR [DAYS] | unignore CIDR          (used by the WHM plugin)
@@ -41,7 +42,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.9.5"   # sürüm — başlangıç log satırında görünür
+VERSION="1.9.6"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -111,6 +112,7 @@ while [ $# -gt 0 ]; do
         --dry-run) MODE=run; DRY=1 ;;
         --status)  MODE=status ;;
         --lookup)  MODE=lookup ;;
+        --events)  MODE=events ;;
         --action)  MODE=action; ACT="${2:-}"; shift ;;
         --config)  MODE=config ;;
         --set)     SETS+=("${2:-}"); shift ;;
@@ -1662,7 +1664,9 @@ do_status() {
     fi
 
     local recent=()
-    [ -r "$EVENTS_FILE" ] && mapfile -t recent < <(grep -v '"type":"run"' "$EVENTS_FILE" | grep -E '^\{"t":[0-9]+,.*\}$' | tail -n 300)
+    # IP listeleri olmadan: sayaçlar ve "yeni" çubuğu için yeter; IP'li kayıtları Geçmiş --events ile sayfa sayfa alır,
+    # aktif/izlenen blokların ban kaydı ise aşağıdaki evx'te tam gelir
+    [ -r "$EVENTS_FILE" ] && mapfile -t recent < <(grep -v '"type":"run"' "$EVENTS_FILE" | grep -E '^\{"t":[0-9]+,.*\}$' | tail -n 300 | ev_strip_ips)
     # olay kaydından önceki işler (günlükten; bir kez hesaplanıp saklanır)
     [ -f "$LOGHIST_FILE" ] || loghist_build
     if [ -s "$LOGHIST_FILE" ]; then
@@ -1820,6 +1824,47 @@ do_status() {
 }
 
 # ── --lookup IP ─────────────────────────────────────────────────────────────
+# Olay satırından "ips":[…] alanını çıkarır (dizgi içindeki köşeli parantez ve kaçışlar sayılmaz)
+ev_strip_ips() {
+    awk '{
+        s = $0; out = ""
+        while ((i = index(s, ",\"ips\":[")) > 0) {
+            out = out substr(s, 1, i - 1); j = i + 8; d = 1; q = 0; n = length(s)
+            while (j <= n && d > 0) {
+                c = substr(s, j, 1)
+                if (q) { if (c == "\\") j++; else if (c == "\"") q = 0 }
+                else if (c == "\"") q = 1
+                else if (c == "[") d++
+                else if (c == "]") d--
+                j++
+            }
+            s = substr(s, j)
+        }
+        print out s
+    }'
+}
+# ── --events latest|after|before T N ───────────────────────────────────────
+# Geçmiş sekmesi için olay kaydından bir sayfa (tur kayıtları hariç, IP'leriyle):
+#   latest       → son N olay; more = daha eskisi var mı
+#   before T     → zamanı ≤ T olan son N olay; more = daha eskisi var mı
+#   after T      → zamanı ≥ T olan olaylar (en çok N); more = N'den fazlaydı (panel baştan yükler)
+# Sınır saniyesi iki sayfada da yer alır (aynı saniyedeki olaylar kaybolmasın); panel tekrarı ayıklar.
+do_events() {
+    local mode="${1:-latest}" t="${2:-0}" n="${3:-300}"
+    if ! [[ "$mode" =~ ^(latest|after|before)$ ]] || ! [[ "$t" =~ ^[0-9]{1,12}$ ]] || ! [[ "$n" =~ ^[0-9]{1,4}$ ]] || [ "$n" -lt 1 ] || [ "$n" -gt 1000 ]; then
+        echo '{"ok":false,"error":"bad_input"}'; return 2
+    fi
+    { [ -r "$EVENTS_FILE" ] && grep -v '"type":"run"' "$EVENTS_FILE" | grep -E '^\{"t":[0-9]+,.*\}$'; } |
+    awk -v m="$mode" -v T="$t" -v N="$n" '
+        { match($0, /^\{"t":[0-9]+/); et = substr($0, 6, RLENGTH - 5) + 0
+          if (m == "before" && et > T) next
+          if (m == "after" && et < T) next
+          c++; L[c % N] = $0 }
+        END { k = c < N ? c : N
+              printf "{\"ok\":true,\"more\":%s,\"events\":[", (c > N ? "true" : "false")
+              for (i = c - k + 1; i <= c; i++) printf "%s%s", (i > c - k + 1 ? "," : ""), L[i % N]
+              print "]}" }'
+}
 do_lookup() {
     local ip="$1" n host="" fwd=false txt asn="" pfx="" cc="" reg="" alloc="" asname="" a b c d i
     local deny="" cover="" temp="" wl="" rig="" pend="" ign="" line t tip port dir to note now
@@ -2421,6 +2466,7 @@ mkdir -p "$(dirname "$SAYAC_FILE")"; touch "$SAYAC_FILE"
 case "$MODE" in
     status) LOG_MODE=quiet; do_status; exit $? ;;
     lookup) LOG_MODE=quiet; do_lookup "${ARGS[0]}"; exit $? ;;
+    events) LOG_MODE=quiet; do_events "${ARGS[0]}" "${ARGS[1]}" "${ARGS[2]}"; exit $? ;;
     action) LOG_MODE=file; do_action "$ACT" "${ARGS[0]}" "${ARGS[1]}"; exit $? ;;
     config) LOG_MODE=file; do_config; exit $? ;;
     busy)   if lock_busy; then echo busy; else echo idle; fi; exit 0 ;;

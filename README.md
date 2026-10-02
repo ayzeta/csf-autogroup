@@ -27,7 +27,7 @@ is escalated to a **permanent** ban. `/16` ranges are only flagged for review
 - **English / Türkçe** — the plugin, logs and emails.
 - **Works on phones** — the page adapts to small screens.
 
-**Version 1.9.5** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
+**Version 1.9.6** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
 cPanel the same engine runs from cron and the command line
 ([details](#without-cpanel)).
 
@@ -114,8 +114,9 @@ settings, with no prompts. `config.env` is left untouched.
   permanent + `do not delete`. Sorted by days left; **⋯ → IPs** shows the IPs
   and reasons behind the temp block ban.
 - **History** (its own tab) — every ban, promotion, skip, warning and manual
-  action. Work from before the event log existed is filled in from the log.
-  Click an address to open its IP card.
+  action, back to the start of the event log: the latest 300 load first and
+  **Show more** pages further back. Work from before the event log existed is
+  filled in from the log. Click an address to open its IP card.
   Settings changes are listed under Settings → Settings history.
 - **Look up an IP** — hostname (forward-confirmed), owner, announced prefix,
   registry, whether CSF blocks it (for an IP inside a block ban: the block's
@@ -279,6 +280,7 @@ the page shows is available from the command line:
 ./csf_autogroup.sh --status          # same data as the plugin page
 ./csf_autogroup.sh --dry-run         # what a run would do, changes nothing
 ./csf_autogroup.sh --lookup 1.2.3.4  # who is this IP?
+./csf_autogroup.sh --events latest 0 50   # the latest 50 events as JSON (after|before TIME N pages)
 ./csf_autogroup.sh --digest          # preview the weekly summary
 ./csf_autogroup.sh --config get      # current settings (--config set KEY=VALUE …)
 ./csf_autogroup.sh --help

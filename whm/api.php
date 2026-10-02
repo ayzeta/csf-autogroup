@@ -65,6 +65,15 @@ switch ($a) {
         }
         ag_json(ag_run_json(['--lookup', $ip, '--json'], 45));
 
+    case 'events':                                  // Geçmiş sekmesi: olay kaydından bir sayfa
+        $m = (string) ($_POST['m'] ?? 'latest');
+        if (!in_array($m, ['latest', 'after', 'before'], true)) {
+            ag_json(['ok' => false, 'error' => 'bad_input']);
+        }
+        $t = max(0, (int) ($_POST['t'] ?? 0));
+        $n = max(1, min(1000, (int) ($_POST['n'] ?? 300)));
+        ag_json(ag_run_json(['--events', $m, (string) $t, (string) $n], 30));
+
     case 'action':
         $name   = (string) ($_POST['name'] ?? '');
         $target = trim((string) ($_POST['target'] ?? ''));
