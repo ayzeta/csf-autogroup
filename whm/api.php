@@ -65,15 +65,6 @@ switch ($a) {
         }
         ag_json(ag_run_json(['--lookup', $ip, '--json'], 45));
 
-    case 'history':
-        $cidr = trim((string) ($_POST['cidr'] ?? ''));
-        $day  = trim((string) ($_POST['day'] ?? ''));
-        if (!ag_valid(AG_RE_CIDR, $cidr) || !preg_match('#/(16|24)$#', $cidr) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $day)) {
-            ag_json(['ok' => false, 'error' => 'bad_input']);
-        }
-        $span = (int) ($_POST['span'] ?? 2);            // blok banında 30 gün geriye bakılır
-        ag_json(ag_run_json(['--history', $cidr, $day, (string) max(1, min(60, $span))], 120));
-
     case 'action':
         $name   = (string) ($_POST['name'] ?? '');
         $target = trim((string) ($_POST['target'] ?? ''));

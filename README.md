@@ -27,7 +27,7 @@ is escalated to a **permanent** ban. `/16` ranges are only flagged for review
 - **English / Türkçe** — the plugin, logs and emails.
 - **Works on phones** — the page adapts to small screens.
 
-**Version 1.9.4** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
+**Version 1.9.5** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
 cPanel the same engine runs from cron and the command line
 ([details](#without-cpanel)).
 
@@ -107,8 +107,7 @@ settings, with no prompts. `config.env` is left untouched.
   searchable by CIDR, AS number or organisation. Filters show their counts.
   Blocks that became permanent on a second attack are tagged *repeat
   offender*; temp block bans show their time left. **⋯ → IPs** lists the IPs
-  and ban reasons behind any block (for older bans, fetched once from the LFD
-  log and kept). The
+  and ban reasons behind any block (from the event log). The
   *Old* filter lists block bans older than the old-block limit (default 365
   days), with a button to remove them all.
 - **Watched** — `/24`s that were temp-banned once. If one comes back, it becomes
@@ -147,7 +146,7 @@ whitelist, removing a `do not delete` block) make you type the target.
 | Remove | lift a block ban (`do not delete` blocks too; `csf.deny` is backed up first) |
 | Remove old ones | on the *Old* filter: remove every block ban older than the old-block limit |
 | Ignore | hide an item from review for 7/30/90 days (stops `/16` warning emails too) |
-| IPs | a block's IPs and ban reasons; for bans and warnings older than the event log they are fetched once from the LFD log |
+| IPs | a block's IPs and ban reasons, as recorded in the event log |
 | Dry run | show what a run would do; changes nothing, sends nothing |
 | Run now | run immediately instead of waiting for cron |
 

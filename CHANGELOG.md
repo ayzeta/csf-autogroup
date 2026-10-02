@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.9.5 — 2026-10-02
+
+- Removed fetching IPs from the LFD log ("IPs" on blocks older than the event
+  log, the `--history` mode and its cache). Every ban is recorded in the event
+  log with its IPs and reasons, so a fresh install never needs it; it only
+  served blocks left over from versions before the event log. Those now show
+  without IPs, and the IP card says when a watched block's reason isn't
+  recorded. The `LFD_LOG` setting is no longer used.
+
 ## 1.9.4 — 2026-10-02
 
 - "IPs" (fetching a block's IPs from the LFD log) is offered only for dates the

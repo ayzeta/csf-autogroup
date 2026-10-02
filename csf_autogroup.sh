@@ -41,7 +41,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.9.4"   # sürüm — başlangıç log satırında görünür
+VERSION="1.9.5"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -89,8 +89,7 @@ OWNERS_FILE="${OWNERS_FILE:-$(dirname "$SAYAC_FILE")/owners}"      # /24 → ASN
 OWNER_TTL_DAYS="${OWNER_TTL_DAYS:-30}"
 BACKFILL_MAX="${BACKFILL_MAX:-50}"      # her turda en fazla bu kadar /24'ün sahibi sorgulanır
 IMUNIFY_BIN="${IMUNIFY_BIN:-$(command -v imunify360-agent 2>/dev/null)}"   # yoksa Imunify kısmı atlanır
-HIST_FILE="${HIST_FILE:-$(dirname "$SAYAC_FILE")/history.jsonl}"
-LOGHIST_FILE="${LOGHIST_FILE:-$(dirname "$SAYAC_FILE")/loghist.v2.jsonl}"   # günlükten çıkarılan, olay kaydından önceki işler      # "Ayrıntı" ile getirilen eski uyarılar (bir kez)
+LOGHIST_FILE="${LOGHIST_FILE:-$(dirname "$SAYAC_FILE")/loghist.v2.jsonl}"   # günlükten çıkarılan, olay kaydından önceki işler
 IMUNIFY_FILE="${IMUNIFY_FILE:-$(dirname "$SAYAC_FILE")/imunify}"         # yerel kara liste önbelleği
 IMUNIFY_WL_FILE="${IMUNIFY_WL_FILE:-$(dirname "$SAYAC_FILE")/imunify_white}"  # yerel beyaz liste önbelleği
 IC_STATE_FILE="${IC_STATE_FILE:-$(dirname "$SAYAC_FILE")/slack_state}"   # Slack'e bildirilmiş, süren sorunlar
@@ -98,7 +97,6 @@ SLACK_QUEUE="${SLACK_QUEUE:-$(dirname "$SAYAC_FILE")/slack_queue}"   # Slack'e g
 SLACK_LAST="${SLACK_LAST:-$(dirname "$SAYAC_FILE")/slack_last}"      # son toplu tur bildiriminin zamanı
 MODSEC_DB="${MODSEC_DB:-/var/cpanel/modsec/modsec.sqlite}"      # cPanel'in ModSecurity eşleşme kaydı (kural mesajları)
 MODSEC_CACHE="${MODSEC_CACHE:-$(dirname "$SAYAC_FILE")/modsec_msgs}"   # kural no → mesaj önbelleği
-LFD_LOG="${LFD_LOG:-/var/log/lfd.log}"         # eski uyarıların ayrıntısı için okunur (lfd.log, .1, .gz)
 IMUNIFY_REFRESH_MIN="${IMUNIFY_REFRESH_MIN:-60}"   # liste en çok bu kadar dakikada bir yeniden alınır (yalnız panelde gösterilir)
 IMUNIFY_BACKFILL="${IMUNIFY_BACKFILL:-200}"   # Imunify IP'leri için turda ayrıca bu kadar /24 sorgulanır
 DIGEST="${DIGEST:-1}"                   # 1 = haftalık özet maili
@@ -118,7 +116,6 @@ while [ $# -gt 0 ]; do
         --set)     SETS+=("${2:-}"); shift ;;
         --digest)  MODE=digest ;;
         --busy)    MODE=busy ;;
-        --history) MODE=history ;;
         --logrotate) MODE=logrotate ;;
         --send)    SEND=1 ;;
         --json)    JSON=1 ;;
@@ -1633,11 +1630,8 @@ do_status() {
             [ -n "${seen[$c]}" ] && continue; seen[$c]=1
             ign_until "$c" && continue
             cidr_range "$c" && perm_covers "$R_LO" "$R_HI" && continue
-            # daha önce "Ayrıntı" ile getirildiyse saklanan sonuç da gelir
-            local hc=""
-            [ -r "$HIST_FILE" ] && hc=$(grep -F "{\"cidr\":\"$c\",\"day\":\"$u\"," "$HIST_FILE" | grep -E '^\{"cidr":.*\}$' | tail -1)
             day_epoch "$u"
-            review+=("{\"t\":$REPLY,\"type\":\"$ty\",\"cidr\":\"$c\",\"day\":\"$u\",\"hist\":true${W16D[$c]:+,\"rep\":${W16D[$c]}}${hc:+,\"cached\":$hc}}")
+            review+=("{\"t\":$REPLY,\"type\":\"$ty\",\"cidr\":\"$c\",\"day\":\"$u\",\"hist\":true${W16D[$c]:+,\"rep\":${W16D[$c]}}}")
             rtext+=("$(printf '%-18s %s · %s' "$c" "$ty" "$(date -d "$u" '+%d.%m')")")
         done < <(sort -k2,2r "$SAYAC_FILE")        # blok başına en yeni tarih
     fi
@@ -1671,9 +1665,6 @@ do_status() {
     [ -r "$EVENTS_FILE" ] && mapfile -t recent < <(grep -v '"type":"run"' "$EVENTS_FILE" | grep -E '^\{"t":[0-9]+,.*\}$' | tail -n 300)
     # olay kaydından önceki işler (günlükten; bir kez hesaplanıp saklanır)
     [ -f "$LOGHIST_FILE" ] || loghist_build
-    # "Ayrıntı" ile daha önce getirilenler (blok|gün): Geçmiş'teki günlük satırları da kullanır
-    local hcache=()
-    [ -r "$HIST_FILE" ] && mapfile -t hcache < <(grep -E '^\{"cidr":.*\}$' "$HIST_FILE")
     if [ -s "$LOGHIST_FILE" ]; then
         local lh=()
         mapfile -t lh < <(grep -E '^\{"t":[0-9]+,.*\}$' "$LOGHIST_FILE")
@@ -1787,11 +1778,11 @@ do_status() {
         # (burada IFS=, olduğu için liste satır satır okunur, kelimelere bölünmez)
         while read -r msid; do
             modsec_msg "$msid"; [ -n "$REPLY" ] && { jstr "$REPLY"; msj+=("\"$msid\":$REPLY"); }
-        done < <( { cat "$EVENTS_FILE" "$HIST_FILE" "$CSF_VAR/csf.tempban" 2>/dev/null; grep -F 'mod_security' "$DENY_FILE" 2>/dev/null; } |
+        done < <( { cat "$EVENTS_FILE" "$CSF_VAR/csf.tempban" 2>/dev/null; grep -F 'mod_security' "$DENY_FILE" 2>/dev/null; } |
                   grep -oE 'mod_security \(id:[0-9]+\)' | grep -oE '[0-9]+' | sort -u | head -n 100)
         printf '"modsec":{%s},' "${msj[*]}"
         # Aktif ve izlenen blokların banı koyduran son kayıt (IP'ler + sebepler): son 300 olaya girmeyen eski
-        # bloklarda da panel IP'leri ve sebebi LFD günlüğüne gitmeden gösterebilsin. Yalnız bu bloklar → çıktı şişmez.
+        # bloklarda da panel IP'leri ve sebebi gösterebilsin. Yalnız bu bloklar → çıktı şişmez.
         local evx=() want
         want=$( { printf '%s\n' "${g_tok[@]}" "${!TG_TTL[@]}"; printf '%s\n' "${pending[@]}" | sed -n 's/.*"prefix":"\([0-9.]*\)".*/\1.0\/24/p'; } | sort -u | paste -sd' ' -)
         [ -r "$EVENTS_FILE" ] && [ -n "$want" ] && mapfile -t evx < <(awk -v want="$want" '
@@ -1800,18 +1791,8 @@ do_status() {
                 c = substr($0, RSTART + 8, RLENGTH - 9); if (c in W) L[c] = $0 }
             END { for (c in L) print L[c] }' "$EVENTS_FILE" | grep -E '^\{"t":[0-9]+,.*\}$')
         printf '"evx":[%s],' "${evx[*]}"
-        # LFD günlüğü ne kadar eskiye gidiyor (en eski arşivin ilk satırı): panel, günlüğün kapsamadığı tarihler için
-        # "IP'ler" (LFD'den getir) önermez — sonuç veremeyeceği belli
-        local lfdo="" lf ll
-        lf=$(ls -1tr "$LFD_LOG" "$LFD_LOG".* "$LFD_LOG"-* 2>/dev/null | head -n 1)
-        if [ -n "$lf" ]; then
-            case "$lf" in *.gz) ll=$(zcat "$lf" 2>/dev/null | head -n 1) ;; *) ll=$(head -n 1 "$lf" 2>/dev/null) ;; esac
-            lfdo=$(LC_ALL=C date -d "${ll:0:6}" +%F 2>/dev/null)
-            [ -n "$lfdo" ] && [[ "$lfdo" > "$(date +%F)" ]] && lfdo=$(LC_ALL=C date -d "${ll:0:6} $(( $(date +%Y) - 1 ))" +%F 2>/dev/null)
-        fi
-        printf '"lfd_oldest":"%s",' "$lfdo"
-        printf '"groups":[%s],"pending":[%s],"review":[%s],"ignored":[%s],"hist_cache":[%s],"events":[%s]}\n' \
-            "${groups[*]}" "${pending[*]}" "${review[*]}" "${ignored[*]}" "${hcache[*]}" "${recent[*]}"
+        printf '"groups":[%s],"pending":[%s],"review":[%s],"ignored":[%s],"events":[%s]}\n' \
+            "${groups[*]}" "${pending[*]}" "${review[*]}" "${ignored[*]}" "${recent[*]}"
         return 0
     fi
 
@@ -1839,88 +1820,6 @@ do_status() {
 }
 
 # ── --lookup IP ─────────────────────────────────────────────────────────────
-# Olay kaydı başlamadan önceki bir uyarının ayrıntısı: o gün ve bir önceki gün lfd günlüğünde bu
-# bloktan geçen IP'ler (ban satırındaki sebeple), şu an csf.deny ve geçici listede olanlarla birlikte.
-do_history() {   # CIDR GÜN(YYYY-MM-DD) [GÜN SAYISI, varsayılan 2: o gün ve önceki] → JSON
-    local cidr="$1" day="$2" span="${3:-2}" re dl="" di f ip t why src n=0 total subnets js="" p
-    local -A HT=() HW=() HS=()
-    if ! [[ "$cidr" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.0/24$|^([0-9]{1,3})\.([0-9]{1,3})\.0\.0/16$ ]] || \
-       ! [[ "$day" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || ! date -d "$day" >/dev/null 2>&1 || \
-       ! [[ "$span" =~ ^[0-9]{1,2}$ ]] || [ "$span" -lt 1 ] || [ "$span" -gt 60 ]; then
-        echo '{"ok":false,"error":"bad_input"}'; return 2
-    fi
-    if [[ "$cidr" == */24 ]]; then re="${cidr%.0/24}."; else re="${cidr%.0.0/16}."; fi
-    # bakılacak günler (lfd satırının başı: "Sep 26"): blok banında tekiller günler önce banlanmış olabilir
-    for (( di = 0; di < span; di++ )); do dl+="${dl:+|}$(LC_ALL=C date -d "$day -$di day" '+%b %e')"; done
-    # lfd satırı: "Sep 26 04:00:10 lin lfd[123]: (sshd) Failed SSH login from 34.47.1.2 (US/..): 5 in the
-    # last 3600 secs - *Blocked in csf* for 3600 secs [LF_SSHD]" ya da "Incoming IP 34.47.1.2 temporary block removed"
-    while IFS='|' read -r ip t why; do
-        [ -n "$ip" ] || continue
-        [ -z "${HT[$ip]}" ] && HT[$ip]="$t"
-        [ -n "$why" ] && [ -z "${HW[$ip]}" ] && HW[$ip]="$why"
-        HS[$ip]=lfd
-    done < <( { for f in "$LFD_LOG" "$LFD_LOG.1"; do [ -r "$f" ] && cat "$f"; done
-                for f in "$LFD_LOG".*.gz "$LFD_LOG"-*.gz; do [ -r "$f" ] && zcat "$f"; done; } 2>/dev/null |
-        awk -v dl="$dl" -v pre="$re" '
-            BEGIN { nd = split(dl, DL, "|"); for (k = 1; k <= nd; k++) OK[DL[k]] = 1 }
-            !(substr($0, 1, 6) in OK) { next }
-            {
-                msg = $0; sub(/^[A-Z][a-z][a-z] +[0-9]+ [0-9:]+ [^ ]+ [^:]+: /, "", msg)
-                rest = msg
-                while (match(rest, /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/)) {
-                    ip = substr(rest, RSTART, RLENGTH); rest = substr(rest, RSTART + RLENGTH)
-                    if (index(ip, pre) != 1) continue
-                    why = ""
-                    if (msg ~ /Blocked in csf/) {
-                        why = msg; i = index(why, ip); if (i > 1) why = substr(why, 1, i - 1)
-                        sub(/ +(from|IP|by|for)? *$/, "", why); sub(/[ :-]+$/, "", why)
-                        if (match(msg, /\[[A-Z0-9_]+\] *$/)) { tag = substr(msg, RSTART + 1, RLENGTH - 2); sub(/\] *$/, "", tag); why = why (why != "" ? " · " : "") tag }
-                    }
-                    print ip "|" substr($0, 1, 15) "|" why
-                }
-            }')
-    # şu an csf.deny'de (kalıcı tekil) ve geçici listede olanlar
-    parse_deny "$DENY_FILE" 1
-    for ip in "${!SINGLE_NOTE[@]}"; do
-        [[ "$ip" == "$re"* ]] || continue
-        HS[$ip]=deny; short_reason "${SINGLE_NOTE[$ip]}" "$ip"; [ -n "$REPLY" ] && HW[$ip]="$REPLY"
-    done
-    if [ -r "$CSF_VAR/csf.tempban" ]; then
-        local tt tip port dir to note
-        while IFS='|' read -r tt tip port dir to note; do
-            [[ "$tip" == "$re"* ]] || continue
-            [ -z "${HS[$tip]}" ] && HS[$tip]=temp
-            short_reason "$note" "$tip"; [ -n "$REPLY" ] && [ -z "${HW[$tip]}" ] && HW[$tip]="$REPLY"
-        done < "$CSF_VAR/csf.tempban"
-    fi
-    total=${#HS[@]}
-    subnets=$(for ip in "${!HS[@]}"; do echo "${ip%.*}"; done | sort -u | grep -c .)
-    owners_load
-    local looked=0
-    for ip in $(printf '%s\n' "${!HS[@]}" | sort -V); do
-        [ "$n" -ge 40 ] && break; n=$((n + 1))
-        p="${ip%.*}"
-        if [ -z "${OWN_L[$p]+x}" ] && [ "$looked" -lt 10 ]; then owner_lookup "$ip"; looked=$((looked + 1)); fi
-        REPLY=""; [ "$n" -le 20 ] && ptr_lookup "$ip"
-        local jh jw jo jt
-        jstr "$REPLY"; jh="$REPLY"
-        why="${HW[$ip]}"; [ -z "$why" ] && why="$M_H_NOREASON"
-        jstr "$why"; jw="$REPLY"; jstr "${OWN_L[$p]}"; jo="$REPLY"; jstr "${HT[$ip]}"; jt="$REPLY"
-        js+="${js:+,}{\"ip\":\"$ip\",\"host\":$jh,\"why\":$jw,\"owner\":$jo,\"src\":\"${HS[$ip]}\",\"when\":$jt}"
-    done
-    owners_save 2>/dev/null
-    local res="{\"cidr\":\"$cidr\",\"day\":\"$day\",\"span\":$span,\"total\":$total,\"subnets\":$(num "$subnets"),\"ips\":[$js]}"
-    # Sonuç saklanır: sayfa her açıldığında yeniden "Ayrıntı" demek gerekmesin. Aynı blok+gün için
-    # (ve aynı gün sayısı) için tek satır, en çok 50 kayıt; geçici dosya + mv (aynı anda okuyan durum çıktısı yarım görmesin).
-    if [ "$DRY" != 1 ]; then
-        local tmp="$HIST_FILE.tmp.$$"
-        { [ -r "$HIST_FILE" ] && grep -vF "{\"cidr\":\"$cidr\",\"day\":\"$day\",\"span\":$span," "$HIST_FILE" | awk 'NR <= 49'
-          printf '%s
-' "$res"; } > "$tmp" 2>/dev/null && mv -f "$tmp" "$HIST_FILE"
-        rm -f "$tmp"
-    fi
-    echo "{\"ok\":true,${res#\{}"
-}
 do_lookup() {
     local ip="$1" n host="" fwd=false txt asn="" pfx="" cc="" reg="" alloc="" asname="" a b c d i
     local deny="" cover="" temp="" wl="" rig="" pend="" ign="" line t tip port dir to note now
@@ -2192,10 +2091,9 @@ imunify_top() {  # [N] → IM_TOP satırları "ASN|KURUM|CC|IP sayısı|SEBEP:n,
     IM_TOP="${IM_TOP%$'\n'}"
     return 0
 }
-ev_reason() {    # CIDR → REPLY = "3 IP · (sshd) Failed SSH login" (olay kaydından, yoksa "Ayrıntı"/IP'ler önbelleğinden; yoksa boş)
+ev_reason() {    # CIDR → REPLY = "3 IP · (sshd) Failed SSH login" (olay kaydından; yoksa boş)
     local id
-    REPLY=$( { grep -F "\"cidr\":\"$1\"" "$EVENTS_FILE" 2>/dev/null | grep -F '"ips":[{' | tail -n 1
-               [ -r "$HIST_FILE" ] && grep -F "{\"cidr\":\"$1\"," "$HIST_FILE" | tail -n 1; } | awk -v f="$M_H_RSUM" '
+    REPLY=$(grep -F "\"cidr\":\"$1\"" "$EVENTS_FILE" 2>/dev/null | grep -F '"ips":[{' | tail -n 1 | awk -v f="$M_H_RSUM" '
         NR == 1 { s = $0; n = 0
                   while (match(s, /"why":"[^"]*"/)) { w = substr(s, RSTART + 7, RLENGTH - 8); C[w]++; n++; s = substr(s, RSTART + RLENGTH) }
                   if (n) { b = ""; bm = 0; for (w in C) if (C[w] > bm) { bm = C[w]; b = w }; printf f, n, b }
@@ -2526,7 +2424,6 @@ case "$MODE" in
     action) LOG_MODE=file; do_action "$ACT" "${ARGS[0]}" "${ARGS[1]}"; exit $? ;;
     config) LOG_MODE=file; do_config; exit $? ;;
     busy)   if lock_busy; then echo busy; else echo idle; fi; exit 0 ;;
-    history) LOG_MODE=quiet; do_history "${ARGS[0]}" "${ARGS[1]}" "${ARGS[2]:-2}"; exit $? ;;
     logrotate) logrotate_write && { echo "$LOGROTATE_CONF"; exit 0; }; exit 1 ;;   # install.sh çağırır   # eklenti "Şimdi çalıştır"dan önce sorar
     digest) LOG_MODE=file; owners_load; parse_deny "$DENY_FILE" 1; panel_init; digest_build
             if [ "$SEND" = 1 ]; then mail_on && send_mail "$DG_SUBJ" "$DG_BODY" "$DG_HTML"; slack_on && [ "$IC_DIGEST" = 1 ] && ic_send Digest "$DG_SUBJ" "$DG_BODY"; log "$(m "$M_DG_SENT" "$ALERT_MAIL")"; ev digest "" "by=\"$AG_BY\""
