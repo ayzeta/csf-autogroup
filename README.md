@@ -27,7 +27,7 @@ is escalated to a **permanent** ban. `/16` networks are only flagged for review
 - **English / Türkçe** — the plugin, logs and emails.
 - **Works on phones** — the page adapts to small screens.
 
-**Version 1.9.9** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
+**Version 1.9.10** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
 cPanel the same engine runs from cron and the command line
 ([details](#without-cpanel)).
 
@@ -179,6 +179,11 @@ can't be banned at all.
   CSF's `TCP_IN`). The rules are marked and removed with the ban, and are never
   counted as whitelist entries.
 
+Each service button shows how many IPs of the range attacked it, read from the
+ban reasons LFD wrote (`(sshd)` → SSH, `(smtpauth)` / `(imapd)` → mail sync,
+ModSecurity and web rules → Web, port scans → "Everything" is suggested).
+**Selected services** preselects only the attacked services; **Everything
+except** preselects nothing and warns when an attacked service is kept open.
 A **Blocked / Stays open** summary under the choices says in plain words what
 the selection does. The window also points out services that depend on each other: mail may need DNS when
 this server also hosts the DNS for its domains (other mail servers look up MX,

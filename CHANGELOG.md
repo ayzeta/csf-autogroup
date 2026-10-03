@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.9.10 — 2026-10-03
+
+- **Suggestions from the range's own attacks.** The service buttons of the ban
+  window show how many IPs of the range attacked each service, read from the
+  ban reasons LFD wrote (single bans, temp bans and the recorded IPs of the
+  block bans inside; e.g. "(sshd) … [LF_SSHD]" → SSH). **Selected services**
+  preselects only the services that were attacked, and says so; with no
+  recorded reasons nothing is preselected. Port scans suggest "Everything".
+  **Everything except** preselects nothing and warns when a service you keep
+  open was attacked from the range. (Before, a fixed set was preselected.)
+- The "entries removed" and "entries restored" counts of a manual ban now
+  include the partial bans inside it (a split partial ban counts once); before,
+  only single and range bans were counted.
+
 ## 1.9.9 — 2026-10-03
 
 A review of the manual ban features added in 1.9.7–1.9.8.

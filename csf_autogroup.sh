@@ -48,7 +48,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.9.9"   # sürüm — başlangıç log satırında görünür
+VERSION="1.9.10"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1535,7 +1535,7 @@ wl_report() {    # CIDR COUNT PREFIX24 "IPS" KIND — günde bir kez maile ekle
 # Tekiller yalnızca ana dosyadan gruplanır (csf -dr Include dosyalarına dokunmaz);
 # kapsama kontrolü Include dosyalarındaki CIDR'leri de görür. Aynı IP'nin tekrar
 # eden satırları (LF_REPEATBLOCK) tek IP sayılır.
-declare -A DENY_IP SINGLE_NOTE count24 ips24 DLINE   # DLINE: ana csf.deny'de adres → satır (bir okumada)
+declare -A DENY_IP SINGLE_NOTE count24 ips24 DLINE IN_TNOTE   # DLINE: ana csf.deny'de adres → satır (bir okumada)
 DC_LO=(); DC_HI=(); DC_TXT=(); AGG=(); MANB=()   # MANB: elle konan tam banlar · AGG: CSF Auto-Group'un kendi eklediği bloklar (diğer CIDR'ler değil)
 parse_deny() {   # FILE MAIN(1|0) [DEPTH]
     local line tok p depth="${3:-0}"
@@ -2044,7 +2044,7 @@ inside_scan() {  # CIDR
     local -A seen=() pf=()
     cidr_range "$1" || return 1
     lo=$R_LO; hi=$R_HI
-    IN_COVER=""; IN_BLK=(); IN_OTH=(); IN_SGL=(); IN_SGLD=(); IN_TMP=(); IN_WATCH=(); IN_EVJ=(); IN_EVN=0; IN_PFX=(); IN_PORT=(); IN_OWNP=(); IN_PSVC=""; IN_PEXTRA=""
+    IN_COVER=""; IN_BLK=(); IN_OTH=(); IN_SGL=(); IN_SGLD=(); IN_TMP=(); IN_WATCH=(); IN_EVJ=(); IN_EVN=0; IN_PFX=(); IN_PORT=(); IN_OWNP=(); IN_PSVC=""; IN_PEXTRA=""; IN_TNOTE=()
     for i in "${!DC_LO[@]}"; do
         if (( DC_LO[i] <= lo && DC_HI[i] >= hi )); then IN_COVER="${DC_TXT[i]}"; continue; fi
         (( DC_LO[i] >= lo && DC_HI[i] <= hi )) || continue
@@ -2064,7 +2064,7 @@ inside_scan() {  # CIDR
             [ -n "$tip" ] && [ -z "${seen[$tip]}" ] || continue
             cidr_range "$tip" 2>/dev/null || continue
             (( R_LO >= lo && R_HI <= hi )) || continue
-            seen[$tip]=1; IN_TMP+=("$tip")
+            seen[$tip]=1; IN_TMP+=("$tip"); IN_TNOTE[$tip]="$note"
             x="${tip%/*}"; pf[${x%.*}]=1
             if [[ "$tip" != */* ]] && [ -z "${SINGLE_NOTE[$tip]+x}" ]; then short_reason "$note" "$tip"; inside_ev "$tip" "$REPLY"; fi
         done < "$CSF_VAR/csf.tempban"
@@ -2093,6 +2093,45 @@ inside_scan() {  # CIDR
     return 0
 }
 restore_file() { REPLY="$RESTORE_DIR/${1//\//_}"; }   # CIDR → saklanan satırların dosyası
+inside_attacks() { # CIDR → REPLY = {"ssh":12,"web":3,…}: aralıktaki IP'lerin ban sebeplerinden servis başına saldıran
+    # IP sayısı. Kaynaklar: kalıcı listedeki tekiller, geçici banlar, içteki banların olay kaydındaki IP sebepleri.
+    # LFD sebebi servisi söyler ("(sshd) … [LF_SSHD]"); tanınmayanlar "other", port taraması "scan" sayılır.
+    local c="$1" ip x want="" lo hi
+    cidr_range "$c" || { REPLY="{}"; return; }
+    lo=$R_LO; hi=$R_HI
+    for x in "${IN_BLK[@]}" "${IN_OTH[@]}" "${IN_OWNP[@]}" "$c"; do want+=" $x"; done
+    for x in "${IN_WATCH[@]}"; do want+=" $x.0/24"; done
+    REPLY=$( {
+        for ip in "${IN_SGL[@]}" "${IN_SGLD[@]}"; do printf '%s|%s\n' "$ip" "${SINGLE_NOTE[$ip]}"; done
+        for ip in "${!IN_TNOTE[@]}"; do [[ "$ip" == */* ]] || printf '%s|%s\n' "$ip" "${IN_TNOTE[$ip]}"; done
+        # içteki ban ve izleme kayıtlarının son IP listesi (o bloklar banlanırken silinen tekillerin sebepleri burada)
+        [ -r "$EVENTS_FILE" ] && awk -v want="$want" '
+            BEGIN { n = split(want, w, " "); for (i = 1; i <= n; i++) W[w[i]] = 1 }
+            /"ips":\[\{/ && match($0, /"cidr":"[0-9.\/]+"/) { k = substr($0, RSTART + 8, RLENGTH - 9); if (k in W) L[k] = $0 }
+            END { for (k in L) { s = L[k]
+                    while (match(s, /"ip":"[0-9.]+"[^}]*/)) {
+                        e = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
+                        ip = e; sub(/^"ip":"/, "", ip); sub(/".*/, "", ip)
+                        why = ""; if (match(e, /"why":"[^"]*"/)) why = substr(e, RSTART + 7, RLENGTH - 8)
+                        print ip "|" why } } }' "$EVENTS_FILE"
+    } | awk -F'|' -v lo="$lo" -v hi="$hi" '
+        function ipn(a,  p) { split(a, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
+        function cls(r) {
+            r = tolower(r)
+            if (r ~ /port ?scan|ps_limit|lf_distattack/) return "scan"
+            if (r ~ /sshd|lf_sshd/) return "ssh"
+            if (r ~ /ftpd|lf_ftpd|lf_distftp/) return "ftp"
+            if (r ~ /cpanel|cpaneld|whm|webmail|lf_cpanel|webmin|lf_webmin|directadmin/) return "cp"
+            if (r ~ /smtpauth|lf_smtpauth|lf_distsmtp|sasl|imapd|pop3d|lf_pop3d|lf_imapd|dovecot|courier/) return "sync"
+            if (r ~ /exim|lf_eximsyntax|smtp|relay|spam/) return "min"
+            if (r ~ /named|lf_dns|dns/) return "dns"
+            if (r ~ /mod_?security|htpasswd|lf_htaccess|lf_modsec|apache|nginx|litespeed|http|wordpress|wp-|xmlrpc|joomla|login\.php|lf_apache|404/) return "web"
+            return "other"
+        }
+        $1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && !($1 in S) { v = ipn($1); if (v < lo || v > hi) next; S[$1] = 1; C[cls($2)]++ }
+        END { o = ""; for (k in C) o = o (o == "" ? "" : ",") "\"" k "\":" C[k]; print "{" o "}" }')
+    [ -n "$REPLY" ] || REPLY="{}"
+}
 inside_ev() {    # IP SEBEP → IN_EVJ'ye ekle
     IN_EVN=$((IN_EVN + 1))
     [ "$IN_EVN" -le 40 ] || return 0
@@ -2138,6 +2177,7 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
         jarr "${IN_OWNP[@]}"; o+=",\"own_partial\":$REPLY,\"partial_svc\":\"$IN_PSVC\",\"partial_extra\":\"$IN_PEXTRA\""
         ssh_ports; o+=",\"ssh\":\"$REPLY\""
         ftp_passive; o+=",\"ftp_pasv\":\"$REPLY\""
+        inside_attacks "$c"; o+=",\"attacks\":$REPLY"
         local ownf=false opn="" rcn=0
         if [ "$IN_COVER" = "$c" ] && [[ "$(deny_line "$c")" == *"csf_autogroup:"* ]]; then
             ownf=true
@@ -2462,6 +2502,7 @@ restore_save() { # CIDR SATIRLAR → kapsananların kopyası; ilk satırda banı
 unban_full_core() { # CIDR → tam banı kaldır; RESTORE=1 ise kapsananları geri yükle; banın izin istisnaları da gider.
     # Hepsi tek kilitli yazım ve tek csf -r (satır başına csf -d / -dr yerine) → UB_RN (geri yüklenen), UB_ERR
     local t="$1" rf since now delta rl body k ts nd dl="" al="" n=0 tokf subf
+    local -A PRC=()
     UB_RN=0; UB_ERR=""
     restore_file "$t"; rf="$REPLY"
     local -A HAVE=()
@@ -2487,6 +2528,7 @@ unban_full_core() { # CIDR → tam banı kaldır; RESTORE=1 ise kapsananları ge
                         n=$((n + 1))
                     else
                         grep -qxF -- "$rl" "$DENY_FILE" && continue      # kısmi ban satırı zaten varsa
+                        if adv_parse "$rl" && [ -z "${PRC[$ADV_CIDR]}" ]; then PRC[$ADV_CIDR]=1; n=$((n + 1)); fi
                     fi
                     dl+="$rl"$'\n' ;;
             esac
@@ -2648,6 +2690,8 @@ do_action() {    # NAME TARGET [DAYS]
                 [ -n "${LEFT[$x]}" ] && continue
                 if [[ "$x" == */* ]]; then rb=$((rb + 1)); else rs=$((rs + 1)); fi
             done
+            local rp=0                                      # içteki kısmi banlar (bölünmüş satırlar tek kayıt)
+            for x in "${ownp[@]}"; do grep -qF "|s=$x # csf_autogroup:" "$DENY_FILE" || rp=$((rp + 1)); done
             if [ ${#rem[@]} -gt 0 ] || [ ${#ownp[@]} -gt 0 ] || [ "$BMODE" = exc ]; then csf_run -r; fi
             if [ "$CLEAN" = 1 ]; then
                 for x in "${IN_TMP[@]}"; do csf_run -tr "$x"; grep -qF "|$x|" "$CSF_VAR/csf.tempban" 2>/dev/null || rt=$((rt + 1)); done
@@ -2655,11 +2699,11 @@ do_action() {    # NAME TARGET [DAYS]
             jstr "$WL_HIT"; jw="$REPLY"
             owners_load; inside_owner "${t%.*}" "$t"; owner_kv
             log "$(m "$M_A_LOG" "$AG_BY" "$(m "$M_A_BANNED" "$cidr")")"
-            ev manual_ban "$cidr" "by=\"$AG_BY\"" "wl=$jw" "restorable=$((rb + rs))" "force=$([ "$FORCE" = 1 ] && echo true || echo false)" "${OKV[@]}" \
+            ev manual_ban "$cidr" "by=\"$AG_BY\"" "wl=$jw" "restorable=$((rb + rs + rp))" "force=$([ "$FORCE" = 1 ] && echo true || echo false)" "${OKV[@]}" \
                "mode=\"$BMODE\"" $([ "$BMODE" = exc ] && echo "open=\"$BSVC\" extra=\"$BPORTS\"") \
-               "removed={\"ranges\":$rb,\"singles\":$rs,\"temps\":$rt,\"watched\":$rw}" "total=$IN_EVN" "ips=[$(IFS=,; echo "${IN_EVJ[*]}")]"
+               "removed={\"ranges\":$rb,\"singles\":$rs,\"partials\":$rp,\"temps\":$rt,\"watched\":$rw}" "total=$IN_EVN" "ips=[$(IFS=,; echo "${IN_EVJ[*]}")]"
             msg="$(m "$M_A_BANNED" "$cidr")"
-            [ $((rb + rs + rt)) -gt 0 ] && msg="$(m "$M_A_CLEANED" "$msg" $((rb + rs + rt)))"
+            [ $((rb + rs + rp + rt)) -gt 0 ] && msg="$(m "$M_A_CLEANED" "$msg" $((rb + rs + rp + rt)))"
             [ "$xn" -gt 0 ] && msg="$(m "$M_A_EXC" "$msg" "$xn")"
             act_out 0 "$msg" ;;
         forget)
