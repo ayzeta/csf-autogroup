@@ -1,5 +1,47 @@
 # Changelog
 
+## 1.9.9 — 2026-10-03
+
+A review of the manual ban features added in 1.9.7–1.9.8.
+
+- **Large bans no longer time out.** Covered entries are removed in one locked
+  rewrite of `csf.deny` and one `csf -r` (instead of one `csf -dr` each), and the
+  restore copy is written before anything is removed. Restoring works the same
+  way. The steps are ordered so an interruption never leaves a range open or
+  loses saved entries.
+- **Files without a final newline:** a line added to `csf.allow` or `csf.deny`
+  could stick to the previous line's comment, and removing it later could take
+  that line with it. Every write now keeps lines separate.
+- A wider ban now also removes (and saves) the allow rules and partial bans of
+  CSF Auto-Group bans inside it; before, their ports could stay open.
+- "Everything except" bans keep their **other ports**: shown in Active block
+  bans, the IP card and History, and kept by **Change ban**.
+- A failed write is reported as an error instead of success; Change ban writes
+  the new state before removing the old one.
+- Restoring keeps entries that could not be put back instead of losing them;
+  an old restore copy is never attached to a new ban.
+- Restored automatic block bans don't count the time spent under the manual ban
+  toward their age, so "remove old block bans" doesn't delete them right away.
+- Leftovers of manual bans removed outside the plugin (e.g. in the CSF UI) —
+  restore copies and allow rules — are cleaned up on the next run.
+- **List usage now counts like CSF:** lines marked "do not delete" don't count
+  toward `DENY_IP_LIMIT` (CSF skips them), so the usage shown is the real one.
+  The ban window's "lines freed" follows the same rule.
+- Switching a full ban to partial is recorded as **Ban changed** (with the
+  number of restored entries), not as a new ban.
+- A suspicious network with a partial ban says so in To review and in the
+  warning email.
+- Manual bans no longer weigh as attack evidence in **Most blocked providers**.
+- The `/16` whitelist check is bounded (at most 30 blocks and 30 reverse-DNS
+  lookups), so the window opens quickly even for busy networks.
+- **History → Since your last visit** lists everything since then, removals and
+  changes included (it used to show a ban but not its removal).
+- Panel texts: the new windows use the same polite form as the rest of the
+  plugin; partial bans get their own removal text; English uses "network" for a
+  `/16` (e.g. *suspicious network*, *Ban network (/16)*) and "range" only in the
+  general sense. Narrow screens: the mode buttons wrap instead of overflowing.
+- Command line: actions refuse `--dry-run` instead of partly writing.
+
 ## 1.9.8 — 2026-10-03
 
 - **What to block** in the manual ban window (`/24` and `/16`): **Everything**,

@@ -48,7 +48,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.9.8"   # sürüm — başlangıç log satırında görünür
+VERSION="1.9.9"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -275,6 +275,10 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_A_NOSVC="En az bir servis seçilmeli"
   M_A_BADPORTS="Geçersiz port: %s (tek port ya da 30000-35000 gibi aralık, virgülle)"
   M_A_CHANGED="%s: ban güncellendi"
+  M_A_NOSAVE="%s: kurtarma kopyası yazılamadı (%s); kapsananlar yerinde bırakıldı"
+  M_A_NODRY="Elle işlemler kuru çalıştırmada (--dry-run) yapılmaz"
+  M_ORPHANS="Banı CSF ekranından kaldırılmış %s eski kayıt temizlendi (kurtarma kopyası / izin satırı)"
+  M_PART_NOTE="   Not: bu ağda kısmi ban var (%s · %s); yalnız seçilen servisler kapalı, diğer portlardan gelenler sürebilir"
   M_A_UNBANFAIL="%s kaldırılamadı: %s"
   M_A_NOTFOUND="%s ne csf.deny'de ne geçici listede birebir bulunamadı"
   M_A_IGNORED="%s %s tarihine kadar yoksayılacak"
@@ -380,10 +384,10 @@ else
   M_OWNER="   Owner: %s"
   M_WARN16="SUSPICIOUS RANGE: %s.0.0/16 - %s IPs from permanent bans, %s distinct blocks - review manually"
   M_WARN16_B="%s.0.0/16 -> %s IPs across %s distinct blocks"
-  M_SKIP16="SKIPPED suspicious range: %s.0.0/16 already reported today"
-  M_16_DONE="Suspicious range pass done. %s report(s)."
-  M_MAIL16_BODY="Many permanent bans have piled up in the following ranges (/16). The range was not banned;\nmanual review recommended:"
-  M_MAIL16_SUBJ="%s suspicious range(s)"
+  M_SKIP16="SKIPPED suspicious network: %s.0.0/16 already reported today"
+  M_16_DONE="Suspicious network pass done. %s report(s)."
+  M_MAIL16_BODY="Many permanent bans have piled up in the following networks (/16). The network was not banned;\nmanual review recommended:"
+  M_MAIL16_SUBJ="%s suspicious network(s)"
   M_TCLEAN="Cleaned: %s (covered by a permanent ban)"
   M_TSKIP24="SKIPPED temp block: %s.0/24 already permanently banned"
   M_TC24_PERM="Auto-grouped from temp /24: %s temp singles, 2nd group attack -> permanent ban - do not delete"
@@ -400,11 +404,11 @@ else
   M_MAILT24P_BODY="The following blocks (/24) had been temp-banned before and came back, so they are now permanently banned (do not delete):"
   M_MAILT24P_SUBJ="%s block(s) made permanent"
   M_TWARN16="SUSPICIOUS RANGE: %s.0.0/16 - %s IPs from temp bans, %s distinct blocks - review manually"
-  M_TSKIP16="SKIPPED suspicious range: %s.0.0/16 already permanently banned"
-  M_TSKIP16D="SKIPPED suspicious range (temp): %s.0.0/16 already reported today"
-  M_T16_DONE="Suspicious range pass (temp bans) done. %s report(s)."
-  M_MAILT16_BODY="Many temp bans have piled up in the following ranges (/16). The range was not banned;\nmanual review recommended:"
-  M_MAILT16_SUBJ="%s suspicious range(s) (temp bans)"
+  M_TSKIP16="SKIPPED suspicious network: %s.0.0/16 already permanently banned"
+  M_TSKIP16D="SKIPPED suspicious network (temp): %s.0.0/16 already reported today"
+  M_T16_DONE="Suspicious network pass (temp bans) done. %s report(s)."
+  M_MAILT16_BODY="Many temp bans have piled up in the following networks (/16). The network was not banned;\nmanual review recommended:"
+  M_MAILT16_SUBJ="%s suspicious network(s) (temp bans)"
   M_WL_LOADED="Whitelist loaded: %s ranges, %s rignore domains"
   M_WL_SELF="server IP"
   M_A_SELF="%s contains this server's own IP (%s); it can't be banned"
@@ -442,7 +446,7 @@ else
   M_PANEL_GEN="Panel: %s → Plugins → CSF Auto-Group"
   M_DRY_ON="DRY RUN — nothing will be changed, no email will be sent"
   M_DRY_MAIL="[email not sent] To: %s — Subject: %s"
-  M_IGN16="SKIPPED suspicious range: %s.0.0/16 is ignored (until %s)"
+  M_IGN16="SKIPPED suspicious network: %s.0.0/16 is ignored (until %s)"
   M_BUSY="Another run is in progress, try again in a moment"
   M_BAD_TARGET="Invalid target: %s"
   M_BAD_IP="Invalid IPv4 address: %s"
@@ -469,6 +473,10 @@ else
   M_A_NOSVC="Pick at least one service"
   M_A_BADPORTS="Invalid port: %s (single ports or ranges like 30000-35000, comma separated)"
   M_A_CHANGED="%s: ban updated"
+  M_A_NOSAVE="%s: the restore copy could not be written (%s); covered entries were left in place"
+  M_A_NODRY="Manual actions are not run in a dry run (--dry-run)"
+  M_ORPHANS="Cleaned up %s leftover entries of bans removed outside the plugin (restore copies / allow lines)"
+  M_PART_NOTE="   Note: this network has a partial ban (%s · %s); only the selected services are blocked, traffic to other ports can continue"
   M_A_UNBANFAIL="%s could not be removed: %s"
   M_A_NOTFOUND="%s is not in csf.deny or the temp list (exact match)"
   M_A_IGNORED="%s will be ignored until %s"
@@ -503,7 +511,7 @@ else
   M_TM_FAIL="the mail command failed: %s"
   M_DG_SUBJ="CSF Auto-Group weekly summary (%s)"
   M_DG_HEAD="Last 7 days: %s – %s"
-  M_DG_COUNTS="%s block bans · %s temp block bans · %s made permanent · %s suspicious ranges · %s skipped (whitelist) · %s manual actions · %s settings changes"
+  M_DG_COUNTS="%s block bans · %s temp block bans · %s made permanent · %s suspicious networks · %s skipped (whitelist) · %s manual actions · %s settings changes"
   M_DG_USAGE="Permanent list: %s / %s lines (%s%%) · 7 days ago: %s"
   M_DG_TUSAGE="Temp list: %s / %s lines"
   M_DG_NEW="New block bans:"
@@ -527,7 +535,7 @@ else
   M_H_PANEL="Open the panel"; M_H_PANELP="WHM → Plugins → CSF Auto-Group"
   M_H_PERM="Permanent list"; M_H_TEMP="Temp list"; M_H_LINES="%s / %s lines · %s%%"; M_H_AGO="7 days ago %s"
   M_H_WEEK="Weekly summary"; M_H_NONE="None this week."
-  M_H_CNT="block bans|temp block bans|made permanent|suspicious ranges|skipped|manual actions|settings changes"
+  M_H_CNT="block bans|temp block bans|made permanent|suspicious networks|skipped|manual actions|settings changes"
   M_H_NEWT="New block bans"; M_H_BLOCK="Block"; M_H_OWNER="Owner"; M_H_STATE="State"
   M_H_K_add24="permanent"; M_H_K_promote="repeat offender"; M_H_K_manual_ban="manual"
   M_H_TOPT="Providers CSF blocks most"; M_H_TOPS="by block bans and single bans in csf.deny"
@@ -535,7 +543,7 @@ else
   M_H_IMT="Providers Imunify360 blocks most"; M_H_IMS="This server's own blacklist · %s IPs"; M_H_IPS="IPs"; M_H_RSN="Reason"
   M_H_EXPT="Watched blocks expiring"; M_H_EXPS="within 14 days; they become permanent if they return"; M_H_DAYS="%s days"; M_H_NONE_S="None"
   M_H_RUNS="Run health"; M_H_RUNSS="last 7 days"; M_H_RUNSV="%s runs · ~%s expected"
-  M_H_GLOSS="single = one-IP ban · block = /24 · range = /16 · do not delete = CSF keeps it even when the list is full"
+  M_H_GLOSS="single = one-IP ban · block = /24 · network = /16 · do not delete = CSF keeps it even when the list is full"
   M_SQ_SUBJ="%s run notices (last %s min)"
   M_H_TMT="Test email"; M_H_TMS="Your mail settings work"; M_H_RSUM="%s IPs · %s"
 fi
@@ -1442,13 +1450,18 @@ self_overlap() { # LO HI → aralıkta sunucunun kendi IP'si var mı (SELF_HIT);
     return 1
 }
 wl_range16() {   # A.B LO HI → /16 için /24 ile aynı beyaz liste kontrolleri: aralık çakışması, sonra içinde tekil banı
-    # olan her bloğun IP'leriyle CC_IGNORE / CC_ALLOW ve csf.rignore (tekil yoksa ağın ilk adresiyle) → WL_HIT
-    local p n=0
+    # olan bloklarla CC_IGNORE / CC_ALLOW (sahip önbellekten, ucuz) ve csf.rignore (her IP bir ters DNS sorgusu).
+    # Sorgular sınırlı: en çok 30 blok, rignore için toplam 30 IP örneği — yüzlerce tekilli bir /16'da pencere
+    # ve ban dakikalarca beklemesin (otomatik /24 banındaki sorgu sayısıyla aynı düzey)
+    local p n=0 q=30 ips
     WL_HIT=""; WL_RETRY=0
     wl_overlap "$2" "$3" && return 0
-    for p in "${!ips24[@]}"; do
+    for p in $(printf '%s\n' "${!ips24[@]}" | grep -F "$1." | sort -V); do
         [[ "$p" == "$1".* ]] || continue
-        n=$((n + 1)); wl_check "$p" "${ips24[$p]}" && return 0
+        n=$((n + 1)); [ "$n" -le 30 ] || break
+        ips=$(printf '%s\n' ${ips24[$p]} | head -n "$(( q > 3 ? 3 : (q > 0 ? q : 1) ))" | paste -sd' ' -)
+        q=$(( q - $(wc -w <<< "$ips") ))
+        wl_check "$p" "$ips" && return 0
     done
     [ "$n" = 0 ] && wl_check "$1.0" "$1.0.1" && return 0
     return 1
@@ -1522,8 +1535,8 @@ wl_report() {    # CIDR COUNT PREFIX24 "IPS" KIND — günde bir kez maile ekle
 # Tekiller yalnızca ana dosyadan gruplanır (csf -dr Include dosyalarına dokunmaz);
 # kapsama kontrolü Include dosyalarındaki CIDR'leri de görür. Aynı IP'nin tekrar
 # eden satırları (LF_REPEATBLOCK) tek IP sayılır.
-declare -A DENY_IP SINGLE_NOTE count24 ips24
-DC_LO=(); DC_HI=(); DC_TXT=(); AGG=()   # AGG: CSF Auto-Group'un kendi eklediği bloklar (diğer CIDR'ler değil)
+declare -A DENY_IP SINGLE_NOTE count24 ips24 DLINE   # DLINE: ana csf.deny'de adres → satır (bir okumada)
+DC_LO=(); DC_HI=(); DC_TXT=(); AGG=(); MANB=()   # MANB: elle konan tam banlar · AGG: CSF Auto-Group'un kendi eklediği bloklar (diğer CIDR'ler değil)
 parse_deny() {   # FILE MAIN(1|0) [DEPTH]
     local line tok p depth="${3:-0}"
     [ -r "$1" ] || return
@@ -1534,9 +1547,10 @@ parse_deny() {   # FILE MAIN(1|0) [DEPTH]
         fi
         tok="${line%%[[:space:]]*}"
         [[ "$tok" =~ $CIDR4_RE ]] || continue
+        [ "$2" = 1 ] && [ -z "${DLINE[$tok]+x}" ] && DLINE[$tok]="$line"
         if [[ "$tok" == */* ]]; then
             cidr_range "$tok" && { DC_LO+=("$R_LO"); DC_HI+=("$R_HI"); DC_TXT+=("$tok"); }
-            if [ "$2" = 1 ]; then case "$line" in *Auto-grouped*|*csf_autogroup:*) AGG+=("$tok") ;; esac; fi
+            if [ "$2" = 1 ]; then case "$line" in *Auto-grouped*) AGG+=("$tok") ;; *csf_autogroup:*) AGG+=("$tok"); MANB+=("$tok") ;; esac; fi
         else
             DENY_IP[$tok]=1
             if [ "$2" = 1 ] && [ -z "${SINGLE_NOTE[$tok]+x}" ]; then
@@ -1545,6 +1559,13 @@ parse_deny() {   # FILE MAIN(1|0) [DEPTH]
             fi
         fi
     done < "$1"
+}
+# CSF'in DENY_IP_LIMIT için saydığı satırlar (csf.pl, csf -d): boş, yorum ve Include satırları ile içinde
+# "do not delete" geçenler sayılmaz, gerisi (IP, CIDR ve gelişmiş satırlar) sayılır; Include edilen dosyalar sayılmaz
+deny_count() {
+    awk '{ l = $0; sub(/\r$/, "", l) }
+         l == "" || l ~ /^[ \t]*#/ || index(l, "Include") || tolower(l) ~ /do not delete/ { next }
+         { n++ } END { print n + 0 }' "$DENY_FILE" 2>/dev/null || echo 0
 }
 deny_line() { grep -m1 -E "^${1//./\\.}([[:space:]]|$)" "$DENY_FILE"; }   # CIDR/IP → csf.deny satırı
 is_dnd()    { [[ "$1" =~ [Dd][Oo][[:space:]]+[Nn][Oo][Tt][[:space:]]+[Dd][Ee][Ll][Ee][Tt][Ee] ]]; }
@@ -1651,7 +1672,7 @@ do_status() {
     parse_deny "$DENY_FILE" 1
     read_temp_groups
     limit=$(num "$(conf_val DENY_IP_LIMIT)"); tlimit=$(num "$(conf_val DENY_TEMP_IP_LIMIT)")
-    pc=$(grep -cE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' "$DENY_FILE")
+    pc=$(deny_count)
     # Geçici liste doluluğu: her sayfa yoklamasında csf -t (Perl) başlatmak yerine csf.tempban'ın
     # satırları sayılır; csf.pl dotempban ile aynı: boş olmayan her satır, port listesindeki her port için
     # bir DENY satırı (port yoksa bir).
@@ -1664,8 +1685,8 @@ do_status() {
     local groups=() gtext=() ghist="" gi
     wide_load
     # eklentinin kısmi banları (gelişmiş satırlar; bölünmüş olanlar tek kayıt) ve tam banların izin istisnaları
-    local -A PB_P=() PB_S=() PB_D=() PB_X=() EXC_S=()
-    local pl re_ex='exception for ([0-9./]+) \[svc=([a-z,]*)\]'
+    local -A PB_P=() PB_S=() PB_D=() PB_X=() EXC_S=() EXC_X=()
+    local pl re_ex='exception for ([0-9./]+) \[svc=([a-z,]*)(;ports=([0-9,-]+))?\]'
     while IFS= read -r pl; do
         adv_parse "$pl" || continue
         PB_P[$ADV_CIDR]+="${PB_P[$ADV_CIDR]:+,}$ADV_PORTS"
@@ -1674,7 +1695,7 @@ do_status() {
         [[ "$pl" =~ $re_d ]] && PB_D[$ADV_CIDR]="${BASH_REMATCH[1]}"
     done < <(grep -F '# csf_autogroup:' "$DENY_FILE" 2>/dev/null | grep -F '|')
     while IFS= read -r pl; do
-        [[ "$pl" =~ $re_ex ]] && EXC_S[${BASH_REMATCH[1]}]="${BASH_REMATCH[2]}"
+        [[ "$pl" =~ $re_ex ]] && { EXC_S[${BASH_REMATCH[1]}]="${BASH_REMATCH[2]}"; EXC_X[${BASH_REMATCH[1]}]="${BASH_REMATCH[4]}"; }
     done < <(grep -F 'csf_autogroup: exception for' "$CSF_DIR/csf.allow" 2>/dev/null)
     local g_tok=() g_kind=() g_dnd=() g_n=() g_ds=() g_ep=()
     while IFS= read -r line; do
@@ -1700,7 +1721,7 @@ do_status() {
         REPLY=""; cidr_range "$tok" && under_of "$R_LO" "$R_HI" "$tok"
         local gu="$REPLY" grn=0
         if [ "$kind" = manual ]; then restore_file "$tok"; [ -s "$REPLY" ] && grn=$(grep -c . "$REPLY"); fi
-        groups+=("{\"cidr\":\"$tok\",\"kind\":\"$kind\",\"dnd\":$dnd,\"n\":${g_n[gi]},\"added\":$added,\"ttl\":0${gu:+,\"under\":\"$gu\"}$([ "$grn" -gt 0 ] && echo ",\"restore\":$grn")${EXC_S[$tok]:+,\"open\":\"${EXC_S[$tok]}\"}}")
+        groups+=("{\"cidr\":\"$tok\",\"kind\":\"$kind\",\"dnd\":$dnd,\"n\":${g_n[gi]},\"added\":$added,\"ttl\":0${gu:+,\"under\":\"$gu\"}$([ "$grn" -gt 0 ] && echo ",\"restore\":$grn")$([ -n "${EXC_S[$tok]+x}" ] && echo ",\"open\":\"${EXC_S[$tok]}\",\"open_extra\":\"${EXC_X[$tok]}\"")}")
         [ "$added" -gt 0 ] && ghist+="$added $kind $tok"$'\n'
         [ "$JSON" = 1 ] || gtext+=("$(printf '%-18s %-9s %s' "$tok" "$kind" "$([ "$dnd" = true ] && echo 'do not delete')")")
     done
@@ -1751,6 +1772,10 @@ do_status() {
             ign_until "$c" && continue
             cidr_range "$c" && perm_covers "$R_LO" "$R_HI" && continue
             [ -n "${W16D[$c]}" ] && line="${line%\}},\"rep\":${W16D[$c]}}"
+            # şüpheli ağda kısmi ban varsa (yalnız seçilen servisler kapalı) satırda belirtilir
+            if [[ "$ty" == warn16* ]] && cidr_range "$c" && part_note "$R_LO" "$R_HI"; then
+                line="${line%\}},\"partial\":\"${REPLY%%|*}\",\"partial_svc\":\"${REPLY#*|}\"}"
+            fi
             review+=("$line")
             rtext+=("$(printf '%-18s %s · %s' "$c" "$ty" "$(date -d "@$t" '+%d.%m %H:%M')")")
         done < <(tac "$EVENTS_FILE")
@@ -2023,8 +2048,8 @@ inside_scan() {  # CIDR
     for i in "${!DC_LO[@]}"; do
         if (( DC_LO[i] <= lo && DC_HI[i] >= hi )); then IN_COVER="${DC_TXT[i]}"; continue; fi
         (( DC_LO[i] >= lo && DC_HI[i] <= hi )) || continue
-        line=$(deny_line "${DC_TXT[i]}")
-        [ -n "$line" ] || continue                       # Include edilen dosyadaki satır: csf -dr silemez, sayılmaz
+        line="${DLINE[${DC_TXT[i]}]}"
+        [ -n "$line" ] || continue                       # Include edilen dosyadaki satır: eklenti silemez, sayılmaz
         case "$line" in *Auto-grouped*|*csf_autogroup:*) IN_BLK+=("${DC_TXT[i]}") ;; *) IN_OTH+=("${DC_TXT[i]}") ;; esac
         x="${DC_TXT[i]%/*}"; pf[${x%.*}]=1
     done
@@ -2116,13 +2141,16 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
         local ownf=false opn="" rcn=0
         if [ "$IN_COVER" = "$c" ] && [[ "$(deny_line "$c")" == *"csf_autogroup:"* ]]; then
             ownf=true
-            opn=$(grep -F "csf_autogroup: exception for $c [" "$CSF_DIR/csf.allow" 2>/dev/null | head -n 1 | sed -n 's/.*\[svc=\([a-z,]*\).*/\1/p')
+            opn=$(grep -F "csf_autogroup: exception for $c [" "$CSF_DIR/csf.allow" 2>/dev/null | head -n 1 | sed -n 's/.*\[svc=\([a-z,]*\)\(;ports=\([0-9,-]*\)\)\{0,1\}\].*/\1|\3/p')
             restore_file "$c"; [ -s "$REPLY" ] && rcn=$(grep -c . "$REPLY")
         fi
-        o+=",\"own_full\":$ownf,\"open\":\"$opn\",\"restore\":$rcn"
+        o+=",\"own_full\":$ownf,\"open\":\"${opn%%|*}\",\"open_extra\":\"$([ -n "$opn" ] && echo "${opn#*|}")\",\"restore\":$rcn"
         o+=",\"singles\":${#IN_SGL[@]},\"singles_dnd\":${#IN_SGLD[@]},\"temps\":${#IN_TMP[@]}"
         jarr "${IN_WATCH[@]/%/.0/24}"; o+=",\"watched\":$REPLY"
-        o+=",\"free\":$(( ${#IN_BLK[@]} + ${#IN_OTH[@]} + ${#IN_SGL[@]} + ${#IN_SGLD[@]} ))}"
+        # "boşalır": CSF'in sınırına giren satırlar (do not delete olanlar zaten sayılmaz)
+        local fr=0 fx fl
+        for fx in "${IN_BLK[@]}" "${IN_OTH[@]}" "${IN_SGL[@]}"; do fl="${DLINE[$fx]}"; [ -n "$fl" ] && ! is_dnd "$fl" && fr=$((fr + 1)); done
+        o+=",\"removable\":$(( ${#IN_BLK[@]} + ${#IN_OTH[@]} + ${#IN_SGL[@]} + ${#IN_SGLD[@]} )),\"free\":$fr}"
         echo "$o"; return 0
     fi
     echo "$c${OWN_LONG:+  ($OWN_LONG)}"
@@ -2162,9 +2190,9 @@ do_lookup() {
     for i in "${!DC_LO[@]}"; do
         (( DC_LO[i] <= n && DC_HI[i] >= n )) || continue
         ln="$(deny_line "${DC_TXT[i]}")"
-        op=$(grep -F "csf_autogroup: exception for ${DC_TXT[i]} [" "$CSF_DIR/csf.allow" 2>/dev/null | head -n 1 | sed -n 's/.*\[svc=\([a-z,]*\)\].*/\1/p')
+        op=$(grep -F "csf_autogroup: exception for ${DC_TXT[i]} [" "$CSF_DIR/csf.allow" 2>/dev/null | head -n 1 | sed -n 's/.*\[svc=\([a-z,]*\)\(;ports=\([0-9,-]*\)\)\{0,1\}\].*/\1|\3/p')
         jstr "${ln:-${DC_TXT[i]}}"
-        covers+=("$(( DC_HI[i] - DC_LO[i] ))|{\"kind\":\"cidr\",\"cidr\":\"${DC_TXT[i]}\",\"line\":$REPLY${op:+,\"open\":\"$op\"}}")
+        covers+=("$(( DC_HI[i] - DC_LO[i] ))|{\"kind\":\"cidr\",\"cidr\":\"${DC_TXT[i]}\",\"line\":$REPLY${op:+,\"open\":\"${op%%|*}\",\"open_extra\":\"${op#*|}\"}}")
     done
     while IFS= read -r ln; do
         adv_parse "$ln" || continue
@@ -2231,7 +2259,7 @@ do_lookup() {
     while IFS= read -r cv; do
         cv="${cv#*|}"
         case "$cv" in
-            *'"kind":"cidr"'*)   printf '  %-18s %s\n' "$M_L_DENY" "$(printf '%s' "$cv" | sed -n 's/.*"line":"\(.*\)"}$/\1/p')" ;;
+            *'"kind":"cidr"'*)   printf '  %-18s %s\n' "$M_L_DENY" "$(printf '%s' "$cv" | sed -n 's/.*"line":"\(.*\)"\(,"open":.*\)\{0,1\}}$/\1/p')" ;;
             *'"kind":"port"'*)   printf '  %-18s %s\n' "$M_L_PORT" "$(printf '%s' "$cv" | sed -n 's/.*"line":"\(.*\)"}$/\1/p')" ;;
             *'"kind":"ccport"'*) printf '  %-18s %s\n' "$M_L_CCP" "$(printf '%s' "$cv" | sed -n 's/.*"what":"\([^"]*\)".*"tcp":"\([^"]*\)".*/\1 · tcp \2/p')" ;;
             *)                   printf '  %-18s %s\n' "$M_L_CCD" "$(printf '%s' "$cv" | sed -n 's/.*"what":"\([^"]*\)".*/\1/p')" ;;
@@ -2267,6 +2295,7 @@ strip_dnd() {    # CIDR → satırdaki "do not delete" ifadesini kaldır (csf -d
 }
 SSHD_CONFIG="${SSHD_CONFIG:-/etc/ssh/sshd_config}"
 RE_SV='\[svc=([a-z,]*)'; RE_PO=';ports=([0-9,-]+)'
+RE_DATE='- ([A-Z][a-z]{2} [A-Z][a-z]{2} +[0-9]{1,2} [0-9:]{8} [0-9]{4})[[:space:]]*$'
 ssh_ports() {    # sunucunun SSH port(lar)ı → REPLY ("22" ya da "33330")
     local p
     p=$(sshd -T 2>/dev/null | awk '$1 == "port" && $2 ~ /^[0-9]+$/ { print $2 }' | sort -un | paste -sd, -)
@@ -2362,22 +2391,35 @@ exc_lines() {    # CIDR → EXC_LINES: tam banın yanına csf.allow'a girecek iz
     EXC_LINES="${EXC_LINES%$'\n'}"
     [ -n "$EXC_LINES" ]
 }
-file_append_locked() { # DOSYA SATIRLAR — csf'in kilidi tutulur, inode korunur, önce yedek alınır
-    [ -n "$2" ] || return 1
-    cp -p "$1" "$1.autogroup.bak" 2>/dev/null
-    ( command -v flock >/dev/null 2>&1 && { flock -x 8 || exit 1; }; printf '%s\n' "$2" >> "$1" ) 8<"$1"
-}
-file_drop_locked() {   # DOSYA METİN — metni içeren satırları sil (aynı güvencelerle)
-    local tmp rc
-    grep -qF -- "$2" "$1" 2>/dev/null || return 0
+# ── Dosya yazımı: csf.deny / csf.allow tek kilitli yeniden yazımla değişir ───────
+# csf'in kilidi (flock) tutulur, inode korunur (cat >), önce yedek alınır. Sonuç awk'tan geçtiği için son satır
+# her zaman satır sonuyla biter: sonu satır sonsuz bir dosyada eklenen satır öncekinin yorumuna yapışmaz.
+file_rewrite() { # DOSYA SİL_ADRESLER SİL_METİNLER EKLENECEK — ilk alanı listedeki adres olan ya da listedeki
+    # metni içeren satırlar silinir, EKLENECEK satırlar sona eklenir; 1 = yazılamadı (dosya değişmez)
+    local f="$1" tmp rc
+    [ -e "$f" ] || : > "$f"
     tmp=$(mktemp) || return 1
-    cp -p "$1" "$1.autogroup.bak" 2>/dev/null
+    cp -p "$f" "$f.autogroup.bak" 2>/dev/null
     (
         command -v flock >/dev/null 2>&1 && { flock -x 8 || exit 1; }
-        grep -vF -- "$2" "$1" > "$tmp"; [ $? -le 1 ] || exit 1
-        cat "$tmp" > "$1"
-    ) 8<"$1"
+        AG_ADD="$4" awk -v tf="$2" -v sf="$3" '
+            BEGIN { while ((getline l < tf) > 0) if (l != "") T[l] = 1
+                    while ((getline l < sf) > 0) if (l != "") S[++ns] = l }
+            { split($0, a, /[ \t]/); k = a[1]; sub(/\r$/, "", k); if (k in T) next
+              for (i = 1; i <= ns; i++) if (index($0, S[i])) next
+              print }
+            END { n = split(ENVIRON["AG_ADD"], L, "\n"); for (i = 1; i <= n; i++) if (L[i] != "") print L[i] }' "$f" > "$tmp" || exit 1
+        cat "$tmp" > "$f" || exit 1
+    ) 8<"$f"
     rc=$?; rm -f "$tmp"; return $rc
+}
+file_append_locked() { file_rewrite "$1" /dev/null /dev/null "$2"; }   # DOSYA SATIRLAR
+file_drop_locked() {   # DOSYA METİN — metni içeren satırları sil
+    local sf rc
+    grep -qF -- "$2" "$1" 2>/dev/null || return 0
+    sf=$(mktemp) || return 1
+    printf '%s\n' "$2" > "$sf"
+    file_rewrite "$1" /dev/null "$sf" ""; rc=$?; rm -f "$sf"; return $rc
 }
 own_partials_inside() { # LO HI → eklentinin bu aralıktaki kısmi banlarının CIDR'leri (tekrarsız)
     local l
@@ -2385,87 +2427,152 @@ own_partials_inside() { # LO HI → eklentinin bu aralıktaki kısmi banlarını
         adv_parse "$l" && cidr_range "$ADV_CIDR" && (( R_LO >= $1 && R_HI <= $2 )) && echo "$ADV_CIDR"
     done | sort -u
 }
-ban_partial() {  # CIDR BITS PORTLAR — yalnız seçilen servislere gelen bağlantıları kapatan gelişmiş satır(lar)
-    local c="$1" b="$2" pp="$3" dt mk lines="" ch jw
+part_shown() {   # PORTLAR → iletide gösterilecek liste (CSF aralıkları 30000-35000 biçiminde)
+    local x="$1${PART_RNG:+${1:+,}${PART_RNG// /,}}"
+    printf '%s' "${x//_/-}"
+}
+partial_write() { # CIDR BITS PORTLAR → kısmi ban satırları; aynı aralığın önceki kısmi banının yerine, tek yazımda
+    local c="$1" b="$2" pp="$3" dt mk lines="" ch sf rc
     dt=$(LC_ALL=C date '+%a %b %d %H:%M:%S %Y')
     mk="csf_autogroup: $(m "$M_A_PCOMMENT" "$b" "$AG_BY") [svc=$BSVC${BPORTS:+;ports=$BPORTS}] - do not delete - $dt"
-    file_drop_locked "$DENY_FILE" "|s=$c # csf_autogroup:"            # aynı aralığın önceki kısmi banı yenisiyle değişir
     for ch in $(chunks15 "$pp"); do lines+="tcp|in|d=$ch|s=$c # $mk"$'\n'; done
     for ch in $PART_RNG; do lines+="tcp|in|d=$ch|s=$c # $mk"$'\n'; done      # CSF'te aralık tek başına satır ister
     [ "$PART_UDP" = 1 ] && lines+="udp|in|d=53|s=$c # $mk"$'\n'
-    file_append_locked "$DENY_FILE" "${lines%$'\n'}" || { act_out 1 "$(m "$M_A_BANFAIL" "$c" "csf.deny")"; return 1; }
+    sf=$(mktemp) || return 1
+    printf '%s\n' "|s=$c # csf_autogroup:" > "$sf"
+    file_rewrite "$DENY_FILE" /dev/null "$sf" "$lines"; rc=$?; rm -f "$sf"; return $rc
+}
+ban_partial() {  # CIDR BITS PORTLAR — yalnız seçilen servislere gelen bağlantıları kapatan gelişmiş satır(lar)
+    local c="$1" b="$2" pp="$3" jw
+    partial_write "$c" "$b" "$pp" || { act_out 1 "$(m "$M_A_BANFAIL" "$c" "csf.deny")"; return 1; }
     csf_run -r                                                        # gelişmiş satırı csf -d ekleyemez: yeniden yükle
     jstr "$WL_HIT"; jw="$REPLY"
     owners_load; inside_owner "${c%.0/24}"; owner_kv
-    log "$(m "$M_A_LOG" "$AG_BY" "$(m "$M_A_PBANNED" "$c" "${pp}${PART_RNG:+ ${PART_RNG}}")")"
+    log "$(m "$M_A_LOG" "$AG_BY" "$(m "$M_A_PBANNED" "$c" "$(part_shown "$pp")")")"
     ev manual_ban "$c" "by=\"$AG_BY\"" "wl=$jw" "force=$([ "$FORCE" = 1 ] && echo true || echo false)" "${OKV[@]}" \
-       "mode=\"svc\"" "svc=\"$BSVC\"" "ports=\"$pp\"" "total=$IN_EVN" "ips=[$(IFS=,; echo "${IN_EVJ[*]}")]"
-    local shown="$pp${PART_RNG:+${pp:+,}${PART_RNG// /,}}"
-    shown="${shown//_/-}"
-    if [ "${PB_RESTORED:-0}" -gt 0 ]; then act_out 0 "$(m "$M_A_RESTORED" "$(m "$M_A_PBANNED" "$c" "$shown")" "$PB_RESTORED")"
-    else act_out 0 "$(m "$M_A_PBANNED" "$c" "$shown")"; fi
+       "mode=\"svc\"" "svc=\"$BSVC\"" "extra=\"$BPORTS\"" "ports=\"$pp\"" "total=$IN_EVN" "ips=[$(IFS=,; echo "${IN_EVJ[*]}")]"
+    act_out 0 "$(m "$M_A_PBANNED" "$c" "$(part_shown "$pp")")"
 }
-unban_full_core() { # CIDR → tam banı kaldır; RESTORE=1 ise elle banın kaldırdıklarını geri yükle; izin istisnaları da gider
-    # → UB_RN (geri yüklenen satır), UB_ERR (hata iletisi)
-    local t="$1" line rf rl tok cm
+restore_save() { # CIDR SATIRLAR → kapsananların kopyası; ilk satırda banın zamanı (geri yüklemede yaş hesabı için)
+    local rf
+    restore_file "$1"; rf="$REPLY"
+    mkdir -p "$RESTORE_DIR" 2>/dev/null; chmod 700 "$RESTORE_DIR" 2>/dev/null
+    { printf '#t|%s\n' "$(date +%s)"; printf '%s\n' "$2"; } > "$rf.tmp" 2>/dev/null && mv -f "$rf.tmp" "$rf"
+}
+unban_full_core() { # CIDR → tam banı kaldır; RESTORE=1 ise kapsananları geri yükle; banın izin istisnaları da gider.
+    # Hepsi tek kilitli yazım ve tek csf -r (satır başına csf -d / -dr yerine) → UB_RN (geri yüklenen), UB_ERR
+    local t="$1" rf since now delta rl body k ts nd dl="" al="" n=0 tokf subf
     UB_RN=0; UB_ERR=""
-    line=$(deny_line "$t")
-    if is_dnd "$line"; then strip_dnd "$t" || { UB_ERR="$(m "$M_A_UNBANFAIL" "$t" "strip")"; return 1; }; fi
-    csf_run -dr "$t"
-    deny_has "$t" && { UB_ERR="$(m "$M_A_UNBANFAIL" "$t" "${CSF_OUT%%$NL*}")"; return 1; }
-    # elle ban konurken kaldırılan kalıcı satırlar: istenirse aynen geri yüklenir (csf -d ile eklenir —
-    # iptables kuralı hemen kurulsun — sonra satır özgün yorumu ve tarihiyle değiştirilir)
     restore_file "$t"; rf="$REPLY"
+    local -A HAVE=()
     if [ "$RESTORE" = 1 ] && [ -s "$rf" ]; then
+        while read -r k _; do [ -n "$k" ] && HAVE[$k]=1; done < "$DENY_FILE"
+        now=$(date +%s)
+        since=$(sed -n 's/^#t|//p' "$rf" | head -n 1)
+        [[ "$since" =~ ^[0-9]+$ ]] || since=$(stat -c %Y "$rf" 2>/dev/null || echo "$now")
+        delta=$(( now - since )); [ "$delta" -lt 0 ] && delta=0
         while IFS= read -r rl; do
-            tok="${rl%%[[:space:]]*}"
-            [[ "$tok" =~ $CIDR4_RE ]] || continue
-            deny_has "$tok" && continue
-            cm="${rl#"$tok"}"; cm="${cm#"${cm%%[![:space:]#]*}"}"
-            cm=$(printf '%s' "$cm" | sed -E 's/[[:space:]]+-[[:space:]]+[A-Z][a-z]{2} [A-Z][a-z]{2} +[0-9]+ [0-9:]{8} [0-9]{4}[[:space:]]*$//')
-            csf_run -d "$tok" "$cm"
-            if deny_has "$tok"; then deny_put_line "$tok" "$rl"; UB_RN=$((UB_RN + 1)); fi
+            case "$rl" in
+                '#t|'*|'') continue ;;
+                'allow|'*) body="${rl#allow|}"
+                           grep -qxF -- "$body" "$CSF_DIR/csf.allow" 2>/dev/null || al+="$body"$'\n' ;;
+                *)  k="${rl%%[[:space:]]*}"
+                    if [[ "$k" =~ $CIDR4_RE ]]; then
+                        [ -n "${HAVE[$k]}" ] && continue
+                        # otomatik blok banı: ban altında geçen süre yaşına sayılmaz (eski blok temizliği hemen silmesin)
+                        if [ "$delta" -gt 0 ] && [[ "$rl" == *Auto-grouped* && "$rl" =~ $RE_DATE ]]; then
+                            ts=$(LC_ALL=C date -d "${BASH_REMATCH[1]}" +%s 2>/dev/null) && \
+                            nd=$(LC_ALL=C date -d "@$(( ts + delta ))" '+%a %b %e %H:%M:%S %Y' 2>/dev/null) && rl="${rl/"${BASH_REMATCH[1]}"/$nd}"
+                        fi
+                        n=$((n + 1))
+                    else
+                        grep -qxF -- "$rl" "$DENY_FILE" && continue      # kısmi ban satırı zaten varsa
+                    fi
+                    dl+="$rl"$'\n' ;;
+            esac
         done < "$rf"
     fi
-    rm -f "$rf"
-    # tam banın yanına eklenmiş izin satırları banla birlikte gider
-    if grep -qF "csf_autogroup: exception for $t [" "$CSF_DIR/csf.allow" 2>/dev/null; then
-        file_drop_locked "$CSF_DIR/csf.allow" "csf_autogroup: exception for $t [" && csf_run -r
+    tokf=$(mktemp) || { UB_ERR="$(m "$M_A_UNBANFAIL" "$t" "mktemp")"; return 1; }
+    printf '%s\n' "$t" > "$tokf"
+    if ! file_rewrite "$DENY_FILE" "$tokf" /dev/null "$dl"; then rm -f "$tokf"; UB_ERR="$(m "$M_A_UNBANFAIL" "$t" "csf.deny")"; return 1; fi
+    rm -f "$tokf"
+    deny_has "$t" && { UB_ERR="$(m "$M_A_UNBANFAIL" "$t" "csf.deny")"; return 1; }
+    if [ -n "$al" ] || grep -qF "csf_autogroup: exception for $t [" "$CSF_DIR/csf.allow" 2>/dev/null; then
+        subf=$(mktemp); printf '%s\n' "csf_autogroup: exception for $t [" > "$subf"
+        file_rewrite "$CSF_DIR/csf.allow" /dev/null "$subf" "$al"; rm -f "$subf"
     fi
+    rm -f "$rf"                                   # yalnız yazımlar tuttuktan sonra
+    UB_RN=$n
+    csf_run -r
     return 0
 }
-replace_full() { # CIDR BITS → eklentinin tam banının kipini değiştir (istisnaları yenile ya da kısmi bana çevir)
-    local c="$1" b="$2" xn=0 msg
+replace_full() { # CIDR BITS → eklentinin tam banının kipini değiştir. Önce yeni hâl yazılır, sonra eskisi kalkar:
+    # yarıda kesilse de aralık açıkta kalmaz
+    local c="$1" b="$2" xn=0 msg subf
     case "$BMODE" in
         all|exc)
-            file_drop_locked "$CSF_DIR/csf.allow" "csf_autogroup: exception for $c ["
-            if [ "$BMODE" = exc ] && file_append_locked "$CSF_DIR/csf.allow" "$EXC_LINES"; then xn=$(grep -c . <<< "$EXC_LINES"); fi
+            subf=$(mktemp); printf '%s\n' "csf_autogroup: exception for $c [" > "$subf"
+            if ! file_rewrite "$CSF_DIR/csf.allow" /dev/null "$subf" "$([ "$BMODE" = exc ] && printf '%s' "$EXC_LINES")"; then
+                rm -f "$subf"; act_out 1 "$(m "$M_A_BANFAIL" "$c" "csf.allow")"; return
+            fi
+            rm -f "$subf"
+            [ "$BMODE" = exc ] && xn=$(grep -c . <<< "$EXC_LINES")
             csf_run -r
             log "$(m "$M_A_LOG" "$AG_BY" "$(m "$M_A_CHANGED" "$c")")"
-            ev manual_change "$c" "by=\"$AG_BY\"" "mode=\"$BMODE\"" $([ "$BMODE" = exc ] && echo "open=\"$BSVC\"")
+            ev manual_change "$c" "by=\"$AG_BY\"" "mode=\"$BMODE\"" $([ "$BMODE" = exc ] && echo "open=\"$BSVC\" extra=\"$BPORTS\"")
             msg="$(m "$M_A_CHANGED" "$c")"; [ "$xn" -gt 0 ] && msg="$(m "$M_A_EXC" "$msg" "$xn")"
             act_out 0 "$msg" ;;
         svc)
-            # kısmi ban aralığı kapsamaz: tam ban konurken kaldırılanlar geri yüklenir, sonra kısmi ban yazılır
+            # kısmi ban aralığı kapsamaz: önce kısmi satırlar yazılır, sonra tam ban kalkar ve kaldırdıkları geri gelir
+            part_ports
+            local pp="$REPLY"
+            partial_write "$c" "$b" "$pp" || { act_out 1 "$(m "$M_A_BANFAIL" "$c" "csf.deny")"; return; }
             RESTORE=1; unban_full_core "$c" || { act_out 1 "$UB_ERR"; return; }
-            DC_LO=(); DC_HI=(); DC_TXT=(); AGG=(); DENY_IP=(); SINGLE_NOTE=(); count24=(); ips24=()
-            parse_deny "$DENY_FILE" 1; inside_scan "$c"; WL_HIT=""
-            PB_RESTORED="$UB_RN"; part_ports; ban_partial "$c" "$b" "$REPLY" ;;
+            log "$(m "$M_A_LOG" "$AG_BY" "$(m "$M_A_CHANGED" "$c")")"
+            ev manual_change "$c" "by=\"$AG_BY\"" "mode=\"svc\"" "svc=\"$BSVC\"" "extra=\"$BPORTS\"" "ports=\"$pp\"" "restored=$UB_RN"
+            msg="$(m "$M_A_PBANNED" "$c" "$(part_shown "$pp")")"
+            [ "$UB_RN" -gt 0 ] && msg="$(m "$M_A_RESTORED" "$msg" "$UB_RN")"
+            act_out 0 "$msg" ;;
     esac
 }
-deny_put_line() { # CIDR SATIR → csf.deny'de o adresin satırını verilen satırla değiştir (geri yüklemede özgün
-    # tarih ve yorum korunsun diye; csf -d satıra bugünün tarihini yazar). strip_dnd ile aynı güvenceler.
-    local tmp rc
-    tmp=$(mktemp) || return 1
-    (
-        command -v flock >/dev/null 2>&1 && { flock -x 8 || exit 1; }
-        AG_RL="$2" awk -v c="$1" '{ split($0, f, /[ \t]/); if (f[1] == c && !done) { print ENVIRON["AG_RL"]; done = 1 } else print }' \
-            "$DENY_FILE" > "$tmp" && [ -s "$tmp" ] && cat "$tmp" > "$DENY_FILE"
-    ) 8<"$DENY_FILE"
-    rc=$?; rm -f "$tmp"; return $rc
+orphans_clean() { # banı CSF ekranından (eklenti dışından) kaldırılmış elle banların artıkları: kurtarma kopyaları
+    # ve "exception for" izin satırları. Başka bir kopyanın içinde saklanan iç içe banlarınkiler korunur.
+    local f c n=0 x sf o
+    if [ -d "$RESTORE_DIR" ]; then
+        for f in "$RESTORE_DIR"/*; do
+            [ -f "$f" ] || continue
+            case "$f" in *.tmp) continue ;; esac
+            c="${f##*/}"; c="${c//_//}"
+            [[ "$c" =~ $CIDR4_RE ]] || continue
+            deny_has "$c" && continue
+            for o in "$RESTORE_DIR"/*; do
+                [ "$o" != "$f" ] && [ -f "$o" ] && grep -q "^${c//./\\.} " "$o" 2>/dev/null && continue 2
+            done
+            rm -f "$f"; n=$((n + 1))
+        done
+    fi
+    sf=$(mktemp) || return 0
+    while read -r x; do
+        deny_has "$x" || printf '%s\n' "csf_autogroup: exception for $x [" >> "$sf"
+    done < <(grep -oE 'csf_autogroup: exception for [0-9./]+ \[' "$CSF_DIR/csf.allow" 2>/dev/null | awk '{ print $4 }' | sort -u)
+    if [ -s "$sf" ] && file_rewrite "$CSF_DIR/csf.allow" /dev/null "$sf" ""; then
+        n=$(( n + $(grep -c . "$sf") )); csf_run -r
+    fi
+    rm -f "$sf"
+    [ "$n" -gt 0 ] && log "$(m "$M_ORPHANS" "$n")"
+    return 0
+}
+part_note() {    # LO HI → REPLY = "CIDR|svc" (aralıktaki ilk kısmi ban) ya da boş
+    local x l
+    REPLY=""
+    x=$(own_partials_inside "$1" "$2" | head -n 1); [ -n "$x" ] || return 1
+    l=$(grep -F "|s=$x # csf_autogroup:" "$DENY_FILE" | head -n 1)
+    [[ "$l" =~ $RE_SV ]] && REPLY="$x|${BASH_REMATCH[1]}" || REPLY="$x|"
 }
 do_action() {    # NAME TARGET [DAYS]
     local name="$1" t="$2" days="${3:-30}" cidr bits pfx ip line jw
+    [ "$DRY" = 1 ] && { act_out 2 "$M_A_NODRY"; return 2; }
+    [ -z "$BSVC" ] || [[ "$BSVC" =~ ^[a-z]+(,[a-z]+){0,9}$ ]] || { act_out 2 "$(m "$M_BAD_TARGET" "$BSVC")"; return 2; }
     take_lock || { act_out 3 "$M_BUSY"; return 3; }
     parse_deny "$DENY_FILE" 1
     case "$name" in
@@ -2494,41 +2601,62 @@ do_action() {    # NAME TARGET [DAYS]
             if [ -n "$WL_HIT" ] && [ "$FORCE" != 1 ]; then act_out 4 "$(m "$M_A_WL" "$cidr" "$WL_HIT")"; return; fi
             # kısmi ban: aralığı tamamen kapsamaz; içindekilere ve izlemelere dokunulmaz
             if [ "$BMODE" = svc ]; then part_ports; ban_partial "$cidr" "$bits" "$REPLY"; return; fi
-            csf_run -d "$cidr" "$(m "$M_A_COMMENT" "$bits" "$AG_BY")"
-            deny_has "$cidr" || { act_out 1 "$(m "$M_A_BANFAIL" "$cidr" "${CSF_OUT%%$NL*}")"; return; }
-            # İçindekiler (onay penceresi aynı taramayı gösterdi): izlemeler her durumda biter, banlı aralıkta
-            # izlemenin anlamı yok. --keep verilmedikçe kalıcı listedeki bütün kapsanan satırlar (do not delete ve
-            # başka aralıklar dahil) silinir ve aynen saklanır (ban kaldırılırken geri yüklenebilir); geçici banlar
-            # silinir, saklanmaz (süreleri zaten dolacaktı)
-            local x rb=0 rs=0 rt=0 rw=0 ln rf=""
-            for x in "${IN_WATCH[@]}"; do cnt_del_prefix "$x"; rw=$((rw + 1)); done
+            # Sıra, yarıda kesilse (panelin süre sınırı) bile güvenli kalacak biçimde: önce kurtarma kopyası ve izin
+            # satırları, sonra ban, sonra kapsananlar tek yazımda, tek csf -r, en sonda geçici banlar.
+            local x rb=0 rs=0 rt=0 rw=0 xn=0 ln msg rf tokf subf save="" rem=() ownp=() inx=()
+            restore_file "$cidr"; rf="$REPLY"
+            rm -f "$rf"                                    # aynı aralığın eski kopyası: ban yokken kalmış, artık geçersiz
             if [ "$CLEAN" = 1 ]; then
-                restore_file "$cidr"; rf="$REPLY"
-                mkdir -p "$RESTORE_DIR" 2>/dev/null; chmod 700 "$RESTORE_DIR" 2>/dev/null; : > "$rf.tmp"
+                ownp=($(own_partials_inside "$lo" "$hi"))
                 for x in "${IN_BLK[@]}" "${IN_OTH[@]}" "${IN_SGL[@]}" "${IN_SGLD[@]}"; do
-                    ln=$(deny_line "$x"); [ -n "$ln" ] || continue
-                    is_dnd "$ln" && strip_dnd "$x"
-                    csf_run -dr "$x"
-                    deny_has "$x" && continue
-                    printf '%s\n' "$ln" >> "$rf.tmp"
-                    if [[ "$x" == */* ]]; then rb=$((rb + 1)); else rs=$((rs + 1)); fi
+                    ln="${DLINE[$x]}"; [ -n "$ln" ] || continue
+                    rem+=("$x"); save+="$ln"$'\n'
+                    # içteki kendi "hariç" banının izin satırları da onunla gider (kalsalar o portlar açık kalırdı)
+                    if [[ "$ln" == *"csf_autogroup:"* ]] && grep -qF "csf_autogroup: exception for $x [" "$CSF_DIR/csf.allow" 2>/dev/null; then
+                        inx+=("$x"); save+="$(grep -F "csf_autogroup: exception for $x [" "$CSF_DIR/csf.allow" | sed 's/^/allow|/')"$'\n'
+                    fi
                 done
-                if [ -s "$rf.tmp" ]; then mv -f "$rf.tmp" "$rf"; else rm -f "$rf.tmp" "$rf"; fi
+                for x in "${ownp[@]}"; do save+="$(grep -F "|s=$x # csf_autogroup:" "$DENY_FILE")"$'\n'; done
+                if [ -n "$save" ] && ! restore_save "$cidr" "${save%$'\n'}"; then
+                    log "$(m "$M_A_NOSAVE" "$cidr" "$RESTORE_DIR")"; rem=(); inx=(); ownp=(); CLEAN=0
+                fi
+            fi
+            if [ "$BMODE" = exc ]; then
+                file_append_locked "$CSF_DIR/csf.allow" "$EXC_LINES" || { rm -f "$rf"; act_out 1 "$(m "$M_A_BANFAIL" "$cidr" "csf.allow")"; return; }
+                xn=$(grep -c . <<< "$EXC_LINES")
+            fi
+            csf_run -d "$cidr" "$(m "$M_A_COMMENT" "$bits" "$AG_BY")"
+            if ! deny_has "$cidr"; then
+                [ "$BMODE" = exc ] && file_drop_locked "$CSF_DIR/csf.allow" "csf_autogroup: exception for $cidr ["
+                rm -f "$rf"; act_out 1 "$(m "$M_A_BANFAIL" "$cidr" "${CSF_OUT%%$NL*}")"; return
+            fi
+            for x in "${IN_WATCH[@]}"; do cnt_del_prefix "$x"; rw=$((rw + 1)); done   # banlı aralıkta izlemenin anlamı yok
+            # kapsananlar ve içteki kendi kısmi banlarımız tek kilitli yazımda (her biri için ayrı csf -dr yerine)
+            tokf=$(mktemp); subf=$(mktemp)
+            [ ${#rem[@]} -gt 0 ] && printf '%s\n' "${rem[@]}" > "$tokf"
+            for x in "${ownp[@]}"; do printf '%s\n' "|s=$x # csf_autogroup:" >> "$subf"; done
+            if [ ${#rem[@]} -gt 0 ] || [ ${#ownp[@]} -gt 0 ]; then
+                file_rewrite "$DENY_FILE" "$tokf" "$subf" "" || log "$(m "$M_A_BANFAIL" "$cidr" "csf.deny")"
+            fi
+            : > "$subf"
+            for x in "${inx[@]}"; do printf '%s\n' "csf_autogroup: exception for $x [" >> "$subf"; done
+            [ ${#inx[@]} -gt 0 ] && file_rewrite "$CSF_DIR/csf.allow" /dev/null "$subf" ""
+            rm -f "$tokf" "$subf"
+            local -A LEFT=()                                # yazımdan sonra dosyada kalan adresler (tek okuma)
+            while read -r x _; do [ -n "$x" ] && LEFT[$x]=1; done < "$DENY_FILE"
+            for x in "${rem[@]}"; do
+                [ -n "${LEFT[$x]}" ] && continue
+                if [[ "$x" == */* ]]; then rb=$((rb + 1)); else rs=$((rs + 1)); fi
+            done
+            if [ ${#rem[@]} -gt 0 ] || [ ${#ownp[@]} -gt 0 ] || [ "$BMODE" = exc ]; then csf_run -r; fi
+            if [ "$CLEAN" = 1 ]; then
                 for x in "${IN_TMP[@]}"; do csf_run -tr "$x"; grep -qF "|$x|" "$CSF_VAR/csf.tempban" 2>/dev/null || rt=$((rt + 1)); done
             fi
-            # tam ban, aralıktaki kendi kısmi banlarımızın yerini alır; "hariç" kipinde izin satırları eklenir
-            local reload=0 xn=0 msg
-            for x in $(own_partials_inside "$lo" "$hi"); do file_drop_locked "$DENY_FILE" "|s=$x # csf_autogroup:" && reload=1; done
-            if [ "$BMODE" = exc ]; then
-                file_drop_locked "$CSF_DIR/csf.allow" "csf_autogroup: exception for $cidr ["
-                if file_append_locked "$CSF_DIR/csf.allow" "$EXC_LINES"; then xn=$(grep -c . <<< "$EXC_LINES"); reload=1; fi
-            fi
-            [ "$reload" = 1 ] && csf_run -r
             jstr "$WL_HIT"; jw="$REPLY"
             owners_load; inside_owner "${t%.*}" "$t"; owner_kv
             log "$(m "$M_A_LOG" "$AG_BY" "$(m "$M_A_BANNED" "$cidr")")"
             ev manual_ban "$cidr" "by=\"$AG_BY\"" "wl=$jw" "restorable=$((rb + rs))" "force=$([ "$FORCE" = 1 ] && echo true || echo false)" "${OKV[@]}" \
-               "mode=\"$BMODE\"" $([ "$BMODE" = exc ] && echo "open=\"$BSVC\"") \
+               "mode=\"$BMODE\"" $([ "$BMODE" = exc ] && echo "open=\"$BSVC\" extra=\"$BPORTS\"") \
                "removed={\"ranges\":$rb,\"singles\":$rs,\"temps\":$rt,\"watched\":$rw}" "total=$IN_EVN" "ips=[$(IFS=,; echo "${IN_EVJ[*]}")]"
             msg="$(m "$M_A_BANNED" "$cidr")"
             [ $((rb + rs + rt)) -gt 0 ] && msg="$(m "$M_A_CLEANED" "$msg" $((rb + rs + rt)))"
@@ -2596,9 +2724,10 @@ do_action() {    # NAME TARGET [DAYS]
 asn_top() {      # [N] [evidence|blocks] → ASN_TOP satırları: "ASN|KURUM|CC|grup|blok|tekil|cc_deny(0/1)"
     # Sıralama saldırı kanıtına göre: kendi grup banlarımız + tekil banlar (lfd'nin yakaladıkları).
     # csf.deny'deki başka kaynaklı bloklar (elle / başka araç) gösterilir ama sıralamaya girmez.
-    local -A G=() B=() T=() NM=() CC=() IS_AG=() DEN=()
+    local -A G=() B=() T=() NM=() CC=() IS_AG=() DEN=() M=() IS_M=()
     local c i p a
     for c in "${AGG[@]}"; do IS_AG[$c]=1; done
+    for c in "${MANB[@]}"; do IS_M[$c]=1; done                   # elle banlar: listede görünür, kanıt ağırlığı almaz
     for c in $(conf_val CC_DENY | LC_ALL=C tr '[:lower:],' '[:upper:] '); do DEN[$c]=1; done
     for c in "${!SINGLE_NOTE[@]}"; do
         p="${c%.*}"; a="${OWN_A[$p]}"; [ -n "$a" ] || continue
@@ -2607,11 +2736,12 @@ asn_top() {      # [N] [evidence|blocks] → ASN_TOP satırları: "ASN|KURUM|CC|
     for i in "${!DC_TXT[@]}"; do
         c="${DC_TXT[i]%/*}"; p="${c%.*}"; a="${OWN_A[$p]}"; [ -n "$a" ] || continue
         if [ -n "${IS_AG[${DC_TXT[i]}]}" ]; then G[$a]=$(( ${G[$a]:-0} + 1 )); else B[$a]=$(( ${B[$a]:-0} + 1 )); fi
+        [ -n "${IS_M[${DC_TXT[i]}]}" ] && M[$a]=$(( ${M[$a]:-0} + 1 ))
         NM[$a]="${OWN_N[$p]}"; CC[$a]="${OWN_C[$p]}"
     done
     ASN_TOP=$(for a in $(printf '%s\n' "${!G[@]}" "${!B[@]}" "${!T[@]}" | sort -u); do
         printf '%s|%s|%s|%s|%s|%s|%s|%s\n' "$a" "${NM[$a]//|/ }" "${CC[$a]}" "${G[$a]:-0}" "${B[$a]:-0}" "${T[$a]:-0}" \
-            $(( ${#DEN[AS$a]} > 0 )) $(( ${G[$a]:-0} * 4 + ${T[$a]:-0} ))
+            $(( ${#DEN[AS$a]} > 0 )) $(( (${G[$a]:-0} - ${M[$a]:-0}) * 4 + ${T[$a]:-0} ))
     done | if [ "${2:-evidence}" = blocks ]; then awk -F'|' '$5 > 0' | sort -t'|' -k5,5nr; else sort -t'|' -k8,8nr -k5,5nr; fi \
          | cut -d'|' -f1-7 | awk -v n="${1:-10}" 'NR <= n')   # head değil: bkz. SIGPIPE notu
 }
@@ -2740,7 +2870,7 @@ digest_build() { # → DG_SUBJ, DG_BODY
     fi
     [ -n "${C[perm0]}" ] && perm0="${C[perm0]}"
     limit=$(num "$(conf_val DENY_IP_LIMIT)"); tlimit=$(num "$(conf_val DENY_TEMP_IP_LIMIT)")
-    pc=$(grep -cE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' "$DENY_FILE")
+    pc=$(deny_count)
     tc=$("$CSF_BIN" -t 2>/dev/null 9>&- | grep -c "^DENY")
     DG_SUBJ=$(m "$M_DG_SUBJ" "$(hostname 2>/dev/null || echo "$HOSTNAME")")
     DG_BODY="$(m "$M_DG_HEAD" "$(date -d "@$since" '+%d.%m')" "$(date -d "@$now" '+%d.%m')")$NL$NL"
@@ -3049,7 +3179,7 @@ logr "$M_START (v$VERSION)"
 
 # ── Permanent deny limit ────────────────────────────────────────────────────
 limit=$(grep "^DENY_IP_LIMIT" "$CSF_CONF" | cut -d'=' -f2 | tr -d ' "')
-current_count=$(grep -cP '^\d+\.\d+\.\d+\.\d+|^\d+\.\d+\.\d+\.\d+\/\d+' "$DENY_FILE" || true)
+current_count=$(deny_count)          # CSF'in kendi sayımıyla aynı (do not delete satırları sınıra girmez)
 if [ -n "$limit" ] && [ "$limit" -gt 0 ] 2>/dev/null; then
     percent=$((current_count * 100 / limit))
     logr "$(m "$M_PERM_USAGE" "$current_count" "$limit" "$percent")"
@@ -3091,6 +3221,7 @@ fi
 
 # ── Read csf.deny: singles (grouping) + CIDRs (coverage) ────────────────────
 parse_deny "$DENY_FILE" 1
+[ "$DRY" = 1 ] || orphans_clean       # eklenti dışından kaldırılmış elle banların artıkları
 
 # ── /24 grouping (permanent): auto-ban + drop singles ───────────────────────
 added24=0; added24_body=""
@@ -3163,6 +3294,7 @@ for prefix in $(printf '%s\n' "${!count16[@]}" | sort -V); do
             log "$(m "$M_WARN16" "$prefix" "${count16[$prefix]}" "$subnet_count")"
             warn_body+="$(m "$M_WARN16_B" "$prefix" "${count16[$prefix]}" "$subnet_count")$NL"
             WL_HIT=""; wl_overlap "$lo" $((lo + 65535)) && warn_body+="$(m "$M_WL_NOTE" "$WL_HIT")$NL"
+            part_note "$lo" $((lo + 65535)) && warn_body+="$(m "$M_PART_NOTE" "${REPLY%%|*}" "${REPLY#*|}")$NL"
             ip_lines "${ips16[$prefix]}" perm 1; warn_body+="$REPLY"
             warn16=$((warn16 + 1)); cnt_add "WARN16_${prefix} $TODAY"
             jstr "$WL_HIT"
@@ -3274,6 +3406,7 @@ for prefix in $(printf '%s\n' "${!temp_count16[@]}" | sort -V); do
         log "$(m "$M_TWARN16" "$prefix" "${temp_count16[$prefix]}" "$subnet_count")"
         temp_warn_body+="$(m "$M_WARN16_B" "$prefix" "${temp_count16[$prefix]}" "$subnet_count")$NL"
         WL_HIT=""; wl_overlap "$lo" $((lo + 65535)) && temp_warn_body+="$(m "$M_WL_NOTE" "$WL_HIT")$NL"
+        part_note "$lo" $((lo + 65535)) && temp_warn_body+="$(m "$M_PART_NOTE" "${REPLY%%|*}" "${REPLY#*|}")$NL"
         ip_lines "${temp_ips16[$prefix]}" temp 1; temp_warn_body+="$REPLY"
         temp_warn16=$((temp_warn16 + 1)); cnt_add "WARN_TEMP16_${prefix} $TODAY"
         jstr "$WL_HIT"

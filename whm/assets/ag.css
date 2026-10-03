@@ -375,7 +375,6 @@
 .ag-tab.on { background: #fff; color: var(--ag-text); box-shadow: 0 1px 2px rgba(15, 23, 42, .1); }
 
 /* ── Settings ───────────────────────────────────────────────────── */
-.ag-settings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; padding-bottom: 72px; }
 .ag-form { padding: 6px 18px 16px; }
 .ag-field { padding: 12px 0; border-top: 1px solid var(--ag-line-soft); position: relative; }
 .ag-field:first-child { border-top: 0; }
@@ -399,7 +398,6 @@
 
 @media (max-width: 1100px) {
   .ag-grid { grid-template-columns: minmax(0, 1fr); }
-  .ag-settings { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 760px) {
   .ag-app { padding: 16px; }
@@ -595,7 +593,6 @@
   .ag-setform .ag-field > * { max-width: none; }
   .ag-setform .ag-field > :not(.ag-field-l):not(.ag-field-h) { margin-top: 8px; justify-self: start; max-width: 100%; }
 }
-.ag-ev-x { flex: none; display: flex; align-items: center; font-size: 12px; }
 
 /* durum bandı: CSF · lfd · Cron */
 .ag-hchips { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
@@ -676,7 +673,6 @@
 @media (max-width: 600px) {
   .ag-ev { flex-wrap: wrap; }
   .ag-ev-b { flex: 1 1 0; min-width: 0; }
-  .ag-ev-x { order: 3; flex-basis: 100%; padding-left: 40px; }
 }
 
 .ag-mob { display: none; }
@@ -778,3 +774,9 @@
 .ag-sum-k { flex: 0 0 82px; font-weight: 650; }
 .ag-sum-k.bad { color: var(--ag-bad); }
 .ag-sum-k.ok { color: var(--ag-ok); }
+@media (max-width: 560px) {
+  .ag-mode .ag-chips { flex-wrap: wrap; }
+  .ag-mode .ag-chips .ag-chip { white-space: normal; height: auto; min-height: 30px; padding: 4px 8px; }
+  .ag-fate { white-space: normal; }
+  .ag-sum-k { flex-basis: 70px; }
+}

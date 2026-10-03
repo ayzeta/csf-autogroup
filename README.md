@@ -8,7 +8,7 @@ Most floods come from the same neighbourhood. When 3–5 already-banned IPs pile
 up in a single `/24`, the rest of that range is almost always the same attacker
 still coming. CSF Auto-Group bans the **whole `/24`** and drops the singles, so
 the attack is blocked before you have to touch anything. A range that comes back
-is escalated to a **permanent** ban. `/16` ranges are only flagged for review
+is escalated to a **permanent** ban. `/16` networks are only flagged for review
 (never auto-banned, too broad).
 
 ![Overview page in WHM](docs/overview.png)
@@ -20,19 +20,19 @@ is escalated to a **permanent** ban. `/16` ranges are only flagged for review
 - **Safe by default** — never bans a range that touches any CSF whitelist, and
   every manual action asks for confirmation.
 - **Email and Slack** — one HTML email per run with everything it did (block
-  bans, suspicious ranges, skips, limit and firewall alerts), plus Slack
+  bans, suspicious networks, skips, limit and firewall alerts), plus Slack
   messages. Both addresses come from WHM; nothing arrives twice.
 - **Watches the firewall itself** — shows whether CSF and LFD are working and
   alerts you if one of them stops.
 - **English / Türkçe** — the plugin, logs and emails.
 - **Works on phones** — the page adapts to small screens.
 
-**Version 1.9.8** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
+**Version 1.9.9** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
 cPanel the same engine runs from cron and the command line
 ([details](#without-cpanel)).
 
 **Terms used everywhere** (plugin, emails, log): a *single* is one banned IP, a
-*block* is a `/24` (banned automatically), a *range* is a `/16` (never banned,
+*block* is a `/24` (banned automatically), a *network* is a `/16` (never banned,
 only flagged as *suspicious*), a *provider* is an ASN.
 
 ---
@@ -98,10 +98,10 @@ settings, with no prompts. `config.env` is left untouched.
 - **Summary cards** — active block bans (with this week's change), items to
   review, and how full CSF's permanent and temp lists are.
 - **Activity** — a daily chart of block bans, blocks made permanent, temp block
-  bans, suspicious ranges and whitelist skips over the last 7 or 30 days. Hover
+  bans, suspicious networks and whitelist skips over the last 7 or 30 days. Hover
   a day for its breakdown.
-- **To review** — suspicious ranges and whitelist-skipped blocks from the last 7
-  days, with every IP's hostname, owner and ban reason. A range flagged on 3 or
+- **To review** — suspicious networks and whitelist-skipped blocks from the last 7
+  days, with every IP's hostname, owner and ban reason. A network flagged on 3 or
   more separate days is marked *repeating* and moves to the top.
 - **Active block bans** — a sortable, paged table with each block's owner,
   searchable by CIDR, AS number or organisation. Filters show their counts.
@@ -192,7 +192,7 @@ full one.
 
 | Button | Does |
 |--------|------|
-| Ban range (/16) | permanent `/16` ban, added as `do not delete`: from To review, **⋯** in Active block bans and Watched, and the IP card |
+| Ban network (/16) | permanent `/16` ban, added as `do not delete`: from To review, **⋯** in Active block bans and Watched, and the IP card |
 | Ban block (/24) | permanent `/24` ban from the IP card |
 | Change ban | change what a CSF Auto-Group ban blocks (everything / selected services / everything except) |
 | Ban anyway | ban a whitelist-skipped `/24` (overrides the whitelist) |
@@ -228,8 +228,8 @@ history):
 
 ![Notification settings](docs/settings.png)
 
-- **Thresholds** — block ban (`/24`), `do not delete`, suspicious range (`/16`),
-  temp block ban (`/24`) and suspicious range from temp bans (`/16`).
+- **Thresholds** — block ban (`/24`), `do not delete`, suspicious network (`/16`),
+  temp block ban (`/24`) and suspicious network from temp bans (`/16`).
 - **Schedule** — cron every 5 / 10 / 15 / 30 minutes or hourly.
 - **Lookups** — owner/hostname lookups on or off, DNS timeout.
 - **Retention** — watch period, review days, old-block limit (default 365 days)
@@ -251,17 +251,17 @@ logs each change as `SETTING (user): KEY: old → new`. CSF's own list limits
 
 ## How grouping works
 
-The escalation ladder: a few bad singles in a range turn into a range ban, and a
-range that comes back turns into a permanent one.
+The escalation ladder: a few bad singles in a block turn into a block ban, and a
+block that comes back turns into a permanent one.
 
 | Trigger | Action |
 |--------|--------|
 | `/24` with **≥3** permanent single bans | permanently ban the `/24`, remove the singles |
 | `/24` with **≥5** permanent singles | ban `/24` + `do not delete` |
-| `/16` with **≥5** singles across **≥2** `/24`s | flag as suspicious range by email (once/day), no auto-ban |
+| `/16` with **≥5** singles across **≥2** `/24`s | flag as suspicious network by email (once/day), no auto-ban |
 | `/24` with **≥3** temp bans (first time) | temp-ban the `/24` for 12h, watch it |
 | same `/24` seen again | permanent ban + `do not delete` |
-| temp `/16` with **≥5** singles / **≥2** `/24`s | flag as suspicious range by email (once/day) |
+| temp `/16` with **≥5** singles / **≥2** `/24`s | flag as suspicious network by email (once/day) |
 | deny list **≥80%** of its limit | alert: email once a day; Slack once when it starts and once when resolved |
 | CSF disabled / in testing mode / rules not loaded, or LFD not running | alert: email once a day; Slack once when it starts and once when resolved |
 | block ban older than the old-block limit (optional) | remove it |
@@ -275,7 +275,7 @@ keeps `csf.deny` from overflowing its line limit.
 ### Owner info
 
 Each run sends at most one email; its subject sums up the run, e.g.
-`CSF Auto-Group: 2 block bans · 1 suspicious range · 1 temp block ban`. Emails
+`CSF Auto-Group: 2 block bans · 1 suspicious network · 1 temp block ban`. Emails
 are HTML (cards and tables that also work in desktop Outlook) with a plain-text
 part for clients that don't show HTML.
 
