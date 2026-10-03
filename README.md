@@ -118,6 +118,13 @@ settings, with no prompts. `config.env` is left untouched.
   **Show more** pages further back. Work from before the event log existed is
   filled in from the log. Click an address to open its IP card.
   Settings changes are listed under Settings → Settings history.
+- **Suggestions where decisions are made** — the ban window suggests a partial
+  ban when attacks hit only one or two services; the remove window shows when
+  and why the ban was added (and, for partial bans, attacks on other services
+  since then); the IP card shows how far the block is from its threshold;
+  changing a threshold shows its effect on the current entries; suspicious
+  networks show the attacked services and suggest a single block when most
+  singles sit in one.
 - **Look up an IP** — hostname (forward-confirmed), owner, announced prefix,
   registry, and **every** level at which CSF blocks it: the single ban, the
   covering `/24`, `/16` or other range (with its state, date and main ban

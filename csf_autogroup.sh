@@ -1729,8 +1729,15 @@ do_status() {
         local pa=0 pp
         pp=$(uniq_ports "${PB_P[$c]}")
         [ -n "${PB_D[$c]}" ] && pa=$(LC_ALL=C date -d "${PB_D[$c]}" +%s 2>/dev/null || echo 0)
+        local psince="{}"
+        if [ "$pa" -gt 0 ] && cidr_range "$c"; then
+            attack_json "$R_LO" "$R_HI" "$pa" "${PB_S[$c]}" < <(
+                for x in "${!SINGLE_NOTE[@]}"; do printf '%s|%s\n' "$x" "${SINGLE_NOTE[$x]}"; done
+                [ -r "$CSF_VAR/csf.tempban" ] && awk -F'|' '$2 !~ /\// { print $2 "|" $6 "|e:" $1 }' "$CSF_VAR/csf.tempban")
+            psince="$REPLY"
+        fi
         REPLY=""; cidr_range "$c" && under_of "$R_LO" "$R_HI" "$c"
-        groups+=("{\"cidr\":\"$c\",\"kind\":\"partial\",\"dnd\":false,\"n\":0,\"added\":${pa:-0},\"ttl\":0,\"svc\":\"${PB_S[$c]}\",\"extra\":\"${PB_X[$c]}\",\"ports\":\"$pp\"${REPLY:+,\"under\":\"$REPLY\"}}")
+        groups+=("{\"cidr\":\"$c\",\"since\":$psince,\"kind\":\"partial\",\"dnd\":false,\"n\":0,\"added\":${pa:-0},\"ttl\":0,\"svc\":\"${PB_S[$c]}\",\"extra\":\"${PB_X[$c]}\",\"ports\":\"$pp\"${REPLY:+,\"under\":\"$REPLY\"}}")
         [ "$JSON" = 1 ] || gtext+=("$(printf '%-18s %-9s %s' "$c" "partial" "tcp $pp")")
     done
     for c in "${!TG_TTL[@]}"; do
@@ -1960,6 +1967,30 @@ do_status() {
                 c = substr($0, RSTART + 8, RLENGTH - 9); if (c in W) L[c] = $0 }
             END { for (c in L) print L[c] }' "$EVENTS_FILE" | grep -E '^\{"t":[0-9]+,.*\}$')
         printf '"evx":[%s],' "${evx[*]}"
+        # Ayarlar → Eşikler: eşiğin etkisini panel hesaplasın diye ağ başına, bloklardaki tekil ve geçici ban sayıları
+        local -A DP=() DT=() TPC=()
+        local dp dx dl
+        for dx in "${!count24[@]}"; do
+            [ -n "${DLINE[$dx.0/24]+x}" ] && continue
+            ip2int "$dx.0"; under_of "$REPLY" $((REPLY + 255)) "" && continue
+            ign_until "$dx.0/24" && continue
+            dp="${dx%.*}"; DP[$dp]+="${DP[$dp]:+,}${count24[$dx]}"
+        done
+        if [ -r "$CSF_VAR/csf.tempban" ]; then
+            while IFS='|' read -r dl dx _; do
+                [[ "$dx" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || continue
+                [ -n "${TPC[x$dx]}" ] && continue; TPC[x$dx]=1
+                TPC[${dx%.*}]=$(( ${TPC[${dx%.*}]:-0} + 1 ))
+            done < "$CSF_VAR/csf.tempban"
+            for dx in "${!TPC[@]}"; do
+                [[ "$dx" == x* ]] && continue
+                [ -n "${DLINE[$dx.0/24]+x}" ] || [ "${TG_TTL[$dx.0/24]:-0}" -gt 0 ] && continue
+                dp="${dx%.*}"; DT[$dp]+="${DT[$dp]:+,}${TPC[$dx]}"
+            done
+        fi
+        printf '"dist":{"p":{%s},"t":{%s}},' \
+            "$(for dp in "${!DP[@]}"; do printf '"%s":[%s],' "$dp" "${DP[$dp]}"; done | sed 's/,$//')" \
+            "$(for dp in "${!DT[@]}"; do printf '"%s":[%s],' "$dp" "${DT[$dp]}"; done | sed 's/,$//')"
         printf '"groups":[%s],"pending":[%s],"review":[%s],"ignored":[%s],"events":[%s]}\n' \
             "${groups[*]}" "${pending[*]}" "${review[*]}" "${ignored[*]}" "${recent[*]}"
         return 0
@@ -2093,15 +2124,48 @@ inside_scan() {  # CIDR
     return 0
 }
 restore_file() { REPLY="$RESTORE_DIR/${1//\//_}"; }   # CIDR → saklanan satırların dosyası
-inside_attacks() { # CIDR → REPLY = {"ssh":12,"web":3,…}: aralıktaki IP'lerin ban sebeplerinden servis başına saldıran
-    # IP sayısı. Kaynaklar: kalıcı listedeki tekiller, geçici banlar, içteki banların olay kaydındaki IP sebepleri.
-    # LFD sebebi servisi söyler ("(sshd) … [LF_SSHD]"); tanınmayanlar "other", port taraması "scan" sayılır.
+# Ban sebebinden servis: LFD sebebi servisi söyler ("(sshd) … [LF_SSHD]"); tanınmayanlar "other", port taraması "scan".
+# Panelde aynı kural ag.js'teki svcOfReason'da (Dikkat edilecekler için) — birini değiştirirsen ötekini de değiştir.
+AWK_CLS='function cls(r) {
+    r = tolower(r)
+    if (r ~ /port ?scan|ps_limit|lf_distattack/) return "scan"
+    if (r ~ /sshd|lf_sshd/) return "ssh"
+    if (r ~ /ftpd|lf_ftpd|lf_distftp/) return "ftp"
+    if (r ~ /cpanel|cpaneld|whm|webmail|lf_cpanel|webmin|lf_webmin|directadmin/) return "cp"
+    if (r ~ /smtpauth|lf_smtpauth|lf_distsmtp|sasl|imapd|pop3d|lf_pop3d|lf_imapd|dovecot|courier/) return "sync"
+    if (r ~ /exim|lf_eximsyntax|smtp|relay|spam/) return "min"
+    if (r ~ /named|lf_dns|dns/) return "dns"
+    if (r ~ /mod_?security|htpasswd|lf_htaccess|lf_modsec|apache|nginx|litespeed|http|wordpress|wp-|xmlrpc|joomla|login\.php|lf_apache|404/) return "web"
+    return "other"
+}
+function datekey(n,  a, k, M, i, h) {   # "… - Sat Sep 26 12:00:00 2026" → 20260926120000 (yoksa 0)
+    split("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec", M, " "); k = split(n, a, /[ \t]+/)
+    if (k < 4 || a[k] !~ /^[0-9][0-9][0-9][0-9]$/ || a[k - 1] !~ /^[0-9][0-9]:[0-9][0-9]:[0-9][0-9]$/) return 0
+    h = a[k - 1]; gsub(/:/, "", h)
+    for (i = 1; i <= 12; i++) if (M[i] == a[k - 3]) return (a[k] sprintf("%02d%02d", i, a[k - 2]) h) + 0
+    return 0
+}'
+attack_json() {  # LO HI [SONRA_EPOCH ATLANACAK_SERVİSLER] < "ip|sebep[|e:epoch]" → REPLY = {"ssh":12,…}
+    # her IP bir kez; SONRA verilirse yalnız o zamandan sonra konan banlar (tekilde nottaki tarih, geçicide epoch)
+    local sk=0
+    [ -n "$3" ] && [ "$3" != 0 ] && sk=$(LC_ALL=C date -d "@$3" +%Y%m%d%H%M%S 2>/dev/null || echo 0)
+    REPLY=$(awk -F'|' -v lo="$1" -v hi="$2" -v se="${3:-0}" -v sk="$sk" -v skip=",${4}," "$AWK_CLS"'
+        function ipn(a,  p) { split(a, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
+        $1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && !($1 in S) {
+            v = ipn($1); if (v < lo || v > hi) next
+            if (se > 0) { if ($3 ~ /^e:/) { if (substr($3, 3) + 0 <= se + 0) next } else { d = datekey($2); if (d == 0 || d <= sk + 0) next } }
+            S[$1] = 1; k = cls($2); if (index(skip, "," k ",")) next; C[k]++ }
+        END { o = ""; for (k in C) o = o (o == "" ? "" : ",") "\"" k "\":" C[k]; print "{" o "}" }')
+    [ -n "$REPLY" ] || REPLY="{}"
+}
+inside_attacks() { # CIDR → REPLY = {"ssh":12,"web":3,…}: aralıktaki IP'lerin ban sebeplerinden servis başına saldıran IP
+    # sayısı. Kaynaklar: kalıcı listedeki tekiller, geçici banlar, içteki banların olay kaydındaki IP sebepleri.
     local c="$1" ip x want="" lo hi
     cidr_range "$c" || { REPLY="{}"; return; }
     lo=$R_LO; hi=$R_HI
     for x in "${IN_BLK[@]}" "${IN_OTH[@]}" "${IN_OWNP[@]}" "$c"; do want+=" $x"; done
     for x in "${IN_WATCH[@]}"; do want+=" $x.0/24"; done
-    REPLY=$( {
+    attack_json "$lo" "$hi" < <(
         for ip in "${IN_SGL[@]}" "${IN_SGLD[@]}"; do printf '%s|%s\n' "$ip" "${SINGLE_NOTE[$ip]}"; done
         for ip in "${!IN_TNOTE[@]}"; do [[ "$ip" == */* ]] || printf '%s|%s\n' "$ip" "${IN_TNOTE[$ip]}"; done
         # içteki ban ve izleme kayıtlarının son IP listesi (o bloklar banlanırken silinen tekillerin sebepleri burada)
@@ -2113,24 +2177,7 @@ inside_attacks() { # CIDR → REPLY = {"ssh":12,"web":3,…}: aralıktaki IP'ler
                         e = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
                         ip = e; sub(/^"ip":"/, "", ip); sub(/".*/, "", ip)
                         why = ""; if (match(e, /"why":"[^"]*"/)) why = substr(e, RSTART + 7, RLENGTH - 8)
-                        print ip "|" why } } }' "$EVENTS_FILE"
-    } | awk -F'|' -v lo="$lo" -v hi="$hi" '
-        function ipn(a,  p) { split(a, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
-        function cls(r) {
-            r = tolower(r)
-            if (r ~ /port ?scan|ps_limit|lf_distattack/) return "scan"
-            if (r ~ /sshd|lf_sshd/) return "ssh"
-            if (r ~ /ftpd|lf_ftpd|lf_distftp/) return "ftp"
-            if (r ~ /cpanel|cpaneld|whm|webmail|lf_cpanel|webmin|lf_webmin|directadmin/) return "cp"
-            if (r ~ /smtpauth|lf_smtpauth|lf_distsmtp|sasl|imapd|pop3d|lf_pop3d|lf_imapd|dovecot|courier/) return "sync"
-            if (r ~ /exim|lf_eximsyntax|smtp|relay|spam/) return "min"
-            if (r ~ /named|lf_dns|dns/) return "dns"
-            if (r ~ /mod_?security|htpasswd|lf_htaccess|lf_modsec|apache|nginx|litespeed|http|wordpress|wp-|xmlrpc|joomla|login\.php|lf_apache|404/) return "web"
-            return "other"
-        }
-        $1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && !($1 in S) { v = ipn($1); if (v < lo || v > hi) next; S[$1] = 1; C[cls($2)]++ }
-        END { o = ""; for (k in C) o = o (o == "" ? "" : ",") "\"" k "\":" C[k]; print "{" o "}" }')
-    [ -n "$REPLY" ] || REPLY="{}"
+                        print ip "|" why } } }' "$EVENTS_FILE")
 }
 inside_ev() {    # IP SEBEP → IN_EVJ'ye ekle
     IN_EVN=$((IN_EVN + 1))
@@ -2286,6 +2333,9 @@ do_lookup() {
         for k in host asname pfx cc reg alloc deny temp wl rig pend ign; do
             v="${!k}"; jstr "$v"; o+=",\"$k\":$REPLY"
         done
+        local bp="${ip%.*}" btc=0
+        [ -r "$CSF_VAR/csf.tempban" ] && btc=$(awk -F'|' -v p="$bp." 'index($2, p) == 1 && $2 !~ /\// && !S[$2]++ { n++ } END { print n + 0 }' "$CSF_VAR/csf.tempban")
+        o+=",\"blk\":{\"s\":${count24[$bp]:-0},\"t\":$btc,\"ts\":$THRESHOLD_24,\"tt\":$THRESHOLD_TEMP_24}"
         o+=",\"covers\":[$cvj],\"asn\":\"$asn\",\"fwd\":$fwd,\"lookup\":$([ "$LOOK_INIT" = 1 ] && echo true || echo false)}"
         echo "$o"; return 0
     fi

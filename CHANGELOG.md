@@ -10,6 +10,19 @@
   recorded reasons nothing is preselected. Port scans suggest "Everything".
   **Everything except** preselects nothing and warns when a service you keep
   open was attacked from the range. (Before, a fixed set was preselected.)
+- **More suggestions from the data already collected:**
+  - Ban window, *Everything*: when the attacks from the range only hit one or
+    two services, it suggests a partial ban that blocks just those (one click
+    switches to *Selected services*).
+  - Remove ban window: when and why the ban was added; for a partial ban, new
+    bans that came from the range to other services since then, with a
+    **Change ban** shortcut.
+  - IP card → **Block status**: how many single / temp bans the IP's block has
+    and how many more until it is banned automatically.
+  - Settings → Thresholds: changing a threshold shows how many more blocks (or
+    networks) the current entries would ban or report at the new value.
+  - To review, suspicious networks: which services were attacked, and when most
+    singles sit in one block, a suggestion and a button to ban just that block.
 - The "entries removed" and "entries restored" counts of a manual ban now
   include the partial bans inside it (a split partial ban counts once); before,
   only single and range bans were counted.
