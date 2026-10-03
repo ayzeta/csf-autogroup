@@ -27,7 +27,7 @@ is escalated to a **permanent** ban. `/16` ranges are only flagged for review
 - **English / Türkçe** — the plugin, logs and emails.
 - **Works on phones** — the page adapts to small screens.
 
-**Version 1.9.7** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
+**Version 1.9.8** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
 cPanel the same engine runs from cron and the command line
 ([details](#without-cpanel)).
 
@@ -159,10 +159,39 @@ they would have expired anyway. The removed IPs and their ban reasons also stay
 with the new ban (**⋯ → IPs**). A range containing one of this server's own IPs
 can't be banned at all.
 
+**What to block** — the same window lets you choose:
+
+- **Everything** — the range is cut in both directions (a normal CSF ban).
+- **Selected services** — only connections *from* the range to the services you
+  pick are blocked (Web, SSH on this server's real SSH port, FTP, cPanel · WHM ·
+  Webmail, incoming mail, mail sync, DNS, plus any other ports or ranges such as
+  `8080, 30000-35000`). Everything else stays open, and connections from this
+  server to the range are not affected. It is one `csf.deny` line (split per 15
+  ports), shown as *partial* in Active block bans; it doesn't cover the range, so
+  nothing inside is removed and watching continues.
+- **Everything except** — a full ban, but the services you pick stay open,
+  including outgoing mail and outgoing web (this server calling APIs, backups or
+  updates in that range). CSF checks bans before "established connection" replies,
+  so each service gets a two-way allow rule in `csf.allow` (request and reply);
+  for FTP the passive port range is added too (read from pure-ftpd / proftpd, or
+  CSF's `TCP_IN`). The rules are marked and removed with the ban, and are never
+  counted as whitelist entries.
+
+The window points out services that depend on each other: mail may need DNS when
+this server also hosts the DNS for its domains (other mail servers look up MX,
+SPF, DKIM and DMARC records), web may need DNS for crawlers and visitors that
+resolve through resolvers in that range, and cPanel addresses like
+`cpanel.example.com` go through the web port. **⋯ → Change ban** reopens the
+window for a CSF Auto-Group ban with its current choice: change the open
+services, switch a full ban to a partial one (the entries it removed are
+restored, since a partial ban doesn't cover the range) or a partial ban to a
+full one.
+
 | Button | Does |
 |--------|------|
 | Ban range (/16) | permanent `/16` ban, added as `do not delete`: from To review, **⋯** in Active block bans and Watched, and the IP card |
 | Ban block (/24) | permanent `/24` ban from the IP card |
+| Change ban | change what a CSF Auto-Group ban blocks (everything / selected services / everything except) |
 | Ban anyway | ban a whitelist-skipped `/24` (overrides the whitelist) |
 | Make permanent | make a watched `/24` permanent right away |
 | Stop watching | forget a watched `/24` (next attack counts as the first) |

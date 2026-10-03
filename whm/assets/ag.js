@@ -67,7 +67,7 @@
       ev_warn16t: 'Şüpheli ağ', ev_clean_temp: 'Geçici ban silindi', clean_d: 'zaten kalıcı listede (tekil ya da blok banı içinde)', ev_manual_ban: 'Elle ban', ev_manual_unban: 'Kaldırıldı',
       ev_manual_forget: 'İzlemeden çıkarıldı', ev_manual_ignore: 'Yoksayıldı', ev_manual_unignore: 'Yoksayma kalktı',
       kind_perm: 'kalıcı', kind_promoted: 'tekrar gelen', kind_temp: 'geçici', kind_manual: 'elle', kind_perm_h: 'Kalıcı blok banı: blokta yeterince kalıcı tekil ban (tek IP) birikince eklendi.', kind_promoted_h: 'Tekrar gelen: önce 12 saatlik geçici blok banı aldı, izleme süresi içinde tekrar saldırınca kalıcı yapıldı.', kind_temp_h: 'Geçici blok banı: süresi dolunca kalkar; izleme süresi içinde tekrar gelirse kalıcı olur.', kind_manual_h: 'Elle: panelden eklendi.', kind_dnd_h: 'do not delete: CSF, liste dolsa bile bu banı silmez.', evh_add24: 'Blok banı: blokta (/24) yeterince kalıcı tekil ban birikince blok kalıcı banlandı, tekiller silindi.', evh_promote: 'Kalıcıya alındı: daha önce geçici blok banı almış blok, izleme süresi içinde tekrar geldiği için kalıcı yapıldı.', evh_temp24: 'Geçici blok banı: blokta yeterince geçici tekil ban birikince 12 saatliğine banlandı ve izlemeye alındı.', evh_skip_wl: 'Atlandı: ban eşiğine ulaştı ama bir beyaz liste kaydıyla çakıştığı için banlanmadı.', evh_warn16: 'Şüpheli ağ: ağda (/16) birçok bloktan kalıcı tekil ban birikti. Ağ banlanmaz; bakmanız önerilir.', evh_warn16t: 'Şüpheli ağ: ağda (/16) birçok bloktan geçici tekil ban birikti. Ağ banlanmaz; bakmanız önerilir.', evh_clean_temp: 'Geçici ban silindi: IP zaten kalıcı listede olduğu için geçici banı gereksizdi.', evh_expire: 'Eski blok kaldırıldı: eski blok banı sınırını geçtiği için kaldırıldı.', evh_manual: 'Elle işlem: panelden biri tarafından yapıldı.', rep_h: 'Bu ağ son günlerde {0} ayrı gün şüpheli olarak işaretlendi.', p_why: 'Geçici blok banı: {0}', p_why_none: 'sebebi kayıtlı değil (olay kaydı başlamadan izlemeye alınmış)', cov_info: '{0} · {1} eklendi', cov_why: 'Banın sebebi: {0}', own_why: 'Bu IP\'nin sebebi: {0}', asn_why: 'en sık: {0}',
-      ips: 'IP\'ler', hide: 'Gizle', ban16: 'Ağı banla (/16)', ban24: 'Bloğu banla (/24)', ban_btn: 'Banla', m_ban24_t: '{0} kalıcı olarak banlansın mı?', m_ban24_b: 'Bu, bloktaki 256 adresin tamamını engeller. Ban "do not delete" olarak eklenir; liste dolduğunda da silinmez.', in_loading: 'İçindekiler okunuyor…', in_h: 'İçinde şu an', in_blocks: 'Blok banları', in_singles: 'Tekil banlar', in_temps: 'Geçici banlar', in_watched: 'İzlenen bloklar', in_others: 'Başka aralıklar', in_owner: 'Sahip', in_none: 'İçinde başka kayıt yok.', in_watch_end: 'izlemeleri biter', in_oth_keep: 'dokunulmaz', in_clean0: 'Kapsananları kaldır', in_clean_d: 'Aralığın içindeki kalıcı kayıtlar (do not delete olanlar ve başka aralıklar dahil) kalıcı listeden, geçici banlar geçici listeden silinir. Silinen kalıcı kayıtlar saklanır; bu ban kaldırılırken istersen eski hâlleriyle geri yüklenir. Geçici banlar geri yüklenmez, süreleri zaten dolacaktı.', in_cover: 'Bu aralık zaten banlı: {0}', in_wl: 'Beyaz listeyle çakışıyor:', under: '{0} içinde', under_h: 'Bu blok {0} banının içinde; ayrıca gerekmiyor. Kaldırmak kalıcı listede bir satır boşaltır.', under_hp: 'Bu blok {0} banının içinde; izlemenin anlamı kalmadı.', l_perm_net: 'Kalıcı (ağ)', l_perm_rng: 'Kalıcı (/{0})', l_port: 'Port sınırlı · {0} {1} kapalı · {2}', l_ccd_cc: 'Ülke banlı · CC_DENY {0}', l_ccd_asn: 'ASN banlı · CC_DENY {0}', l_ccp: 'Port sınırlı · CC_DENY_PORTS {0} · {1}', l_ccd_src: 'Ülke ve ASN burada Team Cymru\'dan; CSF kendi veritabanını kullanır, nadiren farklı olabilir.', ev_removed: '{0} kayıt kaldırıldı', ev_restored: '{0} kayıt geri yüklendi', m_restore_d: 'Kayıtlar kalıcı listeye eski yorum ve tarihleriyle döner, do not delete işaretleri dahil. İşaretlemezsen saklanan kayıtlar silinir.', m_restore: 'Bu ban konurken kaldırılan {0} kaydı geri yükle', m_unban_rb: 'Ban kalıcı listeden kaldırılır.', in_free_pt: 'kalıcı listede {0} satır, geçici listede {1} kayıt boşalır', in_free_t: 'geçici listede {0} kayıt boşalır', in_free_p: 'kalıcı listede {0} satır boşalır', in_sgl_dnd: '{0} do not delete dahil', in_keep: 'kalır', in_rm: 'kaldırılır', dir_in: 'gelen', dir_out: 'giden', in_ports: 'Port sınırlı satırlar', in_self: 'Bu aralıkta sunucunun kendi IP\'si var ({0}); banlanamaz.', ban_anyway: 'Yine de banla', ignore: 'Yoksay', unban: 'Kaldır',
+      ips: 'IP\'ler', hide: 'Gizle', ban16: 'Ağı banla (/16)', ban24: 'Bloğu banla (/24)', mode_h: 'Ne kapatılsın', mode_all: 'Her şey', mode_svc: 'Seçtiğim servisler', mode_exc: 'Her şey, şunlar hariç', md_all: 'Aralıktan gelen ve aralığa giden bütün bağlantılar kesilir.', md_svc: 'Yalnız seçtiğin servislere bu aralıktan gelen bağlantılar kapanır; diğer her şey açık kalır. Sunucudan bu aralığa giden bağlantılar (posta, DNS, web istekleri) etkilenmez.', md_exc: 'Aralık tamamen kesilir, seçtiğin servisler açık kalır. Her servis için CSF\'e iki yönlü izin satırı eklenir; ban kaldırılınca bu satırlar da kaldırılır.', svc_h_block: 'Kapatılacak servisler', svc_h_in: 'Açık kalsın · bu aralıktan gelen', svc_h_out: 'Açık kalsın · sunucudan bu aralığa giden', svc_web: 'Web', svc_ssh: 'SSH', svc_ftp: 'FTP', svc_cp: 'cPanel · WHM · Webmail', svc_min: 'Gelen posta', svc_sync: 'Posta eşitleme', svc_dns: 'DNS', svc_mout: 'Giden posta', svc_wout: 'Giden web', svc_pasv: 'pasif {0}', svc_ports: 'port {0}', svc_x_svc: 'Başka portlar', svc_x_exc: 'Başka portlar (gelen)', svc_x_ph: 'ör. 8080, 30000-35000', h_dns_mail: 'Posta için DNS de gerekebilir: bu sunucu alan adlarının DNS\'ini de yapıyorsa, karşı posta sunucuları posta teslim etmeden önce MX kaydını, sizden gelen postayı alırken de SPF, DKIM ve DMARC kayıtlarını buradan sorgulayabilir. DNS kapalı kalırsa posta gecikebilir ya da hiç ulaşmayabilir.', h_dns_web: 'Web için DNS de gerekebilir: bu aralıktaki tarayıcılar ve ziyaretçiler, sitelere bağlanmadan önce alan adlarını bu sunucunun DNS\'inden çözüyor olabilir.', h_cp_exc: 'cpanel.alanadi.com gibi adresler web portundan (443) çalışır; onların da açık kalması için Web\'i de seç.', h_cp_svc: 'cPanel, WHM ve Webmail\'e cpanel.alanadi.com gibi adreslerle web portundan (443) da girilebilir; tamamen kapatmak için Web\'i de seç.', h_dns_blk: 'DNS\'i kapatmak, bu sunucu alan adlarının DNS\'ini de yapıyorsa bu aralıktan gelen posta ve ziyaretleri de etkileyebilir.', h_ftp_nopasv: 'FTP\'nin pasif port aralığı bulunamadı; dosya aktarımı da çalışsın diye o aralığı "Başka portlar"a ekle (ör. 30000-35000).', h_chg_restore: 'Kısmi bana çevrilince, bu ban konurken kaldırılan {0} kayıt geri yüklenir; kısmi ban aralığı tamamen kapsamaz.', m_svc_t: '{0} için seçilen servisler kapatılsın mı?', m_svc_b16: 'Ağdaki 65.536 adresten seçtiğin servislere gelen bağlantılar engellenir. Ban "do not delete" olarak eklenir; liste dolduğunda da silinmez.', m_svc_b24: 'Bloktaki 256 adresten seçtiğin servislere gelen bağlantılar engellenir. Ban "do not delete" olarak eklenir; liste dolduğunda da silinmez.', m_chg_t: 'Banı değiştir: {0}', chg_btn: 'Değiştir', chg: 'Banı değiştir', in_clean_na: 'Kapsananlar kaldırılmaz', in_clean_na_d: 'Kısmi ban aralığı tamamen kapsamadığı için içindeki banlar yerinde kalır; onlar diğer servisleri de kapatıyor.', in_part: 'Kısmi banlar', in_part_repl: 'yenisiyle değiştirilir', in_watch_keep: 'izlenmeye devam eder', kind_partial: 'kısmi', kind_partial_h: 'Kısmi ban: yalnız seçilen servislere bu aralıktan gelen bağlantılar kapalı; diğer her şey açık.', f_partial: 'Kısmi', g_closed: 'kapalı: {0}', g_open: 'açık: {0}', l_part_net: 'Kısmi (ağ)', l_part_blk: 'Kısmi (blok)', l_part_rng: 'Kısmi (/{0})', l_part_d: 'kapalı: {0} · bu aralıktan gelen; diğer bağlantılar açık', l_open: 'açık bırakılanlar: {0}', ev_svc: 'kısmi · kapalı: {0}', ev_exc: 'açık: {0}', ev_full: 'tam ban', ev_manual_change: 'Ban değiştirildi', ban_btn: 'Banla', m_ban24_t: '{0} kalıcı olarak banlansın mı?', m_ban24_b: 'Bu, bloktaki 256 adresin tamamını engeller. Ban "do not delete" olarak eklenir; liste dolduğunda da silinmez.', in_loading: 'İçindekiler okunuyor…', in_h: 'İçinde şu an', in_blocks: 'Blok banları', in_singles: 'Tekil banlar', in_temps: 'Geçici banlar', in_watched: 'İzlenen bloklar', in_others: 'Başka aralıklar', in_owner: 'Sahip', in_none: 'İçinde başka kayıt yok.', in_watch_end: 'izlemeleri biter', in_oth_keep: 'dokunulmaz', in_clean0: 'Kapsananları kaldır', in_clean_d: 'Aralığın içindeki kalıcı kayıtlar (do not delete olanlar ve başka aralıklar dahil) kalıcı listeden, geçici banlar geçici listeden silinir. Silinen kalıcı kayıtlar saklanır; bu ban kaldırılırken istersen eski hâlleriyle geri yüklenir. Geçici banlar geri yüklenmez, süreleri zaten dolacaktı.', in_cover: 'Bu aralık zaten banlı: {0}', in_wl: 'Beyaz listeyle çakışıyor:', under: '{0} içinde', under_h: 'Bu blok {0} banının içinde; ayrıca gerekmiyor. Kaldırmak kalıcı listede bir satır boşaltır.', under_hp: 'Bu blok {0} banının içinde; izlemenin anlamı kalmadı.', l_perm_net: 'Kalıcı (ağ)', l_perm_rng: 'Kalıcı (/{0})', l_port: 'Port sınırlı · {0} {1} kapalı · {2}', l_ccd_cc: 'Ülke banlı · CC_DENY {0}', l_ccd_asn: 'ASN banlı · CC_DENY {0}', l_ccp: 'Port sınırlı · CC_DENY_PORTS {0} · {1}', l_ccd_src: 'Ülke ve ASN burada Team Cymru\'dan; CSF kendi veritabanını kullanır, nadiren farklı olabilir.', ev_removed: '{0} kayıt kaldırıldı', ev_restored: '{0} kayıt geri yüklendi', m_restore_d: 'Kayıtlar kalıcı listeye eski yorum ve tarihleriyle döner, do not delete işaretleri dahil. İşaretlemezsen saklanan kayıtlar silinir.', m_restore: 'Bu ban konurken kaldırılan {0} kaydı geri yükle', m_unban_rb: 'Ban kalıcı listeden kaldırılır.', in_free_pt: 'kalıcı listede {0} satır, geçici listede {1} kayıt boşalır', in_free_t: 'geçici listede {0} kayıt boşalır', in_free_p: 'kalıcı listede {0} satır boşalır', in_sgl_dnd: '{0} do not delete dahil', in_keep: 'kalır', in_rm: 'kaldırılır', dir_in: 'gelen', dir_out: 'giden', in_ports: 'Port sınırlı satırlar', in_self: 'Bu aralıkta sunucunun kendi IP\'si var ({0}); banlanamaz.', ban_anyway: 'Yine de banla', ignore: 'Yoksay', unban: 'Kaldır',
       promote: 'Kalıcı yap', forget: 'İzlemeden çıkar', unignore: 'Kaldır', show_all: 'Tümünü göster ({0})', more: 'Daha fazla',
       n_ip: '{0} IP', n_subnets: '{0} farklı blok', from_temp: 'geçici banlardan', from_perm: 'kalıcı banlardan', days_left: '{0} gün kaldı',
       ttl_left: 'geçici ban: {0} kaldı', until: '{0} tarihine kadar', by: '{0} tarafından', wl: 'beyaz liste: {0}', and_more: '+{0} IP daha',
@@ -159,7 +159,7 @@
       ev_warn16t: 'Suspicious range', ev_clean_temp: 'Temp ban removed', clean_d: 'already in the permanent list (single or inside a block ban)', ev_manual_ban: 'Manual ban', ev_manual_unban: 'Removed',
       ev_manual_forget: 'Unwatched', ev_manual_ignore: 'Ignored', ev_manual_unignore: 'Unignored',
       kind_perm: 'permanent', kind_promoted: 'repeat offender', kind_temp: 'temp', kind_manual: 'manual', kind_perm_h: 'Permanent block ban: added once enough permanent single (one-IP) bans piled up in the block.', kind_promoted_h: 'Repeat offender: got a 12-hour temp block ban first, then attacked again within the watch period and was made permanent.', kind_temp_h: 'Temp block ban: lifted when it expires; becomes permanent if the block comes back within the watch period.', kind_manual_h: 'Manual: added from the plugin.', kind_dnd_h: 'do not delete: CSF keeps this ban even when the list is full.', evh_add24: 'Block ban: enough permanent single bans piled up in the block (/24), so it was banned permanently and the singles removed.', evh_promote: 'Made permanent: a block that had a temp block ban came back within the watch period, so it was made permanent.', evh_temp24: 'Temp block ban: enough temp single bans piled up in the block, so it was banned for 12 hours and is now watched.', evh_skip_wl: 'Skipped: reached the ban threshold but overlaps a whitelist entry, so it was not banned.', evh_warn16: 'Suspicious range: permanent single bans piled up across several blocks of the range (/16). Ranges are never banned; worth a look.', evh_warn16t: 'Suspicious range: temp single bans piled up across several blocks of the range (/16). Ranges are never banned; worth a look.', evh_clean_temp: 'Temp ban removed: the IP was already in the permanent list, so its temp ban was redundant.', evh_expire: 'Old block removed: it was older than the old block ban limit.', evh_manual: 'Manual action: done by someone from the plugin.', rep_h: 'This range was flagged as suspicious on {0} separate days recently.', p_why: 'Temp block ban: {0}', p_why_none: 'reason not recorded (watched since before the event log started)', cov_info: '{0} · added {1}', cov_why: 'Ban reason: {0}', own_why: 'This IP: {0}', asn_why: 'most often: {0}',
-      ips: 'IPs', hide: 'Hide', ban16: 'Ban range (/16)', ban24: 'Ban block (/24)', ban_btn: 'Ban', m_ban24_t: 'Permanently ban {0}?', m_ban24_b: 'This blocks all 256 addresses in the block. The ban is added as "do not delete" and is kept even when the list is full.', in_loading: 'Reading what is inside…', in_h: 'Inside right now', in_blocks: 'Block bans', in_singles: 'Single bans', in_temps: 'Temp bans', in_watched: 'Watched blocks', in_others: 'Other ranges', in_owner: 'Owner', in_none: 'Nothing else inside.', in_watch_end: 'no longer watched', in_oth_keep: 'left as they are', in_clean0: 'Remove covered entries', in_clean_d: 'Permanent entries inside the range (including "do not delete" ones and other ranges) are removed from the permanent list, temp bans from the temp list. The removed permanent entries are kept: when you lift this ban you can restore them exactly as they were. Temp bans are not restored; they would have expired anyway.', in_cover: 'Already banned: {0}', in_wl: 'Overlaps a whitelist entry:', under: 'inside {0}', under_h: 'This block is inside the {0} ban and no longer needed. Removing it frees a line in the permanent list.', under_hp: 'This block is inside the {0} ban; watching it no longer matters.', l_perm_net: 'Permanent (range)', l_perm_rng: 'Permanent (/{0})', l_port: 'Port-limited · {0} {1} blocked · {2}', l_ccd_cc: 'Country blocked · CC_DENY {0}', l_ccd_asn: 'ASN blocked · CC_DENY {0}', l_ccp: 'Port-limited · CC_DENY_PORTS {0} · {1}', l_ccd_src: 'Country and ASN here come from Team Cymru; CSF uses its own database, which can rarely differ.', ev_removed: '{0} entries removed', ev_restored: '{0} entries restored', m_restore_d: 'They go back to the permanent list with their original comments and dates, "do not delete" markers included. If you leave this unchecked, the saved entries are discarded.', m_restore: 'Restore the {0} entries removed when this ban was added', m_unban_rb: 'The ban is removed from the permanent list.', in_free_pt: 'frees {0} lines in the permanent list and {1} entries in the temp list', in_free_t: 'frees {0} entries in the temp list', in_free_p: 'frees {0} lines in the permanent list', in_sgl_dnd: 'incl. {0} do not delete', in_keep: 'kept', in_rm: 'removed', dir_in: 'inbound', dir_out: 'outbound', in_ports: 'Port-limited lines', in_self: 'This range contains this server\'s own IP ({0}); it can\'t be banned.', ban_anyway: 'Ban anyway', ignore: 'Ignore', unban: 'Remove',
+      ips: 'IPs', hide: 'Hide', ban16: 'Ban range (/16)', ban24: 'Ban block (/24)', mode_h: 'What to block', mode_all: 'Everything', mode_svc: 'Selected services', mode_exc: 'Everything except', md_all: 'All connections from and to the range are cut.', md_svc: 'Only connections from the range to the services you pick are blocked; everything else stays open. Connections from this server to the range (mail, DNS, web requests) are not affected.', md_exc: 'The range is cut completely and the services you pick stay open. Two-way allow lines are added to CSF for each; they are removed with the ban.', svc_h_block: 'Services to block', svc_h_in: 'Keep open · from this range', svc_h_out: 'Keep open · from this server to the range', svc_web: 'Web', svc_ssh: 'SSH', svc_ftp: 'FTP', svc_cp: 'cPanel · WHM · Webmail', svc_min: 'Incoming mail', svc_sync: 'Mail sync', svc_dns: 'DNS', svc_mout: 'Outgoing mail', svc_wout: 'Outgoing web', svc_pasv: 'passive {0}', svc_ports: 'port {0}', svc_x_svc: 'Other ports', svc_x_exc: 'Other ports (inbound)', svc_x_ph: 'e.g. 8080, 30000-35000', h_dns_mail: 'Mail may also need DNS: if this server also hosts the DNS for its domains, other mail servers may look up the MX record here before delivering, and the SPF, DKIM and DMARC records when receiving your mail. With DNS closed, mail may be delayed or not arrive at all.', h_dns_web: 'Web may also need DNS: crawlers and visitors in this range may resolve your domains on this server\'s DNS before connecting.', h_cp_exc: 'Addresses like cpanel.example.com work through the web port (443); select Web too to keep them open.', h_cp_svc: 'cPanel, WHM and Webmail can also be reached through the web port (443) via addresses like cpanel.example.com; select Web too to block them completely.', h_dns_blk: 'Blocking DNS may also affect mail and visits from this range if this server hosts the DNS for its domains.', h_ftp_nopasv: 'FTP\'s passive port range wasn\'t found; add it to "Other ports" (e.g. 30000-35000) so transfers work too.', h_chg_restore: 'Switching to a partial ban restores the {0} entries removed when this ban was added, since a partial ban doesn\'t cover the whole range.', m_svc_t: 'Block the selected services for {0}?', m_svc_b16: 'Connections from the 65,536 addresses in the range to the services you pick are blocked. The ban is added as "do not delete" and is kept even when the list is full.', m_svc_b24: 'Connections from the 256 addresses in the block to the services you pick are blocked. The ban is added as "do not delete" and is kept even when the list is full.', m_chg_t: 'Change ban: {0}', chg_btn: 'Change', chg: 'Change ban', in_clean_na: 'Covered entries stay', in_clean_na_d: 'A partial ban doesn\'t cover the whole range, so the bans inside stay; they block the other services too.', in_part: 'Partial bans', in_part_repl: 'replaced', in_watch_keep: 'still watched', kind_partial: 'partial', kind_partial_h: 'Partial ban: only connections from this range to the selected services are blocked; everything else is open.', f_partial: 'Partial', g_closed: 'blocked: {0}', g_open: 'open: {0}', l_part_net: 'Partial (range)', l_part_blk: 'Partial (block)', l_part_rng: 'Partial (/{0})', l_part_d: 'blocked: {0} · from this range; other connections open', l_open: 'kept open: {0}', ev_svc: 'partial · blocked: {0}', ev_exc: 'open: {0}', ev_full: 'full ban', ev_manual_change: 'Ban changed', ban_btn: 'Ban', m_ban24_t: 'Permanently ban {0}?', m_ban24_b: 'This blocks all 256 addresses in the block. The ban is added as "do not delete" and is kept even when the list is full.', in_loading: 'Reading what is inside…', in_h: 'Inside right now', in_blocks: 'Block bans', in_singles: 'Single bans', in_temps: 'Temp bans', in_watched: 'Watched blocks', in_others: 'Other ranges', in_owner: 'Owner', in_none: 'Nothing else inside.', in_watch_end: 'no longer watched', in_oth_keep: 'left as they are', in_clean0: 'Remove covered entries', in_clean_d: 'Permanent entries inside the range (including "do not delete" ones and other ranges) are removed from the permanent list, temp bans from the temp list. The removed permanent entries are kept: when you lift this ban you can restore them exactly as they were. Temp bans are not restored; they would have expired anyway.', in_cover: 'Already banned: {0}', in_wl: 'Overlaps a whitelist entry:', under: 'inside {0}', under_h: 'This block is inside the {0} ban and no longer needed. Removing it frees a line in the permanent list.', under_hp: 'This block is inside the {0} ban; watching it no longer matters.', l_perm_net: 'Permanent (range)', l_perm_rng: 'Permanent (/{0})', l_port: 'Port-limited · {0} {1} blocked · {2}', l_ccd_cc: 'Country blocked · CC_DENY {0}', l_ccd_asn: 'ASN blocked · CC_DENY {0}', l_ccp: 'Port-limited · CC_DENY_PORTS {0} · {1}', l_ccd_src: 'Country and ASN here come from Team Cymru; CSF uses its own database, which can rarely differ.', ev_removed: '{0} entries removed', ev_restored: '{0} entries restored', m_restore_d: 'They go back to the permanent list with their original comments and dates, "do not delete" markers included. If you leave this unchecked, the saved entries are discarded.', m_restore: 'Restore the {0} entries removed when this ban was added', m_unban_rb: 'The ban is removed from the permanent list.', in_free_pt: 'frees {0} lines in the permanent list and {1} entries in the temp list', in_free_t: 'frees {0} entries in the temp list', in_free_p: 'frees {0} lines in the permanent list', in_sgl_dnd: 'incl. {0} do not delete', in_keep: 'kept', in_rm: 'removed', dir_in: 'inbound', dir_out: 'outbound', in_ports: 'Port-limited lines', in_self: 'This range contains this server\'s own IP ({0}); it can\'t be banned.', ban_anyway: 'Ban anyway', ignore: 'Ignore', unban: 'Remove',
       promote: 'Make permanent', forget: 'Stop watching', unignore: 'Remove', show_all: 'Show all ({0})', more: 'Show more',
       n_ip: '{0} IPs', n_subnets: '{0} distinct blocks', from_temp: 'from temp bans', from_perm: 'from permanent bans', days_left: '{0} days left',
       ttl_left: 'temp ban: {0} left', until: 'until {0}', by: 'by {0}', wl: 'whitelist: {0}', and_more: '+{0} more IPs',
@@ -671,7 +671,8 @@
     if (f === 'perm') return g.kind === 'perm' || g.kind === 'promoted';
     if (f === 'dnd') return g.dnd;
     if (f === 'temp') return g.kind === 'temp';
-    if (f === 'manual') return g.kind === 'manual';
+    if (f === 'manual') return g.kind === 'manual' || g.kind === 'partial';
+    if (f === 'partial') return g.kind === 'partial';
     if (f === 'old') return isOld(g);
     return true;
   }
@@ -683,7 +684,7 @@
     }
     return true;
   }
-  var KIND_ORD = { manual: 1, promoted: 2, perm: 3, temp: 4 };
+  var KIND_ORD = { manual: 1, partial: 1, promoted: 2, perm: 3, temp: 4 };
   function ipNum(c) { var p = String(c).split('/')[0].split('.'); return ((+p[0] * 256 + +p[1]) * 256 + +p[2]) * 256 + +p[3]; }
   function groupSorted() {
     var s = UI.gs, d = UI.gd;
@@ -710,17 +711,21 @@
     var from = UI.gp * PAGE, shown = list.slice(from, from + PAGE);
     var rows = shown.map(function (g) {
       var o = ownerOf(g.cidr), ev = (OWNERS[g.cidr] || {}).ev, key = 'g:' + g.cidr, open = UI.open[key];
-      var kindCls = { perm: 'ag-pill-n', promoted: 'ag-pill-acc', temp: 'ag-pill-warn', manual: 'ag-pill-bad' }[g.kind] || 'ag-pill-n';
+      var kindCls = { perm: 'ag-pill-n', promoted: 'ag-pill-acc', temp: 'ag-pill-warn', manual: 'ag-pill-bad', partial: 'ag-pill-warn' }[g.kind] || 'ag-pill-n';
+      // kısmi banda kapalı servisler, istisnalı tam banda açık bırakılanlar
+      var gnote = g.kind === 'partial' ? t('g_closed', svcNames(g.svc, g.extra) || t('svc_ports', String(g.ports || '').replace(/_/g, '–'))) : g.open ? t('g_open', svcNames(g.open)) : '';
       var first = ev && ev.ips && ev.ips[0] ? ev.ips[0].ip : g.cidr.replace(/\/\d+$/, '').replace(/\.0$/, '.1');
       var when = g.added ? relT(g.added) : '—';
       var items = [];
       if (ev && ev.ips && ev.ips.length) items.push({ act: 'toggle', label: open ? t('hide') : t('ips'), icon: 'list', attrs: 'data-key="' + esc(key) + '"' });
       items.push({ act: 'ipcard', label: t('ipcard'), icon: 'search', attrs: 'data-ip="' + esc(first) + '"' });
+      if ((g.kind === 'manual' || g.kind === 'partial') && (bitsOf(g.cidr) === 16 || bitsOf(g.cidr) === 24))
+        items.push({ act: 'chg', label: t('chg'), icon: 'sliders', attrs: 'data-c="' + esc(g.cidr) + '"' });
       if (bitsOf(g.cidr) > 16 && bitsOf(g.under) > 16) items.push({ act: 'ban16', label: t('ban16'), icon: 'ban', danger: true, attrs: 'data-t="' + esc(p16(g.cidr)) + '"' });
       items.push({ act: 'unban', label: t('unban'), icon: 'x', danger: true, attrs: 'data-c="' + esc(g.cidr) + '" data-dnd="' + (g.dnd ? 1 : 0) + '" data-kind="' + esc(g.kind) + '" data-restore="' + (g.restore || 0) + '"' });
       return '<div class="ag-item" data-row="' + esc(g.cidr) + '"><div class="ag-tr">' +
         '<div class="ag-td ag-td-main">' + newDot(g.added) + '<span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(g.cidr) + '</span>' + (g.under ? underPill(g.under) : '') + '</div>' +
-        '<div class="ag-td ag-td-state"><span class="ag-pill ' + kindCls + '"' + ' title="' + esc(t('kind_' + g.kind + '_h') + (g.dnd ? ' ' + t('kind_dnd_h') : '')) + '"' + '>' + (g.dnd ? IC.lock : '') + esc(t('kind_' + g.kind)) + (g.kind === 'temp' && g.ttl > 0 ? ' · ' + esc(t('left_short', dur(g.ttl))) : '') + '</span></div>' +
+        '<div class="ag-td ag-td-state"><span class="ag-pill ' + kindCls + '"' + ' title="' + esc(t('kind_' + g.kind + '_h') + (g.dnd ? ' ' + t('kind_dnd_h') : '')) + '"' + '>' + (g.dnd ? IC.lock : '') + esc(t('kind_' + g.kind)) + (g.kind === 'temp' && g.ttl > 0 ? ' · ' + esc(t('left_short', dur(g.ttl))) : '') + '</span>' + (gnote ? '<span class="ag-g-note">' + esc(gnote) + '</span>' : '') + '</div>' +
         '<div class="ag-td ag-td-own" title="' + esc(o.label || '') + '">' + (o.asn ? flag(o.cc) + '<span class="ag-asn">AS' + esc(o.asn) + '</span><span class="ag-org">' + esc(o.name || '') + '</span>' : '<span class="ag-muted">—</span>') + '</div>' +
         '<div class="ag-td ag-num-c">' + (g.n ? num(g.n) + '<span class="ag-mob"> ' + esc(t('singles_s')) + '</span>' : '—') + '</div>' +
         '<div class="ag-td ag-when">' + when + '</div>' +
@@ -745,8 +750,9 @@
     return n === S.groups.length ? num(n) : num(n) + ' / ' + num(S.groups.length);
   }
   function groups() {
-    var chips = ['all', 'perm', 'dnd', 'temp', 'manual', 'old'].map(function (f) {
+    var chips = ['all', 'perm', 'dnd', 'temp', 'manual', 'partial', 'old'].map(function (f) {
       var n = S.groups.filter(function (g) { return kindMatch(g, f); }).length;
+      if (f === 'partial' && !n && UI.gf !== f) return '';           // kısmi ban yoksa filtre görünmez
       return '<button class="ag-chip' + (UI.gf === f ? ' on' : '') + (n ? '' : ' zero') + '" data-act="gf" data-f="' + f + '">' + t('f_' + f) +
         '<span class="ag-chip-n">' + num(n) + '</span></button>';
     }).join('');
@@ -758,12 +764,12 @@
 
   var EV_CLASS = {
     add24: 'ag-pill-ok', promote: 'ag-pill-acc', temp24: 'ag-pill-warn', skip_wl: 'ag-pill-info', warn16: 'ag-pill-warn',
-    warn16t: 'ag-pill-warn', clean_temp: 'ag-pill-n', manual_ban: 'ag-pill-bad', manual_unban: 'ag-pill-n',
+    warn16t: 'ag-pill-warn', clean_temp: 'ag-pill-n', manual_ban: 'ag-pill-bad', manual_change: 'ag-pill-acc', manual_unban: 'ag-pill-n',
     manual_forget: 'ag-pill-n', manual_ignore: 'ag-pill-n', manual_unignore: 'ag-pill-n', config: 'ag-pill-acc', test_mail: 'ag-pill-n', digest: 'ag-pill-n'
   };
   var EV_GROUP = {
     bans: ['add24', 'promote', 'temp24', 'manual_ban'], warn: ['warn16', 'warn16t'], skip: ['skip_wl'],
-    manual: ['manual_ban', 'manual_unban', 'manual_forget', 'manual_ignore', 'manual_unignore'], clean: ['clean_temp', 'expire']
+    manual: ['manual_ban', 'manual_change', 'manual_unban', 'manual_forget', 'manual_ignore', 'manual_unignore'], clean: ['clean_temp', 'expire']
   };
   // olay rozeti açıklaması (üzerine gelince); elle işlemler tek açıklamayı paylaşır
   function evTitle(type) {
@@ -785,6 +791,9 @@
     if (e.by) d.push(t('by', e.by));
     if (e.removed) { var rn = (e.removed.ranges || 0) + (e.removed.singles || 0) + (e.removed.temps || 0); if (rn) d.push(t('ev_removed', num(rn))); }
     if (e.restored) d.push(t('ev_restored', num(e.restored)));
+    if (e.mode === 'svc' && (e.type === 'manual_ban' || e.type === 'manual_change')) d.push(t('ev_svc', svcNames(e.svc) || t('svc_ports', String(e.ports || '').replace(/_/g, '–'))));
+    if (e.mode === 'exc') d.push(t('ev_exc', svcNames(e.open)));
+    if (e.type === 'manual_change' && e.mode === 'all') d.push(t('ev_full'));
     if (e.type === 'clean_temp') d.push(t('clean_d'));
     if (e.src === 'log') d.push(t('from_log'));
     if (e.until) d.push(t('until', e.until));
@@ -792,7 +801,7 @@
     return esc(d.join(' · '));
   }
   var EV_ICON = {
-    add24: ['ban', 'acc'], manual_ban: ['ban', 'bad'], promote: ['lock', 'vio'], temp24: ['clock', 'warn'], warn16: ['alert', 'warn'], warn16t: ['alert', 'warn'],
+    add24: ['ban', 'acc'], manual_ban: ['ban', 'bad'], manual_change: ['sliders', 'acc'], promote: ['lock', 'vio'], temp24: ['clock', 'warn'], warn16: ['alert', 'warn'], warn16t: ['alert', 'warn'],
     skip_wl: ['check', 'info'], clean_temp: ['x', 'n'], expire: ['hour', 'n'], config: ['sliders', 'acc'], test_mail: ['inbox', 'n'], digest: ['inbox', 'n']
   };
   /* Geçmiş sekmesi: eklentinin işleri · Ayarlar sekmesi (cfg): ayar değişiklikleri, test maili, özet */
@@ -1331,35 +1340,147 @@
      kullanır), pencere neyin kapsanacağını, beyaz liste çakışmasını ve "kapsananları kaldır"ı gösterir. */
   function p16(c) { var a = String(c).split('.'); return a[0] + '.' + a[1]; }
   function bitsOf(c) { var m = /\/(\d+)$/.exec(String(c || '')); return m ? +m[1] : 32; }
+  // Servis seçimi iki kipte aynı liste; "giden" servisler yalnız "hariç" kipinde (diğer kip yalnız gelen bağlantıları kapatır)
+  var SVC_IN = ['web', 'ssh', 'ftp', 'cp', 'min', 'sync', 'dns'], SVC_OUT = ['mout', 'wout'];
+  function svcPorts(k, d, exc) {
+    if (k === 'ssh') return d && d.ssh ? String(d.ssh).split(',').join(', ') : '22';
+    if (k === 'ftp') return '21' + (exc && d && d.ftp_pasv ? ' · ' + t('svc_pasv', String(d.ftp_pasv).replace('_', '–')) : '');
+    return { web: '80, 443', cp: '2077–2096', min: '25', sync: '465, 587, IMAP, POP3', dns: '53', mout: '25', wout: '80, 443' }[k] || '';
+  }
+  function svcNames(keys, extra) {   // "web,ssh" + "8080" → "Web, SSH, port 8080"
+    var a = String(keys || '').split(',').filter(Boolean).map(function (k) { return t('svc_' + k); });
+    if (extra) a.push(t('svc_ports', String(extra).split(',').join(', ').replace(/_/g, '–')));
+    return a.join(', ');
+  }
+  function portsOk(v) {             // "8080, 30000-35000" → "8080,30000-35000"; boşsa ""; geçersizse null
+    v = String(v || '').replace(/\s+/g, '');
+    if (!v) return '';
+    if (!/^\d{1,5}(-\d{1,5})?(,\d{1,5}(-\d{1,5})?)*$/.test(v)) return null;
+    var bad = v.split(',').some(function (x) { var q = x.split('-').map(Number); return q[0] < 1 || q[q.length - 1] > 65535 || (q.length === 2 && q[0] >= q[1]); });
+    return bad ? null : v;
+  }
+  /* Elle /24 ya da /16 banı: önce içindekiler okunur (motorun --inside taraması; ban eylemi aynı hesabı kullanır).
+     Pencere neyin kapsanacağını, beyaz liste çakışmasını, "Ne kapatılsın" seçimini ve "kapsananları kaldır"ı gösterir.
+     Eklentinin kendi banı için açılırsa (Banı değiştir) seçim banın şu anki hâliyle başlar. */
   function rangeBan(bits, target, o) {
     o = o || {};
-    var cidr = bits === 16 ? target + '.0.0/16' : target + '.0/24', D = null;
+    var cidr = bits === 16 ? target + '.0.0/16' : target + '.0/24', D = null, W = null;
+    var M = { mode: 'all', clean: true, extra: { svc: '', exc: '' },
+              sel: { svc: { web: 1, ssh: 1, cp: 1 }, exc: { min: 1, sync: 1, mout: 1, dns: 1 } } };
+    function cIn() { return '<span class="ag-mono">' + esc(cidr) + '</span>'; }
+    function changing() { return !!D && (D.own_full || (D.own_partial || []).indexOf(cidr) >= 0); }
+    function picked() {
+      var s = M.sel[M.mode] || {};
+      return Object.keys(s).filter(function (k) { return s[k] && (M.mode === 'exc' || SVC_IN.indexOf(k) >= 0); });
+    }
+    function hints() {             // servisler arası bağımlılıklar (ayrıntı: README → Manual bans)
+      var s = M.sel[M.mode] || {}, h = [];
+      if (M.mode === 'exc') {
+        if ((s.min || s.sync || s.mout) && !s.dns) h.push(t('h_dns_mail'));
+        if (s.web && !s.dns) h.push(t('h_dns_web'));
+        if (s.cp && !s.web) h.push(t('h_cp_exc'));
+        if (s.ftp && !(D && D.ftp_pasv)) h.push(t('h_ftp_nopasv'));
+      } else if (M.mode === 'svc') {
+        if (s.dns) h.push(t('h_dns_blk'));
+        if (s.cp && !s.web) h.push(t('h_cp_svc'));
+        if (D && D.own_full && D.restore) h.push(t('h_chg_restore', num(D.restore)));
+      }
+      return h;
+    }
+    function chip(k, on) {
+      return '<button type="button" class="ag-svc' + (on ? ' on' : '') + '" data-svc="' + k + '" aria-pressed="' + !!on + '">' + esc(t('svc_' + k)) +
+        ' <small>' + esc(svcPorts(k, D, M.mode === 'exc')) + '</small></button>';
+    }
+    function svcBox() {
+      if (M.mode === 'all') return '';
+      var s = M.sel[M.mode], ex = M.mode === 'exc';
+      var h = '<div class="ag-svc-h">' + esc(t(ex ? 'svc_h_in' : 'svc_h_block')) + '</div><div class="ag-svcs">' + SVC_IN.map(function (k) { return chip(k, s[k]); }).join('') + '</div>';
+      if (ex) h += '<div class="ag-svc-h">' + esc(t('svc_h_out')) + '</div><div class="ag-svcs">' + SVC_OUT.map(function (k) { return chip(k, s[k]); }).join('') + '</div>';
+      return h + '<div class="ag-svc-x"><label for="ag-xports">' + esc(t(ex ? 'svc_x_exc' : 'svc_x_svc')) + '</label>' +
+        '<input class="ag-input ag-mono" id="ag-xports" autocomplete="off" spellcheck="false" placeholder="' + esc(t('svc_x_ph')) + '" value="' + esc(M.extra[M.mode]) + '"></div>';
+    }
+    function drawHints() {
+      var hb = W.querySelector('#ag-hints'); if (!hb) return;
+      var h = hints();
+      hb.innerHTML = h.map(function (x) { return '<div>' + esc(x) + '</div>'; }).join('');
+      hb.style.display = h.length ? '' : 'none';
+    }
+    function okState() {
+      var ok = W.querySelector('[data-m="ok"]'); if (!ok) return;
+      var blocked = !D || !!D.self || (!!D.cover && !D.own_full);
+      var inp = W.querySelector('#ag-typed2'), typedOk = !inp || inp.value.trim() === cidr;
+      var xp = W.querySelector('#ag-xports'), xv = xp ? portsOk(xp.value) : '';
+      if (xp) xp.parentNode.classList.toggle('bad', xv === null);
+      var modeOk = M.mode === 'all' || (xv !== null && (picked().length > 0 || !!xv));
+      ok.disabled = blocked || !typedOk || !modeOk;
+      ok.textContent = changing() ? t('chg_btn') : D && D.wl ? t('ban_anyway') : t('ban_btn');
+    }
+    function refresh() {           // seçim değişince: başlık, açıklama, servisler, ipuçları, temizlik, akıbetler, düğme
+      if (!W || !D) return;
+      var h3 = W.querySelector('.ag-modal-h h3'), lead = W.querySelector('#ag-lead');
+      if (h3) h3.innerHTML = changing() ? t('m_chg_t', cIn()) : M.mode === 'svc' ? t('m_svc_t', cIn()) : (o.title || t(bits === 16 ? 'm_ban16_t' : 'm_ban24_t', cIn()));
+      if (lead) lead.innerHTML = M.mode === 'svc' ? t(bits === 16 ? 'm_svc_b16' : 'm_svc_b24') : (o.body || t(bits === 16 ? 'm_ban16_b' : 'm_ban24_b'));
+      W.querySelectorAll('[data-mode]').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-mode') === M.mode); });
+      var md = W.querySelector('#ag-md'); if (md) md.textContent = t('md_' + M.mode);
+      var sb = W.querySelector('#ag-svcbox'); if (sb) sb.innerHTML = svcBox();
+      drawHints();
+      var tbl = W.querySelector('.ag-in'), cb = W.querySelector('#ag-clean'), cl = W.querySelector('.ag-clean');
+      if (tbl) { tbl.classList.toggle('part', M.mode === 'svc'); tbl.classList.toggle('keep', M.mode !== 'svc' && !M.clean); }
+      if (cb && cl) {
+        cb.disabled = M.mode === 'svc'; cb.checked = M.mode !== 'svc' && M.clean;
+        cl.classList.toggle('dis', M.mode === 'svc');
+        cl.querySelector('b').textContent = M.mode === 'svc' ? t('in_clean_na') : cl.getAttribute('data-b');
+        cl.querySelector('span').textContent = M.mode === 'svc' ? t('in_clean_na_d') : t('in_clean_d');
+      }
+      okState();
+    }
     return modal({
       icon: 'ban', tone: 'bad', okText: t('ban_btn'), okClass: 'ag-btn-danger-solid',
-      title: o.title || t(bits === 16 ? 'm_ban16_t' : 'm_ban24_t', '<span class="ag-mono">' + esc(cidr) + '</span>'),
-      html: '<p>' + (o.body || t(bits === 16 ? 'm_ban16_b' : 'm_ban24_b')) + '</p><div id="ag-in"><div class="ag-in"><div class="ag-in-h">' + esc(t('in_loading')) + '</div>' +
+      title: o.title || t(bits === 16 ? 'm_ban16_t' : 'm_ban24_t', cIn()),
+      html: '<p id="ag-lead">' + (o.body || t(bits === 16 ? 'm_ban16_b' : 'm_ban24_b')) + '</p><div id="ag-in"><div class="ag-in"><div class="ag-in-h">' + esc(t('in_loading')) + '</div>' +
         '<div class="ag-in-r"><div class="ag-skel" style="width:70%"></div></div></div></div>',
       onOpen: function (w) {
+        W = w;
         var ok = w.querySelector('[data-m="ok"]'); if (ok) ok.disabled = true;
         api('inside', { bits: bits, target: target }).then(function (r) {
           var box = w.querySelector('#ag-in'); if (!box || !ok) return;
           if (!r || !r.ok) { box.innerHTML = '<div class="ag-warnbox">' + esc(t('t_err', (r && (r.message || r.error)) || '?')) + '</div>'; return; }
-          D = r; box.innerHTML = insideHtml(r, bits, cidr);
-          var cb = box.querySelector('#ag-clean'), tbl = box.querySelector('.ag-in');
-          if (cb && tbl) cb.addEventListener('change', function () { tbl.classList.toggle('keep', !cb.checked); });
-          if (r.cover || r.self) return;                         // zaten banlı ya da sunucunun kendi IP'si: banlanmaz
-          if (r.wl) ok.textContent = t('ban_anyway');
-          var inp = box.querySelector('#ag-typed2');
-          if (!inp) { ok.disabled = false; ok.focus(); return; }
-          inp.addEventListener('input', function () { ok.disabled = inp.value.trim() !== cidr; });
-          inp.focus();
+          D = r;
+          if (r.own_full) {                                      // kendi tam banımız: şu anki açık servislerle başla
+            M.mode = r.open ? 'exc' : 'all';
+            if (r.open) { M.sel.exc = {}; r.open.split(',').forEach(function (k) { M.sel.exc[k] = 1; }); }
+          } else if ((r.own_partial || []).indexOf(cidr) >= 0) { // kendi kısmi banımız: seçili servislerle başla
+            M.mode = 'svc'; M.sel.svc = {};
+            String(r.partial_svc || '').split(',').filter(Boolean).forEach(function (k) { M.sel.svc[k] = 1; });
+            M.extra.svc = String(r.partial_extra || '');
+          }
+          box.innerHTML = insideHtml(r, bits, cidr);
+          if ((r.cover && !r.own_full) || r.self) return;        // başkasının banı ya da sunucunun kendi IP'si: yapılacak bir şey yok
+          box.addEventListener('click', function (ev) {
+            var mb = ev.target.closest('[data-mode]');
+            if (mb) { M.mode = mb.getAttribute('data-mode'); refresh(); return; }
+            var sv = ev.target.closest('[data-svc]');
+            if (sv) {
+              var k = sv.getAttribute('data-svc'), st = M.sel[M.mode]; st[k] = !st[k];
+              sv.classList.toggle('on', !!st[k]); sv.setAttribute('aria-pressed', String(!!st[k])); drawHints(); okState();
+            }
+          });
+          box.addEventListener('input', function (ev) {
+            if (ev.target.id === 'ag-xports') { M.extra[M.mode] = ev.target.value; okState(); }
+            if (ev.target.id === 'ag-typed2') okState();
+          });
+          box.addEventListener('change', function (ev) { if (ev.target.id === 'ag-clean' && M.mode !== 'svc') { M.clean = ev.target.checked; refresh(); } });
+          refresh();
+          var inp = box.querySelector('#ag-typed2'); (inp || ok).focus();
         });
       }
     }).then(function (m) {
-      if (!m.ok || !D || D.cover || D.self) return null;
-      var cb = m.el.querySelector('#ag-clean'), extra = {};
+      if (!m.ok || !D || (D.cover && !D.own_full) || D.self) return null;
+      var extra = {};
       if (D.wl) extra.force = '1';                               // çakışma pencerede gösterildi ve yazılarak onaylandı
-      if (cb && !cb.checked) extra.keep = '1';
+      if (M.mode !== 'svc' && !M.clean) extra.keep = '1';
+      if (changing()) extra.replace = '1';
+      if (M.mode !== 'all') { extra.mode = M.mode; extra.svc = picked().join(','); var xv = portsOk(M.extra[M.mode]); if (xv) extra.ports = xv; }
       return doAction('ban' + bits, target, extra).then(function (r) {
         if (r && r.code === 4) return forceBan(bits, target, cidr, r.message);   // beyaz liste pencere açıkken değişti
         return r;
@@ -1367,25 +1488,32 @@
     });
   }
   function insideHtml(d, bits, cidr) {
-    if (d.cover) return '<div class="ag-warnbox">' + esc(t('in_cover', d.cover)) + '</div>';
+    if (d.cover && !d.own_full) return '<div class="ag-warnbox">' + esc(t('in_cover', d.cover)) + '</div>';
     if (d.self) return '<div class="ag-warnbox">' + esc(t('in_self', d.self)) + '</div>';
     function lst(a) { return a.length ? '<span class="ag-mono">' + esc(a.slice(0, 3).join(', ')) + '</span>' + (a.length > 3 ? ' +' + num(a.length - 3) : '') : ''; }
     function row(l, n, v) { return n ? '<div class="ag-in-r"><div class="ag-in-l">' + esc(l) + '</div><div class="ag-in-n">' + num(n) + '</div><div class="ag-in-v">' + v + '</div></div>' : ''; }
-    // akıbet: "Kapsananları kaldır" açıkken kaldırılır, kapatılınca kalır (sınıf değişir, metin yeniden yazılmaz)
-    var fate = '<span class="ag-fate"><span class="ag-fate-rm">' + esc(t('in_rm')) + '</span><span class="ag-fate-keep">' + esc(t('in_keep')) + '</span></span>';
     function sep(a) { return a ? a + ' · ' : ''; }
+    // akıbet: "Kapsananları kaldır" ve "Ne kapatılsın"a göre sınıflar değişir (keep, part), metin yeniden yazılmaz
+    var fate = '<span class="ag-fate"><span class="ag-fate-rm">' + esc(t('in_rm')) + '</span><span class="ag-fate-keep">' + esc(t('in_keep')) + '</span></span>';
+    var op = d.own_partial || [];
     var rows = row(t('in_blocks'), d.blocks.length, sep(lst(d.blocks)) + fate) +
       row(t('in_others'), d.others.length, sep(lst(d.others)) + fate) +
       row(t('in_singles'), d.singles + d.singles_dnd, sep(d.singles_dnd ? esc(t('in_sgl_dnd', num(d.singles_dnd))) : '') + fate) +
       row(t('in_temps'), d.temps, fate) +
-      row(t('in_watched'), d.watched.length, sep(lst(d.watched)) + '<span class="ag-fate">' + esc(t('in_watch_end')) + '</span>') +
+      row(t('in_watched'), d.watched.length, sep(lst(d.watched)) + '<span class="ag-fate"><span class="ag-fate-wend">' + esc(t('in_watch_end')) + '</span><span class="ag-fate-wkeep">' + esc(t('in_watch_keep')) + '</span></span>') +
+      row(t('in_part'), op.length, sep(lst(op)) + '<span class="ag-fate"><span class="ag-fate-pfull">' + esc(t('in_rm')) + '</span><span class="ag-fate-prt">' +
+        esc(op.indexOf(cidr) >= 0 ? t('in_part_repl') : t('in_keep')) + '</span></span>') +
       row(t('in_ports'), (d.ports || []).length, sep(lst(d.ports || [])) + '<span class="ag-fate">' + esc(t('in_oth_keep')) + '</span>');
-    var h = '<div class="ag-in"><div class="ag-in-h">' + esc(t('in_h')) + '</div>' + (rows || '<div class="ag-in-r"><div class="ag-in-v">' + esc(t('in_none')) + '</div></div>') +
+    var h = '<div class="ag-in' + (d.own_full ? ' chg' : '') + '"><div class="ag-in-h">' + esc(t('in_h')) + '</div>' + (rows || '<div class="ag-in-r"><div class="ag-in-v">' + esc(t('in_none')) + '</div></div>') +
       (d.owner ? '<div class="ag-in-r"><div class="ag-in-l">' + esc(t('in_owner')) + '</div><div class="ag-in-v ag-in-o">' + esc(d.owner) + '</div></div>' : '') + '</div>';
     if (d.wl) h += '<div class="ag-warnbox">' + esc(t('in_wl')) + ' <b>' + esc(d.wl) + '</b><br>' + esc(t('m_force_n')) + '</div>';
-    if (d.free + d.temps > 0) h += '<label class="ag-clean"><input type="checkbox" id="ag-clean" checked><div><b>' +
-      esc(t('in_clean0') + ' · ' + (d.free && d.temps ? t('in_free_pt', num(d.free), num(d.temps)) : d.free ? t('in_free_p', num(d.free)) : t('in_free_t', num(d.temps)))) +
-      '</b><span>' + esc(t('in_clean_d')) + '</span></div></label>';
+    h += '<div class="ag-mode"><div class="ag-mode-h">' + esc(t('mode_h')) + '</div><div class="ag-chips">' + ['all', 'svc', 'exc'].map(function (m) {
+      return '<button type="button" class="ag-chip" data-mode="' + m + '">' + esc(t('mode_' + m)) + '</button>';
+    }).join('') + '</div><div class="ag-mode-d" id="ag-md"></div><div id="ag-svcbox"></div><div class="ag-mode-hint" id="ag-hints" style="display:none"></div></div>';
+    if (!d.own_full && d.free + d.temps > 0) {
+      var cbt = t('in_clean0') + ' · ' + (d.free && d.temps ? t('in_free_pt', num(d.free), num(d.temps)) : d.free ? t('in_free_p', num(d.free)) : t('in_free_t', num(d.temps)));
+      h += '<label class="ag-clean" data-b="' + esc(cbt) + '"><input type="checkbox" id="ag-clean" checked><div><b>' + esc(cbt) + '</b><span>' + esc(t('in_clean_d')) + '</span></div></label>';
+    }
     if (bits === 16 || d.wl) h += '<label>' + t('type_to_confirm', '<span class="ag-target">' + esc(cidr) + '</span>') + '</label>' +
       '<input class="ag-input ag-mono" id="ag-typed2" autocomplete="off" spellcheck="false">';
     return h;
@@ -1509,6 +1637,7 @@
     },
     commits: function () { UI.commits = !UI.commits; render(); },
     ban16: function (el) { rangeBan(16, el.getAttribute('data-t')); },
+    chg: function (el) { var c = el.getAttribute('data-c'), b = bitsOf(c); rangeBan(b, b === 16 ? p16(c) : pfxOf(c.split('/')[0])); },
     banforce: function (el) { rangeBan(24, el.getAttribute('data-t')); },
     promote: function (el) {
       var tg = el.getAttribute('data-t');
@@ -1679,7 +1808,12 @@
             if (mine && mine.why) cx += '<div style="margin-top:2px">' + esc(t('own_why', whyText(mine.why))) + '</div>';
           }
           fw.push('<span class="ag-pill ag-pill-bad">' + esc(cb === 24 ? t('l_perm_cover') : cb === 16 ? t('l_perm_net') : t('l_perm_rng', cb)) + '</span>' +
-            '<div class="ag-mono ag-muted" style="margin-top:4px">' + esc(c.line) + '</div>' + cx);
+            '<div class="ag-mono ag-muted" style="margin-top:4px">' + esc(c.line) + '</div>' + cx +
+            (c.open ? '<div class="ag-muted" style="margin-top:2px">' + esc(t('l_open', svcNames(c.open))) + '</div>' : ''));
+        } else if (c.kind === 'port' && c.own) {                 // eklentinin kısmi banı
+          var pb = bitsOf(c.cidr), px = (/;ports=([0-9,-]+)/.exec(c.line || '') || [])[1];
+          fw.push('<span class="ag-pill ag-pill-warn">' + esc(pb === 16 ? t('l_part_net') : pb === 24 ? t('l_part_blk') : t('l_part_rng', pb)) + '</span>' +
+            '<div class="ag-mono ag-muted" style="margin-top:4px">' + esc(c.line) + '</div><div class="ag-muted" style="margin-top:2px">' + esc(t('l_part_d', svcNames(c.svc, px) || c.ports)) + '</div>');
         } else if (c.kind === 'port') {
           fw.push('<span class="ag-pill ag-pill-warn">' + esc(t('l_port', c.proto, c.ports || '*', c.dir === 'in' || c.dir === 'out' ? t('dir_' + c.dir) : c.dir)) + '</span><div class="ag-mono ag-muted" style="margin-top:4px">' + esc(c.line) + '</div>');
         } else if (c.kind === 'cc' || c.kind === 'asn') {

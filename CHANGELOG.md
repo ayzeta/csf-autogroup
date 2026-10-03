@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.9.8 — 2026-10-03
+
+- **What to block** in the manual ban window (`/24` and `/16`): **Everything**,
+  **Selected services** (only connections from the range to Web, SSH, FTP,
+  cPanel · WHM · Webmail, incoming mail, mail sync, DNS or any other ports and
+  ranges are blocked) or **Everything except** (a full ban that keeps the chosen
+  services open, outgoing mail and outgoing web included).
+- Partial bans are written as port-limited `csf.deny` lines and shown as
+  *partial* in Active block bans (with a **Partial** filter), on the IP card and
+  in History; they don't cover the range, so nothing inside is removed.
+- "Everything except" adds two-way allow rules to `csf.allow` for each service
+  (CSF drops replies from a banned range otherwise), including FTP's passive
+  port range; they are removed together with the ban.
+- The window explains dependencies between services: mail and web may need DNS
+  when this server hosts the DNS for its domains; cPanel addresses such as
+  `cpanel.example.com` go through the web port.
+- **⋯ → Change ban** for CSF Auto-Group bans: change the open services, switch
+  full ⇄ partial (switching to partial restores what the full ban removed).
+- SSH is offered on this server's real SSH port.
+- New command-line options: `--mode all|svc|exc`, `--svc`, `--ports`, `--replace`.
+
 ## 1.9.7 — 2026-10-03
 
 - **Ban a /16 from more places:** **⋯ → Ban range (/16)** in Active block bans

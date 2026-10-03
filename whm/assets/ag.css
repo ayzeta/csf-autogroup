@@ -745,3 +745,30 @@
 .ag-td-stack .ag-under { margin-left: 0; align-self: flex-start; }
 .ag-dr-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 @media (max-width: 560px) { .ag-in-l { flex-basis: 108px; } }
+
+/* Elle ban: "Ne kapatılsın" (her şey / seçilen servisler / her şey, şunlar hariç) */
+.ag-mode { margin: 16px 0 0; }
+.ag-mode-h, .ag-svc-h { font-size: 12.5px; font-weight: 600; color: var(--ag-text-2); margin: 0 0 6px; }
+.ag-svc-h { margin: 12px 0 6px; }
+.ag-mode .ag-chips { display: flex; width: 100%; }
+.ag-mode .ag-chips .ag-chip { flex: 1; }
+.ag-mode-d { font-size: 12.5px; color: var(--ag-text-3); margin: 8px 2px 0; }
+.ag-svcs { display: flex; flex-wrap: wrap; gap: 6px; }
+.ag-svc { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border-radius: 8px; border: 1px solid var(--ag-line); background: #fff;
+          font: inherit; font-size: 12.5px; font-weight: 550; color: var(--ag-text-2); cursor: pointer; transition: background .1s, border-color .1s; }
+.ag-svc:hover { border-color: var(--ag-accent-line); }
+.ag-svc small { font-weight: 500; color: var(--ag-text-3); font-size: 11.5px; }
+.ag-svc.on { border-color: var(--ag-accent-line); background: var(--ag-accent-soft); color: var(--ag-accent); }
+.ag-svc.on small { color: var(--ag-accent); opacity: .75; }
+.ag-svc-x { margin-top: 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ag-modal-b .ag-svc-x label { margin: 0; font-weight: 500; color: var(--ag-text-3); }
+.ag-svc-x .ag-input { width: 200px; height: 30px; }
+.ag-svc-x.bad .ag-input { border-color: #f87171; box-shadow: 0 0 0 3px var(--ag-bad-soft); }
+.ag-mode-hint { margin-top: 10px; padding: 9px 12px; border-radius: 8px; background: var(--ag-accent-soft); border: 1px solid var(--ag-accent-line); color: var(--ag-text-2); font-size: 12.5px; }
+.ag-mode-hint div + div { margin-top: 6px; }
+.ag-clean.dis { opacity: .6; cursor: default; }
+.ag-fate-wkeep, .ag-fate-prt { display: none; }
+.ag-in.part .ag-fate-rm, .ag-in.part .ag-fate-wend, .ag-in.part .ag-fate-pfull { display: none; }
+.ag-in.part .ag-fate-keep, .ag-in.part .ag-fate-wkeep, .ag-in.part .ag-fate-prt { display: inline; }
+.ag-in.chg .ag-fate { display: none; }
+.ag-g-note { display: block; margin-top: 3px; font-size: 11.5px; color: var(--ag-text-3); white-space: normal; }

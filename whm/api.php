@@ -111,8 +111,25 @@ switch ($a) {
         if ($name === 'unban' && ($_POST['restore'] ?? '') === '1') {   // elle banın kaldırdıklarını geri yükle
             $args[] = '--restore';
         }
+        if ($name === 'ban16' || $name === 'ban24') {   // ne kapatılsın: all | svc (seçilen servisler) | exc (her şey, seçilenler hariç)
+            $mode  = (string) ($_POST['mode'] ?? 'all');
+            $svc   = (string) ($_POST['svc'] ?? '');
+            $ports = (string) ($_POST['ports'] ?? '');
+            if (!in_array($mode, ['all', 'svc', 'exc'], true) || ($svc !== '' && !preg_match('/^[a-z]+(,[a-z]+){0,9}$/', $svc))
+                || ($ports !== '' && !preg_match('/^[0-9]{1,5}(-[0-9]{1,5})?(,[0-9]{1,5}(-[0-9]{1,5})?){0,29}$/', $ports))) {
+                ag_json(['ok' => false, 'code' => 2, 'message' => 'bad_mode']);
+            }
+            if (($_POST['replace'] ?? '') === '1') {   // eklentinin kendi banının kipini değiştir
+                $args[] = '--replace';
+            }
+            if ($mode !== 'all') {
+                array_push($args, '--mode', $mode);
+                if ($svc !== '') { array_push($args, '--svc', $svc); }
+                if ($ports !== '') { array_push($args, '--ports', $ports); }
+            }
+        }
         $args[] = '--json';
-        ag_json(ag_run_json($args, 90));
+        ag_json(ag_run_json($args, 180));   // csf -r büyük listelerde uzun sürebilir
 
     case 'dry_run':
         // Hiçbir şeyi değiştirmez; çıktı olduğu gibi gösterilir. "Kaydetmeden önce dene" için
