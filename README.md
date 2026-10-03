@@ -144,7 +144,9 @@ settings, with no prompts. `config.env` is left untouched.
 Every action asks for confirmation. Risky ones (banning a `/16`, overriding a
 whitelist, removing a `do not delete` block) make you type the target.
 
-Manual `/24` and `/16` bans open the same window: it first lists what is inside
+Manual bans run the same whitelist checks as automatic ones (for a `/16`, the
+blocks inside with single bans are checked too), including Imunify360's own
+whitelist. Manual `/24` and `/16` bans open the same window: it first lists what is inside
 the range (CSF Auto-Group block bans, single bans, temp bans, watched blocks,
 other ranges and port-limited rules), shows any whitelist overlap, and offers
 **Remove covered entries** (on by default): every permanent entry inside the
@@ -177,7 +179,8 @@ can't be banned at all.
   CSF's `TCP_IN`). The rules are marked and removed with the ban, and are never
   counted as whitelist entries.
 
-The window points out services that depend on each other: mail may need DNS when
+A **Blocked / Stays open** summary under the choices says in plain words what
+the selection does. The window also points out services that depend on each other: mail may need DNS when
 this server also hosts the DNS for its domains (other mail servers look up MX,
 SPF, DKIM and DMARC records), web may need DNS for crawlers and visitors that
 resolve through resolvers in that range, and cPanel addresses like

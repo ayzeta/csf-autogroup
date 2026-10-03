@@ -19,6 +19,11 @@
 - **⋯ → Change ban** for CSF Auto-Group bans: change the open services, switch
   full ⇄ partial (switching to partial restores what the full ban removed).
 - SSH is offered on this server's real SSH port.
+- A **Blocked / Stays open** summary under the choices says in plain words what
+  the selection does.
+- **Fix:** a manual `/16` ban now runs the same whitelist checks as a `/24`:
+  besides overlapping entries, the blocks inside with single bans are checked
+  against `CC_IGNORE` / `CC_ALLOW` and `csf.rignore` (e.g. Googlebot).
 - New command-line options: `--mode all|svc|exc`, `--svc`, `--ports`, `--replace`.
 
 ## 1.9.7 — 2026-10-03

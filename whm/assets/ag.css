@@ -772,3 +772,9 @@
 .ag-in.part .ag-fate-keep, .ag-in.part .ag-fate-wkeep, .ag-in.part .ag-fate-prt { display: inline; }
 .ag-in.chg .ag-fate { display: none; }
 .ag-g-note { display: block; margin-top: 3px; font-size: 11.5px; color: var(--ag-text-3); white-space: normal; }
+.ag-sum { margin-top: 12px; border: 1px solid var(--ag-line); border-radius: 10px; overflow: hidden; }
+.ag-sum-r { display: flex; gap: 10px; padding: 8px 12px; font-size: 12.5px; color: var(--ag-text-2); border-top: 1px solid var(--ag-line-soft); align-items: baseline; }
+.ag-sum-r:first-child { border-top: 0; }
+.ag-sum-k { flex: 0 0 82px; font-weight: 650; }
+.ag-sum-k.bad { color: var(--ag-bad); }
+.ag-sum-k.ok { color: var(--ag-ok); }

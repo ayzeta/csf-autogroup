@@ -1441,6 +1441,18 @@ self_overlap() { # LO HI → aralıkta sunucunun kendi IP'si var mı (SELF_HIT);
     done
     return 1
 }
+wl_range16() {   # A.B LO HI → /16 için /24 ile aynı beyaz liste kontrolleri: aralık çakışması, sonra içinde tekil banı
+    # olan her bloğun IP'leriyle CC_IGNORE / CC_ALLOW ve csf.rignore (tekil yoksa ağın ilk adresiyle) → WL_HIT
+    local p n=0
+    WL_HIT=""; WL_RETRY=0
+    wl_overlap "$2" "$3" && return 0
+    for p in "${!ips24[@]}"; do
+        [[ "$p" == "$1".* ]] || continue
+        n=$((n + 1)); wl_check "$p" "${ips24[$p]}" && return 0
+    done
+    [ "$n" = 0 ] && wl_check "$1.0" "$1.0.1" && return 0
+    return 1
+}
 wl_check() {     # PREFIX24 "IP IP ..." → 0 = banlama (WL_HIT dolu; WL_RETRY=1 ise doğrulanamadı, sonraki tur)
     local lo hi ip host d re entry name vals v first unk=0
     WL_RETRY=0
@@ -2086,7 +2098,7 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
     inside_owner $pfx24
     # beyaz liste: ban eylemindeki kontrolün aynısı (/24'te bloktaki IP'lerle, /16'da aralık çakışması)
     WL_HIT=""; WL_RETRY=0
-    if [ -n "$pfx24" ]; then wl_check "$pfx24" "${ips24[$pfx24]:-$pfx24.1}"; else ip2int "${c%/*}"; wl_overlap "$REPLY" $((REPLY + 65535)); fi
+    if [ -n "$pfx24" ]; then wl_check "$pfx24" "${ips24[$pfx24]:-$pfx24.1}"; else ip2int "${c%/*}"; wl_range16 "${c%.0.0/16}" "$REPLY" $((REPLY + 65535)); fi
     if [ "$JSON" = 1 ]; then
         local o k
         jarr() { local a="" x; for x in "$@"; do a+="${a:+,}\"$x\""; done; REPLY="[$a]"; }
@@ -2478,7 +2490,7 @@ do_action() {    # NAME TARGET [DAYS]
             self_overlap "$lo" "$hi" && { act_out 1 "$(m "$M_A_SELF" "$cidr" "$SELF_HIT")"; return; }
             inside_scan "$cidr"
             WL_HIT=""
-            if [ "$bits" = 24 ]; then wl_check "$t" "${ips24[$t]:-$t.1}"; else wl_overlap "$lo" "$hi"; fi
+            if [ "$bits" = 24 ]; then wl_check "$t" "${ips24[$t]:-$t.1}"; else wl_range16 "$t" "$lo" "$hi"; fi
             if [ -n "$WL_HIT" ] && [ "$FORCE" != 1 ]; then act_out 4 "$(m "$M_A_WL" "$cidr" "$WL_HIT")"; return; fi
             # kısmi ban: aralığı tamamen kapsamaz; içindekilere ve izlemelere dokunulmaz
             if [ "$BMODE" = svc ]; then part_ports; ban_partial "$cidr" "$bits" "$REPLY"; return; fi
