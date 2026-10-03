@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.9.7 — 2026-10-03
+
+- **Ban a /16 from more places:** **⋯ → Ban range (/16)** in Active block bans
+  and Watched, and **Ban block (/24)** / **Ban range (/16)** on the IP card.
+- **One ban window for /24 and /16:** before banning it lists what is inside the
+  range (block bans, single bans, temp bans, watched blocks, other ranges,
+  port-limited rules) and any whitelist overlap. **Remove covered entries** (on
+  by default) clears the block bans and single bans inside from the permanent
+  list and the temp bans from the temp list; `do not delete` singles and ranges
+  added by others stay. The removed IPs and reasons are kept with the new ban,
+  and History shows how many entries were removed.
+- A range containing one of this server's own IPs can no longer be banned, not
+  even with "Ban anyway".
+- **IP card:** shows every level at which CSF blocks the IP (single, `/24`,
+  `/16` or other range, port-limited rules, `CC_DENY` / `CC_DENY_PORTS` country
+  or ASN) instead of only the first covering range.
+- Blocks inside a wider ban are tagged *inside /16* in Active block bans and
+  Watched; a watched block inside one no longer offers "Make permanent".
+- **Fix:** a port-only rule in `csf.allow` that opens a port to everyone (e.g.
+  `tcp|in|d=80|s=0.0.0.0/0`) was read as "the whole internet is whitelisted",
+  which stopped all block bans. Such rules are now port rules, not whitelist
+  entries; port rules for a specific address still protect it.
+- **Fix:** manually banning a `/24` with no single bans in it could fail the
+  `CC_IGNORE` / `CC_ALLOW` check.
+- New command-line mode: `--inside A.B.0.0/16|A.B.C.0/24` shows what a manual
+  ban would cover; `--action ban16|ban24 … --keep` bans without removing the
+  covered entries.
+
 ## 1.9.6 — 2026-10-02
 
 - **History** and **Settings → Settings history** reach back to the start of

@@ -74,6 +74,14 @@ switch ($a) {
         $n = max(1, min(1000, (int) ($_POST['n'] ?? 300)));
         ag_json(ag_run_json(['--events', $m, (string) $t, (string) $n], 30));
 
+    case 'inside':                                  // elle /16 ya da /24 banının onay penceresi: içindekiler
+        $bits = (string) ($_POST['bits'] ?? '');
+        $target = trim((string) ($_POST['target'] ?? ''));
+        if (!($bits === '16' && ag_valid(AG_RE_16, $target)) && !($bits === '24' && ag_valid(AG_RE_24, $target))) {
+            ag_json(['ok' => false, 'error' => 'bad_input']);
+        }
+        ag_json(ag_run_json(['--inside', $bits === '16' ? $target . '.0.0/16' : $target . '.0/24', '--json'], 45));
+
     case 'action':
         $name   = (string) ($_POST['name'] ?? '');
         $target = trim((string) ($_POST['target'] ?? ''));
@@ -96,6 +104,9 @@ switch ($a) {
         }
         if (($_POST['force'] ?? '') === '1') {
             $args[] = '--force';
+        }
+        if (($_POST['keep'] ?? '') === '1') {      // "kapsananları kaldır" kapalı
+            $args[] = '--keep';
         }
         $args[] = '--json';
         ag_json(ag_run_json($args, 90));

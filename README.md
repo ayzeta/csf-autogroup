@@ -27,7 +27,7 @@ is escalated to a **permanent** ban. `/16` ranges are only flagged for review
 - **English / Türkçe** — the plugin, logs and emails.
 - **Works on phones** — the page adapts to small screens.
 
-**Version 1.9.6** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
+**Version 1.9.7** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
 cPanel the same engine runs from cron and the command line
 ([details](#without-cpanel)).
 
@@ -119,9 +119,15 @@ settings, with no prompts. `config.env` is left untouched.
   filled in from the log. Click an address to open its IP card.
   Settings changes are listed under Settings → Settings history.
 - **Look up an IP** — hostname (forward-confirmed), owner, announced prefix,
-  registry, whether CSF blocks it (for an IP inside a block ban: the block's
-  state, date and main ban reason) and which list whitelists it, with links to
-  bgp.he.net and AbuseIPDB. Recently viewed IPs stay one click away.
+  registry, and **every** level at which CSF blocks it: the single ban, the
+  covering `/24`, `/16` or other range (with its state, date and main ban
+  reason), port-limited `csf.deny` rules for that address, and `CC_DENY` /
+  `CC_DENY_PORTS` when its country or ASN is listed there. Also which list
+  whitelists it (port-only `csf.allow` rules are shown with their ports), with
+  links to bgp.he.net and AbuseIPDB, and buttons to ban its `/24` or `/16`.
+  Recently viewed IPs stay one click away.
+- **Inside a wider ban** — a block inside a banned `/16` (or any wider range) is
+  tagged *inside /16* in Active block bans and Watched.
 - **Most blocked providers** (by ASN) — three tabs:
   - *CSF* — ranked by block bans and single bans, with each provider's most
     common ban reason. A provider with 5+ block
@@ -138,9 +144,21 @@ settings, with no prompts. `config.env` is left untouched.
 Every action asks for confirmation. Risky ones (banning a `/16`, overriding a
 whitelist, removing a `do not delete` block) make you type the target.
 
+Manual `/24` and `/16` bans open the same window: it first lists what is inside
+the range (CSF Auto-Group block bans, single bans, temp bans, watched blocks,
+other ranges and port-limited rules), shows any whitelist overlap, and offers
+**Remove covered entries** (on by default): the block bans and single bans
+inside leave the permanent list and the temp bans leave the temp list, freeing
+lines. Singles marked `do not delete` and ranges added by others are never
+touched; watching ends for blocks inside. If the ban is removed later the
+removed entries don't come back (LFD bans them again if the attacks continue).
+The removed IPs and their ban reasons are kept with the new ban (**⋯ → IPs**).
+A range containing one of this server's own IPs can't be banned at all.
+
 | Button | Does |
 |--------|------|
-| Ban /16 | permanent `/16` ban, added as `do not delete` |
+| Ban range (/16) | permanent `/16` ban, added as `do not delete`: from To review, **⋯** in Active block bans and Watched, and the IP card |
+| Ban block (/24) | permanent `/24` ban from the IP card |
 | Ban anyway | ban a whitelist-skipped `/24` (overrides the whitelist) |
 | Make permanent | make a watched `/24` permanent right away |
 | Stop watching | forget a watched `/24` (next attack counts as the first) |
@@ -257,7 +275,7 @@ every list CSF uses to say "don't block this". If **any** entry overlaps the
 
 | Source | What is checked |
 |--------|-----------------|
-| `csf.allow` (+ `Include`) | IPs, CIDRs, advanced rules (`tcp\|in\|d=22\|s=IP`), hostnames |
+| `csf.allow` (+ `Include`) | IPs, CIDRs, hostnames, and port-only rules (`tcp\|in\|d=2083\|s=IP`) for a specific address or range; rules that open a port to everyone (`s=0.0.0.0/0`, anything wider than `/8`) are port rules, not whitelist entries |
 | `csf.ignore` (+ `Include`) | IPs and CIDRs |
 | `GLOBAL_ALLOW`, `GLOBAL_IGNORE`, `DYNDNS`, temp allows (`csf -ta`) | CSF's cached lists in `/var/lib/csf` |
 | Server's own IPs | a `/24` containing one of this server's addresses |
@@ -280,6 +298,7 @@ the page shows is available from the command line:
 ./csf_autogroup.sh --status          # same data as the plugin page
 ./csf_autogroup.sh --dry-run         # what a run would do, changes nothing
 ./csf_autogroup.sh --lookup 1.2.3.4  # who is this IP?
+./csf_autogroup.sh --inside 1.2.0.0/16   # what a manual /16 (or /24) ban would cover
 ./csf_autogroup.sh --events latest 0 50   # the latest 50 events as JSON (after|before TIME N pages)
 ./csf_autogroup.sh --digest          # preview the weekly summary
 ./csf_autogroup.sh --config get      # current settings (--config set KEY=VALUE …)

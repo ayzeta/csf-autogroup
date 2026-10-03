@@ -24,6 +24,8 @@
 #   csf_autogroup.sh --status [--json]    groups, watched blocks, items to review
 #   csf_autogroup.sh --lookup IP [--json] who is this IP? (owner, hostname, lists)
 #   csf_autogroup.sh --events latest|after|before [T] [N]   event log page as JSON (History tab)
+#   csf_autogroup.sh --inside A.B.0.0/16|A.B.C.0/24 [--json]  what a manual ban would cover
+#   csf_autogroup.sh --action ban16|ban24 TARGET [--keep]    manual ban; covered entries are removed unless --keep
 #   csf_autogroup.sh --action NAME TARGET [DAYS] [--force] [--json]
 #        ban16 A.B | ban24 A.B.C | forget A.B.C | unban CIDR
 #        ignore CIDR [DAYS] | unignore CIDR          (used by the WHM plugin)
@@ -42,7 +44,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.9.6"   # sürüm — başlangıç log satırında görünür
+VERSION="1.9.7"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -106,13 +108,15 @@ TODAY=$(date '+%Y-%m-%d')
 NL=$'\n'
 
 # ── Command line ────────────────────────────────────────────────────────────
-MODE=run; JSON=0; FORCE=0; DRY=0; ACT=""; ARGS=(); SETS=(); SEND=0
+MODE=run; JSON=0; FORCE=0; DRY=0; ACT=""; ARGS=(); SETS=(); SEND=0; CLEAN=1
 while [ $# -gt 0 ]; do
     case "$1" in
         --dry-run) MODE=run; DRY=1 ;;
         --status)  MODE=status ;;
         --lookup)  MODE=lookup ;;
         --events)  MODE=events ;;
+        --inside)  MODE=inside ;;
+        --keep)    CLEAN=0 ;;
         --action)  MODE=action; ACT="${2:-}"; shift ;;
         --config)  MODE=config ;;
         --set)     SETS+=("${2:-}"); shift ;;
@@ -199,6 +203,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_MAILT16_SUBJ="%s şüpheli ağ (geçici banlar)"
   M_WL_LOADED="Beyaz liste yüklendi: %s aralık, %s rignore alan adı"
   M_WL_SELF="sunucu IP'si"
+  M_A_SELF="%s sunucunun kendi IP'sini (%s) içeriyor; banlanamaz"
   M_WL_SKIP="ATLANDI %s: beyaz listeyle çakışıyor (%s)"
   M_WL_SKIPD="ATLANDI %s: beyaz listede (%s), bugün zaten bildirildi"
   M_WL_RETRY="ATLANDI %s: beyaz liste (%s) DNS hatası nedeniyle doğrulanamadı, sonraki turda tekrar denenecek"
@@ -244,6 +249,11 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_A_BANNED="%s kalıcı banlandı (do not delete)"
   M_A_BANFAIL="%s eklenemedi: %s"
   M_A_COMMENT="csf_autogroup: elle /%s ban (%s) - do not delete"
+  M_A_CLEANED="%s · %s kayıt kaldırıldı"
+  M_IN_COVER="Zaten kapsanıyor: %s"
+  M_IN_SUM="İçinde: %s blok banı, %s tekil (%s do not delete), %s geçici ban, %s izlenen blok, %s başka aralık"
+  M_IN_WL="Beyaz liste çakışması: %s"
+  M_L_PORT="Port sınırlı"; M_L_CCD="CC_DENY"; M_L_CCP="CC_DENY_PORTS"
   M_A_FORGOT="%s izlemeden çıkarıldı"
   M_A_NOREC="%s izlenmiyor"
   M_A_UNBANNED="%s kaldırıldı"
@@ -379,6 +389,7 @@ else
   M_MAILT16_SUBJ="%s suspicious range(s) (temp bans)"
   M_WL_LOADED="Whitelist loaded: %s ranges, %s rignore domains"
   M_WL_SELF="server IP"
+  M_A_SELF="%s contains this server's own IP (%s); it can't be banned"
   M_WL_SKIP="SKIPPED %s: overlaps a whitelist entry (%s)"
   M_WL_SKIPD="SKIPPED %s: whitelisted (%s), already reported today"
   M_WL_RETRY="SKIPPED %s: whitelist (%s) could not be verified (DNS failure), will retry next run"
@@ -424,6 +435,11 @@ else
   M_A_BANNED="%s permanently banned (do not delete)"
   M_A_BANFAIL="%s could not be added: %s"
   M_A_COMMENT="csf_autogroup: manual /%s ban (%s) - do not delete"
+  M_A_CLEANED="%s · %s entries removed"
+  M_IN_COVER="Already covered: %s"
+  M_IN_SUM="Inside: %s block bans, %s singles (%s do not delete), %s temp bans, %s watched blocks, %s other ranges"
+  M_IN_WL="Whitelist overlap: %s"
+  M_L_PORT="Port-limited"; M_L_CCD="CC_DENY"; M_L_CCP="CC_DENY_PORTS"
   M_A_FORGOT="%s is no longer watched"
   M_A_NOREC="%s is not watched"
   M_A_UNBANNED="%s removed"
@@ -646,6 +662,45 @@ deny_has() { grep -qE "^${1//./\\.}([[:space:]]|$)" "$DENY_FILE"; }
 perm_covers() {  # LO HI → csf.deny içindeki bir CIDR bu aralığın tamamını kapsıyor mu?
     local i
     for i in "${!DC_LO[@]}"; do (( DC_LO[i] <= $1 && DC_HI[i] >= $2 )) && return 0; done
+    return 1
+}
+# CSF gelişmiş satırı: "tcp|in|d=22,80|s=1.2.3.0/24" (yorum hariç) → ADV_PROTO ADV_DIR ADV_PORTS ADV_CIDR
+adv_parse() {
+    local s="${1%%#*}" k v f=()
+    s="${s//[[:space:]]/}"
+    [[ "$s" == *"|"* ]] || return 1
+    ADV_PROTO=""; ADV_DIR=""; ADV_PORTS=""; ADV_CIDR=""
+    IFS='|' read -ra f <<< "$s"
+    ADV_PROTO="${f[0]}"; ADV_DIR="${f[1]}"
+    for k in "${f[@]:2}"; do
+        v="${k#*=}"
+        if [[ "$v" =~ $CIDR4_RE ]]; then ADV_CIDR="$v"
+        elif [[ "$k" == [sd]=* ]]; then ADV_PORTS="${ADV_PORTS:+$ADV_PORTS,}$v"; fi
+    done
+    [[ "$ADV_PROTO" =~ ^[a-z]+$ ]] || ADV_PROTO="?"
+    [[ "$ADV_DIR" =~ ^[a-z]+$ ]] || ADV_DIR="?"
+    [[ "$ADV_PORTS" =~ ^[0-9,:_-]*$ ]] || ADV_PORTS=""
+    [ -n "$ADV_CIDR" ]
+}
+# /8'den geniş aralık (0.0.0.0/0 gibi): gelişmiş satırda "herkes" demek — sunucu geneli port kuralı,
+# belirli bir IP'ye ya da müşteriye ait değil
+adv_wide() { [[ "$1" == */* ]] && [ "${1#*/}" -lt 8 ]; }
+# csf.deny'deki /23 ve daha geniş aralıklar (bir blok ya da ağın üstündeki ban): tablolar "… içinde" der
+wide_load() {
+    local i
+    WD_LO=(); WD_HI=(); WD_TXT=()
+    for i in "${!DC_TXT[@]}"; do
+        [ "${DC_TXT[i]#*/}" -le 23 ] || continue
+        WD_LO+=("${DC_LO[i]}"); WD_HI+=("${DC_HI[i]}"); WD_TXT+=("${DC_TXT[i]}")
+    done
+}
+under_of() {     # LO HI KENDİSİ → REPLY = kapsayan daha geniş aralık (yoksa boş)
+    local i
+    REPLY=""
+    for i in "${!WD_LO[@]}"; do
+        [ "${WD_TXT[i]}" = "$3" ] && continue
+        (( WD_LO[i] <= $1 && WD_HI[i] >= $2 )) && { REPLY="${WD_TXT[i]}"; return 0; }
+    done
     return 1
 }
 temp_covers() {  # LO HI → aktif bir geçici CIDR ban bu aralığı kapsıyor mu?
@@ -1270,12 +1325,22 @@ wl_load() {      # FILE LABEL [DEPTH] — IP, CIDR, gelişmiş satır (tcp|in|d=
     local file="$1" label="$2" depth="${3:-0}" line tok rest mt ip
     [ -r "$file" ] || return
     while IFS= read -r line || [ -n "$line" ]; do
-        line="${line%$'\r'}"; line="${line%%#*}"; line="${line#"${line%%[![:space:]]*}"}"
+        line="${line%$'\r'}"
+        [[ "$line" == *csf_autogroup* ]] && continue      # eklentinin kendi satırları (ör. banlı aralığa port istisnası) korunan kayıt değil
+        line="${line%%#*}"; line="${line#"${line%%[![:space:]]*}"}"
         [ -z "$line" ] && continue
         if [[ "$line" =~ ^Include[[:space:]]+([^[:space:]]+) ]]; then
             [ "$depth" -lt 5 ] && wl_load "${BASH_REMATCH[1]}" "$label" $((depth + 1)); continue
         fi
         tok="${line%%[[:space:]]*}"; rest="$tok"; mt=0
+        # Gelişmiş satır yalnız bir portu açar (tcp|in|d=2083|s=IP): tek IP / dar aralık bilinen bir müşteri
+        # sayılır (blok banı onu da keserdi), "herkese" açan geniş satır (s=0.0.0.0/0) ise beyaz liste değildir
+        if [[ "$tok" == *"|"* ]]; then
+            adv_parse "$tok" || continue
+            adv_wide "$ADV_CIDR" && continue
+            wl_add "$ADV_CIDR" "$label ($ADV_PROTO $ADV_DIR ${ADV_PORTS:-*}): $ADV_CIDR"
+            continue
+        fi
         while [[ "$rest" =~ ([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(/[0-9]{1,2})?) ]]; do
             ip="${BASH_REMATCH[1]}"          # wl_add içindeki regex BASH_REMATCH'i ezer
             rest="${rest#*"$ip"}"
@@ -1337,6 +1402,16 @@ wl_overlap() {   # LO HI → WL_HIT = çakışan beyaz liste kaydı
     [ "$WL_LOADED" = 1 ] || load_whitelist
     for i in "${!WL_LO[@]}"; do
         (( WL_LO[i] <= $2 && WL_HI[i] >= $1 )) && { WL_HIT="${WL_TXT[i]}"; return 0; }
+    done
+    return 1
+}
+self_overlap() { # LO HI → aralıkta sunucunun kendi IP'si var mı (SELF_HIT); "yine de banla" ile de geçilmez
+    local i
+    SELF_HIT=""
+    [ "$WL_LOADED" = 1 ] || load_whitelist
+    for i in "${!WL_LO[@]}"; do
+        [[ "${WL_TXT[i]}" == "$M_WL_SELF: "* ]] || continue
+        (( WL_LO[i] <= $2 && WL_HI[i] >= $1 )) && { SELF_HIT="${WL_TXT[i]#*: }"; return 0; }
     done
     return 1
 }
@@ -1549,6 +1624,7 @@ do_status() {
 
     # Aktif grup banları (kalıcı + geçici)
     local groups=() gtext=() ghist="" gi
+    wide_load
     local g_tok=() g_kind=() g_dnd=() g_n=() g_ds=() g_ep=()
     while IFS= read -r line; do
         tok="${line%%[[:space:]]*}"
@@ -1570,14 +1646,16 @@ do_status() {
     for gi in "${!g_tok[@]}"; do
         added="${g_ep[gi]:-0}"; [[ "$added" =~ ^[0-9]+$ ]] && [ "$added" -gt 86400 ] || added=0
         tok="${g_tok[gi]}"; kind="${g_kind[gi]}"; dnd="${g_dnd[gi]}"
-        groups+=("{\"cidr\":\"$tok\",\"kind\":\"$kind\",\"dnd\":$dnd,\"n\":${g_n[gi]},\"added\":$added,\"ttl\":0}")
+        REPLY=""; cidr_range "$tok" && under_of "$R_LO" "$R_HI" "$tok"
+        groups+=("{\"cidr\":\"$tok\",\"kind\":\"$kind\",\"dnd\":$dnd,\"n\":${g_n[gi]},\"added\":$added,\"ttl\":0${REPLY:+,\"under\":\"$REPLY\"}}")
         [ "$added" -gt 0 ] && ghist+="$added $kind $tok"$'\n'
         [ "$JSON" = 1 ] || gtext+=("$(printf '%-18s %-9s %s' "$tok" "$kind" "$([ "$dnd" = true ] && echo 'do not delete')")")
     done
     for c in "${!TG_TTL[@]}"; do
         [ "${TG_TTL[$c]}" -gt 0 ] || continue
         n=0; [[ "${TG_NOTE[$c]}" =~ $re_n ]] && n="${BASH_REMATCH[1]}"
-        groups+=("{\"cidr\":\"$c\",\"kind\":\"temp\",\"dnd\":false,\"n\":$n,\"added\":${TG_T[$c]:-0},\"ttl\":${TG_TTL[$c]}}")
+        REPLY=""; cidr_range "$c" && under_of "$R_LO" "$R_HI" "$c"
+        groups+=("{\"cidr\":\"$c\",\"kind\":\"temp\",\"dnd\":false,\"n\":$n,\"added\":${TG_T[$c]:-0},\"ttl\":${TG_TTL[$c]}${REPLY:+,\"under\":\"$REPLY\"}}")
         [ "$JSON" = 1 ] || gtext+=("$(printf '%-18s %-9s %s' "$c" "temp" "$(m "$M_S_TTL" "$(( TG_TTL[$c] / 3600 ))h")")")
     done
 
@@ -1587,7 +1665,8 @@ do_status() {
         [[ "$c" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ && "$u" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || continue
         day_epoch "$u"; age=$(( (now - REPLY) / 86400 )); left=$(( SAYAC_RETENTION_DAYS - age ))
         ttl="${TG_TTL[$c.0/24]:-0}"; [ "$ttl" -lt 0 ] && ttl=0
-        pending+=("{\"prefix\":\"$c\",\"since\":\"$u\",\"days_left\":$left,\"temp_ttl\":$ttl}")
+        REPLY=""; cidr_range "$c.0/24" && under_of "$R_LO" "$R_HI" "$c.0/24"
+        pending+=("{\"prefix\":\"$c\",\"since\":\"$u\",\"days_left\":$left,\"temp_ttl\":$ttl${REPLY:+,\"under\":\"$REPLY\"}}")
         [ "$JSON" = 1 ] || ptext+=("$(printf '%-18s %s · %s' "$c.0/24" "$u" "$(m "$M_S_DAYSLEFT" "$left")")")
     done < "$SAYAC_FILE"
 
@@ -1865,9 +1944,114 @@ do_events() {
               for (i = c - k + 1; i <= c; i++) printf "%s%s", (i > c - k + 1 ? "," : ""), L[i % N]
               print "]}" }'
 }
+# ── Elle /16 ya da /24 banının kapsayacakları ─────────────────────────────
+# Onay penceresi (--inside) ve ban eylemi aynı taramayı kullanır: pencerede görülen, silinenle aynıdır.
+#   IN_COVER  aralığı zaten kapsayan kalıcı ban (kendisi ya da daha genişi)
+#   IN_BLK    içindeki eklenti blok banları (do not delete olsalar da: yeni ban onların yerini alır)
+#   IN_OTH    içindeki başka kaynaklı aralıklar (dokunulmaz) · IN_PORT port sınırlı satırlar (dokunulmaz)
+#   IN_SGL    do not delete olmayan tekiller (silinebilir) · IN_SGLD do not delete tekiller (kalır)
+#   IN_TMP    geçici listedeki IP'ler ve aralıklar · IN_WATCH izlenen /24'ler (izleme her durumda biter)
+#   IN_EVJ    olay kaydına giden kanıt: tekil ve geçici IP'ler, ban sebepleriyle (en çok 40) · IN_EVN toplam
+inside_scan() {  # CIDR
+    local lo hi i x ip t tip port dir to note line
+    local -A seen=() pf=()
+    cidr_range "$1" || return 1
+    lo=$R_LO; hi=$R_HI
+    IN_COVER=""; IN_BLK=(); IN_OTH=(); IN_SGL=(); IN_SGLD=(); IN_TMP=(); IN_WATCH=(); IN_EVJ=(); IN_EVN=0; IN_PFX=(); IN_PORT=()
+    for i in "${!DC_LO[@]}"; do
+        if (( DC_LO[i] <= lo && DC_HI[i] >= hi )); then IN_COVER="${DC_TXT[i]}"; continue; fi
+        (( DC_LO[i] >= lo && DC_HI[i] <= hi )) || continue
+        line=$(deny_line "${DC_TXT[i]}")
+        case "$line" in *Auto-grouped*|*csf_autogroup:*) IN_BLK+=("${DC_TXT[i]}") ;; *) IN_OTH+=("${DC_TXT[i]}") ;; esac
+        x="${DC_TXT[i]%/*}"; pf[${x%.*}]=1
+    done
+    for ip in $(printf '%s\n' "${!SINGLE_NOTE[@]}" | sort -V); do
+        ip2int "$ip"; (( REPLY >= lo && REPLY <= hi )) || continue
+        if is_dnd "${SINGLE_NOTE[$ip]}"; then IN_SGLD+=("$ip"); else IN_SGL+=("$ip"); fi
+        pf[${ip%.*}]=1
+        short_reason "${SINGLE_NOTE[$ip]}" "$ip"; inside_ev "$ip" "$REPLY"
+    done
+    if [ -r "$CSF_VAR/csf.tempban" ]; then
+        while IFS='|' read -r t tip port dir to note; do
+            [ -n "$tip" ] && [ -z "${seen[$tip]}" ] || continue
+            cidr_range "$tip" 2>/dev/null || continue
+            (( R_LO >= lo && R_HI <= hi )) || continue
+            seen[$tip]=1; IN_TMP+=("$tip")
+            x="${tip%/*}"; pf[${x%.*}]=1
+            if [[ "$tip" != */* ]] && [ -z "${SINGLE_NOTE[$tip]+x}" ]; then short_reason "$note" "$tip"; inside_ev "$tip" "$REPLY"; fi
+        done < "$CSF_VAR/csf.tempban"
+    fi
+    while read -r x _; do
+        [[ "$x" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] && [ -z "${seen[w$x]}" ] || continue
+        ip2int "$x.0"; (( REPLY >= lo && REPLY <= hi )) || continue
+        seen[w$x]=1; IN_WATCH+=("$x"); pf[$x]=1
+    done < <(cat "$SAYAC_FILE" 2>/dev/null)
+    # port sınırlı satırlar (tcp|in|d=22|s=…): tam ban değil, dokunulmaz; pencere bilgi olarak gösterir
+    while IFS= read -r line; do
+        adv_parse "$line" || continue
+        adv_wide "$ADV_CIDR" && continue
+        cidr_range "$ADV_CIDR" || continue
+        (( R_LO >= lo && R_HI <= hi )) && IN_PORT+=("$ADV_CIDR $ADV_PROTO ${ADV_PORTS:-*}")
+    done < <(grep -F '|' "$DENY_FILE" 2>/dev/null | grep -v '^[[:space:]]*#')
+    IN_PFX=("${!pf[@]}")
+    return 0
+}
+inside_ev() {    # IP SEBEP → IN_EVJ'ye ekle
+    IN_EVN=$((IN_EVN + 1))
+    [ "$IN_EVN" -le 40 ] || return 0
+    local jw w="${2:-$M_H_NOREASON}"
+    is_dnd "$w" && w=$(printf '%s' "$w" | sed -E 's/[[:space:]]*-?[[:space:]]*[Dd][Oo][[:space:]]+[Nn][Oo][Tt][[:space:]]+[Dd][Ee][Ll][Ee][Tt][Ee][[:space:]]*//')
+    jstr "${w:-$M_H_NOREASON}"; jw="$REPLY"
+    IN_EVJ+=("{\"ip\":\"$1\",\"why\":$jw}")
+}
+inside_owner() { # taranan aralığın sahibi: önbellekte bilinen ilk /24 (sorgu yapılmaz)
+    local x
+    OWN_LONG=""; OWN_ASN=""; OWN_CC=""
+    for x in "$@" "${IN_PFX[@]}"; do
+        [ -n "$x" ] || continue
+        [ -n "${OWN_L[$x]}" ] && { OWN_LONG="${OWN_L[$x]}"; OWN_ASN="${OWN_A[$x]}"; OWN_CC="${OWN_C[$x]}"; return 0; }
+    done
+    return 0
+}
+do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
+    local c="$1" pfx24="" lst
+    if ! { [[ "$c" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.0\.0/16$ ]] || [[ "$c" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.0/24$ ]]; } || ! cidr_range "$c"; then
+        if [ "$JSON" = 1 ]; then echo '{"ok":false,"error":"bad_input"}'; else m "$M_BAD_TARGET" "$c"; echo; fi
+        return 2
+    fi
+    parse_deny "$DENY_FILE" 1
+    owners_load
+    inside_scan "$c"
+    [[ "$c" == */24 ]] && pfx24="${c%.0/24}"
+    inside_owner $pfx24
+    # beyaz liste: ban eylemindeki kontrolün aynısı (/24'te bloktaki IP'lerle, /16'da aralık çakışması)
+    WL_HIT=""; WL_RETRY=0
+    if [ -n "$pfx24" ]; then wl_check "$pfx24" "${ips24[$pfx24]:-$pfx24.1}"; else ip2int "${c%/*}"; wl_overlap "$REPLY" $((REPLY + 65535)); fi
+    if [ "$JSON" = 1 ]; then
+        local o k
+        jarr() { local a="" x; for x in "$@"; do a+="${a:+,}\"$x\""; done; REPLY="[$a]"; }
+        o="{\"ok\":true,\"cidr\":\"$c\""
+        jstr "$IN_COVER"; o+=",\"cover\":$REPLY"
+        jstr "$WL_HIT"; o+=",\"wl\":$REPLY,\"wl_retry\":$([ "$WL_RETRY" = 1 ] && echo true || echo false)"
+        jstr "$OWN_LONG"; o+=",\"owner\":$REPLY"
+        cidr_range "$c" && self_overlap "$R_LO" "$R_HI"; o+=",\"self\":\"$SELF_HIT\""
+        jarr "${IN_BLK[@]}"; o+=",\"blocks\":$REPLY"
+        jarr "${IN_OTH[@]}"; o+=",\"others\":$REPLY"
+        jarr "${IN_PORT[@]}"; o+=",\"ports\":$REPLY"
+        o+=",\"singles\":${#IN_SGL[@]},\"singles_dnd\":${#IN_SGLD[@]},\"temps\":${#IN_TMP[@]}"
+        jarr "${IN_WATCH[@]/%/.0/24}"; o+=",\"watched\":$REPLY"
+        o+=",\"free\":$(( ${#IN_BLK[@]} + ${#IN_SGL[@]} ))}"
+        echo "$o"; return 0
+    fi
+    echo "$c${OWN_LONG:+  ($OWN_LONG)}"
+    [ -n "$IN_COVER" ] && echo "  $(m "$M_IN_COVER" "$IN_COVER")"
+    echo "  $(m "$M_IN_SUM" ${#IN_BLK[@]} $(( ${#IN_SGL[@]} + ${#IN_SGLD[@]} )) ${#IN_SGLD[@]} ${#IN_TMP[@]} ${#IN_WATCH[@]} ${#IN_OTH[@]})"
+    [ -n "$WL_HIT" ] && echo "  $(m "$M_IN_WL" "$WL_HIT")"
+    return 0
+}
 do_lookup() {
     local ip="$1" n host="" fwd=false txt asn="" pfx="" cc="" reg="" alloc="" asname="" a b c d i
-    local deny="" cover="" temp="" wl="" rig="" pend="" ign="" line t tip port dir to note now
+    local deny="" temp="" wl="" rig="" pend="" ign="" line t tip port dir to note now
     if ! [[ "$ip" =~ $IPV4_RE ]] || ! cidr_range "$ip"; then
         if [ "$JSON" = 1 ]; then jstr "$(m "$M_BAD_IP" "$ip")"; echo "{\"ok\":false,\"error\":$REPLY}"; else m "$M_BAD_IP" "$ip"; echo; fi
         return 2
@@ -1889,9 +2073,33 @@ do_lookup() {
         fi
     fi
     [ -n "${DENY_IP[$ip]+x}" ] && deny="$(deny_line "$ip")"
+    # IP'yi kapsayan bütün seviyeler, en dardan genişe: blok / ağ / başka aralıklar, port sınırlı satırlar
+    # (yalnız IP'ye özgü olanlar; "herkese" kuralları sunucu geneli), CC_DENY ülke ve ASN listeleri
+    local covers=() cvj ln ccd ccp
     for i in "${!DC_LO[@]}"; do
-        if (( DC_LO[i] <= n && DC_HI[i] >= n )); then cover="$(deny_line "${DC_TXT[i]}")"; [ -z "$cover" ] && cover="${DC_TXT[i]}"; break; fi
+        (( DC_LO[i] <= n && DC_HI[i] >= n )) || continue
+        ln="$(deny_line "${DC_TXT[i]}")"; jstr "${ln:-${DC_TXT[i]}}"
+        covers+=("$(( DC_HI[i] - DC_LO[i] ))|{\"kind\":\"cidr\",\"cidr\":\"${DC_TXT[i]}\",\"line\":$REPLY}")
     done
+    while IFS= read -r ln; do
+        adv_parse "$ln" || continue
+        adv_wide "$ADV_CIDR" && continue
+        cidr_range "$ADV_CIDR" || continue
+        (( R_LO <= n && R_HI >= n )) || continue
+        jstr "$ln"
+        covers+=("$(( R_HI - R_LO ))|{\"kind\":\"port\",\"cidr\":\"$ADV_CIDR\",\"proto\":\"$ADV_PROTO\",\"dir\":\"$ADV_DIR\",\"ports\":\"$ADV_PORTS\",\"line\":$REPLY}")
+    done < <(grep -F '|' "$DENY_FILE" 2>/dev/null | grep -v '^[[:space:]]*#')
+    ccd=" $(conf_val CC_DENY | LC_ALL=C tr '[:lower:],' '[:upper:] ') "
+    ccp=" $(conf_val CC_DENY_PORTS | LC_ALL=C tr '[:lower:],' '[:upper:] ') "
+    if [ -n "$cc" ] && [[ "$ccd" == *" $cc "* ]]; then covers+=("4294967296|{\"kind\":\"cc\",\"what\":\"$cc\"}"); fi
+    if [ -n "$asn" ] && [[ "$ccd" == *" AS$asn "* ]]; then covers+=("4294967297|{\"kind\":\"asn\",\"what\":\"AS$asn\"}"); fi
+    local cpt cpu w
+    cpt=$(conf_val CC_DENY_PORTS_TCP); cpu=$(conf_val CC_DENY_PORTS_UDP)
+    [[ "$cpt" =~ ^[0-9,:_-]*$ ]] || cpt=""; [[ "$cpu" =~ ^[0-9,:_-]*$ ]] || cpu=""
+    for w in ${cc:+$cc} ${asn:+AS$asn}; do
+        [[ "$ccp" == *" $w "* ]] && covers+=("4294967298|{\"kind\":\"ccport\",\"what\":\"$w\",\"tcp\":\"$cpt\",\"udp\":\"$cpu\"}")
+    done
+    cvj=$(printf '%s\n' "${covers[@]}" | grep . | sort -t'|' -k1,1n | cut -d'|' -f2- | paste -sd, -)
     if [ -r "$CSF_VAR/csf.tempban" ]; then
         while IFS='|' read -r t tip port dir to note; do
             cidr_range "$tip" 2>/dev/null || continue
@@ -1914,10 +2122,10 @@ do_lookup() {
 
     if [ "$JSON" = 1 ]; then
         local o="{\"ok\":true,\"ip\":\"$ip\"" k v
-        for k in host asname pfx cc reg alloc deny cover temp wl rig pend ign; do
+        for k in host asname pfx cc reg alloc deny temp wl rig pend ign; do
             v="${!k}"; jstr "$v"; o+=",\"$k\":$REPLY"
         done
-        o+=",\"asn\":\"$asn\",\"fwd\":$fwd,\"lookup\":$([ "$LOOK_INIT" = 1 ] && echo true || echo false)}"
+        o+=",\"covers\":[$cvj],\"asn\":\"$asn\",\"fwd\":$fwd,\"lookup\":$([ "$LOOK_INIT" = 1 ] && echo true || echo false)}"
         echo "$o"; return 0
     fi
     echo "$ip"
@@ -1926,7 +2134,16 @@ do_lookup() {
     [ -n "$pfx" ] && printf '  %-18s %s\n' "$M_L_PREFIX" "$pfx ($cc)"
     [ -n "$reg" ] && printf '  %-18s %s\n' "$M_L_REG" "$reg · $alloc"
     [ -n "$deny" ]  && printf '  %-18s %s\n' "$M_L_DENY" "$deny"
-    [ -n "$cover" ] && printf '  %-18s %s\n' "$M_L_DENY" "$cover"
+    local cv
+    while IFS= read -r cv; do
+        cv="${cv#*|}"
+        case "$cv" in
+            *'"kind":"cidr"'*)   printf '  %-18s %s\n' "$M_L_DENY" "$(printf '%s' "$cv" | sed -n 's/.*"line":"\(.*\)"}$/\1/p')" ;;
+            *'"kind":"port"'*)   printf '  %-18s %s\n' "$M_L_PORT" "$(printf '%s' "$cv" | sed -n 's/.*"line":"\(.*\)"}$/\1/p')" ;;
+            *'"kind":"ccport"'*) printf '  %-18s %s\n' "$M_L_CCP" "$(printf '%s' "$cv" | sed -n 's/.*"what":"\([^"]*\)".*"tcp":"\([^"]*\)".*/\1 · tcp \2/p')" ;;
+            *)                   printf '  %-18s %s\n' "$M_L_CCD" "$(printf '%s' "$cv" | sed -n 's/.*"what":"\([^"]*\)".*/\1/p')" ;;
+        esac
+    done < <(printf '%s\n' "${covers[@]}" | grep . | sort -t'|' -k1,1n)
     [ -n "$temp" ]  && printf '  %-18s %s\n' "$M_L_TEMP" "$temp"
     [ -n "$wl" ]    && printf '  %-18s %s\n' "$M_L_WL" "$wl"
     [ -n "$rig" ]   && printf '  %-18s %s\n' "$M_L_WL" "csf.rignore: $rig"
@@ -1967,21 +2184,33 @@ do_action() {    # NAME TARGET [DAYS]
             { [ -n "$cidr" ] && cidr_range "$cidr"; } || { act_out 2 "$(m "$M_BAD_TARGET" "$t")"; return; }
             local lo=$R_LO hi=$R_HI
             perm_covers "$lo" "$hi" && { act_out 1 "$(m "$M_A_EXISTS" "$cidr")"; return; }
+            self_overlap "$lo" "$hi" && { act_out 1 "$(m "$M_A_SELF" "$cidr" "$SELF_HIT")"; return; }
+            inside_scan "$cidr"
             WL_HIT=""
-            if [ "$bits" = 24 ]; then wl_check "$t" "${ips24[$t]}"; else wl_overlap "$lo" "$hi"; fi
+            if [ "$bits" = 24 ]; then wl_check "$t" "${ips24[$t]:-$t.1}"; else wl_overlap "$lo" "$hi"; fi
             if [ -n "$WL_HIT" ] && [ "$FORCE" != 1 ]; then act_out 4 "$(m "$M_A_WL" "$cidr" "$WL_HIT")"; return; fi
             csf_run -d "$cidr" "$(m "$M_A_COMMENT" "$bits" "$AG_BY")"
             deny_has "$cidr" || { act_out 1 "$(m "$M_A_BANFAIL" "$cidr" "${CSF_OUT%%$NL*}")"; return; }
-            if [ "$bits" = 24 ]; then          # otomatik yoldaki gibi: kapsanan tekiller silinir (do not delete hariç)
-                for ip in ${ips24[$t]}; do
-                    is_dnd "${SINGLE_NOTE[$ip]}" || csf_run -dr "$ip"
+            # İçindekiler (onay penceresi aynı taramayı gösterdi): izlemeler her durumda biter, banlı aralıkta
+            # izlemenin anlamı yok; kalıcı/geçici listedeki kayıtlar --keep verilmedikçe silinir (do not delete
+            # tekiller ve başka kaynaklı aralıklar kalır; eklentinin blok banlarının yerini yeni ban alır)
+            local x rb=0 rs=0 rt=0 rw=0
+            for x in "${IN_WATCH[@]}"; do cnt_del_prefix "$x"; rw=$((rw + 1)); done
+            if [ "$CLEAN" = 1 ]; then
+                for x in "${IN_BLK[@]}"; do
+                    is_dnd "$(deny_line "$x")" && strip_dnd "$x"
+                    csf_run -dr "$x"; deny_has "$x" || rb=$((rb + 1))
                 done
-                cnt_del_prefix "$t"
+                for x in "${IN_SGL[@]}"; do csf_run -dr "$x"; deny_has "$x" || rs=$((rs + 1)); done
+                for x in "${IN_TMP[@]}"; do csf_run -tr "$x"; grep -qF "|$x|" "$CSF_VAR/csf.tempban" 2>/dev/null || rt=$((rt + 1)); done
             fi
             jstr "$WL_HIT"; jw="$REPLY"
+            owners_load; inside_owner "${t%.*}" "$t"; owner_kv
             log "$(m "$M_A_LOG" "$AG_BY" "$(m "$M_A_BANNED" "$cidr")")"
-            ev manual_ban "$cidr" "by=\"$AG_BY\"" "wl=$jw" "force=$([ "$FORCE" = 1 ] && echo true || echo false)"
-            act_out 0 "$(m "$M_A_BANNED" "$cidr")" ;;
+            ev manual_ban "$cidr" "by=\"$AG_BY\"" "wl=$jw" "force=$([ "$FORCE" = 1 ] && echo true || echo false)" "${OKV[@]}" \
+               "removed={\"blocks\":$rb,\"singles\":$rs,\"temps\":$rt,\"watched\":$rw}" "total=$IN_EVN" "ips=[$(IFS=,; echo "${IN_EVJ[*]}")]"
+            if [ $((rb + rs + rt)) -gt 0 ]; then act_out 0 "$(m "$M_A_CLEANED" "$(m "$M_A_BANNED" "$cidr")" $((rb + rs + rt)))"
+            else act_out 0 "$(m "$M_A_BANNED" "$cidr")"; fi ;;
         forget)
             [[ "$t" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || { act_out 2 "$(m "$M_BAD_TARGET" "$t")"; return; }
             grep -qE "^${t//./\\.} " "$SAYAC_FILE" || { act_out 1 "$(m "$M_A_NOREC" "$t.0/24")"; return; }
@@ -2467,6 +2696,7 @@ case "$MODE" in
     status) LOG_MODE=quiet; do_status; exit $? ;;
     lookup) LOG_MODE=quiet; do_lookup "${ARGS[0]}"; exit $? ;;
     events) LOG_MODE=quiet; do_events "${ARGS[0]}" "${ARGS[1]}" "${ARGS[2]}"; exit $? ;;
+    inside) LOG_MODE=quiet; do_inside "${ARGS[0]}"; exit $? ;;
     action) LOG_MODE=file; do_action "$ACT" "${ARGS[0]}" "${ARGS[1]}"; exit $? ;;
     config) LOG_MODE=file; do_config; exit $? ;;
     busy)   if lock_busy; then echo busy; else echo idle; fi; exit 0 ;;
