@@ -147,13 +147,17 @@ whitelist, removing a `do not delete` block) make you type the target.
 Manual `/24` and `/16` bans open the same window: it first lists what is inside
 the range (CSF Auto-Group block bans, single bans, temp bans, watched blocks,
 other ranges and port-limited rules), shows any whitelist overlap, and offers
-**Remove covered entries** (on by default): the block bans and single bans
-inside leave the permanent list and the temp bans leave the temp list, freeing
-lines. Singles marked `do not delete` and ranges added by others are never
-touched; watching ends for blocks inside. If the ban is removed later the
-removed entries don't come back (LFD bans them again if the attacks continue).
-The removed IPs and their ban reasons are kept with the new ban (**⋯ → IPs**).
-A range containing one of this server's own IPs can't be banned at all.
+**Remove covered entries** (on by default): every permanent entry inside the
+range (block bans, single bans, other ranges, `do not delete` ones included)
+leaves the permanent list and the temp bans leave the temp list; the window
+shows how many lines each list frees and what happens to each row. Watching
+ends for blocks inside either way; port-limited rules are left alone. The
+removed permanent entries are saved: when you later remove the ban, **Restore
+the N entries removed when this ban was added** puts them back exactly as they
+were (comments, dates and `do not delete` markers). Temp bans are not restored,
+they would have expired anyway. The removed IPs and their ban reasons also stay
+with the new ban (**⋯ → IPs**). A range containing one of this server's own IPs
+can't be banned at all.
 
 | Button | Does |
 |--------|------|

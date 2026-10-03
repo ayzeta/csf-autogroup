@@ -6,11 +6,15 @@
   and Watched, and **Ban block (/24)** / **Ban range (/16)** on the IP card.
 - **One ban window for /24 and /16:** before banning it lists what is inside the
   range (block bans, single bans, temp bans, watched blocks, other ranges,
-  port-limited rules) and any whitelist overlap. **Remove covered entries** (on
-  by default) clears the block bans and single bans inside from the permanent
-  list and the temp bans from the temp list; `do not delete` singles and ranges
-  added by others stay. The removed IPs and reasons are kept with the new ban,
-  and History shows how many entries were removed.
+  port-limited rules), what happens to each, and any whitelist overlap.
+  **Remove covered entries** (on by default) clears every permanent entry inside
+  (`do not delete` ones and other ranges included) and the temp bans, and says
+  how many lines each list frees. The removed IPs and reasons are kept with the
+  new ban, and History shows how many entries were removed.
+- **Undo:** the removed permanent entries are saved. Removing the ban later
+  offers **Restore the N entries removed when this ban was added**, which puts
+  them back exactly as they were (comments, dates, `do not delete`). Temp bans
+  are not restored.
 - A range containing one of this server's own IPs can no longer be banned, not
   even with "Ban anyway".
 - **IP card:** shows every level at which CSF blocks the IP (single, `/24`,
@@ -26,7 +30,7 @@
   `CC_IGNORE` / `CC_ALLOW` check.
 - New command-line mode: `--inside A.B.0.0/16|A.B.C.0/24` shows what a manual
   ban would cover; `--action ban16|ban24 … --keep` bans without removing the
-  covered entries.
+  covered entries; `--action unban CIDR --restore` restores them.
 
 ## 1.9.6 — 2026-10-02
 

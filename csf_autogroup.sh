@@ -26,6 +26,7 @@
 #   csf_autogroup.sh --events latest|after|before [T] [N]   event log page as JSON (History tab)
 #   csf_autogroup.sh --inside A.B.0.0/16|A.B.C.0/24 [--json]  what a manual ban would cover
 #   csf_autogroup.sh --action ban16|ban24 TARGET [--keep]    manual ban; covered entries are removed unless --keep
+#   csf_autogroup.sh --action unban CIDR [--restore]         lift a ban; --restore brings back what a manual ban removed
 #   csf_autogroup.sh --action NAME TARGET [DAYS] [--force] [--json]
 #        ban16 A.B | ban24 A.B.C | forget A.B.C | unban CIDR
 #        ignore CIDR [DAYS] | unignore CIDR          (used by the WHM plugin)
@@ -92,6 +93,7 @@ OWNERS_FILE="${OWNERS_FILE:-$(dirname "$SAYAC_FILE")/owners}"      # /24 → ASN
 OWNER_TTL_DAYS="${OWNER_TTL_DAYS:-30}"
 BACKFILL_MAX="${BACKFILL_MAX:-50}"      # her turda en fazla bu kadar /24'ün sahibi sorgulanır
 IMUNIFY_BIN="${IMUNIFY_BIN:-$(command -v imunify360-agent 2>/dev/null)}"   # yoksa Imunify kısmı atlanır
+RESTORE_DIR="${RESTORE_DIR:-$(dirname "$SAYAC_FILE")/restore}"   # elle banın kaldırdığı kalıcı satırlar (ban kaldırılırken geri yüklenebilir)
 LOGHIST_FILE="${LOGHIST_FILE:-$(dirname "$SAYAC_FILE")/loghist.v2.jsonl}"   # günlükten çıkarılan, olay kaydından önceki işler
 IMUNIFY_FILE="${IMUNIFY_FILE:-$(dirname "$SAYAC_FILE")/imunify}"         # yerel kara liste önbelleği
 IMUNIFY_WL_FILE="${IMUNIFY_WL_FILE:-$(dirname "$SAYAC_FILE")/imunify_white}"  # yerel beyaz liste önbelleği
@@ -108,7 +110,7 @@ TODAY=$(date '+%Y-%m-%d')
 NL=$'\n'
 
 # ── Command line ────────────────────────────────────────────────────────────
-MODE=run; JSON=0; FORCE=0; DRY=0; ACT=""; ARGS=(); SETS=(); SEND=0; CLEAN=1
+MODE=run; JSON=0; FORCE=0; DRY=0; ACT=""; ARGS=(); SETS=(); SEND=0; CLEAN=1; RESTORE=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --dry-run) MODE=run; DRY=1 ;;
@@ -117,6 +119,7 @@ while [ $# -gt 0 ]; do
         --events)  MODE=events ;;
         --inside)  MODE=inside ;;
         --keep)    CLEAN=0 ;;
+        --restore) RESTORE=1 ;;
         --action)  MODE=action; ACT="${2:-}"; shift ;;
         --config)  MODE=config ;;
         --set)     SETS+=("${2:-}"); shift ;;
@@ -257,6 +260,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_A_FORGOT="%s izlemeden çıkarıldı"
   M_A_NOREC="%s izlenmiyor"
   M_A_UNBANNED="%s kaldırıldı"
+  M_A_RESTORED="%s · %s kayıt geri yüklendi"
   M_A_UNBANFAIL="%s kaldırılamadı: %s"
   M_A_NOTFOUND="%s ne csf.deny'de ne geçici listede birebir bulunamadı"
   M_A_IGNORED="%s %s tarihine kadar yoksayılacak"
@@ -443,6 +447,7 @@ else
   M_A_FORGOT="%s is no longer watched"
   M_A_NOREC="%s is not watched"
   M_A_UNBANNED="%s removed"
+  M_A_RESTORED="%s · %s entries restored"
   M_A_UNBANFAIL="%s could not be removed: %s"
   M_A_NOTFOUND="%s is not in csf.deny or the temp list (exact match)"
   M_A_IGNORED="%s will be ignored until %s"
@@ -1647,7 +1652,9 @@ do_status() {
         added="${g_ep[gi]:-0}"; [[ "$added" =~ ^[0-9]+$ ]] && [ "$added" -gt 86400 ] || added=0
         tok="${g_tok[gi]}"; kind="${g_kind[gi]}"; dnd="${g_dnd[gi]}"
         REPLY=""; cidr_range "$tok" && under_of "$R_LO" "$R_HI" "$tok"
-        groups+=("{\"cidr\":\"$tok\",\"kind\":\"$kind\",\"dnd\":$dnd,\"n\":${g_n[gi]},\"added\":$added,\"ttl\":0${REPLY:+,\"under\":\"$REPLY\"}}")
+        local gu="$REPLY" grn=0
+        if [ "$kind" = manual ]; then restore_file "$tok"; [ -s "$REPLY" ] && grn=$(grep -c . "$REPLY"); fi
+        groups+=("{\"cidr\":\"$tok\",\"kind\":\"$kind\",\"dnd\":$dnd,\"n\":${g_n[gi]},\"added\":$added,\"ttl\":0${gu:+,\"under\":\"$gu\"}$([ "$grn" -gt 0 ] && echo ",\"restore\":$grn")}")
         [ "$added" -gt 0 ] && ghist+="$added $kind $tok"$'\n'
         [ "$JSON" = 1 ] || gtext+=("$(printf '%-18s %-9s %s' "$tok" "$kind" "$([ "$dnd" = true ] && echo 'do not delete')")")
     done
@@ -1947,9 +1954,10 @@ do_events() {
 # ── Elle /16 ya da /24 banının kapsayacakları ─────────────────────────────
 # Onay penceresi (--inside) ve ban eylemi aynı taramayı kullanır: pencerede görülen, silinenle aynıdır.
 #   IN_COVER  aralığı zaten kapsayan kalıcı ban (kendisi ya da daha genişi)
-#   IN_BLK    içindeki eklenti blok banları (do not delete olsalar da: yeni ban onların yerini alır)
-#   IN_OTH    içindeki başka kaynaklı aralıklar (dokunulmaz) · IN_PORT port sınırlı satırlar (dokunulmaz)
-#   IN_SGL    do not delete olmayan tekiller (silinebilir) · IN_SGLD do not delete tekiller (kalır)
+#   IN_BLK    içindeki eklenti blok banları · IN_OTH başka kaynaklı aralıklar · IN_PORT port sınırlı satırlar (dokunulmaz)
+#   IN_SGL    tekiller · IN_SGLD do not delete işaretli tekiller
+#   Kapsananlar kaldırılırken bütün kalıcı satırlar (do not delete ve başka aralıklar dahil) silinir ve
+#   RESTORE_DIR'de saklanır: ban kaldırılırken istenirse eski hâlleriyle geri yüklenir.
 #   IN_TMP    geçici listedeki IP'ler ve aralıklar · IN_WATCH izlenen /24'ler (izleme her durumda biter)
 #   IN_EVJ    olay kaydına giden kanıt: tekil ve geçici IP'ler, ban sebepleriyle (en çok 40) · IN_EVN toplam
 inside_scan() {  # CIDR
@@ -1962,6 +1970,7 @@ inside_scan() {  # CIDR
         if (( DC_LO[i] <= lo && DC_HI[i] >= hi )); then IN_COVER="${DC_TXT[i]}"; continue; fi
         (( DC_LO[i] >= lo && DC_HI[i] <= hi )) || continue
         line=$(deny_line "${DC_TXT[i]}")
+        [ -n "$line" ] || continue                       # Include edilen dosyadaki satır: csf -dr silemez, sayılmaz
         case "$line" in *Auto-grouped*|*csf_autogroup:*) IN_BLK+=("${DC_TXT[i]}") ;; *) IN_OTH+=("${DC_TXT[i]}") ;; esac
         x="${DC_TXT[i]%/*}"; pf[${x%.*}]=1
     done
@@ -1996,6 +2005,7 @@ inside_scan() {  # CIDR
     IN_PFX=("${!pf[@]}")
     return 0
 }
+restore_file() { REPLY="$RESTORE_DIR/${1//\//_}"; }   # CIDR → saklanan satırların dosyası
 inside_ev() {    # IP SEBEP → IN_EVJ'ye ekle
     IN_EVN=$((IN_EVN + 1))
     [ "$IN_EVN" -le 40 ] || return 0
@@ -2040,7 +2050,7 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
         jarr "${IN_PORT[@]}"; o+=",\"ports\":$REPLY"
         o+=",\"singles\":${#IN_SGL[@]},\"singles_dnd\":${#IN_SGLD[@]},\"temps\":${#IN_TMP[@]}"
         jarr "${IN_WATCH[@]/%/.0/24}"; o+=",\"watched\":$REPLY"
-        o+=",\"free\":$(( ${#IN_BLK[@]} + ${#IN_SGL[@]} ))}"
+        o+=",\"free\":$(( ${#IN_BLK[@]} + ${#IN_OTH[@]} + ${#IN_SGL[@]} + ${#IN_SGLD[@]} ))}"
         echo "$o"; return 0
     fi
     echo "$c${OWN_LONG:+  ($OWN_LONG)}"
@@ -2172,6 +2182,17 @@ strip_dnd() {    # CIDR → satırdaki "do not delete" ifadesini kaldır (csf -d
     ) 8<"$DENY_FILE"
     rc=$?; rm -f "$tmp"; return $rc
 }
+deny_put_line() { # CIDR SATIR → csf.deny'de o adresin satırını verilen satırla değiştir (geri yüklemede özgün
+    # tarih ve yorum korunsun diye; csf -d satıra bugünün tarihini yazar). strip_dnd ile aynı güvenceler.
+    local tmp rc
+    tmp=$(mktemp) || return 1
+    (
+        command -v flock >/dev/null 2>&1 && { flock -x 8 || exit 1; }
+        AG_RL="$2" awk -v c="$1" '{ split($0, f, /[ \t]/); if (f[1] == c && !done) { print ENVIRON["AG_RL"]; done = 1 } else print }' \
+            "$DENY_FILE" > "$tmp" && [ -s "$tmp" ] && cat "$tmp" > "$DENY_FILE"
+    ) 8<"$DENY_FILE"
+    rc=$?; rm -f "$tmp"; return $rc
+}
 do_action() {    # NAME TARGET [DAYS]
     local name="$1" t="$2" days="${3:-30}" cidr bits pfx ip line jw
     take_lock || { act_out 3 "$M_BUSY"; return 3; }
@@ -2192,23 +2213,30 @@ do_action() {    # NAME TARGET [DAYS]
             csf_run -d "$cidr" "$(m "$M_A_COMMENT" "$bits" "$AG_BY")"
             deny_has "$cidr" || { act_out 1 "$(m "$M_A_BANFAIL" "$cidr" "${CSF_OUT%%$NL*}")"; return; }
             # İçindekiler (onay penceresi aynı taramayı gösterdi): izlemeler her durumda biter, banlı aralıkta
-            # izlemenin anlamı yok; kalıcı/geçici listedeki kayıtlar --keep verilmedikçe silinir (do not delete
-            # tekiller ve başka kaynaklı aralıklar kalır; eklentinin blok banlarının yerini yeni ban alır)
-            local x rb=0 rs=0 rt=0 rw=0
+            # izlemenin anlamı yok. --keep verilmedikçe kalıcı listedeki bütün kapsanan satırlar (do not delete ve
+            # başka aralıklar dahil) silinir ve aynen saklanır (ban kaldırılırken geri yüklenebilir); geçici banlar
+            # silinir, saklanmaz (süreleri zaten dolacaktı)
+            local x rb=0 rs=0 rt=0 rw=0 ln rf=""
             for x in "${IN_WATCH[@]}"; do cnt_del_prefix "$x"; rw=$((rw + 1)); done
             if [ "$CLEAN" = 1 ]; then
-                for x in "${IN_BLK[@]}"; do
-                    is_dnd "$(deny_line "$x")" && strip_dnd "$x"
-                    csf_run -dr "$x"; deny_has "$x" || rb=$((rb + 1))
+                restore_file "$cidr"; rf="$REPLY"
+                mkdir -p "$RESTORE_DIR" 2>/dev/null; chmod 700 "$RESTORE_DIR" 2>/dev/null; : > "$rf.tmp"
+                for x in "${IN_BLK[@]}" "${IN_OTH[@]}" "${IN_SGL[@]}" "${IN_SGLD[@]}"; do
+                    ln=$(deny_line "$x"); [ -n "$ln" ] || continue
+                    is_dnd "$ln" && strip_dnd "$x"
+                    csf_run -dr "$x"
+                    deny_has "$x" && continue
+                    printf '%s\n' "$ln" >> "$rf.tmp"
+                    if [[ "$x" == */* ]]; then rb=$((rb + 1)); else rs=$((rs + 1)); fi
                 done
-                for x in "${IN_SGL[@]}"; do csf_run -dr "$x"; deny_has "$x" || rs=$((rs + 1)); done
+                if [ -s "$rf.tmp" ]; then mv -f "$rf.tmp" "$rf"; else rm -f "$rf.tmp" "$rf"; fi
                 for x in "${IN_TMP[@]}"; do csf_run -tr "$x"; grep -qF "|$x|" "$CSF_VAR/csf.tempban" 2>/dev/null || rt=$((rt + 1)); done
             fi
             jstr "$WL_HIT"; jw="$REPLY"
             owners_load; inside_owner "${t%.*}" "$t"; owner_kv
             log "$(m "$M_A_LOG" "$AG_BY" "$(m "$M_A_BANNED" "$cidr")")"
-            ev manual_ban "$cidr" "by=\"$AG_BY\"" "wl=$jw" "force=$([ "$FORCE" = 1 ] && echo true || echo false)" "${OKV[@]}" \
-               "removed={\"blocks\":$rb,\"singles\":$rs,\"temps\":$rt,\"watched\":$rw}" "total=$IN_EVN" "ips=[$(IFS=,; echo "${IN_EVJ[*]}")]"
+            ev manual_ban "$cidr" "by=\"$AG_BY\"" "wl=$jw" "restorable=$((rb + rs))" "force=$([ "$FORCE" = 1 ] && echo true || echo false)" "${OKV[@]}" \
+               "removed={\"ranges\":$rb,\"singles\":$rs,\"temps\":$rt,\"watched\":$rw}" "total=$IN_EVN" "ips=[$(IFS=,; echo "${IN_EVJ[*]}")]"
             if [ $((rb + rs + rt)) -gt 0 ]; then act_out 0 "$(m "$M_A_CLEANED" "$(m "$M_A_BANNED" "$cidr")" $((rb + rs + rt)))"
             else act_out 0 "$(m "$M_A_BANNED" "$cidr")"; fi ;;
         forget)
@@ -2231,9 +2259,26 @@ do_action() {    # NAME TARGET [DAYS]
             else
                 act_out 1 "$(m "$M_A_NOTFOUND" "$t")"; return
             fi
+            # elle ban konurken kaldırılan kalıcı satırlar: istenirse aynen geri yüklenir (csf -d ile eklenir —
+            # iptables kuralı hemen kurulsun — sonra satır özgün yorumu ve tarihiyle değiştirilir)
+            local rn=0 rf rl tok cm
+            restore_file "$t"; rf="$REPLY"
+            if [ "$RESTORE" = 1 ] && [ -s "$rf" ]; then
+                while IFS= read -r rl; do
+                    tok="${rl%%[[:space:]]*}"
+                    [[ "$tok" =~ $CIDR4_RE ]] || continue
+                    deny_has "$tok" && continue
+                    cm="${rl#"$tok"}"; cm="${cm#"${cm%%[![:space:]#]*}"}"
+                    cm=$(printf '%s' "$cm" | sed -E 's/[[:space:]]+-[[:space:]]+[A-Z][a-z]{2} [A-Z][a-z]{2} +[0-9]+ [0-9:]{8} [0-9]{4}[[:space:]]*$//')
+                    csf_run -d "$tok" "$cm"
+                    if deny_has "$tok"; then deny_put_line "$tok" "$rl"; rn=$((rn + 1)); fi
+                done < "$rf"
+            fi
+            rm -f "$rf"
             log "$(m "$M_A_LOG" "$AG_BY" "$(m "$M_A_UNBANNED" "$t")")"
-            ev manual_unban "$t" "by=\"$AG_BY\""
-            act_out 0 "$(m "$M_A_UNBANNED" "$t")" ;;
+            ev manual_unban "$t" "by=\"$AG_BY\"" "restored=$rn"
+            if [ "$rn" -gt 0 ]; then act_out 0 "$(m "$M_A_RESTORED" "$(m "$M_A_UNBANNED" "$t")" "$rn")"
+            else act_out 0 "$(m "$M_A_UNBANNED" "$t")"; fi ;;
         expire)
             # hedef = arayüzün gördüğü gün sayısı; ayar arada değiştiyse işlem yapılmaz
             [ "$t" = "$BLOCK_EXPIRE_DAYS" ] || { act_out 2 "$(m "$M_BAD_TARGET" "$t")"; return; }

@@ -108,6 +108,9 @@ switch ($a) {
         if (($_POST['keep'] ?? '') === '1') {      // "kapsananları kaldır" kapalı
             $args[] = '--keep';
         }
+        if ($name === 'unban' && ($_POST['restore'] ?? '') === '1') {   // elle banın kaldırdıklarını geri yükle
+            $args[] = '--restore';
+        }
         $args[] = '--json';
         ag_json(ag_run_json($args, 90));
 
