@@ -23,6 +23,12 @@
     networks) the current entries would ban or report at the new value.
   - To review, suspicious networks: which services were attacked, and when most
     singles sit in one block, a suggestion and a button to ban just that block.
+- **Suspicious networks count permanent and temp single bans together** (each IP
+  once). A network attacked through both lists — e.g. 2 IPs LFD made permanent
+  and 4 temp-banned ones, each below the threshold on its own — is now reported.
+  The warning, To review and History show the split ("2 permanent · 4 temp").
+  The separate temp threshold (`THRESHOLD_TEMP_16`) is gone; `THRESHOLD_16`
+  covers both. /16 networks are still never banned automatically.
 - The "entries removed" and "entries restored" counts of a manual ban now
   include the partial bans inside it (a split partial ban counts once); before,
   only single and range bans were counted.

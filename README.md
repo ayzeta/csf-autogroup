@@ -240,8 +240,8 @@ history):
 
 ![Notification settings](docs/settings.png)
 
-- **Thresholds** — block ban (`/24`), `do not delete`, suspicious network (`/16`),
-  temp block ban (`/24`) and suspicious network from temp bans (`/16`).
+- **Thresholds** — block ban (`/24`), `do not delete`, suspicious network (`/16`,
+  permanent and temp single bans counted together) and temp block ban (`/24`).
 - **Schedule** — cron every 5 / 10 / 15 / 30 minutes or hourly.
 - **Lookups** — owner/hostname lookups on or off, DNS timeout.
 - **Retention** — watch period, review days, old-block limit (default 365 days)
@@ -270,10 +270,9 @@ block that comes back turns into a permanent one.
 |--------|--------|
 | `/24` with **≥3** permanent single bans | permanently ban the `/24`, remove the singles |
 | `/24` with **≥5** permanent singles | ban `/24` + `do not delete` |
-| `/16` with **≥5** singles across **≥2** `/24`s | flag as suspicious network by email (once/day), no auto-ban |
+| `/16` with **≥5** singles across **≥2** `/24`s (permanent and temp counted together, each IP once) | flag as suspicious network by email (once/day), no auto-ban |
 | `/24` with **≥3** temp bans (first time) | temp-ban the `/24` for 12h, watch it |
 | same `/24` seen again | permanent ban + `do not delete` |
-| temp `/16` with **≥5** singles / **≥2** `/24`s | flag as suspicious network by email (once/day) |
 | deny list **≥80%** of its limit | alert: email once a day; Slack once when it starts and once when resolved |
 | CSF disabled / in testing mode / rules not loaded, or LFD not running | alert: email once a day; Slack once when it starts and once when resolved |
 | block ban older than the old-block limit (optional) | remove it |
@@ -377,8 +376,8 @@ tab. Key options:
 - `NOTIFY` — `all` (email + Slack, default), `email` or `slack`.
 - `IC_FIREWALL`, `IC_LISTFULL`, `IC_RUN`, `IC_DIGEST` — which events go to Slack;
   `SLACK_BATCH_MIN` — run notices go to Slack at most this often (default 60).
-- `THRESHOLD_24`, `THRESHOLD_24_PERMANENT`, `THRESHOLD_16`, `THRESHOLD_TEMP_24`,
-  `THRESHOLD_TEMP_16` — sensitivity.
+- `THRESHOLD_24`, `THRESHOLD_24_PERMANENT`, `THRESHOLD_16`, `THRESHOLD_TEMP_24` —
+  sensitivity.
 - `LOOKUP`, `LOOKUP_TIMEOUT` — owner/hostname lookups.
 
 ## Uninstall

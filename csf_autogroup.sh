@@ -184,11 +184,11 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_MAIL24_BODY="Aşağıdaki bloklar (/24) kalıcı banlandı, içlerindeki tekil banlar silindi:"
   M_MAIL24_SUBJ="%s blok banı"
   M_OWNER="   Sahibi: %s"
-  M_WARN16="ŞÜPHELİ AĞ: %s.0.0/16 - kalıcı banlardan %s IP, %s farklı blok - elle bakın"
-  M_WARN16_B="%s.0.0/16 -> %s IP, %s farklı bloktan"
+  M_WARN16="ŞÜPHELİ AĞ: %s.0.0/16 - %s IP (%s kalıcı, %s geçici), %s farklı blok - elle bakın"
+  M_WARN16_B="%s.0.0/16 -> %s IP (%s kalıcı, %s geçici), %s farklı bloktan"
   M_SKIP16="ATLANDI şüpheli ağ: %s.0.0/16 bugün zaten bildirildi"
   M_16_DONE="Şüpheli ağ turu bitti. %s bildirim."
-  M_MAIL16_BODY="Aşağıdaki ağlarda (/16) çok sayıda kalıcı ban birikti. Ağ banlanmadı;\nelle bakmanız önerilir:"
+  M_MAIL16_BODY="Aşağıdaki ağlarda (/16) birçok bloktan tekil ban (kalıcı ve geçici) birikti. Ağ banlanmadı;\nelle bakmanız önerilir:"
   M_MAIL16_SUBJ="%s şüpheli ağ"
   M_TCLEAN="Temizlendi: %s (kalıcı ban kapsamında)"
   M_TSKIP24="ATLANDI geçici blok: %s.0/24 zaten kalıcı banlı"
@@ -382,11 +382,11 @@ else
   M_MAIL24_BODY="The following blocks (/24) were permanently banned and the single bans inside them removed:"
   M_MAIL24_SUBJ="%s block ban(s)"
   M_OWNER="   Owner: %s"
-  M_WARN16="SUSPICIOUS RANGE: %s.0.0/16 - %s IPs from permanent bans, %s distinct blocks - review manually"
-  M_WARN16_B="%s.0.0/16 -> %s IPs across %s distinct blocks"
+  M_WARN16="SUSPICIOUS NETWORK: %s.0.0/16 - %s IPs (%s permanent, %s temp), %s distinct blocks - review manually"
+  M_WARN16_B="%s.0.0/16 -> %s IPs (%s permanent, %s temp) across %s distinct blocks"
   M_SKIP16="SKIPPED suspicious network: %s.0.0/16 already reported today"
   M_16_DONE="Suspicious network pass done. %s report(s)."
-  M_MAIL16_BODY="Many permanent bans have piled up in the following networks (/16). The network was not banned;\nmanual review recommended:"
+  M_MAIL16_BODY="Single bans (permanent and temp) have piled up across several blocks of the following networks (/16). The network was not banned;\nmanual review recommended:"
   M_MAIL16_SUBJ="%s suspicious network(s)"
   M_TCLEAN="Cleaned: %s (covered by a permanent ban)"
   M_TSKIP24="SKIPPED temp block: %s.0/24 already permanently banned"
@@ -1267,13 +1267,13 @@ ip_line() {      # IP NOTE WITH_OWNER(0|1) → REPLY = "   - IP  hostname  [ASN 
     [ -n "$why" ] && out+="  $why"
     REPLY="$out"
 }
-ip_lines() {     # "IP IP ..." KIND(perm|temp) WITH_OWNER → REPLY; tekrarsız, sıralı, ilk 40, fazlası "(+N)"
+ip_lines() {     # "IP IP ..." KIND(perm|temp|mix) WITH_OWNER → REPLY; tekrarsız, sıralı, ilk 40, fazlası "(+N)"
     local all ip n=0 total out="" note js=""
     all=$(printf '%s\n' $1 | grep -E "$IPV4_RE" | sort -Vu)
     total=$(printf '%s\n' "$all" | grep -c .)
     for ip in $all; do
         [ "$n" -ge 40 ] && break; n=$((n + 1))
-        if [ "$2" = temp ]; then note="${TNOTE[$ip]}"; else note="${SINGLE_NOTE[$ip]}"; fi
+        case "$2" in temp) note="${TNOTE[$ip]}" ;; mix) note="${SINGLE_NOTE[$ip]:-${TNOTE[$ip]}}" ;; *) note="${SINGLE_NOTE[$ip]}" ;; esac
         ip_line "$ip" "$note" "$3"; out+="$REPLY$NL"
         js+="${js:+,}$IPJ"
     done
@@ -1967,30 +1967,29 @@ do_status() {
                 c = substr($0, RSTART + 8, RLENGTH - 9); if (c in W) L[c] = $0 }
             END { for (c in L) print L[c] }' "$EVENTS_FILE" | grep -E '^\{"t":[0-9]+,.*\}$')
         printf '"evx":[%s],' "${evx[*]}"
-        # Ayarlar → Eşikler: eşiğin etkisini panel hesaplasın diye ağ başına, bloklardaki tekil ve geçici ban sayıları
-        local -A DP=() DT=() TPC=()
+        # Ayarlar → Eşikler: eşiğin etkisini panel hesaplasın diye ağ başına, her bloğun "kalıcı:geçici" tekil sayısı
+        # (banlı ya da yoksayılmış bloklar hariç; motorun turdaki sayımıyla aynı kurallar)
+        local -A DB=() TPC=()
         local dp dx dl
-        for dx in "${!count24[@]}"; do
-            [ -n "${DLINE[$dx.0/24]+x}" ] && continue
-            ip2int "$dx.0"; under_of "$REPLY" $((REPLY + 255)) "" && continue
-            ign_until "$dx.0/24" && continue
-            dp="${dx%.*}"; DP[$dp]+="${DP[$dp]:+,}${count24[$dx]}"
-        done
         if [ -r "$CSF_VAR/csf.tempban" ]; then
             while IFS='|' read -r dl dx _; do
                 [[ "$dx" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || continue
-                [ -n "${TPC[x$dx]}" ] && continue; TPC[x$dx]=1
+                [ -n "${TPC[x$dx]}" ] || [ -n "${DENY_IP[$dx]+x}" ] && continue; TPC[x$dx]=1
                 TPC[${dx%.*}]=$(( ${TPC[${dx%.*}]:-0} + 1 ))
             done < "$CSF_VAR/csf.tempban"
-            for dx in "${!TPC[@]}"; do
-                [[ "$dx" == x* ]] && continue
-                [ -n "${DLINE[$dx.0/24]+x}" ] || [ "${TG_TTL[$dx.0/24]:-0}" -gt 0 ] && continue
-                dp="${dx%.*}"; DT[$dp]+="${DT[$dp]:+,}${TPC[$dx]}"
-            done
         fi
-        printf '"dist":{"p":{%s},"t":{%s}},' \
-            "$(for dp in "${!DP[@]}"; do printf '"%s":[%s],' "$dp" "${DP[$dp]}"; done | sed 's/,$//')" \
-            "$(for dp in "${!DT[@]}"; do printf '"%s":[%s],' "$dp" "${DT[$dp]}"; done | sed 's/,$//')"
+        for dx in "${!count24[@]}" "${!TPC[@]}"; do
+            [[ "$dx" == x* ]] && continue
+            [ -n "${DB[$dx]}" ] && continue
+            [ -n "${DLINE[$dx.0/24]+x}" ] || [ "${TG_TTL[$dx.0/24]:-0}" -gt 0 ] && continue
+            ip2int "$dx.0"; under_of "$REPLY" $((REPLY + 255)) "" && continue
+            ign_until "$dx.0/24" && continue
+            DB[$dx]="${count24[$dx]:-0}:${TPC[$dx]:-0}"
+        done
+        printf '"dist":{%s},' "$(for dx in "${!DB[@]}"; do printf '%s %s\n' "${dx%.*}" "${DB[$dx]}"; done | sort | awk '
+            $1 != k { if (k != "") printf "%s\"%s\":[%s]", (n++ ? "," : ""), k, v; k = $1; v = "" }
+            { v = v (v == "" ? "" : ",") "\"" $2 "\"" }
+            END { if (k != "") printf "%s\"%s\":[%s]", (n ? "," : ""), k, v }')"
         printf '"groups":[%s],"pending":[%s],"review":[%s],"ignored":[%s],"events":[%s]}\n' \
             "${groups[*]}" "${pending[*]}" "${review[*]}" "${ignored[*]}" "${recent[*]}"
         return 0
@@ -3367,40 +3366,8 @@ if [ "$added24" -gt 0 ]; then
 fi
 logr "$(m "$M_24_DONE" "$added24")"
 
-# ── /16 grouping (permanent): warn only, once per day ───────────────────────
-declare -A count16 seen_subnets ips16
-for ip in "${!SINGLE_NOTE[@]}"; do
-    prefix24="${ip%.*}"; prefix16="${prefix24%.*}"
-    [ "${count24[$prefix24]:-0}" -ge "$THRESHOLD_24" ] && continue
-    count16[$prefix16]=$((${count16[$prefix16]:-0} + 1)); seen_subnets[$prefix16]+=" $prefix24"; ips16[$prefix16]+=" $ip"
-done
-
-warn16=0; warn_body=""
-for prefix in $(printf '%s\n' "${!count16[@]}" | sort -V); do
-    subnet_count=$(echo "${seen_subnets[$prefix]}" | tr ' ' '\n' | sort -u | grep -c '\.')
-    if [ "${count16[$prefix]}" -ge "$THRESHOLD_16" ] && [ "$subnet_count" -ge 2 ]; then
-        ip2int "$prefix.0.0"; lo=$REPLY
-        if ign_until "$prefix.0.0/16"; then logr "$(m "$M_IGN16" "$prefix" "$IGN_UNTIL")"; continue; fi
-        if ! perm_covers "$lo" $((lo + 65535)); then
-            if grep -qF "WARN16_${prefix} $TODAY" "$SAYAC_FILE"; then
-                logr "$(m "$M_SKIP16" "$prefix")"; continue
-            fi
-            log "$(m "$M_WARN16" "$prefix" "${count16[$prefix]}" "$subnet_count")"
-            warn_body+="$(m "$M_WARN16_B" "$prefix" "${count16[$prefix]}" "$subnet_count")$NL"
-            WL_HIT=""; wl_overlap "$lo" $((lo + 65535)) && warn_body+="$(m "$M_WL_NOTE" "$WL_HIT")$NL"
-            part_note "$lo" $((lo + 65535)) && warn_body+="$(m "$M_PART_NOTE" "${REPLY%%|*}" "${REPLY#*|}")$NL"
-            ip_lines "${ips16[$prefix]}" perm 1; warn_body+="$REPLY"
-            warn16=$((warn16 + 1)); cnt_add "WARN16_${prefix} $TODAY"
-            jstr "$WL_HIT"
-            ev warn16 "$prefix.0.0/16" "n=${count16[$prefix]}" "subnets=$subnet_count" "wl=$REPLY" "total=$IPS_TOTAL" "ips=$IPS_J"
-        fi
-    fi
-done
-if [ "$warn16" -gt 0 ]; then
-    mail_add "$(m "$M_MAIL16_SUBJ" "$warn16")" "$(printf '%b' "$(m "$M_MAIL16_BODY")")$NL$NL$warn_body"
-fi
-logr "$(m "$M_16_DONE" "$warn16")"
-
+# ── /16: şüpheli ağ uyarısı geçici banlar okunduktan sonra, kalıcı ve geçici tekiller birlikte (aşağıda) ─
+warn16=0
 # ── Read temp bans + clear singles already covered permanently ──────────────
 # csf -t çok portlu bir bani her port için ayrı satır basar → IP'ler tekilleştirilir.
 # IPv6 satırları (ör. "2001:db8::1") IPv4 sayılmasın diye adres tam eşleşmeli.
@@ -3481,36 +3448,41 @@ if [ "$temp_perm_added24" -gt 0 ]; then
 fi
 logr "$(m "$M_T24_DONE" "$temp_added24" "$temp_perm_added24")"
 
-# ── Temp /16: warn only, once per day ───────────────────────────────────────
-declare -A temp_count16 temp_seen_subnets temp_ips16
-for ip in "${temp_alive[@]}"; do
+# ── /16: şüpheli ağ, kalıcı ve geçici tekiller birlikte; yalnız uyarı, günde bir kez ──────────────
+# Aynı ağdan gelen saldırı, LFD'nin onu hangi listeye koyduğuna bakılmadan görülsün: bir IP bir kez sayılır
+# (iki listede birden varsa kalıcı sayılır). Bu turda banlanan bloklar (kalıcı ya da geçici) sayılmaz.
+declare -A count16 seen_subnets ips16 perm16 tmp16 seen16
+for ip in "${!SINGLE_NOTE[@]}" "${temp_alive[@]}"; do
+    [ -n "${seen16[$ip]}" ] && continue; seen16[$ip]=1
     prefix24="${ip%.*}"; prefix16="${prefix24%.*}"
+    [ "${count24[$prefix24]:-0}" -ge "$THRESHOLD_24" ] && continue
     [ "${temp_count24[$prefix24]:-0}" -ge "$THRESHOLD_TEMP_24" ] && continue
-    temp_count16[$prefix16]=$((${temp_count16[$prefix16]:-0} + 1)); temp_seen_subnets[$prefix16]+=" $prefix24"; temp_ips16[$prefix16]+=" $ip"
+    count16[$prefix16]=$((${count16[$prefix16]:-0} + 1)); seen_subnets[$prefix16]+=" $prefix24"; ips16[$prefix16]+=" $ip"
+    if [ -n "${SINGLE_NOTE[$ip]+x}" ]; then perm16[$prefix16]=$((${perm16[$prefix16]:-0} + 1)); else tmp16[$prefix16]=$((${tmp16[$prefix16]:-0} + 1)); fi
 done
-
-temp_warn16=0; temp_warn_body=""
-for prefix in $(printf '%s\n' "${!temp_count16[@]}" | sort -V); do
-    subnet_count=$(echo "${temp_seen_subnets[$prefix]}" | tr ' ' '\n' | sort -u | grep -c '\.')
-    if [ "${temp_count16[$prefix]}" -ge "$THRESHOLD_TEMP_16" ] && [ "$subnet_count" -ge 2 ]; then
+warn16=0; warn_body=""; temp_warn16=0
+for prefix in $(printf '%s\n' "${!count16[@]}" | sort -V); do
+    subnet_count=$(echo "${seen_subnets[$prefix]}" | tr ' ' '\n' | sort -u | grep -c '\.')
+    if [ "${count16[$prefix]}" -ge "$THRESHOLD_16" ] && [ "$subnet_count" -ge 2 ]; then
         ip2int "$prefix.0.0"; lo=$REPLY
         if perm_covers "$lo" $((lo + 65535)); then logr "$(m "$M_TSKIP16" "$prefix")"; continue; fi
         if ign_until "$prefix.0.0/16"; then logr "$(m "$M_IGN16" "$prefix" "$IGN_UNTIL")"; continue; fi
-        if grep -qF "WARN_TEMP16_${prefix} $TODAY" "$SAYAC_FILE"; then logr "$(m "$M_TSKIP16D" "$prefix")"; continue; fi
-        log "$(m "$M_TWARN16" "$prefix" "${temp_count16[$prefix]}" "$subnet_count")"
-        temp_warn_body+="$(m "$M_WARN16_B" "$prefix" "${temp_count16[$prefix]}" "$subnet_count")$NL"
-        WL_HIT=""; wl_overlap "$lo" $((lo + 65535)) && temp_warn_body+="$(m "$M_WL_NOTE" "$WL_HIT")$NL"
-        part_note "$lo" $((lo + 65535)) && temp_warn_body+="$(m "$M_PART_NOTE" "${REPLY%%|*}" "${REPLY#*|}")$NL"
-        ip_lines "${temp_ips16[$prefix]}" temp 1; temp_warn_body+="$REPLY"
-        temp_warn16=$((temp_warn16 + 1)); cnt_add "WARN_TEMP16_${prefix} $TODAY"
+        if grep -qF "WARN16_${prefix} $TODAY" "$SAYAC_FILE"; then logr "$(m "$M_SKIP16" "$prefix")"; continue; fi
+        np="${perm16[$prefix]:-0}"; nt="${tmp16[$prefix]:-0}"
+        log "$(m "$M_WARN16" "$prefix" "${count16[$prefix]}" "$np" "$nt" "$subnet_count")"
+        warn_body+="$(m "$M_WARN16_B" "$prefix" "${count16[$prefix]}" "$np" "$nt" "$subnet_count")$NL"
+        WL_HIT=""; wl_overlap "$lo" $((lo + 65535)) && warn_body+="$(m "$M_WL_NOTE" "$WL_HIT")$NL"
+        part_note "$lo" $((lo + 65535)) && warn_body+="$(m "$M_PART_NOTE" "${REPLY%%|*}" "${REPLY#*|}")$NL"
+        ip_lines "${ips16[$prefix]}" mix 1; warn_body+="$REPLY"
+        warn16=$((warn16 + 1)); cnt_add "WARN16_${prefix} $TODAY"
         jstr "$WL_HIT"
-        ev warn16t "$prefix.0.0/16" "n=${temp_count16[$prefix]}" "subnets=$subnet_count" "wl=$REPLY" "total=$IPS_TOTAL" "ips=$IPS_J"
+        ev warn16 "$prefix.0.0/16" "n=${count16[$prefix]}" "perm=$np" "temp=$nt" "subnets=$subnet_count" "wl=$REPLY" "total=$IPS_TOTAL" "ips=$IPS_J"
     fi
 done
-if [ "$temp_warn16" -gt 0 ]; then
-    mail_add "$(m "$M_MAILT16_SUBJ" "$temp_warn16")" "$(printf '%b' "$(m "$M_MAILT16_BODY")")$NL$NL$temp_warn_body"
+if [ "$warn16" -gt 0 ]; then
+    mail_add "$(m "$M_MAIL16_SUBJ" "$warn16")" "$(printf '%b' "$(m "$M_MAIL16_BODY")")$NL$NL$warn_body"
 fi
-logr "$(m "$M_T16_DONE" "$temp_warn16")"
+logr "$(m "$M_16_DONE" "$warn16")"
 
 # ── Whitelist skips: one email per run (each block once per day) ────────────
 if [ "$wl_skipped" -gt 0 ]; then

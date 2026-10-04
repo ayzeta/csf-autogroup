@@ -785,3 +785,4 @@
 .ag-field-i { margin-top: 4px; font-size: 12px; color: var(--ag-accent); }
 .ag-field-i:empty { display: none; }
 .ag-mode-hint .ag-link, .ag-modal-b .ag-warnbox .ag-link { font-size: inherit; }
+.ag-rules > .ag-rule:last-child:nth-child(odd) { grid-column: 1 / -1; }   /* tek kalan kutu satırı doldursun */
