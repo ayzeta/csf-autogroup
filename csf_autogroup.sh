@@ -48,7 +48,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.9.10"   # sürüm — başlangıç log satırında görünür
+VERSION="1.9.11"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -2123,10 +2123,12 @@ inside_scan() {  # CIDR
     return 0
 }
 restore_file() { REPLY="$RESTORE_DIR/${1//\//_}"; }   # CIDR → saklanan satırların dosyası
-# Ban sebebinden servis: LFD sebebi servisi söyler ("(sshd) … [LF_SSHD]"); tanınmayanlar "other", port taraması "scan".
+# Ban sebebinden servis: LFD sebebi servisi söyler ("(sshd) … [LF_SSHD]"); tanınmayanlar "other", port taraması "scan",
+# LFD'nin tekrar eden saldırganı kalıcıya alması (PERMBLOCK) "repeat" — servis değil, öneri oranına girmez.
 # Panelde aynı kural ag.js'teki svcOfReason'da (Dikkat edilecekler için) — birini değiştirirsen ötekini de değiştir.
 AWK_CLS='function cls(r) {
     r = tolower(r)
+    if (r ~ /permblock/) return "repeat"         # LFD: çok geçici ban almış IP kalıcıya alındı (servisi söylemez)
     if (r ~ /port ?scan|ps_limit|lf_distattack/) return "scan"
     if (r ~ /sshd|lf_sshd/) return "ssh"
     if (r ~ /ftpd|lf_ftpd|lf_distftp/) return "ftp"

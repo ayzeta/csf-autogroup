@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.11 — 2026-10-04
+
+- Ban reasons marked `(PERMBLOCK)` — LFD making an IP permanent after too many
+  temp bans — are counted as "banned repeatedly" instead of an unknown reason.
+  They name no service, so they no longer hold back the partial-ban suggestion
+  (e.g. a network attacked only on the web, where some IPs were also escalated
+  by LFD, now gets the "only Web" suggestion).
+
 ## 1.9.10 — 2026-10-03
 
 - **Suggestions from the range's own attacks.** The service buttons of the ban
