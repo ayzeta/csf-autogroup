@@ -1,0 +1,8 @@
+#!/bin/bash
+# Team Cymru taklidi: 151.80.x.x → AS16276 FR; başka her şey boş (PTR yok)
+name="${!#}"
+case "$name" in
+  *.80.151.origin.asn.cymru.com) echo '"16276 | 151.80.0.0/16 | FR | ripencc | 2012-01-01"' ;;
+  AS16276.asn.cymru.com)         echo '"16276 | FR | ripencc | 2001-01-01 | OVH, FR"' ;;
+esac
+exit 0

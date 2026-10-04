@@ -1,0 +1,3 @@
+#!/bin/bash
+# Imunify360 taklidi: boş kara ve beyaz liste
+printf '{"max_count": 0, "counts": {"server": {"white": 0, "drop": 0}}, "items": [], "strategy": "CSF_COOP", "warnings": []}\n'

@@ -1,0 +1,6 @@
+#!/bin/bash
+# sendmail taklidi: ham mesajı mails/NN.eml olarak saklar (-t -i)
+mkdir -p "$SIM_ROOT/mails"
+n=$(ls "$SIM_ROOT/mails" 2>/dev/null | wc -l); f="$SIM_ROOT/mails/$(printf %02d $((n+1))).eml"
+cat > "$f"
+echo "sendmail $*" >> "$SIM_ROOT/mail_calls.log"

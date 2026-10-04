@@ -49,6 +49,10 @@
 .ag-spin { width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid var(--ag-line); border-top-color: var(--ag-accent); animation: ag-rot .7s linear infinite; display: inline-block; }
 .ag-spin-sm { width: 14px; height: 14px; border-width: 2px; vertical-align: -2px; }
 @keyframes ag-rot { to { transform: rotate(360deg); } }
+/* işlem bitti, yeni durum bekleniyor: eylem düğmeleri bekletilir (eski duruma göre tıklanmasın) */
+.ag-sync { position: sticky; top: 8px; z-index: 30; display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%; margin: 0 auto 12px;
+  padding: 7px 14px; border-radius: 999px; background: var(--ag-card); border: 1px solid var(--ag-line); box-shadow: 0 4px 14px rgba(15, 23, 42, .08); font-size: 13px; color: var(--ag-text-2); }
+.ag-stale [data-act]:not([data-act="tab"]), .ag-stale [data-dr] { pointer-events: none; opacity: .45; }
 
 /* ── Header ─────────────────────────────────────────────────────── */
 .ag-head { display: flex; align-items: center; gap: 16px; row-gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }

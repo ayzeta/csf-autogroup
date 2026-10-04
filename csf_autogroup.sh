@@ -48,7 +48,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.9.12"   # sürüm — başlangıç log satırında görünür
+VERSION="1.9.14"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -279,6 +279,12 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_A_NODRY="Elle işlemler kuru çalıştırmada (--dry-run) yapılmaz"
   M_ORPHANS="Banı CSF ekranından kaldırılmış %s eski kayıt temizlendi (kurtarma kopyası / izin satırı)"
   M_PART_NOTE="   Not: bu ağda kısmi ban var (%s · %s); yalnız seçilen servisler kapalı, diğer portlardan gelenler sürebilir"
+  M_PART_AFTER="   Yalnız kısmi bandan (%s) sonra gelen banlar sayıldı."
+  M_PART_LEAK="   Dikkat: kapatılan servislere (%s) bandan sonra yine saldırı kaydı var; kuralın yüklü olduğunu kontrol edin: iptables -S DENYIN | grep %s"
+  M_PART_MORE="   Kısmi bandan sonraki saldırılar başka servislere de: %s. Tam ban daha uygun olabilir."
+  M_PSKIP16="ATLANDI şüpheli ağ: %s.0.0/16 kısmi banlı; bandan sonra %s yeni tekil var, eşiğin altında"
+  M_SAME16="ATLANDI şüpheli ağ: %s.0.0/16 son uyarıdan beri yeni IP yok"
+  M_FIX_UDP="%s: kısmi ban/istisnaya eksik UDP 443 satırı eklendi (HTTP/3)"
   M_A_UNBANFAIL="%s kaldırılamadı: %s"
   M_A_NOTFOUND="%s ne csf.deny'de ne geçici listede birebir bulunamadı"
   M_A_IGNORED="%s %s tarihine kadar yoksayılacak"
@@ -477,6 +483,12 @@ else
   M_A_NODRY="Manual actions are not run in a dry run (--dry-run)"
   M_ORPHANS="Cleaned up %s leftover entries of bans removed outside the plugin (restore copies / allow lines)"
   M_PART_NOTE="   Note: this network has a partial ban (%s · %s); only the selected services are blocked, traffic to other ports can continue"
+  M_PART_AFTER="   Only bans added after the partial ban (%s) were counted."
+  M_PART_LEAK="   Warning: the blocked services (%s) were attacked again after the ban; check that the rule is loaded: iptables -S DENYIN | grep %s"
+  M_PART_MORE="   Attacks after the partial ban also hit other services: %s. A full ban may fit better."
+  M_PSKIP16="SKIPPED suspicious network: %s.0.0/16 is partially banned; %s new singles since the ban, below the threshold"
+  M_SAME16="SKIPPED suspicious network: %s.0.0/16 no new IPs since the last warning"
+  M_FIX_UDP="%s: added the missing UDP 443 line to the partial ban/exception (HTTP/3)"
   M_A_UNBANFAIL="%s could not be removed: %s"
   M_A_NOTFOUND="%s is not in csf.deny or the temp list (exact match)"
   M_A_IGNORED="%s will be ignored until %s"
@@ -1364,7 +1376,8 @@ wl_load() {      # FILE LABEL [DEPTH] — IP, CIDR, gelişmiş satır (tcp|in|d=
         line="${line%%#*}"; line="${line#"${line%%[![:space:]]*}"}"
         [ -z "$line" ] && continue
         if [[ "$line" =~ ^Include[[:space:]]+([^[:space:]]+) ]]; then
-            [ "$depth" -lt 5 ] && wl_load "${BASH_REMATCH[1]}" "$label" $((depth + 1)); continue
+            # Include edilen dosyanın adı etikete eklenir: kayıt ana dosyada görünmez (ör. "csf.allow → imunify360.txt")
+            [ "$depth" -lt 5 ] && wl_load "${BASH_REMATCH[1]}" "$label → ${BASH_REMATCH[1]##*/}" $((depth + 1)); continue
         fi
         tok="${line%%[[:space:]]*}"; rest="$tok"; mt=0
         # Gelişmiş satır yalnız bir portu açar (tcp|in|d=2083|s=IP): tek IP / dar aralık bilinen bir müşteri
@@ -1381,7 +1394,7 @@ wl_load() {      # FILE LABEL [DEPTH] — IP, CIDR, gelişmiş satır (tcp|in|d=
             wl_add "$ip" "$label: $ip"; mt=1
         done
         # csf.allow'da hostname olabilir → çöz
-        if [ "$mt" = 0 ] && [ "$label" = "csf.allow" ] && [[ "$tok" =~ ^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$ ]] && [[ "$tok" =~ [A-Za-z] ]]; then
+        if [ "$mt" = 0 ] && [[ "$label" == csf.allow* ]] && [[ "$tok" =~ ^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$ ]] && [[ "$tok" =~ [A-Za-z] ]]; then
             resolve_a "$tok"
             for ip in $REPLY; do wl_add "$ip" "$label: $tok ($ip)"; done
         fi
@@ -1782,6 +1795,7 @@ do_status() {
             if [ -n "${PB_D[$c]}" ]; then
                 pbe=$(LC_ALL=C date -d "${PB_D[$c]}" +%s 2>/dev/null || echo 0)
                 [ "$t" -le "$pbe" ] && continue
+                [[ "$ty" == warn16* && "$line" != *'"after":'* ]] && continue   # eski tekillerle tekrarlanmış uyarı
             fi
             [ -n "${W16D[$c]}" ] && line="${line%\}},\"rep\":${W16D[$c]}}"
             # şüpheli ağda kısmi ban varsa (yalnız seçilen servisler kapalı) satırda belirtilir
@@ -1956,6 +1970,11 @@ do_status() {
         jstr "$cronm"; printf '"cron_min":%s,"runs":%s,' "$REPLY" "$runsj"
         printf '"cron_interval":%s,"daily":{"start":%s,%s},"owners":{%s},"asn_top":[%s],"blocks_top":[%s],"imunify":%s,' \
             "$(cron_interval "$cronm")" "$dstart" "$daily" "${owners[*]}" "${tops[*]}" "${btops[*]}" "$imj"
+        # panelin "zaten kapalı mı" kararları için: /23'ten geniş tam banlar (kaynağı ne olursa olsun) ve CC_DENY listesi
+        local wdj=() ccw
+        for gi in "${WD_TXT[@]}"; do wdj+=("\"$gi\""); done
+        ccw=$(conf_val CC_DENY | LC_ALL=C tr '[:lower:]' '[:upper:]' | tr -cd 'A-Z0-9,')
+        printf '"wide":[%s],"ccd":"%s",' "${wdj[*]}" "$ccw"
         local msj=() msid
         # (burada IFS=, olduğu için liste satır satır okunur, kelimelere bölünmez)
         while read -r msid; do
@@ -2214,6 +2233,26 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
     inside_scan "$c"
     [[ "$c" == */24 ]] && pfx24="${c%.0/24}"
     inside_owner $pfx24
+    # ülke/ASN banı (CC_DENY) aralığı zaten tamamen kapatıyorsa yeni banın etkisi olmaz. Blok kesin tek önekte
+    # (duyurulan önekler /24'ten küçük olmaz); ağ (/16) ise yalnız duyurulan önek bütün ağı içeriyorsa kapalı sayılır.
+    # LOOKUP kapalıysa sorulmaz, bilinmez.
+    local ccd; ccd=" $(conf_val CC_DENY | LC_ALL=C tr '[:lower:],' '[:upper:] ') "
+    if [ -z "$IN_COVER" ] && [ "$ccd" != "  " ]; then
+        local qa qb ccn="" asn="" ap=""
+        if [ -n "$pfx24" ]; then
+            [ -z "$OWN_CC$OWN_ASN" ] && owner_lookup "$pfx24.1"
+            ccn="$OWN_CC"; asn="$OWN_ASN"
+        else
+            IFS=. read -r qa qb _ <<< "$c"
+            if dns_q TXT "1.0.$qb.$qa.origin.asn.cymru.com"; then
+                # "16276 | 151.80.0.0/16 | FR | ripencc | 2012-01-01" — birden çok satırda en geniş önek
+                read -r asn ap ccn < <(printf '%s\n' "$REPLY" | awk -F'|' '{gsub(/ /,""); split($2,p,"/"); print p[2]+0, $1, $2, $3}' | sort -n | head -1 | cut -d' ' -f2-)
+                asn="${asn%% *}"; [ -n "$ap" ] && [ "${ap#*/}" -le 16 ] 2>/dev/null || { ccn=""; asn=""; }
+            fi
+        fi
+        if [ -n "$ccn" ] && [[ "$ccd" == *" $ccn "* ]]; then IN_COVER="CC_DENY $ccn"
+        elif [ -n "$asn" ] && [[ "$ccd" == *" AS$asn "* ]]; then IN_COVER="CC_DENY AS$asn"; fi
+    fi
     # beyaz liste: ban eylemindeki kontrolün aynısı (/24'te bloktaki IP'lerle, /16'da aralık çakışması)
     WL_HIT=""; WL_RETRY=0
     if [ -n "$pfx24" ]; then wl_check "$pfx24" "${ips24[$pfx24]:-$pfx24.1}"; else ip2int "${c%/*}"; wl_range16 "${c%.0.0/16}" "$REPLY" $((REPLY + 65535)); fi
@@ -2444,13 +2483,15 @@ ftp_passive() {  # FTP'nin pasif port aralığı (dosya aktarımı) → REPLY "3
 chunks15() {     # "1,2,…" → 15'erlik gruplar (iptables multiport tek kuralda en çok 15 port alır)
     tr ',' '\n' <<< "$1" | awk 'NF { a[++n] = $1 } END { for (i = 1; i <= n; i += 15) { s = a[i]; for (j = i + 1; j < i + 15 && j <= n; j++) s = s "," a[j]; print s } }'
 }
-part_ports() {   # BSVC + BPORTS → REPLY = kapatılacak TCP portları (PART_UDP=1: DNS'in UDP 53'ü de); 1 = boş ya da geçersiz
+part_ports() {   # BSVC + BPORTS → REPLY = kapatılacak TCP portları; PART_UDPP = UDP'de de kapanacaklar; 1 = boş ya da geçersiz
+    # UDP: DNS 53; web 443 — HTTP/3 (QUIC) UDP 443'ten çalışır, LiteSpeed ve yeni Apache/nginx'te açık olabilir
     local x all=""
-    PART_UDP=0
+    PART_UDPP=""
     for x in ${BSVC//,/ }; do
         case "$x" in
-            web|ssh|ftp|cp|min|sync) svc_ports "$x"; all+="${all:+,}$REPLY" ;;
-            dns) all+="${all:+,}53"; PART_UDP=1 ;;
+            web) svc_ports web; all+="${all:+,}$REPLY"; PART_UDPP+="${PART_UDPP:+,}443" ;;
+            ssh|ftp|cp|min|sync) svc_ports "$x"; all+="${all:+,}$REPLY" ;;
+            dns) all+="${all:+,}53"; PART_UDPP+="${PART_UDPP:+,}53" ;;
             *) return 1 ;;
         esac
     done
@@ -2460,15 +2501,19 @@ part_ports() {   # BSVC + BPORTS → REPLY = kapatılacak TCP portları (PART_UD
     [ -n "$REPLY$PART_RNG" ]
 }
 exc_lines() {    # CIDR → EXC_LINES: tam banın yanına csf.allow'a girecek izin satırları; 1 = boş ya da geçersiz seçim
-    local c="$1" x tin="" tout="" udp=0 mk ch rng=""
+    local c="$1" x tin="" tout="" uin="" uout="" mk ch rng=""
     EXC_LINES=""
     [ -n "$BSVC$BPORTS" ] || return 1
     for x in ${BSVC//,/ }; do
         case "$x" in
             web|ssh|ftp|cp|min|sync) svc_ports "$x"; tin+="${tin:+,}$REPLY" ;;   # aralıktan sunucuya gelen
             mout|wout) svc_ports "$x"; tout+="${tout:+,}$REPLY" ;;               # sunucudan aralığa giden
-            dns) tin+="${tin:+,}53"; tout+="${tout:+,}53"; udp=1 ;;               # iki yönde, TCP ve UDP
+            dns) tin+="${tin:+,}53"; tout+="${tout:+,}53"; uin+="${uin:+,}53"; uout+="${uout:+,}53" ;;   # iki yönde, TCP ve UDP
             *) return 1 ;;
+        esac
+        case "$x" in                                                           # HTTP/3 (QUIC): UDP 443
+            web) uin+="${uin:+,}443" ;;
+            wout) uout+="${uout:+,}443" ;;
         esac
     done
     split_ports "$BPORTS" || return 1
@@ -2476,15 +2521,14 @@ exc_lines() {    # CIDR → EXC_LINES: tam banın yanına csf.allow'a girecek iz
     if [[ ",$BSVC," == *,ftp,* ]]; then ftp_passive; [ -n "$REPLY" ] && rng+="${rng:+ }$REPLY"; fi   # FTP aktarımı pasif portlardan
     [ -n "$tin$tout$rng" ] || return 1
     mk="csf_autogroup: exception for $c [svc=$BSVC${BPORTS:+;ports=$BPORTS}] - do not delete"
-    tin=$(uniq_ports "$tin"); tout=$(uniq_ports "$tout")
+    tin=$(uniq_ports "$tin"); tout=$(uniq_ports "$tout"); uin=$(uniq_ports "$uin"); uout=$(uniq_ports "$uout")
     # CSF önce izin, sonra ban zincirine bakar; ban "kurulmuş bağlantı" kuralından da önce geldiği için her
     # servis iki yönlü yazılır: istek ve yanıt (yanıtın kaynak portu)
     for ch in $(chunks15 "$tin"); do EXC_LINES+="tcp|in|d=$ch|s=$c # $mk"$'\n'"tcp|out|s=$ch|d=$c # $mk"$'\n'; done
     for ch in $(chunks15 "$tout"); do EXC_LINES+="tcp|out|d=$ch|d=$c # $mk"$'\n'"tcp|in|s=$ch|s=$c # $mk"$'\n'; done
     for ch in $rng; do EXC_LINES+="tcp|in|d=$ch|s=$c # $mk"$'\n'"tcp|out|s=$ch|d=$c # $mk"$'\n'; done
-    if [ "$udp" = 1 ]; then
-        EXC_LINES+="udp|in|d=53|s=$c # $mk"$'\n'"udp|out|s=53|d=$c # $mk"$'\n'"udp|out|d=53|d=$c # $mk"$'\n'"udp|in|s=53|s=$c # $mk"$'\n'
-    fi
+    for ch in $(chunks15 "$uin"); do EXC_LINES+="udp|in|d=$ch|s=$c # $mk"$'\n'"udp|out|s=$ch|d=$c # $mk"$'\n'; done
+    for ch in $(chunks15 "$uout"); do EXC_LINES+="udp|out|d=$ch|d=$c # $mk"$'\n'"udp|in|s=$ch|s=$c # $mk"$'\n'; done
     EXC_LINES="${EXC_LINES%$'\n'}"
     [ -n "$EXC_LINES" ]
 }
@@ -2534,7 +2578,7 @@ partial_write() { # CIDR BITS PORTLAR → kısmi ban satırları; aynı aralığ
     mk="csf_autogroup: $(m "$M_A_PCOMMENT" "$b" "$AG_BY") [svc=$BSVC${BPORTS:+;ports=$BPORTS}] - do not delete - $dt"
     for ch in $(chunks15 "$pp"); do lines+="tcp|in|d=$ch|s=$c # $mk"$'\n'; done
     for ch in $PART_RNG; do lines+="tcp|in|d=$ch|s=$c # $mk"$'\n'; done      # CSF'te aralık tek başına satır ister
-    [ "$PART_UDP" = 1 ] && lines+="udp|in|d=53|s=$c # $mk"$'\n'
+    [ -n "$PART_UDPP" ] && lines+="udp|in|d=$(uniq_ports "$PART_UDPP")|s=$c # $mk"$'\n'
     sf=$(mktemp) || return 1
     printf '%s\n' "|s=$c # csf_autogroup:" > "$sf"
     file_rewrite "$DENY_FILE" /dev/null "$sf" "$lines"; rc=$?; rm -f "$sf"; return $rc
@@ -2660,6 +2704,54 @@ orphans_clean() { # banı CSF ekranından (eklenti dışından) kaldırılmış 
     rm -f "$sf"
     [ "$n" -gt 0 ] && log "$(m "$M_ORPHANS" "$n")"
     return 0
+}
+udp_has() {      # DOSYA ÖNEK SONEK PORT → "ÖNEK<portlar>SONEK" biçiminde, port listesinde PORT olan satır var mı
+    awk -v pre="$2" -v suf="$3" -v p="$4" 'index($0, pre) == 1 { r = substr($0, length(pre) + 1); i = index(r, suf)
+        if (i) { n = split(substr(r, 1, i - 1), a, ","); for (j = 1; j <= n; j++) if (a[j] == p) f = 1 } } END { exit !f }' "$1" 2>/dev/null
+}
+proto_fix() {    # 1.9.14 öncesi konan kısmi ban ve istisnalarda web'in UDP 443'ü (HTTP/3) yoktu: eksik satırları ekle
+    local l c svc mk dadd="" aadd="" fixed=""
+    local -A seen=()
+    while IFS= read -r l; do                                           # kısmi banlar: csf.deny
+        adv_parse "$l" || continue; c="$ADV_CIDR"
+        [ -n "${seen[d$c]}" ] && continue; seen[d$c]=1
+        [[ "$l" =~ $RE_SV ]] && svc="${BASH_REMATCH[1]}" || continue
+        [[ ",$svc," == *,web,* ]] || continue
+        udp_has "$DENY_FILE" "udp|in|d=" "|s=$c " 443 && continue
+        dadd+="udp|in|d=443|s=$c # ${l#*# }"$'\n'; fixed+=" $c"
+    done < <(grep -F '# csf_autogroup:' "$DENY_FILE" 2>/dev/null | grep '^tcp|in|d=')
+    while IFS= read -r l; do                                           # istisnalar: csf.allow
+        [[ "$l" =~ exception\ for\ ([0-9./]+)\ \[svc=([a-z,]*) ]] || continue
+        c="${BASH_REMATCH[1]}"; svc="${BASH_REMATCH[2]}"
+        [ -n "${seen[a$c]}" ] && continue; seen[a$c]=1
+        mk="${l#*# }"
+        if [[ ",$svc," == *,web,* ]] && ! udp_has "$CSF_DIR/csf.allow" "udp|in|d=" "|s=$c " 443; then
+            aadd+="udp|in|d=443|s=$c # $mk"$'\n'"udp|out|s=443|d=$c # $mk"$'\n'; fixed+=" $c"
+        fi
+        if [[ ",$svc," == *,wout,* ]] && ! udp_has "$CSF_DIR/csf.allow" "udp|out|d=" "|d=$c " 443; then
+            aadd+="udp|out|d=443|d=$c # $mk"$'\n'"udp|in|s=443|s=$c # $mk"$'\n'; fixed+=" $c"
+        fi
+    done < <(grep -F 'csf_autogroup: exception for ' "$CSF_DIR/csf.allow" 2>/dev/null | grep '^tcp|')
+    [ -n "$fixed" ] || return 0
+    [ -n "$dadd" ] && { file_append_locked "$DENY_FILE" "$dadd" || return 0; }
+    [ -n "$aadd" ] && { file_append_locked "$CSF_DIR/csf.allow" "$aadd" || return 0; }
+    csf_run -r
+    for c in $(printf '%s\n' $fixed | sort -u); do log "$(m "$M_FIX_UDP" "$c")"; ev fix_udp "$c" "add=\"udp 443\""; done
+    return 0
+}
+ips_after() {    # EPOCH IP… → REPLY = bu IP'lerden EPOCH'tan sonra banlananlar (tekilde nottaki tarih, geçicide epoch),
+    # IPA_CLS = onların ban sebebinden servisleri ("web 3,ssh 1")
+    local se="$1" sk x out; shift
+    sk=$(LC_ALL=C date -d "@$se" +%Y%m%d%H%M%S 2>/dev/null || echo 0)
+    out=$( { printf 'W|%s\n' "$@"; for x in "${!SINGLE_NOTE[@]}"; do printf '%s|%s\n' "$x" "${SINGLE_NOTE[$x]}"; done
+             [ -r "$CSF_VAR/csf.tempban" ] && awk -F'|' '$2 !~ /\// { print $2 "|" $6 "|e:" $1 }' "$CSF_VAR/csf.tempban"; } |
+        awk -F'|' -v se="$se" -v sk="$sk" "$AWK_CLS"'
+            $1 == "W" { W[$2] = 1; next }
+            ($1 in W) && !($1 in OK) {
+                if ($3 ~ /^e:/) ok = substr($3, 3) + 0 > se + 0; else { d = datekey($2); ok = d > sk + 0 }
+                if (ok) { OK[$1] = 1; L = L " " $1; C[cls($2)]++ } }
+            END { o = ""; for (k in C) o = o (o == "" ? "" : ",") k " " C[k]; print o "|" L }')
+    IPA_CLS="${out%%|*}"; REPLY="${out#*|}"
 }
 part_note() {    # LO HI → REPLY = "CIDR|svc" (aralıktaki ilk kısmi ban) ya da boş
     local x l
@@ -3323,6 +3415,7 @@ fi
 # ── Read csf.deny: singles (grouping) + CIDRs (coverage) ────────────────────
 parse_deny "$DENY_FILE" 1
 [ "$DRY" = 1 ] || orphans_clean       # eklenti dışından kaldırılmış elle banların artıkları
+[ "$DRY" = 1 ] || proto_fix           # eski kısmi ban / istisnalara eksik UDP 443 (HTTP/3)
 
 # ── /24 grouping (permanent): auto-ban + drop singles ───────────────────────
 added24=0; added24_body=""
@@ -3477,14 +3570,53 @@ for prefix in $(printf '%s\n' "${!count16[@]}" | sort -V); do
         if ign_until "$prefix.0.0/16"; then logr "$(m "$M_IGN16" "$prefix" "$IGN_UNTIL")"; continue; fi
         if grep -qF "WARN16_${prefix} $TODAY" "$SAYAC_FILE"; then logr "$(m "$M_SKIP16" "$prefix")"; continue; fi
         np="${perm16[$prefix]:-0}"; nt="${tmp16[$prefix]:-0}"
+        # ağa eklentinin kısmi banı konmuşsa ondan önceki tekiller o kararla ele alınmıştır: yalnız sonrakiler sayılır
+        pe=0; pnote=""; pl=$(grep -F "|s=$prefix.0.0/16 # csf_autogroup:" "$DENY_FILE" | head -n 1)
+        [ -n "$pl" ] && [[ "$pl" =~ $RE_DATE ]] && pe=$(LC_ALL=C date -d "${BASH_REMATCH[1]}" +%s 2>/dev/null || echo 0)
+        if [ "${pe:-0}" -gt 0 ]; then
+            ips_after "$pe" ${ips16[$prefix]}
+            ips16[$prefix]="$REPLY"; count16[$prefix]=0; np=0; nt=0
+            for ip in $REPLY; do
+                count16[$prefix]=$((count16[$prefix] + 1))
+                if [ -n "${SINGLE_NOTE[$ip]+x}" ]; then np=$((np + 1)); else nt=$((nt + 1)); fi
+            done
+            subnet_count=$(for ip in $REPLY; do echo "${ip%.*}"; done | sort -u | grep -c '\.')
+            if [ "${count16[$prefix]}" -lt "$THRESHOLD_16" ] || [ "$subnet_count" -lt 2 ]; then
+                logr "$(m "$M_PSKIP16" "$prefix" "${count16[$prefix]}")"; continue
+            fi
+            [[ "$pl" =~ $RE_SV ]] && psv="${BASH_REMATCH[1]}" || psv=""
+            pnote="$(m "$M_PART_AFTER" "$(date -d "@$pe" '+%d.%m %H:%M')")$NL"
+            pin=""; pout=""
+            for x in ${IPA_CLS//,/ }; do
+                [[ "$x" =~ ^[a-z]+$ ]] || continue
+                case "$x" in other|repeat|scan) ;; *) if [[ ",$psv," == *",$x,"* ]]; then pin+="${pin:+, }$x"; else pout+="${pout:+, }$x"; fi ;; esac
+            done
+            [ -n "$pin" ] && pnote+="$(m "$M_PART_LEAK" "$pin" "$prefix.0.0/16")$NL"
+            [ -n "$pout" ] && pnote+="$(m "$M_PART_MORE" "$pout")$NL"
+        fi
+        # aynı ağ için son uyarıdan bu yana yeni IP gelmediyse tekrar bildirilmez (Kontrol edilecekler'de zaten duruyor)
+        lw=$(grep -F "\"type\":\"warn16\",\"cidr\":\"$prefix.0.0/16\"" "$EVENTS_FILE" 2>/dev/null | tail -n 1)
+        # kısmi banlı ağda yalnız bandan sonrakilerle atılmış uyarıyla karşılaştırılır (öncekiler başka listeydi)
+        [ "${pe:-0}" -gt 0 ] && [[ "$lw" != *"\"after\":$pe"* ]] && lw=""
+        if [ -n "$lw" ]; then
+            lips=" $(grep -oE '"ip":"[0-9.]+"' <<< "$lw" | cut -d'"' -f4 | tr '\n' ' ')"
+            lcnt=$(grep -oE '"ip":"' <<< "$lw" | grep -c .); ltot=$(grep -oE '"total":[0-9]+' <<< "$lw" | head -n 1 | cut -d: -f2)
+            ln16=$(grep -oE '"n":[0-9]+' <<< "$lw" | head -n 1 | cut -d: -f2)
+            fresh=0
+            for ip in ${ips16[$prefix]}; do [[ "$lips" == *" $ip "* ]] || { fresh=1; break; }; done
+            [ "$fresh" = 1 ] && [ "$lcnt" -gt 0 ] && [ "${ltot:-0}" -gt "$lcnt" ] && [ "${count16[$prefix]}" -le "${ln16:-0}" ] && fresh=0   # liste kısaltılmışsa sayıya bak
+            [ "$fresh" = 0 ] && { logr "$(m "$M_SAME16" "$prefix")"; continue; }
+        fi
         log "$(m "$M_WARN16" "$prefix" "${count16[$prefix]}" "$np" "$nt" "$subnet_count")"
         warn_body+="$(m "$M_WARN16_B" "$prefix" "${count16[$prefix]}" "$np" "$nt" "$subnet_count")$NL"
         WL_HIT=""; wl_overlap "$lo" $((lo + 65535)) && warn_body+="$(m "$M_WL_NOTE" "$WL_HIT")$NL"
         part_note "$lo" $((lo + 65535)) && warn_body+="$(m "$M_PART_NOTE" "${REPLY%%|*}" "${REPLY#*|}")$NL"
+        warn_body+="$pnote"
         ip_lines "${ips16[$prefix]}" mix 1; warn_body+="$REPLY"
         warn16=$((warn16 + 1)); cnt_add "WARN16_${prefix} $TODAY"
         jstr "$WL_HIT"
-        ev warn16 "$prefix.0.0/16" "n=${count16[$prefix]}" "perm=$np" "temp=$nt" "subnets=$subnet_count" "wl=$REPLY" "total=$IPS_TOTAL" "ips=$IPS_J"
+        ev warn16 "$prefix.0.0/16" "n=${count16[$prefix]}" "perm=$np" "temp=$nt" "subnets=$subnet_count" "wl=$REPLY" "total=$IPS_TOTAL" "ips=$IPS_J" \
+           $([ "${pe:-0}" -gt 0 ] && echo "after=$pe")
     fi
 done
 if [ "$warn16" -gt 0 ]; then

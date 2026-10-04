@@ -1,5 +1,47 @@
 # Changelog
 
+## 1.9.14 — 2026-10-05
+
+- **Partial bans on the web also block HTTP/3.** HTTP/3 (QUIC) runs on UDP
+  443, which LiteSpeed (and newer Apache/nginx) can listen on; a web partial
+  ban now blocks UDP 443 as well as TCP 80/443, and an exception that keeps the
+  web (or outgoing web) open allows UDP 443 in both directions. Partial bans
+  and exceptions added before this version get the missing line on the next
+  run, once; History shows it as **Ban completed**.
+- **Suspicious network warnings after a partial ban.** On a network with a
+  partial ban, only bans added after it are counted. If they still reach the
+  threshold, the warning says whether the blocked services were attacked again
+  (with the command to check the rule is loaded) or other services were (a full
+  ban may fit better). The old singles that led to the partial ban no longer
+  repeat the warning, and such repeated warnings leave To review.
+- **No more daily repeats with nothing new.** A network is reported again only
+  when an IP came in that wasn't in its last warning; until then it stays in To
+  review.
+- **Buttons no longer look unresponsive after an action.** Until the new state
+  arrives, action buttons are dimmed and a "Done, updating the list…" note
+  shows; then the buttons come back with the right labels (e.g. **Change ban**).
+- Whitelist notes name the file an entry really comes from when `csf.allow`
+  includes it, e.g. `csf.allow → imunify360.txt: 139.59.43.2` (Imunify360's
+  static whitelist), so it can be found.
+- `tests/durum-tablosu` also checks the engine: UDP 443 lines, exceptions, the
+  one-time upgrade and the warning after a partial ban.
+
+## 1.9.13 — 2026-10-04
+
+- **No more ban buttons that would change nothing.** A country or ASN ban
+  (`CC_DENY`) now counts as covering: the IP card no longer offers to ban the
+  block (or the network, when the announced prefix spans it), and the ban
+  dialog says the range is already blocked by `CC_DENY`.
+- History follows the same rules as the IP card and Overview: an item inside a
+  range banned by another source, or inside a country ban, gets no ban buttons;
+  an IP inside a banned block still offers **Ban network (/16)**; a block with a
+  temp ban offers **Ban the block permanently (/24)** and, if it is watched,
+  **Make permanent**.
+- The ban button for a block with a temp ban now says **Ban the block
+  permanently (/24)**.
+- New `tests/durum-tablosu/calistir.sh`: prints which actions each screen offers
+  in every ban state and checks them against rules (see README, Development).
+
 ## 1.9.12 — 2026-10-04
 
 - **History rows have actions.** Each row gets a **⋯** menu with what can be

@@ -1,0 +1,4 @@
+#!/bin/bash
+# iptables taklidi: CSF zincirleri yüklü
+[ "$1" = -S ] && [ "$2" = LOCALINPUT ] && { echo "-N LOCALINPUT"; exit 0; }
+exit 1

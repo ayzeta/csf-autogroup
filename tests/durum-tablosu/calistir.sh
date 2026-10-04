@@ -1,0 +1,67 @@
+#!/bin/bash
+# Durum × ekran tablosu: panelin her ekranının (IP kartı, Dikkat edilecekler, Aktif blok banları, İzlenenler,
+# Geçmiş menüsü, banla penceresi) her ban durumunda hangi eylemleri sunduğunu motorun gerçek çıktısıyla çıkarır
+# ve kurallara göre denetler (render.js). Sunucuda değil, geliştirme makinesinde çalışır; bash ve node gerekir.
+# CSF, DNS ve diğer dış araçlar bin/ altındaki taklitlerdir; hiçbir şey sisteme yazılmaz.
+#
+#   bash tests/durum-tablosu/calistir.sh        tablo + kural sonucu
+#   bash tests/durum-tablosu/calistir.sh -q     yalnız kural sonucu (ihlal varsa çıkış kodu 1)
+#
+# Senaryolar: ağ 151.80.0.0/16, blok 151.80.7.0/24, IP 151.80.7.9 (taklit DNS'te AS16276, FR).
+H="$(cd "$(dirname "$0")" && pwd)"; REPO="$(cd "$H/../.." && pwd)"
+W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
+mkdir -p "$W/out" "$W/bin"; cp "$H"/bin/* "$W/bin/"; chmod +x "$W"/bin/*
+wp() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi; }
+NOW=$(date +%s); DT=$(LC_ALL=C date '+%a %b %d %H:%M:%S %Y')
+
+mk() {   # ad → temiz kök: boş listeler, sınırlar, taklit araçlar
+    R="$W/roots/$1"; mkdir -p "$R/app" "$R/etc/csf" "$R/var/lib/csf" "$R/var/lib/csf_autogroup"
+    D="$R/etc/csf/csf.deny"; T="$R/var/lib/csf/csf.tempban"; A="$R/etc/csf/csf.allow"; C="$R/var/lib/csf_autogroup/counter"
+    : > "$D"; : > "$T"; : > "$C"; printf '127.0.0.1\n' > "$A"; : > "$R/etc/csf/csf.ignore"; : > "$R/etc/csf/csf.rignore"
+    printf '%s\n' 'DENY_IP_LIMIT = "200"' 'DENY_TEMP_IP_LIMIT = "100"' > "$R/etc/csf/csf.conf"
+    cp "$REPO/csf_autogroup.sh" "$R/app/csf_autogroup.sh"
+    printf '%s\n' "MSG_LANG=tr" "ALERT_MAIL=" "DENY_FILE=$D" "CSF_CONF=$R/etc/csf/csf.conf" "CSF_BIN=$W/bin/csf" \
+        "CSF_VAR=$R/var/lib/csf" "LOG_FILE=$R/autogroup.log" "SAYAC_FILE=$C" "IMUNIFY_BIN=$W/bin/imunify360-agent" > "$R/app/config.env"
+}
+run() { env SIM_ROOT="$R" PATH="$W/bin:/usr/bin:/bin" AG_BY=root bash "$R/app/csf_autogroup.sh" "$@"; }
+single() { printf '%s\n' "$1 # lfd: ($2) Failed login from $1 (FR/France/-): 5 in the last 3600 secs - $DT" >> "$D"; }
+dump() {
+    run --status --json > "$W/out/$1.status.json" 2>/dev/null
+    run --lookup 151.80.7.9 --json > "$W/out/$1.lookup.json" 2>/dev/null
+    run --inside 151.80.7.0/24 --json > "$W/out/$1.in24.json" 2>/dev/null
+    run --inside 151.80.0.0/16 --json > "$W/out/$1.in16.json" 2>/dev/null
+}
+quiet() { run "$@" >/dev/null 2>&1; }
+
+mk none;       dump none
+mk single;     single 151.80.7.9 sshd; dump single
+mk temp;       printf '%s\n' "$NOW|151.80.7.9||in|3600|lfd: (sshd) Failed SSH login from 151.80.7.9" >> "$T"; dump temp
+mk watched;    printf '%s\n' "$NOW|151.80.7.0/24||inout|43200|csf_autogroup: temp block 151.80.7.0/24" >> "$T"
+               printf '%s\n' "151.80.7 $(date +%F)" >> "$C"; dump watched
+mk b24auto;    for x in 1 2 3 4 5 6; do single 151.80.7.$x sshd; done; quiet; dump b24auto
+mk b24full;    quiet --action ban24 151.80.7; dump b24full
+mk b24part;    quiet --action ban24 151.80.7 --mode svc --svc web; dump b24part
+mk b16full;    quiet --action ban16 151.80; dump b16full
+mk b16part;    quiet --action ban16 151.80 --mode svc --svc ssh; dump b16part
+mk b16p_b24f;  quiet --action ban16 151.80 --mode svc --svc ssh; quiet --action ban24 151.80.7; dump b16p_b24f
+mk b16f_other; printf '%s\n' "151.80.0.0/16 # Manually denied: hosting range - $DT" >> "$D"; single 151.80.8.4 sshd; dump b16f_other
+mk cc;         printf '%s\n' 'CC_DENY = "FR"' >> "$R/etc/csf/csf.conf"; single 151.80.7.5 sshd; quiet; dump cc
+mk wl;         printf '%s\n' "151.80.7.0/24 # müşteri" >> "$A"; for x in 1 2 3 4 5 6; do single 151.80.7.$x sshd; done; quiet; dump wl
+mk review16;   for x in 7.1 7.2 8.1 8.2 9.1 10.1; do single 151.80.$x sshd; done; quiet; dump review16
+
+# ── motor kuralları (ekran dışı): yazılan satırlar ve uyarılar ──
+MF=0; ML=""
+mcheck() { if eval "$2"; then ML+="  ✓ $1"$'\n'; else ML+="  ✗ motor: $1"$'\n'; MF=$((MF + 1)); fi; }
+R="$W/roots/b24part"
+mcheck "web kısmi banı UDP 443'ü de kapatır (HTTP/3)" "grep -q '^udp|in|d=443|s=151.80.7.0/24 ' '$R/etc/csf/csf.deny'"
+mk b24exc; quiet --action ban24 151.80.7 --mode exc --svc web
+mcheck "istisnada Web açıkken UDP 443 iki yönde açık" "grep -q '^udp|in|d=443|s=151.80.7.0/24 ' '$A' && grep -q '^udp|out|s=443|d=151.80.7.0/24 ' '$A'"
+mk oldpart;    for x in 7.1 7.2 8.1 8.2 9.1 10.1; do single 151.80.$x sshd; done; quiet --action ban16 151.80 --mode svc --svc web --keep; quiet
+mcheck "kısmi bandan önceki tekiller şüpheli ağ uyarısı üretmez" "! grep -q '\"type\":\"warn16\",\"cidr\":\"151.80.0.0/16\"' '$R/var/lib/csf_autogroup/events.jsonl'"
+mk legacy;     printf '%s\n' "tcp|in|d=80,443|s=151.80.0.0/16 # csf_autogroup: elle /16 kısmi ban (root) [svc=web] - do not delete - $DT" >> "$D"; quiet; quiet
+mcheck "eski kısmi web banına UDP 443 bir kez eklenir" "[ \$(grep -c '^udp|in|d=443|s=151.80.0.0/16 ' '$D') = 1 ]"
+
+node "$(wp "$H/render.js")" "$(wp "$REPO/whm/assets/ag.js")" "$(wp "$W/out")" "$@"; RC=$?
+printf '\nMotor kuralları\n%s' "$ML"
+[ "$MF" -gt 0 ] && { echo "$MF motor kuralı ihlali"; exit 1; }
+exit $RC

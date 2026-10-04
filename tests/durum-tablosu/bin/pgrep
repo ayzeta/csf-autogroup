@@ -1,0 +1,4 @@
+#!/bin/bash
+# pgrep taklidi: lfd çalışıyor (LFD_DOWN=1 ise çalışmıyor)
+[ -n "$LFD_DOWN" ] && exit 1
+case "$*" in *lfd*) echo 1234; exit 0;; esac; exit 1

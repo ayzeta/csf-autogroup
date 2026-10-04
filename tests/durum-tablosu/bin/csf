@@ -1,0 +1,32 @@
+#!/bin/bash
+set -f
+# csf taklidi — csf.pl dodeny/dokill/dotempdeny/dotemprm/dotempban davranışına göre
+R="$SIM_ROOT"; DENY="$R/etc/csf/csf.deny"; TB="$R/var/lib/csf/csf.tempban"; touch "$TB"
+echo "csf $*" >> "$R/csf_calls.log"
+cmd="$1"; shift
+case "$cmd" in
+  -d) ip="$1"; shift; comment="$*"
+      while read -r a _; do a=${a%%#*}; [ "$a" = "$ip" ] && { echo "deny failed: $ip is in the allow file /etc/csf/csf.allow"; exit 0; }; done < "$R/etc/csf/csf.allow"
+      if awk -v ip="$ip" '$1==ip{f=1} END{exit !f}' "$DENY"; then echo "deny failed: $ip is in already in the deny file /etc/csf/csf.deny 1 times"; exit 0; fi
+      echo "$ip # $comment - Sat Sep 26 12:00:00 2026" >> "$DENY"; echo "Adding $ip to csf.deny and iptables DROP..." ;;
+  -dr) ip="$1"; hit=0; : > "$DENY.new"
+      while IFS= read -r line; do t=${line%%[[:space:]]*}
+        if [ "$t" = "$ip" ]; then
+          if echo "$line" | grep -qi 'do not delete'; then echo "csf: $ip set as \"do not delete\" - not removed"; hit=-1; else echo "Removing rule..."; hit=1; continue; fi
+        fi; printf '%s\n' "$line" >> "$DENY.new"; done < "$DENY"
+      mv "$DENY.new" "$DENY"; [ $hit = 0 ] && echo "csf: $ip not found in csf.deny" ;;
+  -td) ip="$1"; to="$2"
+      if grep -qE "^${ip//./\.}\b" "$DENY"; then echo "csf: $ip is already permanently blocked"; exit 0; fi
+      if grep -qF "|$ip||" "$TB"; then echo "csf: $ip is already temporarily blocked"; exit 0; fi
+      shift 2; note="$*"; [ -z "$note" ] && note="Manually added: $ip"
+      echo "$(date +%s)|$ip||in|$to|$note" >> "$TB"; echo "csf: $ip blocked on port * for $to seconds inbound" ;;
+  -tr) ip="$1"; grep -vF "|$ip|" "$TB" > "$TB.new"; mv "$TB.new" "$TB"; echo "DENY $ip removed" ;;
+  -t) [ -s "$TB" ] || { echo "csf: There are no temporary IP entries"; exit 0; }
+      echo; echo "A/D   IP address                               Port   Dir   Time To Live     Comment"
+      while IFS='|' read -r t ip port dir to msg; do [ -z "$port" ] && port="*"
+        for p in ${port//,/ }; do printf 'DENY  %-40s %-7s %-5s %-16s %s\n' "$ip" "$p" "$dir" "11h 59m 0s" "$msg"; done
+      done < "$TB" ;;
+  -r) echo "csf: restarted (stub)" ;;
+  *) echo "stub: unsupported $cmd"; exit 1 ;;
+esac
+exit 0

@@ -27,7 +27,7 @@ is escalated to a **permanent** ban. `/16` networks are only flagged for review
 - **English / Türkçe** — the plugin, logs and emails.
 - **Works on phones** — the page adapts to small screens.
 
-**Version 1.9.12** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
+**Version 1.9.14** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
 cPanel the same engine runs from cron and the command line
 ([details](#without-cpanel)).
 
@@ -179,7 +179,8 @@ can't be banned at all.
   pick are blocked (Web, SSH on this server's real SSH port, FTP, cPanel · WHM ·
   Webmail, incoming mail, mail sync, DNS, plus any other ports or ranges such as
   `8080, 30000-35000`). Everything else stays open, and connections from this
-  server to the range are not affected. It is one `csf.deny` line (split per 15
+  server to the range are not affected. Web includes UDP 443 (HTTP/3) and DNS
+  includes UDP 53. It is one `csf.deny` line (split per 15
   ports), shown as *partial* in Active block bans; it doesn't cover the range, so
   nothing inside is removed and watching continues.
 - **Everything except** — a full ban, but the services you pick stay open,
@@ -274,7 +275,7 @@ block that comes back turns into a permanent one.
 |--------|--------|
 | `/24` with **≥3** permanent single bans | permanently ban the `/24`, remove the singles |
 | `/24` with **≥5** permanent singles | ban `/24` + `do not delete` |
-| `/16` with **≥5** singles across **≥2** `/24`s (permanent and temp counted together, each IP once) | flag as suspicious network by email (once/day), no auto-ban |
+| `/16` with **≥5** singles across **≥2** `/24`s (permanent and temp counted together, each IP once) | flag as suspicious network by email, no auto-ban; reported again only when a new IP comes in (at most once a day). With a partial ban on the network, only bans after it count |
 | `/24` with **≥3** temp bans (first time) | temp-ban the `/24` for 12h, watch it |
 | same `/24` seen again | permanent ban + `do not delete` |
 | deny list **≥80%** of its limit | alert: email once a day; Slack once when it starts and once when resolved |
@@ -399,6 +400,17 @@ rm -rf /var/lib/csf_autogroup
 ```
 
 Existing `/24` bans stay in `csf.deny` until you remove them (`csf -dr <cidr>`).
+
+## Development
+
+`bash tests/durum-tablosu/calistir.sh` builds every ban state (single, temp,
+watched, block and network bans — full and partial —, a range banned by another
+source, a country ban, whitelist, warnings) in a throwaway root with stand-ins
+for CSF and DNS, runs the engine on each, and prints which actions every panel
+screen offers in that state. It checks them against a few rules: no ban that
+would have no effect, the same label for the same action everywhere, and no
+button that the ban dialog would then refuse. Needs bash and node; nothing is
+written to the system.
 
 ## License
 
