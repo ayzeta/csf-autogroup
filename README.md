@@ -27,7 +27,7 @@ is escalated to a **permanent** ban. `/16` networks are only flagged for review
 - **English / Türkçe** — the plugin, logs and emails.
 - **Works on phones** — the page adapts to small screens.
 
-**Version 1.9.14** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
+**Version 1.9.15** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
 cPanel the same engine runs from cron and the command line
 ([details](#without-cpanel)).
 
@@ -95,11 +95,15 @@ settings, with no prompts. `config.env` is left untouched.
   plus three markers: **CSF** (rules loaded, not disabled, not in testing mode),
   **LFD** (running) and **Cron** (runs on time). Turns red when any of them has
   a problem.
-- **Summary cards** — active block bans (with this week's change), items to
-  review, and how full CSF's permanent and temp lists are.
+- **Period** — 7 or 30 days, for the summary cards and the activity chart
+  together.
+- **Summary cards** — active block bans, items to review, and how full CSF's
+  permanent and temp lists are, each with its change over the chosen period.
 - **Activity** — a daily chart of block bans, blocks made permanent, temp block
-  bans, suspicious networks and whitelist skips over the last 7 or 30 days. Hover
-  a day for its breakdown.
+  bans, suspicious networks and whitelist skips. Hover a day for its breakdown.
+- **Colors** — one meaning, one color everywhere (badges, icons, chart): red full
+  ban, violet made permanent, teal temp ban, blue partial ban, amber suspicious
+  network, gray whitelist skip.
 - **To review** — suspicious networks and whitelist-skipped blocks from the last 7
   days, with every IP's hostname, owner and ban reason. A network flagged on 3 or
   more separate days is marked *repeating* and moves to the top.

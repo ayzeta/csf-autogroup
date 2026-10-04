@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.9.15 — 2026-10-05
+
+- A suspicious network warning sent earlier the same day, before a partial ban
+  was added, no longer holds back a new warning: attacks that come in after the
+  partial ban (e.g. on services it leaves open) are reported in the same run
+  instead of the next day.
+- **One period for the cards and the chart.** The 7 / 30 days choice moved above
+  the summary cards and now sets both: each card's change is over the chosen
+  period (block bans added minus removed, items flagged vs the period before,
+  list fill vs N days ago). If the plugin is newer than the period, it says the
+  comparison is since install.
+- **Colors reworked: one meaning, one color everywhere** — badges, History icons,
+  the IP card and the chart: red full ban, violet made permanent, teal temp ban,
+  blue partial ban, amber suspicious network, gray whitelist skip. Indigo stays
+  for buttons and tabs only. Before, a block ban was green in History, indigo
+  in the chart and gray in the table, and partial and temp bans shared orange.
+- **Activity chart redrawn**: value axis with dashed grid lines, slimmer bars,
+  thin gaps between stacked parts, rounded only on top; types with no events in
+  the period are dimmed in the legend. The day breakdown opens beside the bar
+  so its date is never cut off.
+
 ## 1.9.14 — 2026-10-05
 
 - **Partial bans on the web also block HTTP/3.** HTTP/3 (QUIC) runs on UDP

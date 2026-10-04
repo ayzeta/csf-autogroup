@@ -48,7 +48,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.9.14"   # sürüm — başlangıç log satırında görünür
+VERSION="1.9.15"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1832,17 +1832,24 @@ do_status() {
 
     # Bir önceki pencerede (REVIEW_DAYS gün daha geride) kaç FARKLI blok/ağ işaretlenmişti: kartın haftalık
     # değişimi aynı ölçüyle (olay sayısı değil, farklı kayıt sayısı) karşılaştırılsın.
-    local rprev=0 rw1 rw2 rs1 rs2
-    rw2=$(( now - REVIEW_DAYS * 86400 )); rw1=$(( now - 2 * REVIEW_DAYS * 86400 ))
-    printf -v rs1 '%(%Y-%m-%d)T' "$rw1"; printf -v rs2 '%(%Y-%m-%d)T' "$rw2"
-    rprev=$( { [ -r "$EVENTS_FILE" ] && awk -v a="$rw1" -v b="$rw2" '
+    rv_win() {   # A B → [A, B) aralığında işaretlenen farklı blok/ağ sayısı (olay kaydı + sayaçtaki eski kayıtlar)
+        local rw1="$1" rw2="$2" rs1 rs2
+        printf -v rs1 '%(%Y-%m-%d)T' "$rw1"; printf -v rs2 '%(%Y-%m-%d)T' "$rw2"
+        { [ -r "$EVENTS_FILE" ] && awk -v a="$rw1" -v b="$rw2" '
                    match($0, /"t":[0-9]+/) { t = substr($0, RSTART + 4, RLENGTH - 4) + 0 }
                    t >= a && t < b && /"type":"(warn16|warn16t|skip_wl)"/ && match($0, /"cidr":"[0-9.\/]+"/) { print substr($0, RSTART + 8, RLENGTH - 9) }' "$EVENTS_FILE"
                [ -r "$SAYAC_FILE" ] && awk -v a="$rs1" -v b="$rs2" '$2 >= a && $2 < b {
                    k = $1
                    if (k ~ /^WARN16_/)           { sub(/^WARN16_/, "", k);      print k ".0.0/16" }
                    else if (k ~ /^WARN_TEMP16_/) { sub(/^WARN_TEMP16_/, "", k); print k ".0.0/16" }
-                   else if (k ~ /^WLSKIP_/)      { sub(/^WLSKIP_/, "", k);      print k ".0/24" } }' "$SAYAC_FILE"; } | sort -u | grep -c .)
+                   else if (k ~ /^WLSKIP_/)      { sub(/^WLSKIP_/, "", k);      print k ".0/24" } }' "$SAYAC_FILE"; } | sort -u | grep -c .
+    }
+    local rprev rwin="" wd
+    rprev=$(rv_win $(( now - 2 * REVIEW_DAYS * 86400 )) $(( now - REVIEW_DAYS * 86400 )))
+    # özet kartı grafiğin 7 / 30 gün seçimine göre: son N gün ve ondan önceki N gün
+    for wd in 7 30; do
+        rwin+="${rwin:+,}\"$wd\":[$(rv_win $(( now - wd * 86400 )) $(( now + 1 ))),$(rv_win $(( now - 2 * wd * 86400 )) $(( now - wd * 86400 )))]"
+    done
 
     # Yoksayılanlar
     local ignored=() itext=()
@@ -1942,7 +1949,7 @@ do_status() {
     local runsj='{"n24":0,"first":0,"list":[]}'
     if [ -r "$EVENTS_FILE" ]; then
         # p7/t7: 7 gün önceki (ya da daha yeni ilk) turun liste doluluğu — özet kartlarındaki haftalık değişim için
-        runsj=$(grep '"type":"run"' "$EVENTS_FILE" | awk -v c=$(( now - 86400 )) -v w=$(( now - 7 * 86400 )) '
+        runsj=$(grep '"type":"run"' "$EVENTS_FILE" | awk -v c=$(( now - 86400 )) -v w=$(( now - 7 * 86400 )) -v w30=$(( now - 30 * 86400 )) '
             { t = 0; d = 0
               if (match($0, /"t":[0-9]+/))   t = substr($0, RSTART + 4, RLENGTH - 4) + 0
               if (match($0, /"dur":[0-9]+/)) d = substr($0, RSTART + 6, RLENGTH - 6) + 0
@@ -1950,17 +1957,21 @@ do_status() {
               if (!got && t >= w && match($0, /"perm_used":[0-9]+/)) {
                   p7 = substr($0, RSTART + 12, RLENGTH - 12) + 0
                   if (match($0, /"temp_used":[0-9]+/)) t7 = substr($0, RSTART + 12, RLENGTH - 12) + 0; else t7 = -1
-                  got = 1 } }
+                  got = 1 }
+              if (!got30 && t >= w30 && match($0, /"perm_used":[0-9]+/)) {
+                  p30 = substr($0, RSTART + 12, RLENGTH - 12) + 0
+                  if (match($0, /"temp_used":[0-9]+/)) t30 = substr($0, RSTART + 12, RLENGTH - 12) + 0; else t30 = -1
+                  got30 = 1 } }
             END { s = NR > 36 ? NR - 35 : 1; o = ""
                   for (i = s; i <= NR; i++) o = o (o != "" ? "," : "") "[" T[i] "," D[i] "]"
-                  printf "{\"n24\":%d,\"first\":%d,\"p7\":%d,\"t7\":%d,\"list\":[%s]}", n, f, (got ? p7 : -1), (got ? t7 : -1), o }')
+                  printf "{\"n24\":%d,\"first\":%d,\"p7\":%d,\"t7\":%d,\"p30\":%d,\"t30\":%d,\"list\":[%s]}", n, f, (got ? p7 : -1), (got ? t7 : -1), (got30 ? p30 : -1), (got30 ? t30 : -1), o }')
     fi
 
     if [ "$JSON" = 1 ]; then
         local IFS=,
         printf '{"ok":true,"version":"%s","lang":"%s","now":%s,"running":%s,' "$VERSION" "$MSG_LANG" "$now" "$running"
         health_check
-        printf '"review_prev":%s,' "$(num "$rprev")"
+        printf '"review_prev":%s,"review_win":{%s},' "$(num "$rprev")" "$rwin"
         printf '"health":{"csf":"%s","lfd":"%s"},"expire":{"days":%s,"auto":%s},"repeat_min":%s,' "$H_CSF" "$H_LFD" "$(num "$BLOCK_EXPIRE_DAYS")" "$([ "$BLOCK_EXPIRE_AUTO" = 1 ] && echo true || echo false)" "$(num "$REPEAT16_MIN")"
         printf '"config":{"t24":%s,"t24p":%s,"t16":%s,"tt24":%s,"tt16":%s,"retention":%s,"review_days":%s,"lookup":%s},' \
             "$(num "$THRESHOLD_24")" "$(num "$THRESHOLD_24_PERMANENT")" "$(num "$THRESHOLD_16")" "$(num "$THRESHOLD_TEMP_24")" \
@@ -3568,7 +3579,6 @@ for prefix in $(printf '%s\n' "${!count16[@]}" | sort -V); do
         ip2int "$prefix.0.0"; lo=$REPLY
         if perm_covers "$lo" $((lo + 65535)); then logr "$(m "$M_TSKIP16" "$prefix")"; continue; fi
         if ign_until "$prefix.0.0/16"; then logr "$(m "$M_IGN16" "$prefix" "$IGN_UNTIL")"; continue; fi
-        if grep -qF "WARN16_${prefix} $TODAY" "$SAYAC_FILE"; then logr "$(m "$M_SKIP16" "$prefix")"; continue; fi
         np="${perm16[$prefix]:-0}"; nt="${tmp16[$prefix]:-0}"
         # ağa eklentinin kısmi banı konmuşsa ondan önceki tekiller o kararla ele alınmıştır: yalnız sonrakiler sayılır
         pe=0; pnote=""; pl=$(grep -F "|s=$prefix.0.0/16 # csf_autogroup:" "$DENY_FILE" | head -n 1)
@@ -3606,6 +3616,12 @@ for prefix in $(printf '%s\n' "${!count16[@]}" | sort -V); do
             for ip in ${ips16[$prefix]}; do [[ "$lips" == *" $ip "* ]] || { fresh=1; break; }; done
             [ "$fresh" = 1 ] && [ "$lcnt" -gt 0 ] && [ "${ltot:-0}" -gt "$lcnt" ] && [ "${count16[$prefix]}" -le "${ln16:-0}" ] && fresh=0   # liste kısaltılmışsa sayıya bak
             [ "$fresh" = 0 ] && { logr "$(m "$M_SAME16" "$prefix")"; continue; }
+        fi
+        # günde en çok bir uyarı; ama kısmi banlı ağda bugünkü uyarı bandan ÖNCE atıldıysa sayılmaz: bandan sonraki
+        # yeni saldırılar (ör. açık kalan servislere) ertesi güne kalmadan bildirilir
+        if grep -qF "WARN16_${prefix} $TODAY" "$SAYAC_FILE"; then
+            lt=0; [[ "$lw" =~ ^\{\"t\":([0-9]+) ]] && lt="${BASH_REMATCH[1]}"
+            if [ "${pe:-0}" -eq 0 ] || [ "$lt" -ge "$(date -d 'today 00:00' +%s)" ]; then logr "$(m "$M_SKIP16" "$prefix")"; continue; fi
         fi
         log "$(m "$M_WARN16" "$prefix" "${count16[$prefix]}" "$np" "$nt" "$subnet_count")"
         warn_body+="$(m "$M_WARN16_B" "$prefix" "${count16[$prefix]}" "$np" "$nt" "$subnet_count")$NL"

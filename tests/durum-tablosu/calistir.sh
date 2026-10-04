@@ -58,6 +58,10 @@ mk b24exc; quiet --action ban24 151.80.7 --mode exc --svc web
 mcheck "istisnada Web açıkken UDP 443 iki yönde açık" "grep -q '^udp|in|d=443|s=151.80.7.0/24 ' '$A' && grep -q '^udp|out|s=443|d=151.80.7.0/24 ' '$A'"
 mk oldpart;    for x in 7.1 7.2 8.1 8.2 9.1 10.1; do single 151.80.$x sshd; done; quiet --action ban16 151.80 --mode svc --svc web --keep; quiet
 mcheck "kısmi bandan önceki tekiller şüpheli ağ uyarısı üretmez" "! grep -q '\"type\":\"warn16\",\"cidr\":\"151.80.0.0/16\"' '$R/var/lib/csf_autogroup/events.jsonl'"
+printf 'WARN16_151.80 %s\n' "$(date +%F)" >> "$C"          # bugün bandan önce bildirilmiş say
+for x in 20.1 21.1 22.1 23.1 24.1; do printf '%s|151.80.%s||in|3600|lfd: (sshd) Failed SSH login from 151.80.%s\n' "$(( $(date +%s) + 5 ))" "$x" "$x" >> "$T"; done
+quiet
+mcheck "kısmi bandan sonraki yeni saldırılar aynı gün de bildirilir" "grep -q '\"type\":\"warn16\",\"cidr\":\"151.80.0.0/16\".*\"after\":' '$R/var/lib/csf_autogroup/events.jsonl'"
 mk legacy;     printf '%s\n' "tcp|in|d=80,443|s=151.80.0.0/16 # csf_autogroup: elle /16 kısmi ban (root) [svc=web] - do not delete - $DT" >> "$D"; quiet; quiet
 mcheck "eski kısmi web banına UDP 443 bir kez eklenir" "[ \$(grep -c '^udp|in|d=443|s=151.80.0.0/16 ' '$D') = 1 ]"
 
