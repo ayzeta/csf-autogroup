@@ -48,7 +48,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.9.11"   # sürüm — başlangıç log satırında görünür
+VERSION="1.9.12"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1761,7 +1761,7 @@ do_status() {
 
     # Kontrol edilecekler: son REVIEW_DAYS gündeki /16 uyarıları ve beyaz liste atlamaları,
     # blok başına en yenisi; yoksayılanlar ve o arada banlanmış olanlar düşülür.
-    local review=() rtext=() t ty
+    local review=() rtext=() t ty pbe
     local -A seen=() W16D=()
     # tekrar eden şüpheli ağ: kontrol süresi içinde kaç ayrı günde işaretlendi (sayaçtaki günlük kayıtlar)
     if [ -r "$SAYAC_FILE" ]; then
@@ -1778,6 +1778,11 @@ do_status() {
             [ -n "${seen[$c]}" ] && continue; seen[$c]=1
             ign_until "$c" && continue
             cidr_range "$c" && perm_covers "$R_LO" "$R_HI" && continue
+            # aynı aralığa uyarıdan SONRA kısmi ban konduysa uyarı ele alınmıştır; bandan sonra gelen yeni uyarı görünür
+            if [ -n "${PB_D[$c]}" ]; then
+                pbe=$(LC_ALL=C date -d "${PB_D[$c]}" +%s 2>/dev/null || echo 0)
+                [ "$t" -le "$pbe" ] && continue
+            fi
             [ -n "${W16D[$c]}" ] && line="${line%\}},\"rep\":${W16D[$c]}}"
             # şüpheli ağda kısmi ban varsa (yalnız seçilen servisler kapalı) satırda belirtilir
             if [[ "$ty" == warn16* ]] && cidr_range "$c" && part_note "$R_LO" "$R_HI"; then
@@ -1804,6 +1809,7 @@ do_status() {
             [ -n "${seen[$c]}" ] && continue; seen[$c]=1
             ign_until "$c" && continue
             cidr_range "$c" && perm_covers "$R_LO" "$R_HI" && continue
+            [ -n "${PB_P[$c]+x}" ] && continue        # olay kaydından önceki uyarı; aralığa sonradan kısmi ban konmuş
             day_epoch "$u"
             review+=("{\"t\":$REPLY,\"type\":\"$ty\",\"cidr\":\"$c\",\"day\":\"$u\",\"hist\":true${W16D[$c]:+,\"rep\":${W16D[$c]}}}")
             rtext+=("$(printf '%-18s %s · %s' "$c" "$ty" "$(date -d "$u" '+%d.%m')")")

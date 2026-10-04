@@ -786,3 +786,5 @@
 .ag-field-i:empty { display: none; }
 .ag-mode-hint .ag-link, .ag-modal-b .ag-warnbox .ag-link { font-size: inherit; }
 .ag-rules > .ag-rule:last-child:nth-child(odd) { grid-column: 1 / -1; }   /* tek kalan kutu satırı doldursun */
+.ag-ev-m { flex: none; margin: -3px -6px 0 0; }
+.ag-ev-st { color: var(--ag-text-2); font-weight: 600; }

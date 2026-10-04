@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.9.12 — 2026-10-04
+
+- **History rows have actions.** Each row gets a **⋯** menu with what can be
+  done with that item now — based on its current state, not on the old record:
+  ban, change ban, remove, make permanent, stop watching, ignore, **Show in
+  Overview** (opens and highlights the row there) and the IP card. The newest
+  row of each item says its current state ("banned now", "inside the … ban",
+  "in To review", "watched", "no longer banned").
+- **Since your last visit → Show** goes straight to the item in Overview when
+  everything new is about one item that is still there; otherwise to History.
+- With a partial ban in place, ban buttons say what they do: **Change ban**
+  for the same range (opens with the current partial ban), **Ban the whole
+  block (/24)** for a block inside a partially banned network. A suspicious
+  network warning older than the partial ban added for it leaves To review; a
+  new warning after it shows up again with a note.
+- To review: the attacked services and the single-block suggestion come before
+  the owner name, so they stay visible when the line is cut.
+
 ## 1.9.11 — 2026-10-04
 
 - Ban reasons marked `(PERMBLOCK)` — LFD making an IP permanent after too many

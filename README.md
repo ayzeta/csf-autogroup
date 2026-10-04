@@ -27,7 +27,7 @@ is escalated to a **permanent** ban. `/16` networks are only flagged for review
 - **English / Türkçe** — the plugin, logs and emails.
 - **Works on phones** — the page adapts to small screens.
 
-**Version 1.9.11** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
+**Version 1.9.12** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
 cPanel the same engine runs from cron and the command line
 ([details](#without-cpanel)).
 
@@ -125,6 +125,10 @@ settings, with no prompts. `config.env` is left untouched.
   changing a threshold shows its effect on the current entries; suspicious
   networks show the attacked services and suggest a single block when most
   singles sit in one.
+- **History actions** — every row has a **⋯** menu with what can be done with
+  that item *now* (ban, change, remove, ignore, show in Overview, IP card), and
+  the newest row of each item says its current state ("banned now", "in To
+  review", "no longer banned").
 - **Look up an IP** — hostname (forward-confirmed), owner, announced prefix,
   registry, and **every** level at which CSF blocks it: the single ban, the
   covering `/24`, `/16` or other range (with its state, date and main ban
