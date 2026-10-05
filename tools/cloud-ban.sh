@@ -90,11 +90,16 @@ apply() {        # son listelerle ipset'i doldur, zinciri kur (değişmiş olsa 
     [[ "$tcp" =~ ^[0-9,:]*$ && "$udp" =~ ^[0-9,:]*$ ]] || { tcp=""; udp=""; }
     list=$(for n in $names; do [[ "$n" =~ ^[a-z0-9-]+$ ]] && cat "$CACHE/$n.txt" 2>/dev/null; done | grep -E '^[0-9.]+(/[0-9]+)?$' | sort -u)
     if [ -z "$names" ] || [ -z "$list" ] || [ -z "$tcp$udp" ]; then rules_del; return 0; fi
+    # izinli servisler (Googlebot'un bir kısmı Google Cloud aralıklarında): CSF izin listesi zaten önce gelir; izin
+    # listesi bir sebeple boş kalsa da kesilmesinler diye kümeden ayrıca çıkarılırlar (aynı aralık hiç eklenmez, dar olan nomatch)
+    local allow; allow=$(grep -oE '^[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?' "$CSF_DIR/csf_autogroup.services.allow" 2>/dev/null | sort -u)
+    [ -n "$allow" ] && list=$(comm -23 <(printf '%s\n' "$list") <(printf '%s\n' "$allow"))
     ipset create "$SET" hash:net family inet hashsize 4096 maxelem 262144 -exist || return 1
     ipset create "${SET}_t" hash:net family inet hashsize 4096 maxelem 262144 -exist || return 1
     ipset flush "${SET}_t"
     { printf '%s\n' "$list" | awk -v s="${SET}_t" '{ print "add " s " " $1 " -exist" }'
       for s in $(cat "$CACHE/self" 2>/dev/null); do [[ "$s" =~ ^[0-9.]+$ ]] && echo "add ${SET}_t $s/32 nomatch -exist"; done
+      for s in $allow; do [[ "$s" == */* ]] || s="$s/32"; echo "add ${SET}_t $s nomatch -exist"; done
     } | ipset restore -exist || { log "ipset doldurulamadı"; return 1; }
     ipset swap "${SET}_t" "$SET" && ipset destroy "${SET}_t"
     iptables -N "$CHAIN" 2>/dev/null; iptables -F "$CHAIN" || return 1

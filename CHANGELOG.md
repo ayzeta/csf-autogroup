@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.12.3 — 2026-10-05
+
+- **Cloud list ban never catches allowed services:** 23 of Google's crawler
+  ranges sit inside Google Cloud ranges. CSF's allow list already comes first;
+  now the allowed-service addresses are also taken out of the cloud set
+  (`nomatch`), so Googlebot stays reachable even if the allow list were empty.
+- Provider ban events show what changed ("removed: AS8075 · 5 providers in
+  all") instead of the whole list each time.
+
 ## 1.12.2 — 2026-10-05
 
 - **Azure in the cloud lists:** Microsoft's AzureCloud addresses (all Azure
