@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.12.3"   # sürüm — başlangıç log satırında görünür
+VERSION="1.12.4"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -123,6 +123,7 @@ ASN_ALL="${ASN_ALL:-}"                  # her şeyi kapatılanlar (CC_DENY), vir
 ASN_MODE="${ASN_MODE:-web}"             # web (TCP 80,443 + UDP 443) | ports (ASN_TCP / ASN_UDP) | all (bütün portlar)
 ASN_TCP="${ASN_TCP-80,443}"         # boş kaydedilirse boş kalır (varsayılana dönmez)
 ASN_UDP="${ASN_UDP-443}"
+ENABLED="${ENABLED:-1}"                 # 0 = duraklatıldı: tur ban koymaz, sağlayıcı / bulut banını CSF'ten kaldırır
 # Bulut listeleriyle ban: bulut firmalarının kiraladığı sunucuların yayımlanmış adresleri, yalnız seçilen portlar (tools/cloud-ban.sh)
 CLOUD_BAN="${CLOUD_BAN:-0}"             # 1 = açık
 CLOUD_SOURCES="${CLOUD_SOURCES-gcp}"    # virgüllü: gcp aws azure oracle digitalocean linode vultr
@@ -314,6 +315,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_ASN_SELF="Sağlayıcı banı uygulanmadı: %s bu sunucunun kendi sağlayıcısı"
   M_SVC_APPLIED="İzinli servisler güncellendi: %s"
   M_SVC_REMOVED="İzinli servisler kapatıldı; csf.allow'daki Include satırı ve liste kaldırıldı"
+  M_PAUSED="CSF Auto-Group duraklatıldı: yeni ban konmuyor; sağlayıcı ve bulut listesi banı CSF'te kaldırıldı (Ayarlar → Zamanlama'dan açılır)"
   M_CLOUD_REMOVED="Bulut listeleriyle ban kapatıldı; kural, adres kümesi ve csfpost.sh satırı kaldırıldı"
   M_CLOUD_FAIL_SUBJ="bulut listesi indirilemiyor (%s)"
   M_CLOUD_FAIL_BODY="Şu bulut listeleri 3 günden uzun süredir indirilemiyor: %s. Eski listeler kullanılmaya devam ediyor; ama sağlayıcı yeni adresler aldıysa onlar banlı değildir. Adresi panelden düzeltebilirsiniz: Sağlayıcılar → Bulut listeleriyle ban → Kaynak adresleri."
@@ -545,6 +547,7 @@ else
   M_ASN_SELF="Provider ban not applied: %s is this server's own provider"
   M_SVC_APPLIED="Allowed services updated: %s"
   M_SVC_REMOVED="Allowed services turned off; the Include line in csf.allow and the list were removed"
+  M_PAUSED="CSF Auto-Group is paused: no new bans; provider and cloud list bans are off in CSF (turn it back on in Settings → Schedule)"
   M_CLOUD_REMOVED="Cloud list ban turned off; the rule, the address set and the csfpost.sh line were removed"
   M_CLOUD_FAIL_SUBJ="cloud list can't be downloaded (%s)"
   M_CLOUD_FAIL_BODY="These cloud lists haven't downloaded for more than 3 days: %s. The old lists are still used, but addresses the provider added since aren't banned. You can fix the address in the panel: Providers → Cloud list ban → Source addresses."
@@ -688,8 +691,8 @@ mail() {
 
 # ── Settings: validation (panel + --config set + --dry-run --set) ──────────
 # Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
-CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_URLS"
-PROV_KEYS="SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_URLS"
+CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_URLS ENABLED"
+PROV_KEYS="SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_URLS ENABLED"
 SVC_CATALOG="google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake"
 CLOUD_CATALOG="gcp aws azure oracle digitalocean linode vultr"
 CFG_TRY_KEYS="THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS"
@@ -729,7 +732,7 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
         LOG_ROTATE_KEEP) lo=1; hi=52 ;;
         BLOCK_EXPIRE_DAYS) lo=30; hi=3650 ;;
         BLOCK_EXPIRE_AUTO) opts="0 1" ;;
-        SVC_ALLOW|ASN_BAN|CLOUD_BAN) opts="0 1" ;;
+        SVC_ALLOW|ASN_BAN|CLOUD_BAN|ENABLED) opts="0 1" ;;
         CLOUD_SOURCES)
             local x; CFG_VAL=""
             for x in ${v//,/ }; do
@@ -2126,6 +2129,7 @@ do_status() {
         printf '{"ok":true,"version":"%s","lang":"%s","now":%s,"running":%s,' "$VERSION" "$MSG_LANG" "$now" "$running"
         health_check
         printf '"review_prev":%s,"review_win":{%s},' "$(num "$rprev")" "$rwin"
+        printf '"enabled":%s,' "$([ "$ENABLED" = 0 ] && echo false || echo true)"
         printf '"health":{"csf":"%s","lfd":"%s"},"expire":{"days":%s,"auto":%s},"repeat_min":%s,' "$H_CSF" "$H_LFD" "$(num "$BLOCK_EXPIRE_DAYS")" "$([ "$BLOCK_EXPIRE_AUTO" = 1 ] && echo true || echo false)" "$(num "$REPEAT16_MIN")"
         printf '"config":{"t24":%s,"t24p":%s,"t16":%s,"tt24":%s,"tt16":%s,"retention":%s,"review_days":%s,"lookup":%s},' \
             "$(num "$THRESHOLD_24")" "$(num "$THRESHOLD_24_PERMANENT")" "$(num "$THRESHOLD_16")" "$(num "$THRESHOLD_TEMP_24")" \
@@ -4074,7 +4078,9 @@ case "$MODE" in
     inside) LOG_MODE=quiet; do_inside "${ARGS[0]}"; exit $? ;;
     asnimpact) LOG_MODE=quiet; do_asn_impact "${ARGS[0]}"; exit $? ;;
     prov)   LOG_MODE=file; take_lock || { act_out 3 "$M_BUSY"; exit 3; }
-            svc_enforce 0; asn_enforce; cloud_enforce 0; prov_json; echo "{\"ok\":true,\"prov\":$REPLY}"; exit 0 ;;
+            svc_enforce 0
+            if [ "$ENABLED" = 0 ]; then ASN_BAN=0 asn_enforce; CLOUD_BAN=0 cloud_enforce 0; else asn_enforce; cloud_enforce 0; fi
+            prov_json; echo "{\"ok\":true,\"prov\":$REPLY}"; exit 0 ;;
     action) LOG_MODE=file; do_action "$ACT" "${ARGS[0]}" "${ARGS[1]}"; exit $? ;;
     config) LOG_MODE=file; do_config; exit $? ;;
     busy)   if lock_busy; then echo busy; else echo idle; fi; exit 0 ;;
@@ -4094,6 +4100,12 @@ panel_init
 owners_load
 RUN_MODE=1
 logr "$M_START (v$VERSION)"
+if [ "$ENABLED" = 0 ]; then
+    [ "$DRY" = 1 ] || { ASN_BAN=0 asn_enforce; CLOUD_BAN=0 cloud_enforce 0; }    # sağlayıcı ve bulut banı CSF'te kapalı kalsın
+    logr "$M_PAUSED"
+    ev run "" "v=\"$VERSION\"" "dur=$(( $(date +%s) - RUN_T0 ))" "added=0" "warn16=0" "paused=true"
+    exit 0
+fi
 
 # ── Permanent deny limit ────────────────────────────────────────────────────
 limit=$(grep "^DENY_IP_LIMIT" "$CSF_CONF" | cut -d'=' -f2 | tr -d ' "')

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.12.4 — 2026-10-05
+
+- **Pause switch** (Settings → Schedule, `ENABLED`): while paused, runs add no
+  bans and send no warnings, and the provider ban and the cloud list ban are
+  removed from CSF right away. Allowed services and existing block bans stay.
+  Overview says it is paused and has a **Resume** button; resuming puts
+  everything back as set.
+
 ## 1.12.3 — 2026-10-05
 
 - **Cloud list ban never catches allowed services:** 23 of Google's crawler
