@@ -1,9 +1,9 @@
 #!/bin/bash
-# CSF Auto-Group — bulut sağlayıcılarının yayımladığı müşteri adres listeleriyle ban (yalnız seçilen portlar).
+# CSF Auto-Group — bulut firmalarının kiraladığı sunucuların yayımlanmış adres listeleriyle ban (yalnız seçilen portlar).
 #
 # Saldırıların çoğu bulut sunucularından geliyor; ama bir bulut sağlayıcısının bütün ASN'ini banlamak kendi
-# servislerini de keser (ör. Google'ın AS15169'unda Googlebot ve Gmail de var). Sağlayıcılar müşterilerine
-# verdikleri adresleri ayrıca yayımlıyor (Google Cloud cloud.json, AWS EC2, Oracle Cloud, DigitalOcean, Linode,
+# servislerini de keser (ör. Google'ın AS15169'unda Googlebot ve Gmail de var). Firmalar herkese kiraladıkları
+# sunucuların adreslerini ayrıca yayımlıyor (Google Cloud cloud.json, AWS EC2, Oracle Cloud, DigitalOcean, Linode,
 # Vultr); bu araç o listeleri indirir, ag_cloud ipset'ine yükler ve CSF'in LOCALINPUT zincirinin sonuna yalnız
 # seçilen portlarda yeni bağlantıları düşüren bir kural ekler. CSF önce izin listesine (csf.allow, izinli
 # servisler) bakar; onlar bu kuralın önünde kalır. Kural yalnız gelen YENİ bağlantıya uygulanır: sunucunun
@@ -32,7 +32,7 @@ ipv4_list() {
     grep -oE '(^|[^0-9.])[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?' | grep -oE '[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?' |
         awk -F'[./]' '{ ok = 1; for (i = 1; i <= 4; i++) if ($i > 255) ok = 0; if (NF == 5 && ($5 < 10 || $5 > 32)) ok = 0; if (ok) print }' | sort -u
 }
-# kaynağa göre süzgeç: AWS listesinde yalnız EC2 (müşteri sunucuları; CloudFront, S3, Route 53 denetimleri değil)
+# kaynağa göre süzgeç: AWS listesinde yalnız EC2 (kiralık sunucular; CloudFront, S3, Route 53 denetimleri değil)
 pick() {
     case "$1" in
         aws*) awk 'BEGIN { RS = "}" } /"service": *"EC2"/' | ipv4_list ;;

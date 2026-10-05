@@ -1,9 +1,22 @@
 # Changelog
 
+## 1.12.1 — 2026-10-05
+
+- **Needs review groups a suspicious network's IPs by announced range:** when
+  most of them (60%+) sit in one range the owner announces between /17 and
+  /23, the row says so and offers **Ban announced range** next to *Ban
+  network*. The IP lines of new warnings carry their announced range; the
+  owner cache keeps it (filled in as blocks are looked up again).
+- **Bans inside the provider ban:** each row names the provider (linked to
+  bgp.he.net) and the range opens its IP card. On Overview, the banned
+  provider badges open the Providers tab.
+- Cloud list texts say what the lists are: servers the cloud companies rent
+  out to anyone, not your visitors.
+
 ## 1.12.0 — 2026-10-05
 
 - **Cloud list ban (experimental, Providers tab):** blocks the addresses cloud
-  providers give their customers, from the lists they publish — Google Cloud,
+  companies rent out to anyone (virtual servers), from the lists they publish — Google Cloud,
   AWS (EC2 only), Oracle Cloud, DigitalOcean, Linode and Vultr — on ports you
   choose (default web: TCP 80, 443 and UDP 443). The providers' own services
   aren't in these lists (the Google Cloud list has no Googlebot or Gmail), so

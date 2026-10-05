@@ -144,7 +144,8 @@ settings, with no prompts. `config.env` is left untouched.
 - **Inside a wider ban** — a block inside a banned `/16` (or any wider range) is
   tagged *inside /16* in Active block bans and Watched.
 - **Ban announced range** — when the range the IP's owner announces is between
-  /17 and /23, the IP card offers to ban just that range instead of the /16.
+  /17 and /23, the IP card offers to ban just that range instead of the /16;
+  a suspicious network whose IPs mostly sit in one such range offers it too.
 - **Most blocked providers** (by ASN) — three tabs:
   - *CSF* — ranked by block bans and single bans, with each provider's most
     common ban reason. A provider with 5+ block bans gets a suggestion to add
@@ -470,7 +471,7 @@ Overview, History) until it works again.
 works by hand (`--check` shows what would change, `--remove` takes it out).
 
 **Cloud list ban (experimental).** Cloud providers publish the addresses they
-give their customers; the Providers tab can block those on chosen ports
+rent out to anyone (virtual servers); the Providers tab can block those on chosen ports
 (default web): Google Cloud, AWS (EC2), Oracle Cloud, DigitalOcean, Linode and
 Vultr. Unlike a provider ban, the providers' own services stay reachable — the
 Google Cloud list has no Googlebot or Gmail. The lists go into an ipset with

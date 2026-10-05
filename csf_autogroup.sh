@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.12.0"   # sürüm — başlangıç log satırında görünür
+VERSION="1.12.1"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -123,7 +123,7 @@ ASN_ALL="${ASN_ALL:-}"                  # her şeyi kapatılanlar (CC_DENY), vir
 ASN_MODE="${ASN_MODE:-web}"             # web (TCP 80,443 + UDP 443) | ports (ASN_TCP / ASN_UDP) | all (bütün portlar)
 ASN_TCP="${ASN_TCP-80,443}"         # boş kaydedilirse boş kalır (varsayılana dönmez)
 ASN_UDP="${ASN_UDP-443}"
-# Bulut listeleriyle ban: sağlayıcıların yayımladığı müşteri adresleri, yalnız seçilen portlar (tools/cloud-ban.sh)
+# Bulut listeleriyle ban: bulut firmalarının kiraladığı sunucuların yayımlanmış adresleri, yalnız seçilen portlar (tools/cloud-ban.sh)
 CLOUD_BAN="${CLOUD_BAN:-0}"             # 1 = açık
 CLOUD_SOURCES="${CLOUD_SOURCES-gcp}"    # virgüllü: gcp aws oracle digitalocean linode vultr
 CLOUD_TCP="${CLOUD_TCP-80,443}"
@@ -1283,6 +1283,7 @@ owner_lookup() { # IP → OWN_LONG ("AS60729 ARTIKEL10, DE"), OWN_SHORT ("AS6072
         # "60729 | 185.220.101.0/24 | DE | ripencc | 2017-09-12"
         asn=$(printf '%s' "$txt" | cut -d'|' -f1 | awk '{print $1}')
         cc=$(printf '%s' "$txt" | cut -d'|' -f3 | tr -d ' ')
+        OWN_P[$p]=$(printf '%s' "$txt" | cut -d'|' -f2 | tr -d ' '); [[ "${OWN_P[$p]}" =~ ^[0-9.]+/[0-9]{1,2}$ ]] || OWN_P[$p]=
         OWN_A[$p]=""; OWN_C[$p]=""; OWN_L[$p]=""; OWN_S[$p]=""
         if [[ "$asn" =~ ^[0-9]+$ ]]; then
             if [ -z "${ASNAME[$asn]+x}" ]; then
@@ -1301,15 +1302,15 @@ owner_lookup() { # IP → OWN_LONG ("AS60729 ARTIKEL10, DE"), OWN_SHORT ("AS6072
 }
 # Önbellek satırı: "a.b.c|ASN|CC|KURUM|zaman". Sorgulanıp bilgi çıkmayan blok da (boş ASN) saklanır,
 # her turda boşuna yeniden sorulmasın. OWNER_TTL_DAYS'ten eski kayıt okunmaz, yeniden sorulur.
-declare -A OWN_N OWN_T OWN_NEW
+declare -A OWN_N OWN_T OWN_NEW OWN_P      # OWN_P: /24'ün sahibinin duyurduğu aralık (Team Cymru)
 owners_load() {
     local p asn cc name t min
     [ -r "$OWNERS_FILE" ] || return 0
     min=$(( $(date +%s) - OWNER_TTL_DAYS * 86400 ))
-    while IFS='|' read -r p asn cc name t; do
+    while IFS='|' read -r p asn cc name t pf; do
         [[ "$p" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || continue
         [[ "$t" =~ ^[0-9]+$ ]] && [ "$t" -ge "$min" ] || continue
-        OWN_A[$p]="$asn"; OWN_C[$p]="$cc"; OWN_N[$p]="$name"; OWN_T[$p]="$t"
+        OWN_A[$p]="$asn"; OWN_C[$p]="$cc"; OWN_N[$p]="$name"; OWN_T[$p]="$t"; OWN_P[$p]="$pf"
         if [ -n "$asn" ]; then
             OWN_L[$p]="AS$asn ${name:-?}"; [ -z "$name" ] && [ -n "$cc" ] && OWN_L[$p]="AS$asn, $cc"
             OWN_S[$p]="AS$asn${cc:+ $cc}"
@@ -1324,7 +1325,7 @@ owners_save() {  # yalnız yeni sorgu olduysa; atomik
     for p in "${!OWN_A[@]}"; do
         [ -n "${OWN_NEW[$p]+x}" ] && OWN_T[$p]="$now"
         [ -n "${OWN_T[$p]}" ] || continue
-        printf '%s|%s|%s|%s|%s\n' "$p" "${OWN_A[$p]}" "${OWN_C[$p]}" "${OWN_N[$p]//|/ }" "${OWN_T[$p]}"
+        printf '%s|%s|%s|%s|%s|%s\n' "$p" "${OWN_A[$p]}" "${OWN_C[$p]}" "${OWN_N[$p]//|/ }" "${OWN_T[$p]}" "${OWN_P[$p]}"
     done > "$tmp" && mv -f "$tmp" "$OWNERS_FILE"
 }
 deny_prefixes() {   # csf.deny'deki grupların ve tekillerin /24 önekleri (tekrarsız) → stdout
@@ -1394,7 +1395,15 @@ ip_line() {      # IP NOTE WITH_OWNER(0|1) → REPLY = "   - IP  hostname  [ASN 
     # owner_lookup DNS sorgusu yapar ve REPLY'yi ezer → satır "out" içinde toplanır
     if [ "$3" = 1 ]; then
         owner_lookup "$1"; [ -n "$OWN_SHORT" ] && out+="  [$OWN_SHORT]"
-        jstr "$OWN_LONG"; IPJ+=",\"owner\":$REPLY,\"asn\":\"$OWN_ASN\",\"cc\":\"$OWN_CC\""
+        local q="${1%.*}" a b c d
+        if [ "$OWN_UNK" = 0 ] && [ -n "$OWN_ASN" ] && [ -z "${OWN_P[$q]}" ]; then
+            IFS=. read -r a b c d <<< "$1"
+            if dns_q TXT "$d.$c.$b.$a.origin.asn.cymru.com"; then
+                OWN_P[$q]=$(printf '%s' "${REPLY%%$NL*}" | cut -d'|' -f2 | tr -d ' '); [[ "${OWN_P[$q]}" =~ ^[0-9.]+/[0-9]{1,2}$ ]] || OWN_P[$q]=""
+                OWN_NEW[$q]=1
+            fi
+        fi
+        jstr "$OWN_LONG"; IPJ+=",\"owner\":$REPLY,\"asn\":\"$OWN_ASN\",\"cc\":\"$OWN_CC\",\"pfx\":\"${OWN_P[$q]}\""
     fi
     IPJ+="}"
     [ -n "$why" ] && out+="  $why"
@@ -2959,7 +2968,7 @@ svc_srclist() {  # → REPLY = araca verilecek kaynaklar (satır satır): seçil
     REPLY="$o"
 }
 CLOUD_DIR="$(dirname "$SAYAC_FILE")/cloud"
-cloud_urls() {   # KAYNAK → REPLY = varsayılan liste adresi (sağlayıcıların yayımladığı müşteri adresleri)
+cloud_urls() {   # KAYNAK → REPLY = varsayılan liste adresi (firmanın kiraladığı sunucuların adresleri)
     case "$1" in
         gcp)          REPLY="https://www.gstatic.com/ipranges/cloud.json" ;;
         aws)          REPLY="https://ip-ranges.amazonaws.com/ip-ranges.json" ;;            # araç yalnız EC2'yi alır
