@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.9.17 — 2026-10-05
+
+- New `tools/services-allow.sh`: keeps the addresses that services publish
+  (Google's crawler and fetcher lists, Mollie, plus your own entries) in a file
+  included from `csf.allow`, so a provider-wide ban such as a cloud ASN in
+  `CC_DENY_PORTS` doesn't cut them. Plain addresses (ipset), keeps the previous
+  list when a download fails, refuses ranges wider than /16, restarts CSF only
+  on change. See README, "Allowing published service addresses".
+
 ## 1.9.16 — 2026-10-05
 
 - Pressing **Ban** (or any action) dims the action buttons right away with a

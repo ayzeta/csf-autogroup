@@ -27,7 +27,7 @@ is escalated to a **permanent** ban. `/16` networks are only flagged for review
 - **English / Türkçe** — the plugin, logs and emails.
 - **Works on phones** — the page adapts to small screens.
 
-**Version 1.9.16** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
+**Version 1.9.17** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
 cPanel the same engine runs from cron and the command line
 ([details](#without-cpanel)).
 
@@ -404,6 +404,33 @@ rm -rf /var/lib/csf_autogroup
 ```
 
 Existing `/24` bans stay in `csf.deny` until you remove them (`csf -dr <cidr>`).
+
+## Allowing published service addresses
+
+Banning a whole provider (for example a cloud ASN with `CC_DENY_PORTS`) also
+cuts the legitimate services running there. `tools/services-allow.sh` writes the
+addresses that services publish themselves into a separate file and includes it
+from `csf.allow`; CSF checks the allow list before country/ASN bans, so these
+addresses still get through:
+
+- Google's crawlers and fetchers (Googlebot, AdsBot, Storebot, site
+  verification, Gmail's image proxy and other user-triggered fetchers), from
+  Google's four published lists
+- Mollie (payment notifications)
+- your own entries: lines `name|https://url` (a JSON or text list of IPs) or
+  `name|1.2.3.0/24` in `/etc/csf/csf_autogroup.services.extra`
+
+Entries are written as plain addresses, so CSF keeps them in an ipset (one
+lookup per packet however many there are). A source that fails to download, or
+returns far fewer addresses than before, keeps its previous list; ranges wider
+than /16 are refused. CSF is restarted only when the file changed.
+
+```bash
+bash /root/csf-autogroup/tools/services-allow.sh --check
+```
+
+Run it without `--check` to apply, and daily from cron to keep the lists
+current.
 
 ## Development
 
