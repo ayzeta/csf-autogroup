@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.11.0 — 2026-10-05
+
+- **New Providers tab** (Overview · History · Providers · Settings): provider
+  ban and allowed services, next to the most blocked providers — **Ban…** on a
+  row adds it to the list and measures the impact — and the provider ban
+  events. It moved out of Settings; Overview's provider card links to it.
+- **IP card says the result first**: "can connect — the whitelist comes before
+  every ban", "blocked on every port (CC_DENY FR)" or "only Web is blocked;
+  other connections are open". Raw CSF lines are folded under "CSF line". When
+  the network is already fully blocked it says why there are no ban buttons; a
+  provider rule whose addresses CSF hasn't loaded yet is flagged.
+- **Removing a ban restores the removed entries by default**, lists them, and
+  says that unticking unbans them too.
+- **Change ban** says what the ban is now and disables **Change** while the
+  selection matches it.
+- The partial-ban suggestion in the ban dialog has its own button ("Block only
+  SSH"). "Remove covered entries" is two lines; the rest is under "Details".
+- One name for blocks made permanent after coming back: "Came back, permanent"
+  (table, chart, History).
+- Watched blocks: the column is "Watch ends", and the card gives the live number
+  of temp bans that makes a block permanent.
+- Active block bans mark blocks inside a country or provider ban; a temp ban's
+  remaining time sits under its badge instead of being cut off.
+- The save dialog says provider settings apply right away and the others on the
+  next run. The threshold-impact line no longer covers the value field.
+- History no longer shows the first run's events twice (once from the event
+  log, once rebuilt from the plain log); its cache is rebuilt once.
+
 ## 1.10.2 — 2026-10-05
 
 Fixes from a full logic and consistency review:

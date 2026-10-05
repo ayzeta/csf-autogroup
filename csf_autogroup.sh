@@ -48,7 +48,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.10.2"   # sürüm — başlangıç log satırında görünür
+VERSION="1.11.0"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -97,7 +97,7 @@ OWNER_TTL_DAYS="${OWNER_TTL_DAYS:-30}"
 BACKFILL_MAX="${BACKFILL_MAX:-50}"      # her turda en fazla bu kadar /24'ün sahibi sorgulanır
 IMUNIFY_BIN="${IMUNIFY_BIN:-$(command -v imunify360-agent 2>/dev/null)}"   # yoksa Imunify kısmı atlanır
 RESTORE_DIR="${RESTORE_DIR:-$(dirname "$SAYAC_FILE")/restore}"   # elle banın kaldırdığı kalıcı satırlar (ban kaldırılırken geri yüklenebilir)
-LOGHIST_FILE="${LOGHIST_FILE:-$(dirname "$SAYAC_FILE")/loghist.v2.jsonl}"   # günlükten çıkarılan, olay kaydından önceki işler
+LOGHIST_FILE="${LOGHIST_FILE:-$(dirname "$SAYAC_FILE")/loghist.v3.jsonl}"   # günlükten çıkarılan, olay kaydından önceki işler
 IMUNIFY_FILE="${IMUNIFY_FILE:-$(dirname "$SAYAC_FILE")/imunify}"         # yerel kara liste önbelleği
 IMUNIFY_WL_FILE="${IMUNIFY_WL_FILE:-$(dirname "$SAYAC_FILE")/imunify_white}"  # yerel beyaz liste önbelleği
 IC_STATE_FILE="${IC_STATE_FILE:-$(dirname "$SAYAC_FILE")/slack_state}"   # Slack'e bildirilmiş, süren sorunlar
@@ -1702,6 +1702,15 @@ loghist_build() {
     aw=$(command -v gawk 2>/dev/null)
     if [ -z "$aw" ] || [ ! -r "$LOG_FILE" ]; then : > "$LOGHIST_FILE" 2>/dev/null; return 0; fi
     [ -r "$EVENTS_FILE" ] && [[ "$(awk 'NR == 1' "$EVENTS_FILE")" =~ ^\{\"t\":([0-9]+), ]] && first="${BASH_REMATCH[1]}"
+    # sınır, ilk olayı yazan turun BAŞLANGICI: tur günlük satırlarını olaylarından birkaç saniye önce yazar,
+    # sınır olayın saati olursa o turun işleri hem olay kaydından hem günlükten gelip iki kez görünürdü
+    if [ "$first" -gt 0 ] && [ -r "$EVENTS_FILE" ]; then
+        local rl rt rd
+        rl=$(grep -m1 '"type":"run"' "$EVENTS_FILE")
+        [[ "$rl" =~ \"t\":([0-9]+) ]] && rt="${BASH_REMATCH[1]}"
+        [[ "$rl" =~ \"dur\":([0-9]+) ]] && rd="${BASH_REMATCH[1]}"
+        [ -n "$rt" ] && [ -n "$rd" ] && [ $(( rt - rd - 2 )) -lt "$first" ] && first=$(( rt - rd - 2 ))
+    fi
     [ "$first" -gt 0 ] || first=$(( $(date +%s) + 1 ))
     { for f in $(ls -1r "$LOG_FILE".[0-9]*.gz 2>/dev/null); do zcat "$f" 2>/dev/null; done
       for f in "$LOG_FILE.1" "$LOG_FILE"; do [ -r "$f" ] && cat "$f"; done; } |
@@ -1740,7 +1749,7 @@ loghist_build() {
                   (ty ~ /^(add24|promote)$/ ? ",\"dnd\":" dnd : "") (wl != "" ? ",\"wl\":" js(wl) : "") ",\"src\":\"log\""
         }
         END { flush() }' | awk 'NR <= 1000' > "$LOGHIST_FILE.tmp.$$" 2>/dev/null && mv -f "$LOGHIST_FILE.tmp.$$" "$LOGHIST_FILE"
-    rm -f "$LOGHIST_FILE.tmp.$$"
+    rm -f "$LOGHIST_FILE.tmp.$$" "$(dirname "$SAYAC_FILE")/loghist.v2.jsonl"   # eski sürümün (çift kayıtlı) önbelleği
 }
 # ── --status ────────────────────────────────────────────────────────────────
 declare -A DAYEP
@@ -1803,8 +1812,15 @@ do_status() {
         tok="${g_tok[gi]}"; kind="${g_kind[gi]}"; dnd="${g_dnd[gi]}"
         REPLY=""; cidr_range "$tok" && under_of "$R_LO" "$R_HI" "$tok"
         local gu="$REPLY" grn=0
-        if [ "$kind" = manual ]; then restore_file "$tok"; [ -s "$REPLY" ] && grn=$(grep -vc -e '^#' -e '^$' "$REPLY"); fi   # #t| satırı kayıt değil
-        groups+=("{\"cidr\":\"$tok\",\"kind\":\"$kind\",\"dnd\":$dnd,\"n\":${g_n[gi]},\"added\":$added,\"ttl\":0${gu:+,\"under\":\"$gu\"}$([ "$grn" -gt 0 ] && echo ",\"restore\":$grn")$([ -n "${EXC_S[$tok]+x}" ] && echo ",\"open\":\"${EXC_S[$tok]}\",\"open_extra\":\"${EXC_X[$tok]}\"")}")
+        local grip=""
+        if [ "$kind" = manual ]; then
+            restore_file "$tok"
+            if [ -s "$REPLY" ]; then
+                grn=$(grep -vc -e '^#' -e '^$' "$REPLY")                # #t| satırı kayıt değil
+                grip=$(grep -oE '^[0-9][0-9./]+' "$REPLY" | head -n 6 | paste -sd, -)   # pencerede gösterilecek ilk adresler
+            fi
+        fi
+        groups+=("{\"cidr\":\"$tok\",\"kind\":\"$kind\",\"dnd\":$dnd,\"n\":${g_n[gi]},\"added\":$added,\"ttl\":0${gu:+,\"under\":\"$gu\"}$([ "$grn" -gt 0 ] && echo ",\"restore\":$grn,\"rips\":\"$grip\"")$([ -n "${EXC_S[$tok]+x}" ] && echo ",\"open\":\"${EXC_S[$tok]}\",\"open_extra\":\"${EXC_X[$tok]}\"")}")
         [ "$added" -gt 0 ] && ghist+="$added $kind $tok"$'\n'
         [ "$JSON" = 1 ] || gtext+=("$(printf '%-18s %-9s %s' "$tok" "$kind" "$([ "$dnd" = true ] && echo 'do not delete')")")
     done

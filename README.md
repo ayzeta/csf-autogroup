@@ -27,7 +27,7 @@ is escalated to a **permanent** ban. `/16` networks are only flagged for review
 - **English / Türkçe** — the plugin, logs and emails.
 - **Works on phones** — the page adapts to small screens.
 
-**Version 1.10.2** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
+**Version 1.11.0** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
 cPanel the same engine runs from cron and the command line
 ([details](#without-cpanel)).
 
@@ -407,7 +407,7 @@ Existing `/24` bans stay in `csf.deny` until you remove them (`csf -dr <cidr>`).
 
 ## Provider ban (experimental)
 
-**Settings → Provider ban** bans a whole provider by its AS number with CSF —
+The **Providers** tab bans a whole provider by its AS number with CSF —
 useful when attacks come from one cloud spread over hundreds of networks, too
 many to ban one by one. Everything is managed from the panel; the wanted state
 is kept in `config.env`, and every run makes CSF match it. After a server move,
@@ -419,6 +419,9 @@ restoring `config.env` is enough.
   for `CC_DENY_PORTS`, so it is shared: *Web only* (TCP 80, 443 and UDP 443 for
   HTTP/3) or *Selected ports*. If another country or provider there uses
   different ports, the list isn't changed and the screen says why.
+- **Most blocked providers** sits next to it: **Ban…** on a row adds the
+  provider to the list and measures its impact (nothing is applied until you
+  save).
 - **Measure impact** before saving: the last 24 hours of web logs, for that
   provider — response codes, successful requests, successful POSTs (payment
   notifications, webhooks) and non-browser clients, by site.
