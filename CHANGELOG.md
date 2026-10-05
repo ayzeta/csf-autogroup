@@ -1,11 +1,39 @@
 # Changelog
 
+## 1.11.1 — 2026-10-05
+
+Provider ban everywhere:
+
+- **Banned providers leave the rankings.** Most blocked providers (CSF, Other
+  blocks, Imunify) and the weekly summary rank only providers that aren't
+  banned in CSF (`CC_DENY` / `CC_DENY_PORTS`), so the list doesn't fill up
+  with them and the suggestion always points at the next one. A line under the
+  list names the banned ones and what is blocked for each ("everything" or the
+  port list); a provider CSF hasn't loaded yet is flagged.
+- **Needs review drops what the provider ban already blocks.** A suspicious
+  network or skipped block is left out when every attacking IP belongs to a
+  banned provider and the ban covers the attacked service (*Everything*, or a
+  port list that holds that service's ports: a Web-only ban covers web
+  attacks, not SSH ones). The run doesn't send a warning for it either; the
+  log says why.
+- **The weekly summary has a Provider ban card**: banned providers, what is
+  blocked, ranges loaded by CSF, the allowed-services address count with the
+  last download, and sources that couldn't be downloaded for 3 days.
+- Overview's *Active block bans* card shows how many providers are banned,
+  linking to the Providers tab.
+- A source that fails is reported 3 days after its **first failure** (a source
+  that never downloaded is no longer reported on the first run).
+- "Source addresses" no longer overlaps the source tiles.
+
 ## 1.11.0 — 2026-10-05
 
 - **New Providers tab** (Overview · History · Providers · Settings): provider
   ban and allowed services, next to the most blocked providers — **Ban…** on a
   row adds it to the list and measures the impact — and the provider ban
   events. It moved out of Settings; Overview's provider card links to it.
+- The "ban the whole provider" suggestion (providers with 5+ block bans) no
+  longer tells you to edit CSF by hand: **Add to provider ban** opens the
+  Providers tab with the provider added and its impact measured.
 - **IP card says the result first**: "can connect — the whitelist comes before
   every ban", "blocked on every port (CC_DENY FR)" or "only Web is blocked;
   other connections are open". Raw CSF lines are folded under "CSF line". When
@@ -27,6 +55,16 @@
   next run. The threshold-impact line no longer covers the value field.
 - History no longer shows the first run's events twice (once from the event
   log, once rebuilt from the plain log); its cache is rebuilt once.
+- **Allowed services show when they were last downloaded** (at the top of the
+  card, and per source on each tile with its address count).
+- **Source addresses can be edited** under "Source addresses": if a provider
+  moves its list, type the new address; "Reset" goes back to the built-in one
+  (`SVC_URLS`).
+- **A source that can't be downloaded for 3 days is reported**: mail once a
+  day, Slack when it starts and when it is fixed, a bar on Overview and an
+  event in History. The previous list stays in csf.allow meanwhile.
+- Provider rows in the Providers tab are aligned: name and CSF state on the
+  left, mode and **Measure impact** on the right of every row.
 
 ## 1.10.2 — 2026-10-05
 

@@ -145,12 +145,14 @@ settings, with no prompts. `config.env` is left untouched.
   tagged *inside /16* in Active block bans and Watched.
 - **Most blocked providers** (by ASN) — three tabs:
   - *CSF* — ranked by block bans and single bans, with each provider's most
-    common ban reason. A provider with 5+ block
-    bans gets a suggestion explaining how to block the whole ASN with CSF's own
-    `CC_DENY`. The plugin never edits `csf.conf`.
+    common ban reason. A provider with 5+ block bans gets a suggestion to add
+    it to the provider ban.
   - *Other blocks* — ranges in `csf.deny` added outside CSF Auto-Group.
   - *Imunify* (only with Imunify360) — providers in Imunify360's **own** block
     list on this server, with the block reasons. Read-only.
+
+  Providers already banned in CSF are left out of all three rankings (and the
+  weekly summary's); a line under the list names them.
 - **Since your last visit** — what happened since you last opened the page; new
   rows carry a dot.
 
@@ -428,6 +430,12 @@ restoring `config.env` is enough.
 - After saving, the setting is written to CSF right away and lfd is restarted
   (lfd fills the address sets); the screen shows how many ranges are loaded.
   Turning it off removes only what the plugin added.
+- **Needs review** leaves out a suspicious network when every attacking IP is
+  in a banned provider and the ban covers the attacked service (a Web-only ban
+  covers web attacks, not SSH ones); no warning is sent for it. Existing block
+  bans inside a banned provider stay in `csf.deny` until you remove them.
+- The weekly summary lists the banned providers, what is blocked and how many
+  ranges CSF loaded.
 - **CSF's ASN data:** lfd downloads `/var/lib/csf/Geo/ip2asn-combined.tsv` only
   when it is missing, so the addresses go stale; once a day the plugin refreshes
   it when it is older than 25 days.
@@ -445,6 +453,11 @@ first, so they pass country and provider bans, on every port. Lists are
 downloaded again every day; a list that fails to download, or returns far fewer
 addresses than before, keeps its previous version; ranges wider than /16 are
 refused. Yandex and Facebook don't publish address lists.
+
+The card shows when the lists were last downloaded and where each one comes
+from; a built-in source's address can be changed there if the provider moves
+it. A source that can't be downloaded for 3 days is reported (mail, Slack,
+Overview, History) until it works again.
 
 `tools/services-allow.sh` does the downloading; the plugin runs it. It also
 works by hand (`--check` shows what would change, `--remove` takes it out).

@@ -48,7 +48,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.11.0"   # sürüm — başlangıç log satırında görünür
+VERSION="1.11.1"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -115,6 +115,7 @@ SVC_SOURCES_SET="${SVC_SOURCES+x}"
 SVC_ALLOW="${SVC_ALLOW:-auto}"          # 1 = yayımlanmış servis adresleri csf.allow'a yazılır (Include)
 SVC_SOURCES="${SVC_SOURCES-google}"    # virgüllü: google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake
 SVC_EXTRA="${SVC_EXTRA:-}"              # boşlukla ayrılmış "ad|https://liste" ya da "ad|1.2.3.0/24"
+SVC_URLS="${SVC_URLS:-}"                # hazır kaynakların değiştirilmiş adresleri: "google-common|https://… bing|https://…"
 ASN_BAN="${ASN_BAN:-auto}"              # 1 = ASN_LIST'teki sağlayıcılar banlanır
 ASN_LIST="${ASN_LIST:-}"                # ortak port listesiyle banlananlar, virgüllü: AS396982,AS14061
 ASN_ALL="${ASN_ALL:-}"                  # her şeyi kapatılanlar (CC_DENY), virgüllü
@@ -220,6 +221,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_MAILT24_SUBJ="%s geçici blok banı"
   M_MAILT24P_BODY="Aşağıdaki bloklar (/24) daha önce geçici banlanmıştı; tekrar geldikleri için kalıcı banlandı (do not delete):"
   M_MAILT24P_SUBJ="%s blok kalıcıya alındı"
+  M_PROV16="%s.0.0/16: saldıran IP'lerin hepsi sağlayıcı banıyla zaten kapalı (%s), uyarı atlandı"
   M_TWARN16="ŞÜPHELİ AĞ: %s.0.0/16 - geçici banlardan %s IP, %s farklı blok - elle bakın"
   M_TSKIP16="ATLANDI şüpheli ağ: %s.0.0/16 zaten kalıcı banlı"
   M_TSKIP16D="ATLANDI şüpheli ağ (geçici): %s.0.0/16 bugün zaten bildirildi"
@@ -293,6 +295,10 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_A_NOSAVE="%s: kurtarma kopyası yazılamadı (%s); kapsananlar yerinde bırakıldı"
   M_A_NODRY="Elle işlemler kuru çalıştırmada (--dry-run) yapılmaz"
   M_CFG_SVCX="ad|https://adres ya da ad|IP biçiminde, en çok 50 kayıt"
+  M_CFG_SVCU="kaynak|https://adres biçiminde"
+  M_SVC_FAIL_SUBJ="izinli servis listesi indirilemiyor (%s)"
+  M_SVC_FAIL_BODY="Şu izinli servis listeleri 3 günden uzun süredir indirilemiyor: %s. Eski listeler kullanılmaya devam ediyor; ama sağlayıcı adresini değiştirdiyse yeni sunucuları izinli değildir. Adresi panelden düzeltebilirsiniz: Sağlayıcılar → İzinli servisler → Kaynak adresleri."
+  M_SVC_FAIL_OK="İzinli servis listeleri yeniden indirilebiliyor"
   M_CFG_ASN="AS ile başlayan numaralar, virgülle (en çok 50)"
   M_CFG_PORTS="virgüllü portlar ya da aralıklar (30000:35000), en çok 15"
   M_ASN_APPLIED="Sağlayıcı banı CSF'e uygulandı: %s"
@@ -373,7 +379,11 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_H_CNT="blok banı|geçici blok banı|kalıcıya alındı|şüpheli ağ|atlandı|elle işlem|ayar değişikliği"
   M_H_NEWT="Yeni blok banları"; M_H_BLOCK="Blok"; M_H_OWNER="Sahip"; M_H_STATE="Durum"
   M_H_K_add24="kalıcı"; M_H_K_promote="tekrar gelen"; M_H_K_manual_ban="elle"
-  M_H_TOPT="CSF'in en çok engellediği sağlayıcılar"; M_H_TOPS="csf.deny'deki blok banlarına ve tekil banlara göre"
+  M_H_TOPT="CSF'in en çok engellediği sağlayıcılar"; M_H_TOPS="csf.deny'deki blok banlarına ve tekil banlara göre · banlı sağlayıcılar hariç"
+  M_H_PBT="Sağlayıcı banı"; M_H_PBS="Bu sağlayıcılar CSF'te banlı; sıralamalarda gösterilmez"; M_H_PBK="Kapalı"; M_H_PBR="Aralık"
+  M_H_PBALL="her şey"; M_H_PBNL="CSF henüz yüklemedi"
+  M_H_SVC="İzinli servisler: csf.allow'da %s adres · son indirme %s"; M_H_SVCF="3 günden uzun süredir indirilemiyor: %s"
+  M_DG_PB="Sağlayıcı banı (sıralamalarda gösterilmez):"; M_DG_PBL="   %-9s %-44s %s"
   M_H_PROV="Sağlayıcı"; M_H_BLK="Blok"; M_H_SGL="Tekil"; M_H_OTH="CSF Auto-Group dışı"; M_H_OTHV="+%s blok"
   M_H_IMT="Imunify360'ın en çok engellediği sağlayıcılar"; M_H_IMS="Sunucunun kendi kara listesi · %s IP"; M_H_IPS="IP"; M_H_RSN="Sebep"
   M_H_EXPT="İzlemesi bitecek bloklar"; M_H_EXPS="14 gün içinde; tekrar gelirlerse kalıcı olurlar"; M_H_DAYS="%s gün"; M_H_NONE_S="Yok"
@@ -437,6 +447,7 @@ else
   M_MAILT24_SUBJ="%s temp block ban(s)"
   M_MAILT24P_BODY="The following blocks (/24) had been temp-banned before and came back, so they are now permanently banned (do not delete):"
   M_MAILT24P_SUBJ="%s block(s) made permanent"
+  M_PROV16="%s.0.0/16: every attacking IP is already blocked by the provider ban (%s), warning skipped"
   M_TWARN16="SUSPICIOUS RANGE: %s.0.0/16 - %s IPs from temp bans, %s distinct blocks - review manually"
   M_TSKIP16="SKIPPED suspicious network: %s.0.0/16 already permanently banned"
   M_TSKIP16D="SKIPPED suspicious network (temp): %s.0.0/16 already reported today"
@@ -510,6 +521,10 @@ else
   M_A_NOSAVE="%s: the restore copy could not be written (%s); covered entries were left in place"
   M_A_NODRY="Manual actions are not run in a dry run (--dry-run)"
   M_CFG_SVCX="name|https://url or name|IP, at most 50 entries"
+  M_CFG_SVCU="source|https://url"
+  M_SVC_FAIL_SUBJ="allowed service list can't be downloaded (%s)"
+  M_SVC_FAIL_BODY="These allowed service lists haven't downloaded for more than 3 days: %s. The old lists are still used, but if the provider changed its address its new servers aren't allowed. You can fix the address in the panel: Providers → Allowed services → Source addresses."
+  M_SVC_FAIL_OK="Allowed service lists download again"
   M_CFG_ASN="numbers starting with AS, comma separated (at most 50)"
   M_CFG_PORTS="comma separated ports or ranges (30000:35000), at most 15"
   M_ASN_APPLIED="Provider ban applied to CSF: %s"
@@ -590,7 +605,11 @@ else
   M_H_CNT="block bans|temp block bans|made permanent|suspicious networks|skipped|manual actions|settings changes"
   M_H_NEWT="New block bans"; M_H_BLOCK="Block"; M_H_OWNER="Owner"; M_H_STATE="State"
   M_H_K_add24="permanent"; M_H_K_promote="repeat offender"; M_H_K_manual_ban="manual"
-  M_H_TOPT="Providers CSF blocks most"; M_H_TOPS="by block bans and single bans in csf.deny"
+  M_H_TOPT="Providers CSF blocks most"; M_H_TOPS="by block bans and single bans in csf.deny · banned providers left out"
+  M_H_PBT="Provider ban"; M_H_PBS="These providers are banned in CSF; the rankings leave them out"; M_H_PBK="Blocked"; M_H_PBR="Ranges"
+  M_H_PBALL="everything"; M_H_PBNL="not loaded by CSF yet"
+  M_H_SVC="Allowed services: %s addresses in csf.allow · last download %s"; M_H_SVCF="Not downloaded for more than 3 days: %s"
+  M_DG_PB="Provider ban (left out of the rankings):"; M_DG_PBL="   %-9s %-44s %s"
   M_H_PROV="Provider"; M_H_BLK="Blocks"; M_H_SGL="Singles"; M_H_OTH="Not from CSF Auto-Group"; M_H_OTHV="+%s blocks"
   M_H_IMT="Providers Imunify360 blocks most"; M_H_IMS="This server's own blacklist · %s IPs"; M_H_IPS="IPs"; M_H_RSN="Reason"
   M_H_EXPT="Watched blocks expiring"; M_H_EXPS="within 14 days; they become permanent if they return"; M_H_DAYS="%s days"; M_H_NONE_S="None"
@@ -652,8 +671,8 @@ mail() {
 
 # ── Settings: validation (panel + --config set + --dry-run --set) ──────────
 # Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
-CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP"
-PROV_KEYS="SVC_ALLOW SVC_SOURCES SVC_EXTRA ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP"
+CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP"
+PROV_KEYS="SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP"
 SVC_CATALOG="google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake"
 CFG_TRY_KEYS="THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS"
 logrotate_write() { # [MB] [ARŞİV] → /etc/logrotate.d/csf_autogroup (geçici dosya + mv)
@@ -699,6 +718,13 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
             for x in ${v//,/ }; do
                 case " $SVC_CATALOG " in *" $x "*) ;; *) CFG_ERR=$(m "$M_CFG_BAD" "$k" "$x" "$(m "$M_CFG_ONEOF" "${SVC_CATALOG// /, }")"); return 1 ;; esac
                 case ",$CFG_VAL," in *",$x,"*) ;; *) CFG_VAL+="${CFG_VAL:+,}$x" ;; esac
+            done
+            return 0 ;;
+        SVC_URLS)      # yalnız https adresi; ad hazır kaynaklardan biri olmalı
+            local x u re='^[a-z0-9-]{1,40}[|]https://[A-Za-z0-9._~:/?#@=%+&-]{4,255}$'; CFG_VAL=""
+            for x in $v; do
+                [[ "$x" =~ $re ]] || { CFG_ERR=$(m "$M_CFG_BAD" "$k" "$x" "$M_CFG_SVCU"); return 1; }
+                CFG_VAL+="${CFG_VAL:+ }$x"
             done
             return 0 ;;
         SVC_EXTRA)
@@ -1862,6 +1888,7 @@ do_status() {
     # blok başına en yenisi; yoksayılanlar ve o arada banlanmış olanlar düşülür.
     local review=() rtext=() t ty pbe
     local -A seen=() W16D=()
+    owners_load; asn_banned                        # sağlayıcı banının kapattıkları listede tutulmaz
     # tekrar eden şüpheli ağ: kontrol süresi içinde kaç ayrı günde işaretlendi (sayaçtaki günlük kayıtlar)
     if [ -r "$SAYAC_FILE" ]; then
         while read -r k u; do [ -n "$k" ] && W16D[$k]="$u"; done < <(awk -v s="$(date -d "$REVIEW_DAYS days ago" +%Y-%m-%d)" '
@@ -1877,6 +1904,7 @@ do_status() {
             [ -n "${seen[$c]}" ] && continue; seen[$c]=1
             ign_until "$c" && continue
             cidr_range "$c" && perm_covers "$R_LO" "$R_HI" && continue
+            [ -n "$ASB_ORD" ] && [[ "$line" == *'"ips":[{'* ]] && ev_ipsrc "$line" | prov_cover && continue
             # aynı aralığa uyarıdan SONRA kısmi ban konduysa uyarı ele alınmıştır; bandan sonra gelen yeni uyarı görünür
             if [ -n "${PB_D[$c]}" ]; then
                 pbe=$(LC_ALL=C date -d "${PB_D[$c]}" +%s 2>/dev/null || echo 0)
@@ -2067,6 +2095,11 @@ do_status() {
         jstr "$cronm"; printf '"cron_min":%s,"runs":%s,' "$REPLY" "$runsj"
         printf '"cron_interval":%s,"daily":{"start":%s,%s},"owners":{%s},"asn_top":[%s],"blocks_top":[%s],"imunify":%s,' \
             "$(cron_interval "$cronm")" "$dstart" "$daily" "${owners[*]}" "${tops[*]}" "${btops[*]}" "$imj"
+        # sıralamalardan çıkarılan, CSF'te banlı sağlayıcılar (panel listenin altında gösterir)
+        local bj="" ba bn
+        asn_banned
+        for ba in "${ASB_A[@]}"; do asn_name "AS$ba"; jstr "$REPLY"; bn="$REPLY"; asn_setn "AS$ba"; bj+="${bj:+,}{\"asn\":\"$ba\",\"name\":$bn,\"how\":\"${ASB[$ba]}\",\"n\":$REPLY}"; done
+        printf '"asn_banned":[%s],"dports":["%s","%s"],' "$bj" "$(conf_val CC_DENY_PORTS_TCP | tr -cd '0-9,:')" "$(conf_val CC_DENY_PORTS_UDP | tr -cd '0-9,:')"
         # panelin "zaten kapalı mı" kararları için: /23'ten geniş tam banlar (kaynağı ne olursa olsun) ve CC_DENY listesi
         local wdj=() ccw
         for gi in "${WD_TXT[@]}"; do wdj+=("\"$gi\""); done
@@ -2880,7 +2913,14 @@ svc_urls() {     # KAYNAK → REPLY = "ad|adres" kayıtları (boşlukla); kaynak
 }
 svc_srclist() {  # → REPLY = araca verilecek kaynaklar (satır satır): seçilen katalog kaynakları + elle eklenenler
     local x o=""
-    for x in ${SVC_SOURCES//,/ }; do svc_urls "$x"; [ -n "$REPLY" ] && o+="${REPLY// /$'\n'}"$'\n'; done
+    local e n2 u
+    for x in ${SVC_SOURCES//,/ }; do
+        svc_urls "$x"
+        for e in $REPLY; do
+            n2="${e%%|*}"; u=$(printf '%s\n' $SVC_URLS | grep -m1 "^$n2|" | cut -d'|' -f2-)   # panelde değiştirilmiş adres
+            o+="$n2|${u:-${e#*|}}"$'\n'
+        done
+    done
     for x in $SVC_EXTRA; do o+="extra-$x"$'\n'; done
     REPLY="$o"
 }
@@ -3025,24 +3065,19 @@ prov_json() {    # → REPLY = durum JSON'u: izinli servisler (kaynak başına s
     local nm o s="" n c t e a sets="" geo="$CSF_VAR/Geo/ip2asn-combined.tsv" gt=0 cache
     cache="$(dirname "$SAYAC_FILE")/services"
     if [ -r "$cache/status" ]; then
-        while IFS='|' read -r n c t e; do
+        while IFS='|' read -r n c t e f; do
             [[ "$n" =~ ^[A-Za-z0-9._|-]+$ ]] || continue
-            jstr "$n"; s+="${s:+,}{\"n\":$REPLY,\"c\":$(num "$c"),\"t\":$(num "$t")"; jstr "$e"; s+=",\"e\":$REPLY}"
+            jstr "$n"; s+="${s:+,}{\"n\":$REPLY,\"c\":$(num "$c"),\"t\":$(num "$t"),\"f\":$(num "$f")"; jstr "$e"; s+=",\"e\":$REPLY}"
         done < "$cache/status"
     fi
     for a in $(list_plus "$ASN_LIST" "$ASN_ALL" | tr ',' ' '); do
-        c=-1; command -v ipset >/dev/null 2>&1 && c=$(ipset list "cc_${a,,}" 2>/dev/null | grep -cE '^[0-9]')
-        [[ "$c" =~ ^-?[0-9]+$ ]] || c=-1
-        # sağlayıcının adı: CSF'in ASN verisinden bir kez okunur, önbellekte tutulur (dosya büyük, her istekte taranmaz)
-        nm=$(grep -m1 "^$a|" "$cache/asn_names" 2>/dev/null | cut -d'|' -f2-)
-        if [ -z "$nm" ] && [ -r "$geo" ]; then
-            nm=$(awk -F'\t' -v n="${a#AS}" '$3 == n { print $5; exit }' "$geo" | tr -d '|"\\' | cut -c1-80)
-            [ -n "$nm" ] && { mkdir -p "$cache"; printf '%s|%s\n' "$a" "$nm" >> "$cache/asn_names"; }
-        fi
-        jstr "$nm"; sets+="${sets:+,}{\"a\":\"$a\",\"n\":$c,\"d\":$REPLY}"     # n -1: ipset yok, bilinmiyor
+        asn_setn "$a"; c="$REPLY"
+        asn_name "$a"; jstr "$REPLY"; sets+="${sets:+,}{\"a\":\"$a\",\"n\":$c,\"d\":$REPLY}"     # n -1: ipset yok, bilinmiyor
     done
     [ -e "$geo" ] && gt=$(stat -c %Y "$geo" 2>/dev/null || echo 0)
-    jstr "$SVC_EXTRA"; o="{\"svc\":{\"on\":$([ "$SVC_ALLOW" = 1 ] && echo true || echo false),\"sources\":\"$SVC_SOURCES\",\"extra\":$REPLY,\"src\":[$s]}"
+    local catj="" ck
+    for ck in $SVC_CATALOG; do svc_urls "$ck"; jstr "$REPLY"; catj+="${catj:+,}\"$ck\":$REPLY"; done   # kaynak → "ad|adres ad|adres"
+    jstr "$SVC_EXTRA"; o="{\"svc\":{\"on\":$([ "$SVC_ALLOW" = 1 ] && echo true || echo false),\"sources\":\"$SVC_SOURCES\",\"extra\":$REPLY,\"src\":[$s],\"cat\":{$catj},\"urls\":\"$SVC_URLS\"}"
     jstr "${ASN_MSG:-}"
     o+=",\"asn\":{\"on\":$([ "$ASN_BAN" = 1 ] && echo true || echo false),\"list\":\"$ASN_LIST\",\"all\":\"$ASN_ALL\",\"mode\":\"$ASN_MODE\",\"tcp\":\"$ASN_TCP\",\"udp\":\"$ASN_UDP\",\"state\":\"${ASN_STATE:-}\",\"msg\":$REPLY,\"sets\":[$sets],\"geo_t\":$(num "$gt")}}"
     REPLY="$o"
@@ -3094,6 +3129,21 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
               printf "{\"ok\":true,\"total\":%d,\"ips\":%d,\"ok2xx\":%d,\"codes\":{%s},\"posts\":%s,\"bots\":%s,\"sites\":%s}\n",
                   tot, nip, ok, codes, top(P, 15), top(B, 15), top(S, 10) }' /dev/null | grep . || echo '{"ok":true,"total":0,"ips":0,"ok2xx":0,"codes":{},"posts":[],"bots":[],"sites":[]}'
     rm -f "$rng" "$lst"
+}
+svc_health() {   # izinli servis kaynaklarından 3 günden uzun süredir indirilemeyenler → bildirim
+    local st="$(dirname "$SAYAC_FILE")/services/status" n c t e f bad="" now; now=$(date +%s)
+    [ "$SVC_ALLOW" = 1 ] && [ -r "$st" ] || { ic_track IC_RUN SvcFail 0 "" "" "$M_SVC_FAIL_OK"; return 0; }
+    while IFS='|' read -r n c t e f; do
+        [ -n "$e" ] || continue
+        [[ "$f" =~ ^[0-9]+$ ]] && [ "$f" -gt 0 ] || continue      # ilk başarısızlık anı bilinmiyorsa (eski sürüm) bekle
+        [ $(( now - f )) -gt 259200 ] && bad+="${bad:+, }$n"     # 3 gündür indirilemiyor
+    done < "$st"
+    if [ -n "$bad" ] && ! grep -qF "SVC_FAIL $TODAY" "$SAYAC_FILE" 2>/dev/null; then
+        mail_add "$(m "$M_SVC_FAIL_SUBJ" "$bad")" "$(m "$M_SVC_FAIL_BODY" "$bad")" bad; cnt_add "SVC_FAIL $TODAY"
+        jstr "$bad"; ev svc_fail "" "names=$REPLY"; log "$(m "$M_SVC_FAIL_BODY" "$bad")"
+    fi
+    ic_track IC_RUN SvcFail "$([ -n "$bad" ] && echo 1 || echo 0)" "$(m "$M_SVC_FAIL_SUBJ" "$bad")" "$(m "$M_SVC_FAIL_BODY" "$bad")" "$M_SVC_FAIL_OK"
+    return 0
 }
 daily_tasks() {  # günde bir kez, turun içinde (ayrı cron satırı gerekmez):
     # 1) yayımlanmış servis adresleri: araç kullanılıyorsa (csf.allow'da Include satırı varsa) listeler yenilenir
@@ -3282,11 +3332,62 @@ do_action() {    # NAME TARGET [DAYS]
 }
 
 # ── Top attacking networks: gruplar + tekiller ASN'e göre ────────────────────
+asn_banned() {   # → ASB[ASN numarası]=all|ports, ASB_ORD: CSF'te şu an banlı sağlayıcılar (CC_DENY / CC_DENY_PORTS)
+    declare -gA ASB=(); ASB_ORD=""; ASB_A=()
+    local c k IFS=$' \t\n'                                     # durum çıktısı IFS=, ile çağırır
+    for k in CC_DENY CC_DENY_PORTS; do
+        for c in $(conf_val "$k" | LC_ALL=C tr '[:lower:],' '[:upper:] '); do
+            [[ "$c" =~ ^AS([0-9]+)$ ]] || continue
+            [ -n "${ASB[${BASH_REMATCH[1]}]}" ] && continue
+            ASB[${BASH_REMATCH[1]}]=$([ "$k" = CC_DENY ] && echo all || echo ports); ASB_ORD+="${BASH_REMATCH[1]} "; ASB_A+=("${BASH_REMATCH[1]}")
+        done
+    done
+}
+asn_name() {     # ASNNN → REPLY = sağlayıcının adı (CSF'in ASN verisinden bir kez okunur, önbellekte tutulur)
+    local a="$1" cache geo="$CSF_VAR/Geo/ip2asn-combined.tsv"
+    cache="$(dirname "$SAYAC_FILE")/services"
+    REPLY=$(grep -m1 "^$a|" "$cache/asn_names" 2>/dev/null | cut -d'|' -f2-)
+    if [ -z "$REPLY" ] && [ -r "$geo" ]; then
+        REPLY=$(awk -F'\t' -v n="${a#AS}" '$3 == n { print $5; exit }' "$geo" | tr -d '|"\\' | cut -c1-80)
+        [ -n "$REPLY" ] && { mkdir -p "$cache"; printf '%s|%s\n' "$a" "$REPLY" >> "$cache/asn_names"; }
+    fi
+}
+asn_setn() {     # ASNNN → REPLY = CSF'in yüklediği aralık sayısı (-1: ipset yok, bilinmiyor)
+    REPLY=-1; command -v ipset >/dev/null 2>&1 && REPLY=$(ipset list "cc_${1,,}" 2>/dev/null | grep -cE '^[0-9]')
+    [[ "$REPLY" =~ ^-?[0-9]+$ ]] || REPLY=-1
+}
+prov_cover() {   # stdin "ip|sebep|asn" → 0: her IP CSF'te banlı bir sağlayıcıda ve ban saldırılan servisi kapatıyor
+    # (her şey banında her servis; port listesi banında saldırının servisinin portları listede olmalı). Sahibi bilinmeyen IP: kapsanmıyor.
+    local ip r a p n=0 k tcp IFS=$' \t\n'
+    tcp=",$(conf_val CC_DENY_PORTS_TCP | tr -d ' '),"
+    PC_ASN=""
+    while IFS='|' read -r ip r a; do
+        [ -n "$ip" ] || continue
+        [ -n "$a" ] || a="${OWN_A[${ip%.*}]}"
+        [ -n "$a" ] && [ -n "${ASB[$a]}" ] || return 1
+        n=$((n + 1)); [[ " $PC_ASN " == *" AS$a "* ]] || PC_ASN+="${PC_ASN:+ }AS$a"
+        [ "${ASB[$a]}" = all ] && continue
+        k=$(awk -v r="$r" "$AWK_CLS"' BEGIN { print cls(r) }')
+        svc_ports "$k" || return 1
+        for p in ${REPLY//,/ }; do [[ "$tcp" == *",$p,"* ]] || return 1; done
+    done
+    [ "$n" -gt 0 ]
+}
+ev_ipsrc() {     # OLAY_SATIRI → stdout "ip|sebep|asn" (olaydaki IP listesinden)
+    printf '%s\n' "$1" | awk '{ s = $0
+        while (match(s, /\{"ip":"[0-9.]+"[^}]*\}/)) {
+            o = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
+            ip = o; sub(/^\{"ip":"/, "", ip); sub(/".*/, "", ip)
+            w = ""; if (match(o, /"why":"([^"\\]|\\.)*"/)) w = substr(o, RSTART + 7, RLENGTH - 8)
+            a = ""; if (match(o, /"asn":"[0-9]*"/)) a = substr(o, RSTART + 7, RLENGTH - 8)
+            gsub(/\|/, " ", w); print ip "|" w "|" a } }'
+}
 asn_top() {      # [N] [evidence|blocks] → ASN_TOP satırları: "ASN|KURUM|CC|grup|blok|tekil|cc_deny(0/1)"
     # Sıralama saldırı kanıtına göre: kendi grup banlarımız + tekil banlar (lfd'nin yakaladıkları).
     # csf.deny'deki başka kaynaklı bloklar (elle / başka araç) gösterilir ama sıralamaya girmez.
     local -A G=() B=() T=() NM=() CC=() IS_AG=() DEN=() M=() IS_M=()
     local c i p a
+    asn_banned                                                    # CSF'te banlı sağlayıcılar sıralamaya girmez (listeyi doldurmasın)
     for c in "${AGG[@]}"; do IS_AG[$c]=1; done
     for c in "${MANB[@]}"; do IS_M[$c]=1; done                   # elle banlar: listede görünür, kanıt ağırlığı almaz
     for c in $(conf_val CC_DENY | LC_ALL=C tr '[:lower:],' '[:upper:] '); do DEN[$c]=1; done
@@ -3301,6 +3402,7 @@ asn_top() {      # [N] [evidence|blocks] → ASN_TOP satırları: "ASN|KURUM|CC|
         NM[$a]="${OWN_N[$p]}"; CC[$a]="${OWN_C[$p]}"
     done
     ASN_TOP=$(for a in $(printf '%s\n' "${!G[@]}" "${!B[@]}" "${!T[@]}" | sort -u); do
+        [ -n "${ASB[$a]}" ] && continue
         printf '%s|%s|%s|%s|%s|%s|%s|%s\n' "$a" "${NM[$a]//|/ }" "${CC[$a]}" "${G[$a]:-0}" "${B[$a]:-0}" "${T[$a]:-0}" \
             $(( ${#DEN[AS$a]} > 0 )) $(( (${G[$a]:-0} - ${M[$a]:-0}) * 4 + ${T[$a]:-0} ))
     done | if [ "${2:-evidence}" = blocks ]; then awk -F'|' '$5 > 0' | sort -t'|' -k5,5nr; else sort -t'|' -k8,8nr -k5,5nr; fi \
@@ -3379,7 +3481,8 @@ imunify_top() {  # [N] → IM_TOP satırları "ASN|KURUM|CC|IP sayısı|SEBEP:n,
         CNT[$a]=$(( ${CNT[$a]:-0} + 1 )); NM[$a]="${OWN_N[$p]}"; CC[$a]="${OWN_C[$p]}"
         RC[$a|$r]=$(( ${RC[$a|$r]:-0} + 1 ))
     done < "$IMUNIFY_FILE"
-    for a in $(for k in "${!CNT[@]}"; do echo "${CNT[$k]} $k"; done | sort -rn | awk -v n="${1:-10}" 'NR <= n {print $2}'); do
+    asn_banned
+    for a in $(for k in "${!CNT[@]}"; do [ -n "${ASB[$k]}" ] || echo "${CNT[$k]} $k"; done | sort -rn | awk -v n="${1:-10}" 'NR <= n {print $2}'); do
         line=$(for k in "${!RC[@]}"; do [ "${k%%|*}" = "$a" ] && echo "${RC[$k]} ${k#*|}"; done | sort -rn | awk 'NR <= 3 {printf "%s%s:%s", (NR>1?",":""), $2, $1}')
         IM_TOP+="$a|${NM[$a]//|/ }|${CC[$a]}|${CNT[$a]}|$line"$'\n'
     done
@@ -3489,8 +3592,42 @@ digest_build() { # → DG_SUBJ, DG_BODY
         hr="<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"font-size:13px;\"><tr><td style=\"$H_TH;padding:10px 8px 6px 18px;\">$M_H_BLOCK</td><td style=\"$H_TH;padding:10px 8px 6px;\">$M_H_OWNER</td><td align=\"right\" style=\"$H_TH;padding:10px 18px 6px 8px;\">$M_H_STATE</td></tr>$hr</table><div style=\"height:8px;\"></div>"
     else h_box "padding:12px 18px 14px;font-size:13px;color:#5f6776;" "$M_H_NONE"; hr="$REPLY"; fi
     h_card "$M_H_NEWT" "$hr"; DGH+="$REPLY"; hr=""; hi=0
+    # sağlayıcı banı: CSF'te banlı sağlayıcılar (sıralamalara girmezler) + izinli servislerin durumu
+    asn_banned
+    local pt pu pk svl="" svf="" stf
+    pt=$(conf_val CC_DENY_PORTS_TCP | tr -cd '0-9,:'); pu=$(conf_val CC_DENY_PORTS_UDP | tr -cd '0-9,:')
+    pk="${pt:+TCP ${pt//,/, }}${pt:+${pu:+ · }}${pu:+UDP ${pu//,/, }}"
+    stf="$(dirname "$SAYAC_FILE")/services/status"
+    if [ "$SVC_ALLOW" = 1 ] && [ -r "$stf" ]; then
+        local sn st se sf stot=0 slast=0
+        while IFS='|' read -r sn st se sf hk; do
+            [[ "$st" =~ ^[0-9]+$ ]] && stot=$(( stot + st )); [[ "$se" =~ ^[0-9]+$ ]] && [ "$se" -gt "$slast" ] && slast=$se
+            [ -n "$sf" ] && [[ "$hk" =~ ^[0-9]+$ ]] && [ "$hk" -gt 0 ] && [ $(( now - hk )) -gt 259200 ] && svf+="${svf:+, }$sn"
+        done < "$stf"
+        svl=$(m "$M_H_SVC" "$stot" "$([ "$slast" -gt 0 ] && date -d "@$slast" '+%d.%m %H:%M' || echo '—')")
+    fi
+    if [ -n "$ASB_ORD" ] || [ -n "$svl" ]; then
+        DG_BODY+="$M_DG_PB$NL"
+        for a in "${ASB_A[@]}"; do
+            asn_name "AS$a"; owner="$REPLY"; asn_setn "AS$a"; b="$REPLY"
+            hv="$([ "${ASB[$a]}" = all ] && echo "$M_H_PBALL" || echo "${pk:--}")"
+            DG_BODY+="$(m "$M_DG_PBL" "AS$a" "${owner:0:44}" "$hv$([ "$b" -ge 0 ] && echo " · $([ "$b" -gt 0 ] && echo "$b $M_H_PBR" || echo "$M_H_PBNL")")")$NL"
+            h_esc "$owner"; hi=$((hi + 1)); line="$REPLY"; h_esc "$hv"
+            hr+="<tr$([ $((hi % 2)) = 0 ] && echo ' bgcolor="#f7f8fa" style="background:#f7f8fa;"')><td style=\"padding:8px 8px 8px 18px;\"><b style=\"font-family:$H_MONO;color:#4338ca;\">AS$a</b> $line</td><td style=\"padding:8px;color:#4b5563;\">$REPLY</td>"
+            if [ "$b" -eq 0 ]; then hr+="<td align=\"right\" style=\"padding:8px 18px 8px 8px;color:#b45309;font-weight:600;\">$M_H_PBNL</td></tr>"
+            else hr+="<td align=\"right\" style=\"padding:8px 18px 8px 8px;\">$([ "$b" -gt 0 ] && echo "$b" || echo '—')</td></tr>"; fi
+        done
+        [ -n "$svl" ] && DG_BODY+="   $svl$NL"
+        [ -n "$svf" ] && DG_BODY+="   $(m "$M_H_SVCF" "$svf")$NL"
+        [ -n "$hr" ] && hr="<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"font-size:13px;\"><tr><td style=\"$H_TH;padding:10px 8px 6px 18px;\">$M_H_PROV</td><td style=\"$H_TH;padding:10px 8px 6px;\">$M_H_PBK</td><td align=\"right\" style=\"$H_TH;padding:10px 18px 6px 8px;\">$M_H_PBR</td></tr>$hr</table>"
+        if [ -n "$svl" ]; then h_esc "$svl"; h_box "padding:10px 18px 4px;font-size:12.5px;color:#4b5563;${hr:+border-top:1px solid #eef0f3;}" "$REPLY"; hr+="$REPLY"; fi
+        if [ -n "$svf" ]; then h_esc "$(m "$M_H_SVCF" "$svf")"; h_box "padding:2px 18px 4px;font-size:12.5px;color:#b45309;font-weight:600;" "$REPLY"; hr+="$REPLY"; fi
+        hr+="<div style=\"height:8px;\"></div>"
+        h_card "$M_H_PBT" "$hr" "$([ -n "$svf" ] && echo warn)" "$([ -n "$ASB_ORD" ] && echo "$M_H_PBS")"; DGH+="$REPLY"; hr=""; hi=0
+        DG_BODY+="$NL"
+    fi
     # en çok saldıran ağlar
-    DG_BODY+="$NL$M_DG_TOP$NL"
+    DG_BODY+="$M_DG_TOP$NL"
     asn_top 5
     if [ -n "$ASN_TOP" ]; then
         while IFS='|' read -r a owner k b bl line den; do
@@ -3805,6 +3942,7 @@ parse_deny "$DENY_FILE" 1
 [ "$DRY" = 1 ] || proto_fix           # eski kısmi ban / istisnalara eksik UDP 443 (HTTP/3)
 [ "$DRY" = 1 ] || { svc_enforce 0; asn_enforce; }   # izinli servisler ve sağlayıcı banı: istenen durum CSF'te mi
 [ "$DRY" = 1 ] || daily_tasks         # günde bir: servis izin listeleri, CSF'in ASN verisi
+[ "$DRY" = 1 ] || svc_health          # indirilemeyen izinli servis listesi: bildirim
 
 # ── /24 grouping (permanent): auto-ban + drop singles ───────────────────────
 added24=0; added24_body=""
@@ -3951,12 +4089,17 @@ for ip in "${!SINGLE_NOTE[@]}" "${temp_alive[@]}"; do
     if [ -n "${SINGLE_NOTE[$ip]+x}" ]; then perm16[$prefix16]=$((${perm16[$prefix16]:-0} + 1)); else tmp16[$prefix16]=$((${tmp16[$prefix16]:-0} + 1)); fi
 done
 warn16=0; warn_body=""; temp_warn16=0
+asn_banned
 for prefix in $(printf '%s\n' "${!count16[@]}" | sort -V); do
     subnet_count=$(echo "${seen_subnets[$prefix]}" | tr ' ' '\n' | sort -u | grep -c '\.')
     if [ "${count16[$prefix]}" -ge "$THRESHOLD_16" ] && [ "$subnet_count" -ge 2 ]; then
         ip2int "$prefix.0.0"; lo=$REPLY
         if perm_covers "$lo" $((lo + 65535)); then logr "$(m "$M_TSKIP16" "$prefix")"; continue; fi
         if ign_until "$prefix.0.0/16"; then logr "$(m "$M_IGN16" "$prefix" "$IGN_UNTIL")"; continue; fi
+        if [ -n "$ASB_ORD" ]; then
+            pcl=""; for ip in ${ips16[$prefix]}; do pcl+="$ip|${SINGLE_NOTE[$ip]:-${TNOTE[$ip]}}|"$'\n'; done
+            prov_cover <<< "$pcl" && { logr "$(m "$M_PROV16" "$prefix" "$PC_ASN")"; continue; }
+        fi
         np="${perm16[$prefix]:-0}"; nt="${tmp16[$prefix]:-0}"
         # ağa eklentinin kısmi banı konmuşsa ondan önceki tekiller o kararla ele alınmıştır: yalnız sonrakiler sayılır
         pe=0; pnote=""; pl=$(grep -F "|s=$prefix.0.0/16 # csf_autogroup:" "$DENY_FILE" | head -n 1)
