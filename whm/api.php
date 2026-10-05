@@ -152,11 +152,15 @@ switch ($a) {
     case 'config_set':
         // Anahtar listesi ve kaba karakter süzgeci burada; asıl doğrulama script'te (cfg_check).
         $keys = ['MSG_LANG', 'ALERT_MAIL', 'DIGEST', 'DIGEST_DAY', 'NOTIFY', 'IC_FIREWALL', 'IC_LISTFULL', 'IC_RUN', 'IC_DIGEST', 'THRESHOLD_24', 'THRESHOLD_24_PERMANENT', 'THRESHOLD_16', 'THRESHOLD_TEMP_24',
-                 'THRESHOLD_TEMP_16', 'LOOKUP', 'LOOKUP_TIMEOUT', 'SAYAC_RETENTION_DAYS', 'REVIEW_DAYS', 'LOG_MAX_LINES', 'LOG_ROTATE_MB', 'LOG_ROTATE_KEEP', 'BLOCK_EXPIRE_DAYS', 'BLOCK_EXPIRE_AUTO', 'CRON_MIN'];
+                 'THRESHOLD_TEMP_16', 'LOOKUP', 'LOOKUP_TIMEOUT', 'SAYAC_RETENTION_DAYS', 'REVIEW_DAYS', 'LOG_MAX_LINES', 'LOG_ROTATE_MB', 'LOG_ROTATE_KEEP', 'BLOCK_EXPIRE_DAYS', 'BLOCK_EXPIRE_AUTO', 'CRON_MIN',
+                 'SVC_ALLOW', 'SVC_SOURCES', 'SVC_EXTRA', 'ASN_BAN', 'ASN_LIST', 'ASN_MODE', 'ASN_TCP', 'ASN_UDP'];
+        // listeler virgül, elle eklenen servisler boşluk ve "ad|adres" içerir; diğerleri tek değer
+        $re = ['SVC_EXTRA' => '/^[A-Za-z0-9._~:\/?#@=%+&|, -]{0,4000}$/', 'SVC_SOURCES' => '/^[a-z,]{0,120}$/', 'ASN_LIST' => '/^[A-Za-z0-9, ]{0,160}$/',
+               'ASN_TCP' => '/^[0-9,:]{0,120}$/', 'ASN_UDP' => '/^[0-9,:]{0,120}$/'];
         $args = ['--config', 'set'];
         foreach ((array) ($_POST['v'] ?? []) as $k => $v) {
             $v = trim((string) $v);
-            if (!in_array($k, $keys, true) || !preg_match('/^[A-Za-z0-9@._%+*\/:-]{0,254}$/', $v)) {
+            if (!in_array($k, $keys, true) || !preg_match($re[$k] ?? '/^[A-Za-z0-9@._%+*\/:-]{0,254}$/', $v)) {
                 ag_json(['ok' => false, 'code' => 2, 'message' => 'bad_value: ' . $k]);
             }
             $args[] = $k . '=' . $v;
@@ -166,6 +170,16 @@ switch ($a) {
         }
         $args[] = '--json';
         ag_json(ag_run_json($args, 30));
+
+    case 'prov_apply':                              // sağlayıcı banı / izinli servisler: kaydedilen ayarı CSF'e şimdi uygula
+        ag_json(ag_run_json(['--prov-apply', '--json'], 300));
+
+    case 'asn_impact':                              // banlamadan önce: son 24 saatte bu sağlayıcıdan sitelere gelen istekler
+        $asn = strtoupper(trim((string) ($_POST['asn'] ?? '')));
+        if (!preg_match('/^AS[0-9]{1,10}$/', $asn)) {
+            ag_json(['ok' => false, 'error' => 'bad_asn']);
+        }
+        ag_json(ag_run_json(['--asn-impact', $asn, '--json'], 180));
 
     case 'config_test_mail':
         ag_json(ag_run_json(['--config', 'test-mail', '--json'], 30));

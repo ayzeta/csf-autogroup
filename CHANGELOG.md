@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.10.0 — 2026-10-05
+
+- **Provider ban (experimental), managed from Settings → Provider ban.** Bans a
+  provider by AS number with CSF: web only (TCP 80, 443, UDP 443), selected
+  ports, or everything. **Measure impact** first shows the provider's requests
+  to your sites over the last 24 hours (codes, successful POSTs such as payment
+  notifications, non-browser clients, by site). Saving writes the setting to CSF
+  at once and restarts lfd so the address sets fill; the screen shows how many
+  ranges are loaded. Turning it off removes only what the plugin added; a shared
+  `CC_DENY_PORTS` port list used differently by another entry blocks the change
+  and says why; this server's own provider is never banned. A provider ban set
+  up by hand in CSF is adopted.
+- **Allowed services** in the same section: Google, Bing, Apple, DuckDuckGo,
+  OpenAI, Stripe and Mollie lists plus your own entries, written to a file
+  included from `csf.allow` and refreshed daily; per-source counts and last
+  update on screen.
+- The wanted state lives in `config.env` and every run makes CSF match it, so a
+  restored `config.env` brings both back after a server move.
+- Values with spaces are written to `config.env` quoted.
+
 ## 1.9.18 — 2026-10-05
 
 - Once a day the run does two upkeep jobs, so no separate cron lines are needed:

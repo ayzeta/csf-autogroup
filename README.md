@@ -27,7 +27,7 @@ is escalated to a **permanent** ban. `/16` networks are only flagged for review
 - **English / Türkçe** — the plugin, logs and emails.
 - **Works on phones** — the page adapts to small screens.
 
-**Version 1.9.18** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
+**Version 1.10.0** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
 cPanel the same engine runs from cron and the command line
 ([details](#without-cpanel)).
 
@@ -405,38 +405,45 @@ rm -rf /var/lib/csf_autogroup
 
 Existing `/24` bans stay in `csf.deny` until you remove them (`csf -dr <cidr>`).
 
-## Allowing published service addresses
+## Provider ban (experimental)
 
-Banning a whole provider (for example a cloud ASN with `CC_DENY_PORTS`) also
-cuts the legitimate services running there. `tools/services-allow.sh` writes the
-addresses that services publish themselves into a separate file and includes it
-from `csf.allow`; CSF checks the allow list before country/ASN bans, so these
-addresses still get through:
+**Settings → Provider ban** bans a whole provider by its AS number with CSF —
+useful when attacks come from one cloud spread over hundreds of networks, too
+many to ban one by one. Everything is managed from the panel; the wanted state
+is kept in `config.env`, and every run makes CSF match it. After a server move,
+restoring `config.env` is enough.
 
-- Google's crawlers and fetchers (Googlebot, AdsBot, Storebot, site
-  verification, Gmail's image proxy and other user-triggered fetchers), from
-  Google's four published lists
-- Mollie (payment notifications)
-- your own entries: lines `name|https://url` (a JSON or text list of IPs) or
-  `name|1.2.3.0/24` in `/etc/csf/csf_autogroup.services.extra`
+- **What to block:** *Web only* (TCP 80, 443 and UDP 443 for HTTP/3; uses
+  `CC_DENY_PORTS`), *Selected ports*, or *Everything* (`CC_DENY` — this also
+  breaks this server's connections to that provider, because CSF applies it
+  before replies). CSF has one port list for `CC_DENY_PORTS`: if another country
+  or provider there uses different ports, the ban isn't applied and the screen
+  says why.
+- **Measure impact** before saving: the last 24 hours of web logs, for that
+  provider — response codes, successful requests, successful POSTs (payment
+  notifications, webhooks) and non-browser clients, by site.
+- After saving, the setting is written to CSF right away and lfd is restarted
+  (lfd fills the address sets); the screen shows how many ranges are loaded.
+  Turning it off removes only what the plugin added.
+- **CSF's ASN data:** lfd downloads `/var/lib/csf/Geo/ip2asn-combined.tsv` only
+  when it is missing, so the addresses go stale; once a day the plugin refreshes
+  it when it is older than 25 days.
+- A provider ban set up by hand in CSF is adopted the first time.
+- This server's own provider is never banned.
 
-Entries are written as plain addresses, so CSF keeps them in an ipset (one
-lookup per packet however many there are). A source that fails to download, or
-returns far fewer addresses than before, keeps its previous list; ranges wider
-than /16 are refused. CSF is restarted only when the file changed.
+**Allowed services.** Banning a provider also cuts the legitimate services
+running there. Services that publish their own addresses can be allowed:
+Google (Googlebot, AdsBot, Storebot, Gmail images, site verification), Bing,
+Apple, DuckDuckGo, OpenAI, Stripe and Mollie, plus your own entries
+(`name|https://list` or `name|IP`). They are written to a file included from
+`csf.allow` (plain addresses, kept in an ipset); CSF checks the allow list
+first, so they pass country and provider bans, on every port. Lists are
+downloaded again every day; a list that fails to download, or returns far fewer
+addresses than before, keeps its previous version; ranges wider than /16 are
+refused. Yandex and Facebook don't publish address lists.
 
-```bash
-bash /root/csf-autogroup/tools/services-allow.sh --check
-```
-
-Run it once without `--check` to apply. After that CSF Auto-Group's own run
-refreshes the lists once a day (no extra cron line).
-
-**CSF's ASN data.** With an ASN in `CC_DENY` or `CC_DENY_PORTS`, CSF builds the
-ban from `/var/lib/csf/Geo/ip2asn-combined.tsv`, but lfd downloads that file only
-when it is missing, so the addresses go stale. Once a day CSF Auto-Group checks
-it: if it is older than 25 days it is moved aside and lfd is restarted, which
-downloads current data and refills the sets.
+`tools/services-allow.sh` does the downloading; the plugin runs it. It also
+works by hand (`--check` shows what would change, `--remove` takes it out).
 
 ## Development
 

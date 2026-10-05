@@ -619,6 +619,24 @@
 .ag-setform .ag-field > :not(.ag-field-l):not(.ag-field-h) { grid-column: 2; grid-row: 1 / span 2; justify-self: end; max-width: 380px; }
 .ag-setform .ag-field .ag-input:not(.ag-num) { width: 300px; max-width: 100%; }
 .ag-setform .ag-field .ag-num { width: 120px; text-align: right; }
+/* geniş alan: denetim etiketin altında, satırın tamamında (kaynak kutucukları, metin kutusu) */
+.ag-setform .ag-field.w { grid-template-columns: minmax(0, 1fr); }
+.ag-setform .ag-field.w > :not(.ag-field-l):not(.ag-field-h) { grid-column: 1; grid-row: 3; justify-self: stretch; max-width: none; margin-top: 10px; }
+.ag-setform .ag-field.w .ag-input.ag-ta { width: 100%; height: auto; min-height: 72px; padding: 8px 11px; font-family: var(--ag-mono); font-size: 12px; line-height: 1.6; resize: vertical; }
+.ag-setform .ag-warnbox { background: var(--ag-warn-soft); border: 1px solid var(--ag-warn-line); color: #78350f; padding: 10px 12px; border-radius: 8px; font-size: 12.5px; margin: 4px 0 14px; }
+.ag-prov-note { padding: 0 0 14px; }
+.ag-prov-list { padding: 0 0 14px; display: flex; flex-direction: column; gap: 8px; }
+.ag-prov-a { border: 1px solid var(--ag-line); border-radius: 10px; padding: 10px 12px; background: #fff; }
+.ag-prov-ah { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ag-prov-ah .ag-org { font-size: 12.5px; color: var(--ag-text-2); }
+.ag-impact { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--ag-line); font-size: 12.5px; color: var(--ag-text-2); }
+.ag-impact-s { font-weight: 650; color: var(--ag-text); margin-bottom: 2px; }
+.ag-impact-h { font-weight: 600; color: var(--ag-text); margin: 10px 0 4px; }
+.ag-impact ul { list-style: none; margin: 0; padding: 0; }
+.ag-impact li { display: flex; gap: 12px; padding: 2px 0; font-family: var(--ag-mono); font-size: 11.5px; }
+.ag-impact li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-impact li b { margin-left: auto; font-variant-numeric: tabular-nums; }
+.ag-impact-t { margin-top: 10px; }
 .ag-setform .ag-field > .ag-loginfo { grid-column: 1 / -1; grid-row: 2; justify-self: start; max-width: none; margin-top: 3px; }
 @media (max-width: 900px) {
   .ag-setwrap { grid-template-columns: 1fr; }

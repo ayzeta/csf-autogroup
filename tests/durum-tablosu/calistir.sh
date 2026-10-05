@@ -65,6 +65,17 @@ mcheck "kısmi bandan sonraki yeni saldırılar aynı gün de bildirilir" "grep 
 mk legacy;     printf '%s\n' "tcp|in|d=80,443|s=151.80.0.0/16 # csf_autogroup: elle /16 kısmi ban (root) [svc=web] - do not delete - $DT" >> "$D"; quiet; quiet
 mcheck "eski kısmi web banına UDP 443 bir kez eklenir" "[ \$(grep -c '^udp|in|d=443|s=151.80.0.0/16 ' '$D') = 1 ]"
 
+# sağlayıcı banı: elle kurulmuş olan devralınır (CSF'e dokunulmaz), kapatınca yalnız eklentinin eklediği kalkar,
+# CC_DENY_PORTS'ta farklı portlu başka kayıt varsa hiçbir şey değişmez
+mk prov;       printf '%s\n' 'CC_DENY = "VN"' 'CC_DENY_PORTS = "AS396982"' 'CC_DENY_PORTS_TCP = "80,443"' 'CC_DENY_PORTS_UDP = "443"' >> "$R/etc/csf/csf.conf"
+before=$(grep '^CC_DENY' "$R/etc/csf/csf.conf"); quiet
+mcheck "elle kurulmuş sağlayıcı banı devralınır, CSF ayarı değişmez" "[ \"\$(grep '^CC_DENY' '$R/etc/csf/csf.conf')\" = \"\$before\" ]"
+quiet --config set ASN_BAN=0; quiet --prov-apply
+mcheck "sağlayıcı banı kapatılınca yalnız eklentinin eklediği kalkar" "grep -q '^CC_DENY = \"VN\"' '$R/etc/csf/csf.conf' && grep -q '^CC_DENY_PORTS = \"\"' '$R/etc/csf/csf.conf'"
+sed -i 's/^CC_DENY_PORTS = .*/CC_DENY_PORTS = "CN"/; s/^CC_DENY_PORTS_TCP = .*/CC_DENY_PORTS_TCP = "22,25"/' "$R/etc/csf/csf.conf"
+quiet --config set ASN_BAN=1 ASN_LIST=AS396982 ASN_MODE=web; quiet --prov-apply
+mcheck "ortak port listesi çakışmasında CSF ayarı değişmez" "grep -q '^CC_DENY_PORTS = \"CN\"' '$R/etc/csf/csf.conf' && grep -q '^CC_DENY_PORTS_TCP = \"22,25\"' '$R/etc/csf/csf.conf'"
+
 node "$(wp "$H/render.js")" "$(wp "$REPO/whm/assets/ag.js")" "$(wp "$W/out")" "$@"; RC=$?
 printf '\nMotor kuralları\n%s' "$ML"
 [ "$MF" -gt 0 ] && { echo "$MF motor kuralı ihlali"; exit 1; }
