@@ -48,7 +48,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.9.15"   # sürüm — başlangıç log satırında görünür
+VERSION="1.9.16"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -278,6 +278,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_A_NOSAVE="%s: kurtarma kopyası yazılamadı (%s); kapsananlar yerinde bırakıldı"
   M_A_NODRY="Elle işlemler kuru çalıştırmada (--dry-run) yapılmaz"
   M_ORPHANS="Banı CSF ekranından kaldırılmış %s eski kayıt temizlendi (kurtarma kopyası / izin satırı)"
+  M_A_TIME="Elle işlem süresi (%s): %s sn"
   M_PART_NOTE="   Not: bu ağda kısmi ban var (%s · %s); yalnız seçilen servisler kapalı, diğer portlardan gelenler sürebilir"
   M_PART_AFTER="   Yalnız kısmi bandan (%s) sonra gelen banlar sayıldı."
   M_PART_LEAK="   Dikkat: kapatılan servislere (%s) bandan sonra yine saldırı kaydı var; kuralın yüklü olduğunu kontrol edin: iptables -S DENYIN | grep %s"
@@ -482,6 +483,7 @@ else
   M_A_NOSAVE="%s: the restore copy could not be written (%s); covered entries were left in place"
   M_A_NODRY="Manual actions are not run in a dry run (--dry-run)"
   M_ORPHANS="Cleaned up %s leftover entries of bans removed outside the plugin (restore copies / allow lines)"
+  M_A_TIME="Manual action time (%s): %s s"
   M_PART_NOTE="   Note: this network has a partial ban (%s · %s); only the selected services are blocked, traffic to other ports can continue"
   M_PART_AFTER="   Only bans added after the partial ban (%s) were counted."
   M_PART_LEAK="   Warning: the blocked services (%s) were attacked again after the ban; check that the rule is loaded: iptables -S DENYIN | grep %s"
@@ -769,7 +771,9 @@ csf_run() {      # csf'i çalıştır, çıktıyı log'a yaz, CSF_OUT'ta sakla (
     if [ "$DRY" = 1 ]; then
         case "$1" in -d|-dr|-td|-tr) echo "      [dry-run] csf $*"; CSF_OUT=""; return 0 ;; esac
     fi
+    local c0; c0=$(date +%s%N)
     CSF_OUT=$("$CSF_BIN" "$@" 2>&1 9>&-)
+    CSF_TN[$1]=$(( ${CSF_TN[$1]:-0} + 1 )); CSF_TMS[$1]=$(( ${CSF_TMS[$1]:-0} + ($(date +%s%N) - c0) / 1000000 ))
     log_flush                       # csf çıktısı dosyaya doğrudan yazılıyor: önce bağlam satırları
     [ -n "$CSF_OUT" ] && printf '%s\n' "$CSF_OUT" >> "$LOG_FILE"
 }
@@ -2422,8 +2426,16 @@ do_lookup() {
 
 # ── --action (WHM eklentisinin butonları) ───────────────────────────────────
 # Çıkış kodu: 0 tamam · 1 başarısız · 2 geçersiz girdi · 3 meşgul · 4 ek onay gerekiyor (beyaz liste)
+declare -A CSF_TN=() CSF_TMS=()   # csf çağrı sayısı ve süresi (ms), komut başına
+ms_s() { printf '%d,%d' $(( $1 / 1000 )) $(( $1 % 1000 / 100 )); }   # 14230 → "14,2"
 act_out() {      # CODE MESAJ
-    local ok=false; [ "$1" = 0 ] && ok=true
+    local ok=false k tl=""; [ "$1" = 0 ] && ok=true
+    # elle işlem uzun sürerse nerede geçtiği görülsün: "Süre: 14,2 sn · csf -r 1× 9,1 sn · csf -tr 5× 4,0 sn"
+    if [ -n "$ACT_T0" ]; then
+        for k in "${!CSF_TMS[@]}"; do tl+=" · csf $k ${CSF_TN[$k]}× $(ms_s "${CSF_TMS[$k]}") sn"; done
+        log "$(m "$M_A_TIME" "$ACT_NAME" "$(ms_s $(( ($(date +%s%N) - ACT_T0) / 1000000 )))")$tl"
+        ACT_T0=""
+    fi
     if [ "$JSON" = 1 ]; then jstr "$2"; echo "{\"ok\":$ok,\"code\":$1,\"message\":$REPLY}"; else echo "$2"; fi
     return "$1"
 }
@@ -2774,6 +2786,7 @@ part_note() {    # LO HI → REPLY = "CIDR|svc" (aralıktaki ilk kısmi ban) ya 
 do_action() {    # NAME TARGET [DAYS]
     local name="$1" t="$2" days="${3:-30}" cidr bits pfx ip line jw
     [ "$DRY" = 1 ] && { act_out 2 "$M_A_NODRY"; return 2; }
+    ACT_T0=$(date +%s%N); ACT_NAME="$name $t"
     [ -z "$BSVC" ] || [[ "$BSVC" =~ ^[a-z]+(,[a-z]+){0,9}$ ]] || { act_out 2 "$(m "$M_BAD_TARGET" "$BSVC")"; return 2; }
     take_lock || { act_out 3 "$M_BUSY"; return 3; }
     parse_deny "$DENY_FILE" 1

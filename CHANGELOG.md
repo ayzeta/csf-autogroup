@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.9.16 — 2026-10-05
+
+- Pressing **Ban** (or any action) dims the action buttons right away with a
+  "Working…" note, instead of only after the server finished; then "Done,
+  updating the list…" until the new state arrives.
+- Each manual action writes its duration to the log, split by CSF call
+  (e.g. `Manual action time (ban16 104.208): 14,2 s · csf -r 1× 9,1 s ·
+  csf -tr 5× 4,0 s`), so a slow ban shows where the time went.
+
 ## 1.9.15 — 2026-10-05
 
 - A suspicious network warning sent earlier the same day, before a partial ban
