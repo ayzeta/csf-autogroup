@@ -4,7 +4,7 @@
 # Saldırıların çoğu bulut sunucularından geliyor; ama bir bulut sağlayıcısının bütün ASN'ini banlamak kendi
 # servislerini de keser (ör. Google'ın AS15169'unda Googlebot ve Gmail de var). Firmalar herkese kiraladıkları
 # sunucuların adreslerini ayrıca yayımlıyor (Google Cloud cloud.json, AWS EC2, Oracle Cloud, DigitalOcean, Linode,
-# Vultr); bu araç o listeleri indirir, ag_cloud ipset'ine yükler ve CSF'in LOCALINPUT zincirinin sonuna yalnız
+# Vultr, Azure); bu araç o listeleri indirir, ag_cloud ipset'ine yükler ve CSF'in LOCALINPUT zincirinin sonuna yalnız
 # seçilen portlarda yeni bağlantıları düşüren bir kural ekler. CSF önce izin listesine (csf.allow, izinli
 # servisler) bakar; onlar bu kuralın önünde kalır. Kural yalnız gelen YENİ bağlantıya uygulanır: sunucunun
 # o bulutlara kendi açtığı bağlantılar (yedek hedefleri, API'ler) etkilenmez. Sunucunun kendi IP'leri listeden
@@ -25,6 +25,8 @@ SET=ag_cloud CHAIN=AG_CLOUD MARK="# csf_autogroup cloud"
 POST="$CSF_DIR/csfpost.sh"
 SELF_PATH="$(cd "$(dirname "$0")" 2>/dev/null && pwd)/$(basename "$0")"
 UA="Mozilla/5.0 (compatible; csf-autogroup cloud-ban)"
+# Microsoft'un indirme sayfası kısa UA'ya 403 döner: tam tarayıcı kimliği ve başlıklar gerekir
+BUA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
 
 log() { printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "cloud-ban: $1" >> "$LOG_FILE" 2>/dev/null; }
 # IPv4 aralıkları; /10'dan geniş aralık ve geçersiz sekizli alınmaz (bozuk bir liste interneti kapatmasın)
@@ -36,7 +38,23 @@ ipv4_list() {
 pick() {
     case "$1" in
         aws*) awk 'BEGIN { RS = "}" } /"service": *"EC2"/' | ipv4_list ;;
+        azure*) awk '/"name": *"AzureCloud",/ { f = 1 } f && /"addressPrefixes"/ { p = 1; next } p && /\]/ { exit } p' | ipv4_list ;;   # yalnız AzureCloud etiketi
         *) ipv4_list ;;
+    esac
+}
+fetch() {        # AD ADRES → ham liste
+    local u="$2"
+    case "$1" in
+        azure*)
+            # Microsoft listeyi her hafta yeni adla yayımlar (ServiceTags_Public_TARİH.json); sabit olan indirme sayfası,
+            # güncel dosyanın bağlantısı oradan okunur. Adres doğrudan bir .json ise o indirilir.
+            if [[ "$u" != *.json ]]; then
+                u=$(curl -fsSL --max-time 30 -A "$BUA" -H 'Accept: text/html,application/xhtml+xml' -H 'Accept-Language: en-US,en;q=0.9' "$u" 2>/dev/null |
+                    grep -oE 'https://download\.microsoft\.com/download/[^"]*ServiceTags_Public_[0-9]+\.json' | head -n 1)
+                [ -n "$u" ] || return 1
+            fi
+            curl -fsSL --max-time 120 -A "$BUA" "$u" ;;
+        *) curl -fsSL --max-time 60 -A "$UA" "$u" ;;
     esac
 }
 hook_add() {     # csfpost.sh'a tek satır: CSF yeniden başlayınca kural geri gelsin (Imunify satırı en sonda kalır)
@@ -100,7 +118,7 @@ while IFS= read -r s; do
     name="${s%%|*}"; src="${s#*|}"
     [[ "$name" =~ ^[a-z0-9-]+$ ]] || continue
     old="$CACHE/$name.txt"; prev=0; [ -s "$old" ] && prev=$(grep -c . "$old")
-    new=$(curl -fsSL --max-time 60 -A "$UA" "$src" 2>/dev/null | pick "$name")
+    new=$(fetch "$name" "$src" 2>/dev/null | pick "$name")
     n=$(printf '%s' "$new" | grep -c .)
     ot=$(stat -c %Y "$old" 2>/dev/null || echo 0); err=""
     if [ "$n" -eq 0 ] || { [ "$prev" -gt 0 ] && [ "$n" -lt $(( prev / 2 )) ]; }; then

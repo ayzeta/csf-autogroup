@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.12.1"   # sürüm — başlangıç log satırında görünür
+VERSION="1.12.2"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -125,7 +125,7 @@ ASN_TCP="${ASN_TCP-80,443}"         # boş kaydedilirse boş kalır (varsayılan
 ASN_UDP="${ASN_UDP-443}"
 # Bulut listeleriyle ban: bulut firmalarının kiraladığı sunucuların yayımlanmış adresleri, yalnız seçilen portlar (tools/cloud-ban.sh)
 CLOUD_BAN="${CLOUD_BAN:-0}"             # 1 = açık
-CLOUD_SOURCES="${CLOUD_SOURCES-gcp}"    # virgüllü: gcp aws oracle digitalocean linode vultr
+CLOUD_SOURCES="${CLOUD_SOURCES-gcp}"    # virgüllü: gcp aws azure oracle digitalocean linode vultr
 CLOUD_TCP="${CLOUD_TCP-80,443}"
 CLOUD_UDP="${CLOUD_UDP-443}"
 CLOUD_URLS="${CLOUD_URLS:-}"            # değiştirilmiş kaynak adresleri: "gcp|https://… aws|https://…"
@@ -691,7 +691,7 @@ mail() {
 CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_URLS"
 PROV_KEYS="SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_URLS"
 SVC_CATALOG="google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake"
-CLOUD_CATALOG="gcp aws oracle digitalocean linode vultr"
+CLOUD_CATALOG="gcp aws azure oracle digitalocean linode vultr"
 CFG_TRY_KEYS="THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS"
 logrotate_write() { # [MB] [ARŞİV] → /etc/logrotate.d/csf_autogroup (geçici dosya + mv)
     local mb="${1:-$LOG_ROTATE_MB}" keep="${2:-$LOG_ROTATE_KEEP}" tmp
@@ -2972,6 +2972,7 @@ cloud_urls() {   # KAYNAK → REPLY = varsayılan liste adresi (firmanın kirala
     case "$1" in
         gcp)          REPLY="https://www.gstatic.com/ipranges/cloud.json" ;;
         aws)          REPLY="https://ip-ranges.amazonaws.com/ip-ranges.json" ;;            # araç yalnız EC2'yi alır
+        azure)        REPLY="https://www.microsoft.com/en-us/download/details.aspx?id=56519" ;;   # haftalık dosya bu sayfadan bulunur; araç AzureCloud'u alır
         oracle)       REPLY="https://docs.oracle.com/en-us/iaas/tools/public_ip_ranges.json" ;;
         digitalocean) REPLY="https://digitalocean.com/geo/google.csv" ;;
         linode)       REPLY="https://geoip.linode.com/" ;;
@@ -2980,7 +2981,7 @@ cloud_urls() {   # KAYNAK → REPLY = varsayılan liste adresi (firmanın kirala
     esac
 }
 cloud_label() {  # KAYNAK → REPLY = görünen ad
-    case "$1" in gcp) REPLY="Google Cloud" ;; aws) REPLY="AWS EC2" ;; oracle) REPLY="Oracle Cloud" ;; digitalocean) REPLY="DigitalOcean" ;;
+    case "$1" in gcp) REPLY="Google Cloud" ;; aws) REPLY="AWS EC2" ;; azure) REPLY="Azure" ;; oracle) REPLY="Oracle Cloud" ;; digitalocean) REPLY="DigitalOcean" ;;
         linode) REPLY="Linode (Akamai)" ;; vultr) REPLY="Vultr" ;; *) REPLY="$1" ;; esac
 }
 cloud_srclist() { # → REPLY = araca verilecek "ad|adres" satırları (panelde değiştirilmiş adres önce)

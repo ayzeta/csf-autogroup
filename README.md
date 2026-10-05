@@ -472,8 +472,8 @@ works by hand (`--check` shows what would change, `--remove` takes it out).
 
 **Cloud list ban (experimental).** Cloud providers publish the addresses they
 rent out to anyone (virtual servers); the Providers tab can block those on chosen ports
-(default web): Google Cloud, AWS (EC2), Oracle Cloud, DigitalOcean, Linode and
-Vultr. Unlike a provider ban, the providers' own services stay reachable — the
+(default web): Google Cloud, AWS (EC2), Azure, Oracle Cloud, DigitalOcean,
+Linode and Vultr. Unlike a provider ban, the providers' own services stay reachable — the
 Google Cloud list has no Googlebot or Gmail. The lists go into an ipset with
 one rule at the end of CSF's `LOCALINPUT` chain, so `csf.allow` and the allowed
 services come first; only new incoming connections are dropped, and this

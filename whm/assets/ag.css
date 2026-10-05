@@ -636,6 +636,7 @@
 .ag-cov-a { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: inherit; text-decoration: none; }
 .ag-cov-a .ag-org { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ag-text-2); }
 .ag-cov-a:hover .ag-org { text-decoration: underline; }
+.ag-impact.ag-why { margin-bottom: 8px; }
 .ag-bn-l { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 10px 16px 12px; border-top: 1px solid var(--ag-line); font-size: 12px; }
 .ag-bn { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 8px; border: 1px solid var(--ag-line); border-radius: 999px; background: var(--ag-bg-2, transparent); }
 button.ag-bn { cursor: pointer; font: inherit; color: inherit; }

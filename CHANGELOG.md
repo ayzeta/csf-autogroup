@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.12.2 — 2026-10-05
+
+- **Azure in the cloud lists:** Microsoft's AzureCloud addresses (all Azure
+  datacenters). Microsoft publishes the file weekly under a new name; the tool
+  reads the current link from the download page (a direct .json address can be
+  entered instead). Bingbot's addresses are inside AzureCloud: the card warns
+  when Bing isn't on in Allowed services. Narrower than banning AS8075, which
+  also holds Outlook, Office 365 and Teams.
+- **Measure impact also shows why the provider is there:** how many of its IPs
+  were banned (from the event log), the top ban reasons, the services attacked,
+  and whether the web-only port list is enough or other ports are hit too.
+- Provider ban events no longer list the one-time UDP 443 fix of partial bans;
+  newest first.
+
 ## 1.12.1 — 2026-10-05
 
 - **Needs review groups a suspicious network's IPs by announced range:** when
