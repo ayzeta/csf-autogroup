@@ -77,16 +77,18 @@ switch ($a) {
     case 'inside':                                  // elle /16 ya da /24 banının onay penceresi: içindekiler
         $bits = (string) ($_POST['bits'] ?? '');
         $target = trim((string) ($_POST['target'] ?? ''));
-        if (!($bits === '16' && ag_valid(AG_RE_16, $target)) && !($bits === '24' && ag_valid(AG_RE_24, $target))) {
+        // duyurulan aralık (/17–/23): hedef tam CIDR'dir
+        $pfx = preg_match('/^(1[7-9]|2[0-3])$/', $bits) && preg_match('/^([0-9]{1,3}\.){3}[0-9]{1,3}\/' . $bits . '$/', $target);
+        if (!$pfx && !($bits === '16' && ag_valid(AG_RE_16, $target)) && !($bits === '24' && ag_valid(AG_RE_24, $target))) {
             ag_json(['ok' => false, 'error' => 'bad_input']);
         }
-        ag_json(ag_run_json(['--inside', $bits === '16' ? $target . '.0.0/16' : $target . '.0/24', '--json'], 45));
+        ag_json(ag_run_json(['--inside', $pfx ? $target : ($bits === '16' ? $target . '.0.0/16' : $target . '.0/24'), '--json'], 45));
 
     case 'action':
         $name   = (string) ($_POST['name'] ?? '');
         $target = trim((string) ($_POST['target'] ?? ''));
         $re = [
-            'ban16' => AG_RE_16, 'ban24' => AG_RE_24, 'forget' => AG_RE_24,
+            'ban16' => AG_RE_16, 'ban24' => AG_RE_24, 'banpfx' => '/^([0-9]{1,3}\.){3}[0-9]{1,3}\/(1[7-9]|2[0-3])$/', 'forget' => AG_RE_24,
             'unban' => AG_RE_CIDR, 'ignore' => AG_RE_CIDR, 'unignore' => AG_RE_CIDR,
             'expire' => '/^[0-9]{2,4}$/',          // hedef: arayüzün gördüğü "eski" gün sayısı
         ];
@@ -111,7 +113,7 @@ switch ($a) {
         if ($name === 'unban' && ($_POST['restore'] ?? '') === '1') {   // elle banın kaldırdıklarını geri yükle
             $args[] = '--restore';
         }
-        if ($name === 'ban16' || $name === 'ban24') {   // ne kapatılsın: all | svc (seçilen servisler) | exc (her şey, seçilenler hariç)
+        if ($name === 'ban16' || $name === 'ban24' || $name === 'banpfx') {   // ne kapatılsın: all | svc (seçilen servisler) | exc (her şey, seçilenler hariç)
             $mode  = (string) ($_POST['mode'] ?? 'all');
             $svc   = (string) ($_POST['svc'] ?? '');
             $ports = (string) ($_POST['ports'] ?? '');
@@ -153,10 +155,12 @@ switch ($a) {
         // Anahtar listesi ve kaba karakter süzgeci burada; asıl doğrulama script'te (cfg_check).
         $keys = ['MSG_LANG', 'ALERT_MAIL', 'DIGEST', 'DIGEST_DAY', 'NOTIFY', 'IC_FIREWALL', 'IC_LISTFULL', 'IC_RUN', 'IC_DIGEST', 'THRESHOLD_24', 'THRESHOLD_24_PERMANENT', 'THRESHOLD_16', 'THRESHOLD_TEMP_24',
                  'THRESHOLD_TEMP_16', 'LOOKUP', 'LOOKUP_TIMEOUT', 'SAYAC_RETENTION_DAYS', 'REVIEW_DAYS', 'LOG_MAX_LINES', 'LOG_ROTATE_MB', 'LOG_ROTATE_KEEP', 'BLOCK_EXPIRE_DAYS', 'BLOCK_EXPIRE_AUTO', 'CRON_MIN',
-                 'SVC_ALLOW', 'SVC_SOURCES', 'SVC_EXTRA', 'SVC_URLS', 'ASN_BAN', 'ASN_LIST', 'ASN_ALL', 'ASN_MODE', 'ASN_TCP', 'ASN_UDP'];
+                 'SVC_ALLOW', 'SVC_SOURCES', 'SVC_EXTRA', 'SVC_URLS', 'ASN_BAN', 'ASN_LIST', 'ASN_ALL', 'ASN_MODE', 'ASN_TCP', 'ASN_UDP',
+                 'CLOUD_BAN', 'CLOUD_SOURCES', 'CLOUD_TCP', 'CLOUD_UDP', 'CLOUD_URLS'];
         // listeler virgül, elle eklenen servisler boşluk ve "ad|adres" içerir; diğerleri tek değer
         $re = ['SVC_EXTRA' => '/^[A-Za-z0-9._~:\/?#@=%+&|, -]{0,16000}$/', 'SVC_SOURCES' => '/^[a-z,]{0,200}$/', 'SVC_URLS' => '/^[A-Za-z0-9._~:\/?#@=%+&|, -]{0,6000}$/', 'ASN_LIST' => '/^[A-Za-z0-9, ]{0,800}$/', 'ASN_ALL' => '/^[A-Za-z0-9, ]{0,800}$/',
-               'ASN_TCP' => '/^[0-9,:]{0,200}$/', 'ASN_UDP' => '/^[0-9,:]{0,200}$/'];
+               'ASN_TCP' => '/^[0-9,:]{0,200}$/', 'ASN_UDP' => '/^[0-9,:]{0,200}$/', 'CLOUD_TCP' => '/^[0-9,:]{0,200}$/', 'CLOUD_UDP' => '/^[0-9,:]{0,200}$/',
+               'CLOUD_SOURCES' => '/^[a-z,]{0,200}$/', 'CLOUD_URLS' => '/^[A-Za-z0-9._~:\/?#@=%+&|, -]{0,3000}$/'];
         $args = ['--config', 'set'];
         foreach ((array) ($_POST['v'] ?? []) as $k => $v) {
             $v = trim((string) $v);

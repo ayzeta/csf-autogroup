@@ -143,6 +143,8 @@ settings, with no prompts. `config.env` is left untouched.
   Recently viewed IPs stay one click away.
 - **Inside a wider ban** — a block inside a banned `/16` (or any wider range) is
   tagged *inside /16* in Active block bans and Watched.
+- **Ban announced range** — when the range the IP's owner announces is between
+  /17 and /23, the IP card offers to ban just that range instead of the /16.
 - **Most blocked providers** (by ASN) — three tabs:
   - *CSF* — ranked by block bans and single bans, with each provider's most
     common ban reason. A provider with 5+ block bans gets a suggestion to add
@@ -393,6 +395,9 @@ tab. Key options:
 
 ## Uninstall
 
+First turn off **Provider ban**, **Cloud list ban** and **Allowed services** in
+the Providers tab: that removes what the plugin added to CSF.
+
 ```bash
 crontab -l | grep -v 'csf_autogroup.sh' | crontab -
 # WHM plugin (cPanel):
@@ -432,8 +437,10 @@ restoring `config.env` is enough.
   Turning it off removes only what the plugin added.
 - **Needs review** leaves out a suspicious network when every attacking IP is
   in a banned provider and the ban covers the attacked service (a Web-only ban
-  covers web attacks, not SSH ones); no warning is sent for it. Existing block
-  bans inside a banned provider stay in `csf.deny` until you remove them.
+  covers web attacks, not SSH ones); no warning is sent for it.
+- Block bans already inside a banned provider stay in `csf.deny`; they are
+  marked *inside a provider ban* (checked against the ranges CSF loaded) and
+  the Providers tab can remove them.
 - The weekly summary lists the banned providers, what is blocked and how many
   ranges CSF loaded.
 - **CSF's ASN data:** lfd downloads `/var/lib/csf/Geo/ip2asn-combined.tsv` only
@@ -461,6 +468,18 @@ Overview, History) until it works again.
 
 `tools/services-allow.sh` does the downloading; the plugin runs it. It also
 works by hand (`--check` shows what would change, `--remove` takes it out).
+
+**Cloud list ban (experimental).** Cloud providers publish the addresses they
+give their customers; the Providers tab can block those on chosen ports
+(default web): Google Cloud, AWS (EC2), Oracle Cloud, DigitalOcean, Linode and
+Vultr. Unlike a provider ban, the providers' own services stay reachable — the
+Google Cloud list has no Googlebot or Gmail. The lists go into an ipset with
+one rule at the end of CSF's `LOCALINPUT` chain, so `csf.allow` and the allowed
+services come first; only new incoming connections are dropped, and this
+server's own IPs are excluded. A line in `/etc/csf/csfpost.sh` puts the rule
+back when CSF restarts. If a service you rely on runs in one of these clouds
+and calls your sites, allow its address. `tools/cloud-ban.sh` does the work;
+the plugin runs it.
 
 ## Development
 

@@ -1,6 +1,26 @@
 # Changelog
 
-## 1.11.1 — 2026-10-05
+## 1.12.0 — 2026-10-05
+
+- **Cloud list ban (experimental, Providers tab):** blocks the addresses cloud
+  providers give their customers, from the lists they publish — Google Cloud,
+  AWS (EC2 only), Oracle Cloud, DigitalOcean, Linode and Vultr — on ports you
+  choose (default web: TCP 80, 443 and UDP 443). The providers' own services
+  aren't in these lists (the Google Cloud list has no Googlebot or Gmail), so
+  it reaches cloud servers announced under a provider's main ASN without
+  banning that ASN. `tools/cloud-ban.sh` loads the lists into an ipset and adds
+  one rule at the end of CSF's `LOCALINPUT` chain, after the allow list; only
+  new incoming connections are dropped, so this server's own connections to
+  those clouds keep working, and its own IPs are excluded. A line in
+  `/etc/csf/csfpost.sh` restores the rule when CSF restarts (an existing
+  Imunify360 line stays last). Lists are refreshed daily; source addresses can
+  be edited; a list that can't be downloaded for 3 days is reported. Turning it
+  off removes the rule, the set and the line. Needs review, the IP card
+  (result line) and the weekly summary know about it.
+- **Ban announced range** on the IP card: when the range the owner announces is
+  between /17 and /23 (176.88.120.0/21), it can be banned instead of the whole
+  /16 — same window as the /16 ban (what's inside, whitelist, partial ban,
+  removing covered entries), "Change ban" and "Remove ban" work on it.
 
 Provider ban everywhere:
 
@@ -21,6 +41,13 @@ Provider ban everywhere:
   last download, and sources that couldn't be downloaded for 3 days.
 - Overview's *Active block bans* card shows how many providers are banned,
   linking to the Providers tab.
+- **Bans inside the provider ban are marked** ("inside a provider ban" in
+  Active block bans) when the ranges CSF loaded for a banned provider hold the
+  whole range and the provider ban blocks everything the ban blocks (a full ban
+  needs *Everything*; a partial ban needs its ports in the port list). The
+  Providers tab lists them with **Remove** and **Remove all**; entries a manual
+  ban had removed are restored.
+- "Source addresses" is now "Show and edit source addresses".
 - A source that fails is reported 3 days after its **first failure** (a source
   that never downloaded is no longer reported on the first run).
 - "Source addresses" no longer overlaps the source tiles.
