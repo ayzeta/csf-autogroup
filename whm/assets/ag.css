@@ -629,6 +629,8 @@
 .ag-prov-a { border: 1px solid var(--ag-line); border-radius: 10px; padding: 10px 12px; background: #fff; }
 .ag-prov-ah { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ag-prov-ah .ag-org { font-size: 12.5px; color: var(--ag-text-2); }
+.ag-prov-ah .ag-chips { margin-right: 4px; }
+.ag-prov-ah .ag-grow { flex: 1; min-width: 8px; }
 .ag-impact { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--ag-line); font-size: 12.5px; color: var(--ag-text-2); }
 .ag-impact-s { font-weight: 650; color: var(--ag-text); margin-bottom: 2px; }
 .ag-impact-h { font-weight: 600; color: var(--ag-text); margin: 10px 0 4px; }

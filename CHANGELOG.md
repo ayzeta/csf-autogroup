@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.10.1 — 2026-10-05
+
+- **Provider ban: what to block is chosen per provider** — *Port list* or
+  *Everything*. CSF has a single port list for port-limited bans, so *Web only* /
+  *Selected ports* is shared by the providers on *Port list*; the screen says so.
+  Up to 50 providers. A provider in `CC_DENY` set up by hand is adopted as
+  *Everything*.
+- Fixed: saving one provider setting left the others on "follow CSF", so a later
+  change to CSF's port list by hand was taken as the wanted list. Saving any of
+  them now writes them all. When the shared port list conflicts, providers the
+  plugin had already applied there stay in place.
+- **Measure impact** can be hidden again, and measured again.
+- Allowed services: UptimeRobot, Pingdom and StatusCake (site monitoring).
+
 ## 1.10.0 — 2026-10-05
 
 - **Provider ban (experimental), managed from Settings → Provider ban.** Bans a

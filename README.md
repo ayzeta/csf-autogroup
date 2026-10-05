@@ -27,7 +27,7 @@ is escalated to a **permanent** ban. `/16` networks are only flagged for review
 - **English / Türkçe** — the plugin, logs and emails.
 - **Works on phones** — the page adapts to small screens.
 
-**Version 1.10.0** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
+**Version 1.10.1** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
 cPanel the same engine runs from cron and the command line
 ([details](#without-cpanel)).
 
@@ -413,12 +413,12 @@ many to ban one by one. Everything is managed from the panel; the wanted state
 is kept in `config.env`, and every run makes CSF match it. After a server move,
 restoring `config.env` is enough.
 
-- **What to block:** *Web only* (TCP 80, 443 and UDP 443 for HTTP/3; uses
-  `CC_DENY_PORTS`), *Selected ports*, or *Everything* (`CC_DENY` — this also
-  breaks this server's connections to that provider, because CSF applies it
-  before replies). CSF has one port list for `CC_DENY_PORTS`: if another country
-  or provider there uses different ports, the ban isn't applied and the screen
-  says why.
+- **What to block, per provider (up to 50):** *Port list* (`CC_DENY_PORTS`) or
+  *Everything* (`CC_DENY` — this also breaks this server's connections to that
+  provider, because CSF applies it before replies). CSF has a single port list
+  for `CC_DENY_PORTS`, so it is shared: *Web only* (TCP 80, 443 and UDP 443 for
+  HTTP/3) or *Selected ports*. If another country or provider there uses
+  different ports, the list isn't changed and the screen says why.
 - **Measure impact** before saving: the last 24 hours of web logs, for that
   provider — response codes, successful requests, successful POSTs (payment
   notifications, webhooks) and non-browser clients, by site.
@@ -434,7 +434,8 @@ restoring `config.env` is enough.
 **Allowed services.** Banning a provider also cuts the legitimate services
 running there. Services that publish their own addresses can be allowed:
 Google (Googlebot, AdsBot, Storebot, Gmail images, site verification), Bing,
-Apple, DuckDuckGo, OpenAI, Stripe and Mollie, plus your own entries
+Apple, DuckDuckGo, OpenAI, Stripe, Mollie and the site monitors UptimeRobot,
+Pingdom and StatusCake, plus your own entries
 (`name|https://list` or `name|IP`). They are written to a file included from
 `csf.allow` (plain addresses, kept in an ipset); CSF checks the allow list
 first, so they pass country and provider bans, on every port. Lists are

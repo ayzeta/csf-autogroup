@@ -153,9 +153,9 @@ switch ($a) {
         // Anahtar listesi ve kaba karakter süzgeci burada; asıl doğrulama script'te (cfg_check).
         $keys = ['MSG_LANG', 'ALERT_MAIL', 'DIGEST', 'DIGEST_DAY', 'NOTIFY', 'IC_FIREWALL', 'IC_LISTFULL', 'IC_RUN', 'IC_DIGEST', 'THRESHOLD_24', 'THRESHOLD_24_PERMANENT', 'THRESHOLD_16', 'THRESHOLD_TEMP_24',
                  'THRESHOLD_TEMP_16', 'LOOKUP', 'LOOKUP_TIMEOUT', 'SAYAC_RETENTION_DAYS', 'REVIEW_DAYS', 'LOG_MAX_LINES', 'LOG_ROTATE_MB', 'LOG_ROTATE_KEEP', 'BLOCK_EXPIRE_DAYS', 'BLOCK_EXPIRE_AUTO', 'CRON_MIN',
-                 'SVC_ALLOW', 'SVC_SOURCES', 'SVC_EXTRA', 'ASN_BAN', 'ASN_LIST', 'ASN_MODE', 'ASN_TCP', 'ASN_UDP'];
+                 'SVC_ALLOW', 'SVC_SOURCES', 'SVC_EXTRA', 'ASN_BAN', 'ASN_LIST', 'ASN_ALL', 'ASN_MODE', 'ASN_TCP', 'ASN_UDP'];
         // listeler virgül, elle eklenen servisler boşluk ve "ad|adres" içerir; diğerleri tek değer
-        $re = ['SVC_EXTRA' => '/^[A-Za-z0-9._~:\/?#@=%+&|, -]{0,4000}$/', 'SVC_SOURCES' => '/^[a-z,]{0,120}$/', 'ASN_LIST' => '/^[A-Za-z0-9, ]{0,160}$/',
+        $re = ['SVC_EXTRA' => '/^[A-Za-z0-9._~:\/?#@=%+&|, -]{0,4000}$/', 'SVC_SOURCES' => '/^[a-z,]{0,200}$/', 'ASN_LIST' => '/^[A-Za-z0-9, ]{0,800}$/', 'ASN_ALL' => '/^[A-Za-z0-9, ]{0,800}$/',
                'ASN_TCP' => '/^[0-9,:]{0,120}$/', 'ASN_UDP' => '/^[0-9,:]{0,120}$/'];
         $args = ['--config', 'set'];
         foreach ((array) ($_POST['v'] ?? []) as $k => $v) {

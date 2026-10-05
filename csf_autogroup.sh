@@ -48,7 +48,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.10.0"   # sürüm — başlangıç log satırında görünür
+VERSION="1.10.1"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -113,10 +113,11 @@ DIGEST_DAY="${DIGEST_DAY:-1}"           # 1 = pazartesi … 7 = pazar (09:00'dan
 # "auto": ayar hiç kaydedilmemişse CSF'teki mevcut duruma göre (elle kurulmuş olanı devralır).
 SVC_SOURCES_SET="${SVC_SOURCES+x}"
 SVC_ALLOW="${SVC_ALLOW:-auto}"          # 1 = yayımlanmış servis adresleri csf.allow'a yazılır (Include)
-SVC_SOURCES="${SVC_SOURCES:-google}"    # virgüllü: google bing apple duckduckgo openai stripe mollie
+SVC_SOURCES="${SVC_SOURCES:-google}"    # virgüllü: google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake
 SVC_EXTRA="${SVC_EXTRA:-}"              # boşlukla ayrılmış "ad|https://liste" ya da "ad|1.2.3.0/24"
 ASN_BAN="${ASN_BAN:-auto}"              # 1 = ASN_LIST'teki sağlayıcılar banlanır
-ASN_LIST="${ASN_LIST:-}"                # virgüllü: AS396982,AS14061
+ASN_LIST="${ASN_LIST:-}"                # ortak port listesiyle banlananlar, virgüllü: AS396982,AS14061
+ASN_ALL="${ASN_ALL:-}"                  # her şeyi kapatılanlar (CC_DENY), virgüllü
 ASN_MODE="${ASN_MODE:-web}"             # web (TCP 80,443 + UDP 443) | ports (ASN_TCP / ASN_UDP) | all (bütün portlar)
 ASN_TCP="${ASN_TCP:-80,443}"
 ASN_UDP="${ASN_UDP:-443}"
@@ -291,7 +292,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_A_NOSAVE="%s: kurtarma kopyası yazılamadı (%s); kapsananlar yerinde bırakıldı"
   M_A_NODRY="Elle işlemler kuru çalıştırmada (--dry-run) yapılmaz"
   M_CFG_SVCX="ad|https://adres ya da ad|IP biçiminde, en çok 50 kayıt"
-  M_CFG_ASN="AS ile başlayan numaralar, virgülle (en çok 10)"
+  M_CFG_ASN="AS ile başlayan numaralar, virgülle (en çok 50)"
   M_CFG_PORTS="virgüllü portlar ya da aralıklar (30000:35000), en çok 15"
   M_ASN_APPLIED="Sağlayıcı banı CSF'e uygulandı: %s"
   M_ASN_REMOVED="Sağlayıcı banı CSF'ten kaldırıldı: %s"
@@ -507,7 +508,7 @@ else
   M_A_NOSAVE="%s: the restore copy could not be written (%s); covered entries were left in place"
   M_A_NODRY="Manual actions are not run in a dry run (--dry-run)"
   M_CFG_SVCX="name|https://url or name|IP, at most 50 entries"
-  M_CFG_ASN="numbers starting with AS, comma separated (at most 10)"
+  M_CFG_ASN="numbers starting with AS, comma separated (at most 50)"
   M_CFG_PORTS="comma separated ports or ranges (30000:35000), at most 15"
   M_ASN_APPLIED="Provider ban applied to CSF: %s"
   M_ASN_REMOVED="Provider ban removed from CSF: %s"
@@ -649,9 +650,9 @@ mail() {
 
 # ── Settings: validation (panel + --config set + --dry-run --set) ──────────
 # Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
-CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA ASN_BAN ASN_LIST ASN_MODE ASN_TCP ASN_UDP"
-PROV_KEYS="SVC_ALLOW SVC_SOURCES SVC_EXTRA ASN_BAN ASN_LIST ASN_MODE ASN_TCP ASN_UDP"
-SVC_CATALOG="google bing apple duckduckgo openai stripe mollie"
+CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP"
+PROV_KEYS="SVC_ALLOW SVC_SOURCES SVC_EXTRA ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP"
+SVC_CATALOG="google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake"
 CFG_TRY_KEYS="THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS"
 logrotate_write() { # [MB] [ARŞİV] → /etc/logrotate.d/csf_autogroup (geçici dosya + mv)
     local mb="${1:-$LOG_ROTATE_MB}" keep="${2:-$LOG_ROTATE_KEEP}" tmp
@@ -708,9 +709,9 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
                 CFG_VAL+="${CFG_VAL:+ }$x"
             done
             return 0 ;;
-        ASN_LIST)
+        ASN_LIST|ASN_ALL)
             v=$(printf '%s' "$v" | tr '[:lower:]' '[:upper:]' | tr -d ' ')
-            [[ "$v" =~ ^(AS[0-9]{1,10}(,AS[0-9]{1,10}){0,9})?$ ]] && { CFG_VAL="$v"; return 0; }
+            [[ "$v" =~ ^(AS[0-9]{1,10}(,AS[0-9]{1,10}){0,49})?$ ]] && { CFG_VAL="$v"; return 0; }
             CFG_ERR=$(m "$M_CFG_BAD" "$k" "$v" "$M_CFG_ASN"); return 1 ;;
         ASN_TCP|ASN_UDP)
             [[ "$v" =~ ^([0-9]{1,5}(:[0-9]{1,5})?(,[0-9]{1,5}(:[0-9]{1,5})?){0,14})?$ ]] && return 0
@@ -2853,6 +2854,9 @@ svc_urls() {     # KAYNAK → REPLY = "ad|adres" kayıtları (boşlukla); kaynak
         openai)     REPLY="openai-gptbot|https://openai.com/gptbot.json openai-search|https://openai.com/searchbot.json openai-user|https://openai.com/chatgpt-user.json" ;;
         stripe)     REPLY="stripe|https://stripe.com/files/ips/ips_webhooks.txt" ;;
         mollie)     REPLY="mollie|https://ip-ranges.mollie.com/ips.txt" ;;
+        uptimerobot) REPLY="uptimerobot|https://uptimerobot.com/inc/files/ips/IPv4.txt" ;;
+        pingdom)    REPLY="pingdom|https://my.pingdom.com/probes/ipv4" ;;
+        statuscake) REPLY="statuscake|https://www.statuscake.com/API/Locations/txt" ;;
         *)          REPLY="" ;;
     esac
 }
@@ -2871,16 +2875,17 @@ prov_resolve() { # "auto" ayarları CSF'teki duruma göre çöz (bir kez, ayarla
         [ "$inc" = 1 ] && [ -z "$SVC_SOURCES_SET" ] && SVC_SOURCES="google,mollie"
     fi
     if [ "$ASN_BAN" = auto ]; then
+        local ap="" aa=""
         d=$(conf_val CC_DENY); p=$(conf_val CC_DENY_PORTS)
-        for x in ${p//,/ }; do [[ "$x" =~ ^[Aa][Ss][0-9]+$ ]] && a+="${a:+,}${x^^}"; done
-        if [ -n "$a" ]; then
-            ASN_BAN=1; [ -n "$ASN_LIST" ] || ASN_LIST="$a"
-            ASN_TCP=$(conf_val CC_DENY_PORTS_TCP); ASN_UDP=$(conf_val CC_DENY_PORTS_UDP)
-            if [ "$ASN_TCP" = "80,443" ] && [ "$ASN_UDP" = "443" ]; then ASN_MODE=web; else ASN_MODE=ports; fi
-        else
-            for x in ${d//,/ }; do [[ "$x" =~ ^[Aa][Ss][0-9]+$ ]] && a+="${a:+,}${x^^}"; done
-            if [ -n "$a" ]; then ASN_BAN=1; [ -n "$ASN_LIST" ] || ASN_LIST="$a"; ASN_MODE=all; else ASN_BAN=0; fi
-        fi
+        for x in ${p//,/ }; do [[ "$x" =~ ^[Aa][Ss][0-9]+$ ]] && ap+="${ap:+,}${x^^}"; done
+        for x in ${d//,/ }; do [[ "$x" =~ ^[Aa][Ss][0-9]+$ ]] && aa+="${aa:+,}${x^^}"; done
+        if [ -n "$ap$aa" ]; then
+            ASN_BAN=1; [ -n "$ASN_LIST" ] || ASN_LIST="$ap"; [ -n "$ASN_ALL" ] || ASN_ALL="$aa"
+            if [ -n "$ap" ]; then
+                ASN_TCP=$(conf_val CC_DENY_PORTS_TCP); ASN_UDP=$(conf_val CC_DENY_PORTS_UDP)
+                if [ "$ASN_TCP" = "80,443" ] && [ "$ASN_UDP" = "443" ]; then ASN_MODE=web; else ASN_MODE=ports; fi
+            fi
+        else ASN_BAN=0; fi
     fi
 }
 conf_set() {     # ANAHTAR DEĞER → csf.conf'ta satırı değiştir (yoksa ekle)
@@ -2911,50 +2916,60 @@ self_asns() {    # → REPLY = sunucunun kendi IP'lerinin ASN'leri ("AS1,AS2"; s
     REPLY="$o"
 }
 asn_enforce() {  # istenen sağlayıcı banını CSF'te kur / onar / kaldır → ASN_STATE (ok|off|conflict|self), ASN_MSG
-    local had="" prev_tcp="" prev_udp="" d p t u nd np nt nu others x changed=0 want=""
+    # ASN_LIST: ortak port listesiyle (CC_DENY_PORTS; CSF'te bu listede tek port listesi var) · ASN_ALL: her şey (CC_DENY)
+    local had="" prev_tcp="" prev_udp="" d p t u nd np nt nu others x changed=0 wp="" wa="" sa gone keep="" wt wu
     ASN_STATE=off; ASN_MSG=""
     [ -r "$PROV_STATE" ] && { had=$(sed -n 's/^asn=//p' "$PROV_STATE"); prev_tcp=$(sed -n 's/^prev_tcp=//p' "$PROV_STATE"); prev_udp=$(sed -n 's/^prev_udp=//p' "$PROV_STATE"); }
     d=$(conf_val CC_DENY); p=$(conf_val CC_DENY_PORTS); t=$(conf_val CC_DENY_PORTS_TCP); u=$(conf_val CC_DENY_PORTS_UDP)
-    [ "$ASN_BAN" = 1 ] && want="$ASN_LIST"
-    if [ -n "$want" ]; then
-        self_asns
-        for x in ${want//,/ }; do case ",$REPLY," in *",$x,"*) ASN_STATE=self; ASN_MSG=$(m "$M_ASN_SELF" "$x"); want=""; break ;; esac; done
+    if [ "$ASN_BAN" = 1 ]; then
+        if [ "$ASN_MODE" = all ]; then wa=$(list_plus "$ASN_ALL" "$ASN_LIST")      # eski ayar: hepsi "her şey"
+        else wp="$ASN_LIST"; wa=$(list_minus "$ASN_ALL" "$ASN_LIST"); fi
     fi
-    # önce artık istenmeyen (eklentinin eklediği) ASN'ler çıkar
-    nd=$(list_minus "$d" "$(list_minus "$had" "$want")"); np=$(list_minus "$p" "$(list_minus "$had" "$want")"); nt="$t"; nu="$u"
-    if [ -n "$want" ]; then
-        if [ "$ASN_MODE" = all ]; then
-            nd=$(list_plus "$nd" "$want"); np=$(list_minus "$np" "$want")
-        else
-            local wt="$ASN_TCP" wu="$ASN_UDP"; [ "$ASN_MODE" = web ] && { wt="80,443"; wu="443"; }
-            others=$(list_minus "$np" "$(list_plus "$want" "$had")")
-            if [ -n "$others" ] && { [ "$t" != "$wt" ] || [ "$u" != "$wu" ]; }; then
-                ASN_STATE=conflict; ASN_MSG=$(m "$M_ASN_CONFLICT" "$others" "${t:--}" "${u:--}"); want=""
-            else
-                [ -z "$had" ] && [ -z "$prev_tcp$prev_udp" ] && { prev_tcp="$t"; prev_udp="$u"; }
-                np=$(list_plus "$np" "$want"); nd=$(list_minus "$nd" "$want"); nt="$wt"; nu="$wu"
-            fi
+    if [ -n "$wp$wa" ]; then                       # sunucunun kendi sağlayıcısı hiçbir kipte banlanmaz
+        self_asns; sa="$REPLY"
+        for x in ${wp//,/ } ${wa//,/ }; do
+            case ",$sa," in *",$x,"*) ASN_STATE=self; ASN_MSG=$(m "$M_ASN_SELF" "$x"); wp=$(list_minus "$wp" "$x"); wa=$(list_minus "$wa" "$x") ;; esac
+        done
+    fi
+    wt="$ASN_TCP"; wu="$ASN_UDP"; [ "$ASN_MODE" = web ] && { wt="80,443"; wu="443"; }
+    # ortak port listesi başka bir kayıtla (ülke ya da elle eklenmiş ASN) farklı kullanılıyorsa port kısmı uygulanmaz;
+    # eklentinin o listede önceden uyguladıkları da olduğu gibi kalır (yanlışlıkla kaldırılmaz)
+    if [ -n "$wp" ]; then
+        others=$(list_minus "$p" "$(list_plus "$wp" "$had")")
+        if [ -n "$others" ] && { [ "$t" != "$wt" ] || [ "$u" != "$wu" ]; }; then
+            ASN_STATE=conflict; ASN_MSG=$(m "$M_ASN_CONFLICT" "$others" "${t:--}" "${u:--}")
+            keep=$(list_minus "$p" "$(list_minus "$p" "$had")"); wp=""; wt="$t"; wu="$u"
         fi
-        [ -n "$want" ] && ASN_STATE=ok
     fi
-    # port listeleri yalnız eklentinin kullandığı sürece eklentinin: kimse kalmadıysa önceki değerler geri gelir
-    if [ -z "$np" ] && [ -n "$had" ] && [ "$ASN_MODE" != all -o -z "$want" ]; then nt="$prev_tcp"; nu="$prev_udp"; fi
+    gone=$(list_minus "$had" "$(list_plus "$(list_plus "$wp" "$wa")" "$keep")")
+    nd=$(list_minus "$d" "$gone"); np=$(list_minus "$p" "$gone"); nt="$t"; nu="$u"
+    [ -n "$wa" ] && { nd=$(list_plus "$nd" "$wa"); np=$(list_minus "$np" "$wa"); }
+    if [ -n "$wp" ]; then
+        [ -z "$had" ] && [ -z "$prev_tcp$prev_udp" ] && { prev_tcp="$t"; prev_udp="$u"; }
+        np=$(list_plus "$np" "$wp"); nd=$(list_minus "$nd" "$wp"); nt="$wt"; nu="$wu"
+    fi
+    # port listeleri yalnız eklentinin kullandığı sürece eklentinin: liste boşaldıysa önceki değerler geri gelir
+    [ -z "$wp$keep" ] && [ -z "$np" ] && [ -n "$had" ] && { nt="$prev_tcp"; nu="$prev_udp"; }
+    [ -n "$wp$wa" ] && [ "$ASN_STATE" = off ] && ASN_STATE=ok
     [ "$nd" != "$d" ] || [ "$np" != "$p" ] || [ "$nt" != "$t" ] || [ "$nu" != "$u" ] && changed=1
     if [ "$changed" = 1 ]; then
         cp -p "$CSF_CONF" "$CSF_CONF.autogroup.bak" 2>/dev/null
         conf_set CC_DENY "$nd"; conf_set CC_DENY_PORTS "$np"; conf_set CC_DENY_PORTS_TCP "$nt"; conf_set CC_DENY_PORTS_UDP "$nu"
         csf_run -r
         { systemctl restart lfd 2>/dev/null || service lfd restart >/dev/null 2>&1; }   # setleri lfd doldurur
-        if [ -n "$want" ]; then log "$(m "$M_ASN_APPLIED" "$want ($ASN_MODE)")"; ev provider "" "asn=\"$want\"" "mode=\"$ASN_MODE\"" "by=\"${AG_BY:-cron}\""
-        else log "$(m "$M_ASN_REMOVED" "${had:-?}")"; ev provider "" "asn=\"\"" "removed=\"$had\"" "by=\"${AG_BY:-cron}\""; fi
+        if [ -n "$wp$wa" ]; then
+            log "$(m "$M_ASN_APPLIED" "${wp:+$wp ($ASN_MODE)}${wp:+${wa:+ · }}${wa:+$wa (all)}")"
+            ev provider "" "asn=\"$wp\"" "all=\"$wa\"" "mode=\"$ASN_MODE\"" "by=\"${AG_BY:-cron}\""
+        else log "$(m "$M_ASN_REMOVED" "${gone:-?}")"; ev provider "" "asn=\"\"" "removed=\"$gone\"" "by=\"${AG_BY:-cron}\""; fi
     fi
     # çakışma / kendi sağlayıcısı: günde bir kez log'a (her turda değil)
     if [ "$ASN_STATE" = conflict ] || [ "$ASN_STATE" = self ]; then
         grep -qF "ASN_WARN $TODAY" "$SAYAC_FILE" 2>/dev/null || { log "$ASN_MSG"; cnt_add "ASN_WARN $TODAY"; }
     fi
     # eklentinin yazdıkları (bir sonraki değişiklikte yalnız bunlar geri alınır)
-    if [ -n "$want" ]; then printf 'asn=%s\nprev_tcp=%s\nprev_udp=%s\n' "$want" "$prev_tcp" "$prev_udp" > "$PROV_STATE"
-    elif [ "$ASN_STATE" = off ]; then rm -f "$PROV_STATE"; fi
+    x=$(list_plus "$(list_plus "$wp" "$wa")" "$keep")
+    if [ -n "$x" ]; then printf 'asn=%s\nprev_tcp=%s\nprev_udp=%s\n' "$x" "$prev_tcp" "$prev_udp" > "$PROV_STATE"
+    else rm -f "$PROV_STATE"; fi
     return 0
 }
 svc_enforce() {  # FORCE(1 = listeleri şimdi yenile) → izinli servisleri kur / kaldır
@@ -2975,6 +2990,7 @@ svc_enforce() {  # FORCE(1 = listeleri şimdi yenile) → izinli servisleri kur 
     return 0
 }
 prov_json() {    # → REPLY = durum JSON'u: izinli servisler (kaynak başına sayı, son güncelleme) ve sağlayıcı banı (set boyutları)
+    local IFS=$' \t\n'     # durum çıktısı IFS=, ile çağırır; buradaki döngüler boşlukla bölünür
     local nm o s="" n c t e a sets="" geo="$CSF_VAR/Geo/ip2asn-combined.tsv" gt=0 cache
     cache="$(dirname "$SAYAC_FILE")/services"
     if [ -r "$cache/status" ]; then
@@ -2983,7 +2999,7 @@ prov_json() {    # → REPLY = durum JSON'u: izinli servisler (kaynak başına s
             jstr "$n"; s+="${s:+,}{\"n\":$REPLY,\"c\":$(num "$c"),\"t\":$(num "$t")"; jstr "$e"; s+=",\"e\":$REPLY}"
         done < "$cache/status"
     fi
-    for a in ${ASN_LIST//,/ }; do
+    for a in $(list_plus "$ASN_LIST" "$ASN_ALL" | tr ',' ' '); do
         c=-1; command -v ipset >/dev/null 2>&1 && c=$(ipset list "cc_${a,,}" 2>/dev/null | grep -cE '^[0-9]')
         [[ "$c" =~ ^-?[0-9]+$ ]] || c=-1
         # sağlayıcının adı: CSF'in ASN verisinden bir kez okunur, önbellekte tutulur (dosya büyük, her istekte taranmaz)
@@ -2997,7 +3013,7 @@ prov_json() {    # → REPLY = durum JSON'u: izinli servisler (kaynak başına s
     [ -e "$geo" ] && gt=$(stat -c %Y "$geo" 2>/dev/null || echo 0)
     jstr "$SVC_EXTRA"; o="{\"svc\":{\"on\":$([ "$SVC_ALLOW" = 1 ] && echo true || echo false),\"sources\":\"$SVC_SOURCES\",\"extra\":$REPLY,\"src\":[$s]}"
     jstr "${ASN_MSG:-}"
-    o+=",\"asn\":{\"on\":$([ "$ASN_BAN" = 1 ] && echo true || echo false),\"list\":\"$ASN_LIST\",\"mode\":\"$ASN_MODE\",\"tcp\":\"$ASN_TCP\",\"udp\":\"$ASN_UDP\",\"state\":\"${ASN_STATE:-}\",\"msg\":$REPLY,\"sets\":[$sets],\"geo_t\":$(num "$gt")}}"
+    o+=",\"asn\":{\"on\":$([ "$ASN_BAN" = 1 ] && echo true || echo false),\"list\":\"$ASN_LIST\",\"all\":\"$ASN_ALL\",\"mode\":\"$ASN_MODE\",\"tcp\":\"$ASN_TCP\",\"udp\":\"$ASN_UDP\",\"state\":\"${ASN_STATE:-}\",\"msg\":$REPLY,\"sets\":[$sets],\"geo_t\":$(num "$gt")}}"
     REPLY="$o"
 }
 do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan gelen istekler: kodlar, başarılı istekler, siteler
@@ -3614,6 +3630,18 @@ do_config() {
                 logs+=("$(m "$M_CFG_LOG" "$AG_BY" "$k" "${old:--}" "${NEW[$k]}")")
             done
             [ "$n" -eq 0 ] && { act_out 0 "$M_CFG_NOCHANGE"; return 0; }
+            # sağlayıcı ayarlarından biri kaydedilince hepsi o anki değerleriyle yazılır: "auto" (CSF'teki elle kurulumu
+            # devralma) yalnız hiç kaydedilmemişken geçerli; yoksa her tur CSF'teki değişikliği istek sanırdı
+            local pk pv pt=0
+            for pk in $PROV_KEYS; do [ -n "${NEW[$pk]+x}" ] && pt=1; done
+            if [ "$pt" = 1 ]; then
+                for pk in $PROV_KEYS; do
+                    [[ $'\n'"$lines" == *$'\n'"$pk="* ]] && continue          # değişti, zaten yazılacak
+                    grep -qE "^$pk=" "$CFG_FILE" 2>/dev/null && continue
+                    pv="$(cfg_value "$pk")"
+                    if [[ "$pv" =~ [^A-Za-z0-9@._%+*/:,=-] ]]; then lines+="$pk=\"$pv\""$'\n'; else lines+="$pk=$pv"$'\n'; fi
+                done
+            fi
             # Sıra: önce cron (dışarıya bağımlı adım), sonra config.env. Cron başarısız olursa hiçbir şey
             # değişmemiş olur; kayıtlar da yalnızca her şey yazıldıktan sonra düşülür.
             if [ -n "$cron_new" ]; then cron_write "$cron_new" || { act_out 1 "$M_CFG_CRONFAIL"; return 1; }; fi
