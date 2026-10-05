@@ -1,5 +1,45 @@
 # Changelog
 
+## 1.10.2 — 2026-10-05
+
+Fixes from a full logic and consistency review:
+
+- Provider ban never overwrites CSF's `CC_DENY_PORTS_TCP/UDP` when it didn't set
+  them: with only *Everything* providers, your own port list was emptied on the
+  second run. The previous values are saved only when the plugin first writes
+  the shared list, and restored only then.
+- With the shared port list in conflict, a provider moved from *Everything* to
+  *Port list* stays banned (in `CC_DENY`) until the conflict is resolved.
+- An empty port list or source list stays empty instead of falling back to the
+  default (an empty UDP list no longer blocks UDP 443).
+- If no allowed-service list can be downloaded, it is retried at most hourly
+  instead of on every run (which held the run lock for minutes).
+- If CSF's ASN data couldn't be downloaded after a refresh, the previous file is
+  put back.
+- **Measure impact** counts all web logs (they were split into batches and only
+  the last batch was counted) and only the lines of the last 24 hours.
+- This server's own provider: the last known value is used when DNS can't be
+  queried. lfd restarts no longer inherit the run lock.
+- A service list that shrinks by more than half is accepted after the same
+  result three times in a row (it was kept on the old list forever).
+- Ignored blocks were counted in the threshold-impact numbers in Settings.
+- Panel: the provider list field no longer rewrites your text while typing;
+  the port fields keep their help text; reordering lists no longer counts as a
+  change; "Working…" stays until the provider settings are applied (and doesn't
+  leave controls disabled); a busy run is reported as "applied on the next run".
+- Colors: a partial manual ban is blue in History, a removed provider ban is
+  neutral, the "repeats" badge on suspicious networks is amber.
+- Phone: allowed-service tiles wrap instead of overlapping; the chart's day
+  breakdown is centered for middle bars; wider value axis.
+- "Son ziyaretinizden beri" (formal you) in Turkish.
+- From a usability review on rendered screens: the restore option counted one
+  entry too many (the copy's header line); the IP card no longer says a
+  whitelisted block will be banned automatically (it never is — it goes to To
+  review); the temp-ban time on the IP card is in the panel's language; "Ban
+  anyway" says the whitelisted addresses stay open instead of "nothing"; the
+  provider port fields show examples instead of values that look real; the
+  automatic block ban comment no longer repeats "do not delete".
+
 ## 1.10.1 — 2026-10-05
 
 - **Provider ban: what to block is chosen per provider** — *Port list* or

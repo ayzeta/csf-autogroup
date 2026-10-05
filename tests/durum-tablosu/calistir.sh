@@ -51,7 +51,8 @@ mk review16;   for x in 7.1 7.2 8.1 8.2 9.1 10.1; do single 151.80.$x sshd; done
 
 # ── motor kuralları (ekran dışı): yazılan satırlar ve uyarılar ──
 MF=0; ML=""
-mcheck() { if eval "$2"; then ML+="  ✓ $1"$'\n'; else ML+="  ✗ motor: $1"$'\n'; MF=$((MF + 1)); fi; }
+mcheck() { [ -n "$2" ] || { ML+="  ✗ motor: $1 (kuralın komutu boş)"$'\n'; MF=$((MF + 1)); return; }   # tırnak hatası sessizce geçmesin
+    if eval "$2"; then ML+="  ✓ $1"$'\n'; else ML+="  ✗ motor: $1"$'\n'; MF=$((MF + 1)); fi; }
 R="$W/roots/b24part"
 mcheck "web kısmi banı UDP 443'ü de kapatır (HTTP/3)" "grep -q '^udp|in|d=443|s=151.80.7.0/24 ' '$R/etc/csf/csf.deny'"
 mk b24exc; quiet --action ban24 151.80.7 --mode exc --svc web
@@ -79,6 +80,9 @@ quiet --config set ASN_ALL=AS14061; quiet --prov-apply
 mcheck "tek sağlayıcı ayarı kaydedilince diğerleri yerinde kalır (port listeli ASN kalkmaz)" "grep -q '^CC_DENY_PORTS = \"AS396982\"' '$R/etc/csf/csf.conf' && grep -q '^CC_DENY = \"VN,AS14061\"' '$R/etc/csf/csf.conf'"
 sed -i 's/^CC_DENY_PORTS_TCP = .*/CC_DENY_PORTS_TCP = "22,25"/' "$R/etc/csf/csf.conf"; quiet --prov-apply
 mcheck "CSF'te elle değiştirilen port listesi istek sanılmaz (kaydedilmiş liste geri yazılır)" "grep -q '^CC_DENY_PORTS_TCP = \"80,443\"' '$R/etc/csf/csf.conf'"
+mk prov3;      printf '%s\n' 'CC_DENY = "VN"' 'CC_DENY_PORTS = ""' 'CC_DENY_PORTS_TCP = "22"' 'CC_DENY_PORTS_UDP = ""' >> "$R/etc/csf/csf.conf"
+quiet --config set ASN_BAN=1 ASN_ALL=AS2; quiet --prov-apply; quiet --prov-apply
+mcheck "yalnız 'her şey' sağlayıcısı varken kullanıcının port listesine dokunulmaz" "grep -q '^CC_DENY_PORTS_TCP = \"22\"' '$R/etc/csf/csf.conf'"
 R="$W/roots/prov"
 mcheck "ortak port listesi çakışmasında CSF ayarı değişmez" "grep -q '^CC_DENY_PORTS = \"CN\"' '$R/etc/csf/csf.conf' && grep -q '^CC_DENY_PORTS_TCP = \"22,25\"' '$R/etc/csf/csf.conf'"
 

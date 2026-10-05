@@ -74,6 +74,14 @@ for s in "${SOURCES[@]}"; do
     fi
     n=$(printf '%s' "$new" | grep -c .)
     ot=$(stat -c %Y "$old" 2>/dev/null || echo 0); err=""
+    shr="$CACHE/$name.shrink"
+    # yarıdan fazla küçülme: hata sayılır; ama aynı küçük liste 3 kez üst üste gelirse kaynak gerçekten küçülmüştür
+    if [ "$n" -gt 0 ] && [ "$prev" -gt 0 ] && [ "$n" -lt $(( prev / 2 )) ]; then
+        sc=$(cut -d'|' -f2 "$shr" 2>/dev/null); sn=$(cut -d'|' -f1 "$shr" 2>/dev/null)
+        if [ "$sn" = "$n" ]; then sc=$(( ${sc:-0} + 1 )); else sc=1; fi
+        [ "$CHECK" = 0 ] && printf '%s|%s\n' "$n" "$sc" > "$shr"
+        [ "$sc" -ge 3 ] && prev=0
+    else rm -f "$shr" 2>/dev/null; fi
     if [ "$n" -eq 0 ] || { [ "$prev" -gt 0 ] && [ "$n" -lt $(( prev / 2 )) ]; }; then
         log "$name: geçerli adres alınamadı ya da beklenenden az ($n, önceki $prev; indirilemedi, boş ya da /16'dan geniş); önceki liste korunuyor"
         new=$(cat "$old" 2>/dev/null); n=$prev; err="fetch"

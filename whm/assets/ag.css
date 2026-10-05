@@ -463,7 +463,7 @@
 /* ── v1.7: etkinlik grafiği ────────────────────────────────────── */
 .ag-chart2 { display: grid; grid-template-columns: minmax(0, 1fr) 190px; gap: 28px; padding: 18px 20px 14px; }
 .ag-plot { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; }
-.ag-yax { position: relative; font-size: 11px; color: var(--ag-text-3); font-variant-numeric: tabular-nums; text-align: right; min-width: 14px; }
+.ag-yax { position: relative; font-size: 11px; color: var(--ag-text-3); font-variant-numeric: tabular-nums; text-align: right; min-width: 26px; }
 .ag-yax span { position: absolute; right: 0; transform: translateY(50%); line-height: 1; }
 .ag-plot .ag-axis { grid-column: 2; }
 .ag-bars { position: relative; display: flex; align-items: flex-end; gap: 3px; border-bottom: 1px solid #d5d9e2; }
@@ -698,6 +698,7 @@
 }
 
 .ag-c.lft .ag-tip { left: calc(100% + 6px); right: auto; }
+.ag-c.mid .ag-tip { left: 50%; right: auto; transform: translateX(-50%); }
 
 /* ── Dar ekran başlığı: başlık solda, iki düğme sağda alt alta ── */
 @media (max-width: 760px) {
@@ -805,7 +806,7 @@
 .ag-mode .ag-chips .ag-chip { flex: 1; }
 .ag-mode-d { font-size: 12.5px; color: var(--ag-text-3); margin: 8px 2px 0; }
 .ag-svcs { display: flex; flex-wrap: wrap; gap: 6px; }
-.ag-svc { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border-radius: 8px; border: 1px solid var(--ag-line); background: #fff;
+.ag-svc { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 2px 6px; min-height: 30px; padding: 5px 11px; text-align: left; border-radius: 8px; border: 1px solid var(--ag-line); background: #fff;
           font: inherit; font-size: 12.5px; font-weight: 550; color: var(--ag-text-2); cursor: pointer; transition: background .1s, border-color .1s; }
 .ag-svc:hover { border-color: var(--ag-accent-line); }
 .ag-svc small { font-weight: 500; color: var(--ag-text-3); font-size: 11.5px; }
