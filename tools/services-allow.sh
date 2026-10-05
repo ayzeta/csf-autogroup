@@ -11,7 +11,7 @@
 # Kaynak indirilemezse ya da beklenenden çok az adres dönerse o kaynağın önceki listesi korunur (Googlebot bir
 # indirme hatası yüzünden kesilmesin). Dosya değiştiyse csf -r çalışır, değişmediyse hiçbir şey yapılmaz.
 #
-#   services-allow.sh            listeleri güncelle (günlük cron için)
+#   services-allow.sh            listeleri güncelle (sonra eklentinin turu günde bir kez kendisi çalıştırır)
 #   services-allow.sh --check    yalnız göster: kaynak başına adres sayısı, değişecek mi
 #
 # Kendi kaynaklarınız: EXTRA dosyasına "ad|https://adres" satırları (her biri IP ya da CIDR listesi döndüren

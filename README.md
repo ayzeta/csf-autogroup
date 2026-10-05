@@ -27,7 +27,7 @@ is escalated to a **permanent** ban. `/16` networks are only flagged for review
 - **English / Türkçe** — the plugin, logs and emails.
 - **Works on phones** — the page adapts to small screens.
 
-**Version 1.9.17** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
+**Version 1.9.18** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
 cPanel the same engine runs from cron and the command line
 ([details](#without-cpanel)).
 
@@ -429,8 +429,14 @@ than /16 are refused. CSF is restarted only when the file changed.
 bash /root/csf-autogroup/tools/services-allow.sh --check
 ```
 
-Run it without `--check` to apply, and daily from cron to keep the lists
-current.
+Run it once without `--check` to apply. After that CSF Auto-Group's own run
+refreshes the lists once a day (no extra cron line).
+
+**CSF's ASN data.** With an ASN in `CC_DENY` or `CC_DENY_PORTS`, CSF builds the
+ban from `/var/lib/csf/Geo/ip2asn-combined.tsv`, but lfd downloads that file only
+when it is missing, so the addresses go stale. Once a day CSF Auto-Group checks
+it: if it is older than 25 days it is moved aside and lfd is restarted, which
+downloads current data and refills the sets.
 
 ## Development
 

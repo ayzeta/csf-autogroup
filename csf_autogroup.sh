@@ -48,7 +48,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.9.17"   # sürüm — başlangıç log satırında görünür
+VERSION="1.9.18"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -277,6 +277,8 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_A_CHANGED="%s: ban güncellendi"
   M_A_NOSAVE="%s: kurtarma kopyası yazılamadı (%s); kapsananlar yerinde bırakıldı"
   M_A_NODRY="Elle işlemler kuru çalıştırmada (--dry-run) yapılmaz"
+  M_ASN_REFRESH="CSF'in ASN verisi %s günlüktü; yenilensin diye lfd yeniden başlatıldı (ASN banı: %s)"
+  M_ASN_REFRESH_FAIL="CSF'in ASN verisi eski (%s gün) ama lfd yeniden başlatılamadı; ASN banı eski adreslerle çalışıyor"
   M_ORPHANS="Banı CSF ekranından kaldırılmış %s eski kayıt temizlendi (kurtarma kopyası / izin satırı)"
   M_A_TIME="Elle işlem süresi (%s): %s sn"
   M_PART_NOTE="   Not: bu ağda kısmi ban var (%s · %s); yalnız seçilen servisler kapalı, diğer portlardan gelenler sürebilir"
@@ -482,6 +484,8 @@ else
   M_A_CHANGED="%s: ban updated"
   M_A_NOSAVE="%s: the restore copy could not be written (%s); covered entries were left in place"
   M_A_NODRY="Manual actions are not run in a dry run (--dry-run)"
+  M_ASN_REFRESH="CSF's ASN data was %s days old; lfd restarted to refresh it (ASN ban: %s)"
+  M_ASN_REFRESH_FAIL="CSF's ASN data is old (%s days) but lfd couldn't be restarted; the ASN ban uses old addresses"
   M_ORPHANS="Cleaned up %s leftover entries of bans removed outside the plugin (restore copies / allow lines)"
   M_A_TIME="Manual action time (%s): %s s"
   M_PART_NOTE="   Note: this network has a partial ban (%s · %s); only the selected services are blocked, traffic to other ports can continue"
@@ -2776,6 +2780,28 @@ ips_after() {    # EPOCH IP… → REPLY = bu IP'lerden EPOCH'tan sonra banlanan
             END { o = ""; for (k in C) o = o (o == "" ? "" : ",") k " " C[k]; print o "|" L }')
     IPA_CLS="${out%%|*}"; REPLY="${out#*|}"
 }
+daily_tasks() {  # günde bir kez, turun içinde (ayrı cron satırı gerekmez):
+    # 1) yayımlanmış servis adresleri: araç kullanılıyorsa (csf.allow'da Include satırı varsa) listeler yenilenir
+    # 2) ASN banı varsa CSF'in ASN verisi: lfd dosyayı yalnız yoksa indirir, kendiliğinden yenilemez; 25 günden
+    #    eskiyse kenara alınır ve lfd yeniden başlatılır, lfd güncel veriyi indirip setleri yeniden doldurur
+    local out="$CSF_DIR/csf_autogroup.services.allow" tool="$SELF_DIR/tools/services-allow.sh" geo="$CSF_VAR/Geo/ip2asn-combined.tsv" asn age
+    grep -qF "DAILY_TASKS $TODAY" "$SAYAC_FILE" 2>/dev/null && return 0
+    cnt_add "DAILY_TASKS $TODAY"
+    if [ -r "$tool" ] && grep -qE "^Include[[:space:]]+$out([[:space:]]|\$)" "$CSF_DIR/csf.allow" 2>/dev/null; then
+        OUT="$out" ALLOW="$CSF_DIR/csf.allow" CSF_BIN="$CSF_BIN" LOG_FILE="$LOG_FILE" CACHE="$(dirname "$SAYAC_FILE")/services" timeout 300 bash "$tool" >/dev/null 2>&1 9>&-
+    fi
+    asn=$( { conf_val CC_DENY; echo ","; conf_val CC_DENY_PORTS; } | tr ',' '\n' | grep -iE '^AS[0-9]+$' | paste -sd, -)
+    if [ -n "$asn" ] && [ -n "$(find "$geo" -mtime +25 2>/dev/null)" ]; then
+        age=$(( ( $(date +%s) - $(stat -c %Y "$geo") ) / 86400 ))
+        if mv -f "$geo" "$geo.old" && { systemctl restart lfd 2>/dev/null || service lfd restart >/dev/null 2>&1; }; then
+            log "$(m "$M_ASN_REFRESH" "$age" "$asn")"
+        else
+            [ -e "$geo" ] || mv -f "$geo.old" "$geo"           # lfd başlatılamadıysa eski veri yerine dönsün
+            log "$(m "$M_ASN_REFRESH_FAIL" "$age")"
+        fi
+    fi
+    return 0
+}
 part_note() {    # LO HI → REPLY = "CIDR|svc" (aralıktaki ilk kısmi ban) ya da boş
     local x l
     REPLY=""
@@ -3440,6 +3466,7 @@ fi
 parse_deny "$DENY_FILE" 1
 [ "$DRY" = 1 ] || orphans_clean       # eklenti dışından kaldırılmış elle banların artıkları
 [ "$DRY" = 1 ] || proto_fix           # eski kısmi ban / istisnalara eksik UDP 443 (HTTP/3)
+[ "$DRY" = 1 ] || daily_tasks         # günde bir: servis izin listeleri, CSF'in ASN verisi
 
 # ── /24 grouping (permanent): auto-ban + drop singles ───────────────────────
 added24=0; added24_body=""

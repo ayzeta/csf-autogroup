@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.9.18 — 2026-10-05
+
+- Once a day the run does two upkeep jobs, so no separate cron lines are needed:
+  - refreshes the published service addresses when `tools/services-allow.sh`
+    is in use (its include line is in `csf.allow`);
+  - with an ASN ban (`CC_DENY` / `CC_DENY_PORTS`), refreshes CSF's ASN data when
+    it is older than 25 days. lfd downloads `ip2asn-combined.tsv` only when it
+    is missing, so an ASN ban otherwise keeps using old addresses; the file is
+    moved aside and lfd restarted, which downloads current data (put back if lfd
+    can't be restarted).
+
 ## 1.9.17 — 2026-10-05
 
 - New `tools/services-allow.sh`: keeps the addresses that services publish
