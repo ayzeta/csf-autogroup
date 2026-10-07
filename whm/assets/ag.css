@@ -968,3 +968,9 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
   .ag-pc .ag-card-h { flex-wrap: wrap; }
 }
 .ag-pc .ag-card-h .ag-grow { flex: 1; min-width: 8px; }
+
+.ag-activity .ag-card-h .ag-grow { flex: 1; }
+.ag-activity .ag-period { margin: 0; }
+.ag-ev-n { font-weight: 650; font-size: 13px; }
+.ag-grp-l { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 4px 20px 12px 66px; font-size: 12.5px; }
+.ag-grp-l .ag-cidr { cursor: pointer; }

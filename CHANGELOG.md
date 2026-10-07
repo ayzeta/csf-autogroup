@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.13.1 — 2026-10-07
+
+**Overview and History simplified:**
+
+- The *Rules* card is gone from Overview (the same values are in Settings →
+  Thresholds).
+- The 7 / 30 day choice sits in the chart's header instead of its own line.
+- The *Active block bans* and *Needs review* cards lost their rings (they
+  didn't say much); the permanent and temp list cards keep theirs.
+- *Active block bans* hides filters with nothing in them (All and the selected
+  one always stay).
+- *Most blocked providers* on Overview shows the top 5 without the long
+  explanation; the full ranking is in Providers.
+- History folds runs of the same clean-up event in the same minute (temp bans
+  removed, old blocks, UDP 443 fixes) into one row — "3 entries · Temp ban
+  removed" — that opens to the addresses.
+
 ## 1.13.0 — 2026-10-06
 
 **Providers tab redesigned:**
