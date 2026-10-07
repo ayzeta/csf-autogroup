@@ -40,9 +40,10 @@ UA="Mozilla/5.0 (compatible; csf-autogroup services-allow)"
 
 log() { printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "services-allow: $1" | tee -a "$LOG_FILE" 2>/dev/null; }
 # IPv4 adres ve aralıkları çıkar; /16'dan geniş aralık ve geçersiz sekizli alınmaz (yanlış bir liste her şeyi açmasın)
-ipv4_list() {
+ipv4_list() {     # [EN GENİŞ ÖNEK, varsayılan 16]
+    local mn="${1:-16}"
     grep -oE '(^|[^0-9.])[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?' | grep -oE '[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?' |
-        awk -F'[./]' '{ ok = 1; for (i = 1; i <= 4; i++) if ($i > 255) ok = 0; if (NF == 5 && ($5 < 16 || $5 > 32)) ok = 0; if (ok) print }' | sort -u
+        awk -F'[./]' -v mn="$mn" '{ ok = 1; for (i = 1; i <= 4; i++) if ($i > 255) ok = 0; if (NF == 5 && ($5 < mn || $5 > 32)) ok = 0; if (ok) print }' | sort -u
 }
 
 if [ "${1:-}" = "--remove" ]; then
@@ -68,7 +69,9 @@ for s in "${SOURCES[@]}"; do
     [[ "$name" =~ ^[A-Za-z0-9._-]+$ ]] || continue
     old="$CACHE/$name.txt"; prev=0; [ -s "$old" ] && prev=$(grep -c . "$old")
     if [[ "$src" == http* ]]; then
-        new=$(curl -fsSL --max-time 30 -A "$UA" "$src" 2>/dev/null | ipv4_list)
+        # Microsoft 365 kendi posta sunucuları için /13'e kadar aralık yayımlıyor (40.96.0.0/13); yalnız bu kaynakta izin verilir
+        mn=16; [[ "$name" == microsoft365* ]] && mn=12
+        new=$(curl -fsSL --max-time 30 -A "$UA" "$src" 2>/dev/null | ipv4_list "$mn")
     else
         new=$(printf '%s\n' "$src" | ipv4_list)
     fi

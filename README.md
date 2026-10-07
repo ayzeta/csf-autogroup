@@ -453,8 +453,8 @@ restoring `config.env` is enough.
 **Allowed services.** Banning a provider also cuts the legitimate services
 running there. Services that publish their own addresses can be allowed:
 Google (Googlebot, AdsBot, Storebot, Gmail images, site verification), Bing,
-Apple, DuckDuckGo, OpenAI, Stripe, Mollie and the site monitors UptimeRobot,
-Pingdom and StatusCake, plus your own entries
+Apple, DuckDuckGo, OpenAI, Stripe, Mollie, Microsoft 365 (Outlook, Exchange
+Online) and the site monitors UptimeRobot, Pingdom and StatusCake, plus your own entries
 (`name|https://list` or `name|IP`). They are written to a file included from
 `csf.allow` (plain addresses, kept in an ipset); CSF checks the allow list
 first, so they pass country and provider bans, on every port. Lists are
@@ -481,6 +481,10 @@ server's own IPs are excluded. A line in `/etc/csf/csfpost.sh` puts the rule
 back when CSF restarts. If a service you rely on runs in one of these clouds
 and calls your sites, allow its address. `tools/cloud-ban.sh` does the work;
 the plugin runs it.
+
+Each list's download address can be changed from its tile (**Address**), and
+**Extra lists** take your own `name|https://url` lists. Tiles also show how
+many attackers from the event log fall in each list, selected or not.
 
 ## Development
 

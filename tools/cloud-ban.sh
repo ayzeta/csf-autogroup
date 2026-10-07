@@ -137,6 +137,7 @@ while IFS= read -r s; do
     st+="$name|$n|$ot|$err|$ff"$'\n'
 done <<< "${SRC:-}"
 printf '%s' "$st" > "$CACHE/status.tmp" && mv -f "$CACHE/status.tmp" "$CACHE/status"
+[ "${NOAPPLY:-0}" = 1 ] && exit 0          # yalnız indir (eklentinin yoklaması: seçili olmayan listeler, CSF'e yazılmaz)
 hook_add
 apply || exit 1
 log "uygulandı: $(ipset list -t "$SET" 2>/dev/null | awk -F': ' '/^Number of entries/ { print $2 }') aralık"

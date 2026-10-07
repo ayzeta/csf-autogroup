@@ -1,5 +1,79 @@
 # Changelog
 
+## 1.13.0 — 2026-10-06
+
+**Providers tab redesigned:**
+
+- Three layer cards at the top — provider ban, cloud lists, allowed services —
+  each saying whether it's on, how much it covers and whether something needs
+  attention (providers CSF hasn't loaded, lists that don't download); a click
+  scrolls to the card.
+- Every layer card has the same shape: on/off in the header, a one-line
+  summary, the long explanation folded under "How it works", then sections.
+- Providers are added with a box (**Add and measure**) and removed with ×; the
+  comma-separated field is gone. Each row shows CSF's state, the mode and
+  **Measure impact** in one line.
+- Provider ban and cloud lists pick blocked ports with the same control: *Web
+  only* or *Selected ports*, with what stays open spelled out.
+- Source tiles sit in an even grid with the address count, last download or
+  download error. Every tile has an **Address** button that opens that source's
+  download address(es) right below for editing ("Reset" puts the default back)
+  — no plugin update needed when a provider moves its list.
+- **Extra lists** for cloud lists (`CLOUD_EXTRA`, `name|https://url`, plain IP
+  list or JSON) for companies that aren't built in.
+- Every cloud list tile says how many attackers from the event log and the
+  current bans are in that list — including lists that aren't selected (they
+  are downloaded once a day just to count, never written to CSF), so you can
+  see which ones are worth turning on.
+
+## 1.12.8 — 2026-10-06
+
+- **Microsoft 365 in Allowed services** (Outlook, Exchange Online). The new
+  Outlook and Outlook mobile sync and send IMAP accounts' mail through
+  Microsoft 365 servers; 6 of Microsoft's 16 Exchange Online ranges sit inside
+  the Azure list. With this source on, mail ports (465, 587) can be added to
+  the cloud list ports without cutting Outlook users off. The cloud list card
+  warns when Azure is selected, mail ports are blocked and Microsoft 365 isn't
+  allowed. (This source accepts ranges down to /12, as Microsoft publishes them.)
+
+## 1.12.7 — 2026-10-06
+
+Screens that know about each other:
+
+- **Needs review:** when every attacker of a network is already in a banned
+  provider or a cloud list but the attacks hit a port those don't block (SSH
+  while only web is closed), the row says so and which ports to add.
+- **Rankings:** a single ban counts as covered by a cloud list only when the
+  attacked service's ports are in the list's port list (SSH attacks stay
+  counted while only web is blocked).
+- **Ban window:** a range inside an active cloud list says which ports the list
+  already blocks, so a ban is only for the rest.
+- **Bans inside a cloud list:** partial bans whose ports the cloud list also
+  blocks are marked "inside a cloud list" and listed with the provider-ban ones
+  in the Providers tab (Remove / Remove all).
+- **Measure impact:** a successful POST from an address that isn't allowed shows
+  the IP and **Add to allowed services** (goes into Extra addresses, applies on
+  save); a client that calls itself Googlebot, Bingbot, DuckDuckBot… but isn't
+  allowed says whether that source is off in Allowed services or the bot may be
+  fake.
+
+## 1.12.6 — 2026-10-06
+
+- **Measure impact marks allowed services:** requests from addresses in the
+  allowed services (DuckDuckBot, Googlebot, payment webhooks…) are tagged
+  "allowed · duckduckgo — not blocked" in the non-browser clients and
+  successful POST lists, and the summary says how many requests the ban won't
+  touch because CSF lets them through first.
+
+## 1.12.5 — 2026-10-06
+
+- **The rankings know about cloud lists:** block and single bans whose IPs are
+  in an active cloud list aren't counted (those servers are already blocked);
+  a row shows how many are ("12 in a cloud list"). A provider whose bans all
+  fall in cloud lists leaves the ranking and appears on the banned line as
+  "Azure list" — e.g. Microsoft after switching from the AS8075 ban to the
+  Azure list.
+
 ## 1.12.4 — 2026-10-05
 
 - **Pause switch** (Settings → Schedule, `ENABLED`): while paused, runs add no
