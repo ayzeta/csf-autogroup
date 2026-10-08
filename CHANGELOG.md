@@ -16,6 +16,19 @@
 - **Active block bans:** the "in a provider ban" / "in a rented-server list"
   tag no longer pushes the owner's name out of a narrow column; on tagged rows
   the AS number moves to the tip, the tag is shorter.
+- **Fix — LFD PERMBLOCK:** an IP that LFD made permanent after repeated temp
+  blocks (LF_PERMBLOCK) was treated as "service unknown", so a suspicious
+  network whose attacks were all closed (e.g. web attacks inside a rented-server
+  list) stayed in *Needs review*. The real service is now read from the IP's
+  last temp block in `/var/log/lfd.log`; if the log no longer has it, the IP is
+  left out of the check (it is permanently banned on its own). A network with
+  attacks on a service that is still open stays visible and names it.
+- **Measure impact:** response codes are shown separately for allowed services
+  (Bingbot, DuckDuckBot…) and for everyone else, with the request count per
+  allowed service; while it runs it says what it reads and the seconds passed.
+- **IP card:** when the IP is in a rented-server list, the tag and the result
+  say so ("This IP is in the DigitalOcean rented-server list · blocked: tcp
+  80,443"); before, "Rented-server list · DigitalOcean" read like the owner.
 - **Most blocked providers:** the tabs wrap instead of cutting *Banned* off in
   a narrow column; *Banned* lost its own count (the header shows the selected
   tab's total, like the others); the Imunify360 note no longer says

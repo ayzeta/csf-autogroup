@@ -70,6 +70,7 @@ CSF_BIN="${CSF_BIN:-/sbin/csf}"
 CSF_DIR="${CSF_DIR:-$(dirname "$CSF_CONF")}"     # csf.allow / csf.ignore / csf.rignore
 CSF_VAR="${CSF_VAR:-/var/lib/csf}"               # csf.tempban / csf.tempallow / csf.g*
 LOG_FILE="${LOG_FILE:-/var/log/csf_autogroup.log}"
+LFD_LOG="${LFD_LOG:-/var/log/lfd.log}"           # lfd'nin günlüğü: PERMBLOCK alan IP'nin önceki geçici ban sebebi buradan
 LOGROTATE_CONF="${LOGROTATE_CONF:-/etc/logrotate.d/csf_autogroup}"   # varsa günlüğü logrotate döndürür (install.sh yazar)
 SAYAC_FILE="${SAYAC_FILE:-/var/lib/csf_autogroup/counter}"
 LOCK_FILE="${LOCK_FILE:-${SAYAC_FILE}.lock}"
@@ -3367,6 +3368,7 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
           if (!(ip in AW)) AW[ip] = alw(ip); w = AW[ip]; if (w != "") { atot++; AIP[ip] = 1 }
           q = index($0, "\""); r = substr($0, q + 1); e = index(r, "\""); req = substr(r, 1, e - 1); rest = substr(r, e + 2)
           split(rest, f, " "); code = f[1]; C[code]++
+          if (w != "") { AC[code]++; AS[w]++ } else OC[code]++       # izinli servislerin kodları ayrı: ötekilerin cevabı görünsün
           u = rest; sub(/^[^"]*"[^"]*" "/, "", u); sub(/"[^"]*$/, "", u)
           site = FILENAME; sub(/.*\//, "", site); sub(/-ssl_log$/, "", site)
           if (code ~ /^2/) { ok++; S[site]++
@@ -3376,9 +3378,10 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
             for (n = 0; n < k; n++) { best = 0; bk = ""; for (i in A) if (A[i] > best) { best = A[i]; bk = i }
                 if (bk == "") break; o = o (o == "" ? "" : ",") "[" js(bk) "," best "," (X[bk] + 0) "," js(N[bk]) "," js(I[bk]) "]"; delete A[bk] }
             return "[" o "]" }
-        END { codes = ""; for (i in C) codes = codes (codes == "" ? "" : ",") js(i) ":" C[i]; nip = 0; for (i in IPS) nip++; naip = 0; for (i in AIP) naip++
-              printf "{\"ok\":true,\"total\":%d,\"ips\":%d,\"ok2xx\":%d,\"areq\":%d,\"aips\":%d,\"codes\":{%s},\"posts\":%s,\"bots\":%s,\"sites\":%s}\n",
-                  tot, nip, ok, atot, naip, codes, top(P, 15, PA, PN, PI), top(B, 15, BA, BN), top(S, 10) }' /dev/null | grep . || echo '{"ok":true,"total":0,"ips":0,"ok2xx":0,"codes":{},"posts":[],"bots":[],"sites":[]}'
+        function obj(A,  o, i) { o = ""; for (i in A) o = o (o == "" ? "" : ",") js(i) ":" A[i]; return "{" o "}" }
+        END { nip = 0; for (i in IPS) nip++; naip = 0; for (i in AIP) naip++
+              printf "{\"ok\":true,\"total\":%d,\"ips\":%d,\"ok2xx\":%d,\"areq\":%d,\"aips\":%d,\"codes\":%s,\"ocodes\":%s,\"acodes\":%s,\"asvc\":%s,\"posts\":%s,\"bots\":%s,\"sites\":%s}\n",
+                  tot, nip, ok, atot, naip, obj(C), obj(OC), obj(AC), obj(AS), top(P, 15, PA, PN, PI), top(B, 15, BA, BN), top(S, 10) }' /dev/null | grep . || echo '{"ok":true,"total":0,"ips":0,"ok2xx":0,"codes":{},"posts":[],"bots":[],"sites":[]}'
     rm -f "$rng" "$lst" "$alw"
 }
 svc_health() {   # izinli servis kaynaklarından 3 günden uzun süredir indirilemeyenler → bildirim
@@ -3616,6 +3619,25 @@ pc_ports() {     # SERVİS ",port,listesi," → 0: servisin bütün portları li
     svc_ports "$1" || return 1
     local p; for p in ${REPLY//,/ }; do [[ "$2" == *",$p,"* ]] || return 1; done
 }
+declare -A PERM_CLS=()
+perm_cls() {     # IP → REPLY = PERMBLOCK alan IP'nin lfd günlüğündeki son geçici ban sebebinin servisi ("" bulunamadı)
+    # lfd satırı: "lfd[n]: (mod_security) mod_security (id:2008) triggered by IP (IN/India/-): … *Blocked in csf* for 43200 secs"
+    # ya da "(sshd) Failed SSH login from IP (…)". PERMBLOCK satırının kendisi "IP (CC/…) has had more than…" der, eşleşmez.
+    local ip="$1" f l
+    [ -n "${PERM_CLS[$ip]+x}" ] && { REPLY="${PERM_CLS[$ip]}"; return 0; }
+    REPLY=""
+    for f in "$LFD_LOG" "$LFD_LOG.1"; do
+        [ -r "$f" ] || continue
+        l=$(grep -hF -e "by $ip (" -e "from $ip (" "$f" 2>/dev/null | grep -F 'Blocked in csf' | grep -vi permblock | awk 'END { print }')
+        [ -n "$l" ] && break
+    done
+    if [ -n "$l" ]; then
+        l="${l#*]: }"
+        REPLY=$(awk -v r="$l" "$AWK_CLS"' BEGIN { print cls(r) }')
+        case "$REPLY" in repeat|other) REPLY="" ;; esac
+    fi
+    PERM_CLS[$ip]="$REPLY"
+}
 prov_cover() {   # stdin "ip|sebep|asn" → 0: her IP CSF'te banlı bir sağlayıcıda ve ban saldırılan servisi kapatıyor
     # (her şey banında her servis; port listesi banında saldırının servisinin portları listede olmalı). Sahibi bilinmeyen IP: kapsanmıyor.
     local ip r a p n=0 k tcp IFS=$' \t\n'
@@ -3625,6 +3647,11 @@ prov_cover() {   # stdin "ip|sebep|asn" → 0: her IP CSF'te banlı bir sağlay�
         [ -n "$ip" ] || continue
         [ -n "$a" ] || a="${OWN_A[${ip%.*}]}"
         k=$(awk -v r="$r" "$AWK_CLS"' BEGIN { print cls(r) }')
+        # LFD PERMBLOCK (repeat): lfd IP'yi belirli sürede belirli sayıda geçici banladıktan sonra kalıcıya almış (LF_PERMBLOCK).
+        # Asıl saldırı önceki geçici banlarda: servis lfd günlüğünden. Bulunamazsa IP sayılmadan geçilir — zaten tek başına
+        # kalıcı ve tam banlı (yalnız PERMBLOCK varsa n=0 → kapsanmıyor, uyarı kalır). Önce PERMBLOCK "servisi bilinmiyor"
+        # sayılıyor, web'i kapalı ağ (kiralık sunucu listesinde, web saldırıları + bir PERMBLOCK) Kontrol edilecekler'de kalıyordu.
+        if [ "$k" = repeat ]; then perm_cls "$ip"; [ -n "$REPLY" ] || continue; k="$REPLY"; fi
         if [ -n "$a" ] && [ -n "${ASB[$a]}" ] && { [ "${ASB[$a]}" = all ] || pc_ports "$k" "$tcp"; }; then
             n=$((n + 1)); [[ " $PC_ASN " == *" AS$a "* ]] || PC_ASN+="${PC_ASN:+ }AS$a"; continue
         fi
@@ -3695,6 +3722,7 @@ prov_near() {    # stdin "ip|sebep|asn" → 0: her IP banlı bir sağlayıcıda 
         [ -n "$ip" ] || continue
         [ -n "$a" ] || a="${OWN_A[${ip%.*}]}"
         k=$(awk -v r="$r" "$AWK_CLS"' BEGIN { print cls(r) }')
+        if [ "$k" = repeat ]; then perm_cls "$ip"; [ -n "$REPLY" ] && k="$REPLY"; fi     # PERMBLOCK: önceki geçici banın servisi
         if [ -n "$a" ] && [ -n "${ASB[$a]}" ]; then
             n=$((n + 1)); [ "${ASB[$a]}" = all ] && continue
             lab="AS$a"; pl="$tcp"
