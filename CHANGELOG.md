@@ -16,6 +16,8 @@
   would add little is visible before you add it.
 - **Terms** button in the header: a short glossary of the words the panel uses.
 - Active block bans says in one line what it lists.
+- The browser tab shows the plugin's name ("WHM [server] CSF Auto-Group -
+  138.0.13"); WHM's page template left the name out.
 - History shows owners with their short name, as the tables do
   ("AS15169 Google LLC, US").
 - **Phone:** filters and tabs wrap to a second line instead of hiding off the

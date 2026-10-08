@@ -3,6 +3,18 @@
  * --status --json çıktısıdır (terminaldeki --status ile aynı kaynak).
  * Durum değiştiren her işlem bir onay penceresinden geçer; riskli olanlarda
  * (ör. /16 banı, beyaz listeyi aşmak, "do not delete" kaldırmak) hedef elle yazılır. */
+
+/* Sekme başlığı: WHM::header() verilen adı <title>'a koymuyor; şablon "WHM [sunucu]  - 138.0.13"
+ * diye ortada boş bir yuva bırakıyor (CSF'nin kendi sayfası "WHM [lin] ConfigServer Security &
+ * Firewall - 136.0.38"). Ad o yuvaya yazılır, sürüm eki yerinde kalır. Ürün adı çevrilmez. */
+(function () {
+  var ad = 'CSF Auto-Group', t = document.title;
+  if (t.indexOf(ad) >= 0) return;   // yedek kabuk zaten yazdı
+  var i = t.lastIndexOf(' - ');
+  document.title = i > 0 && /^[0-9.]+$/.test(t.slice(i + 3).trim()) ? (t.slice(0, i).trim() + ' ' + ad + t.slice(i)).trim()
+    : (t.trim() ? t.trim() + ' ' + ad : ad);
+})();
+
 (function () {
   'use strict';
 
