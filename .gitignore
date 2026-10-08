@@ -10,3 +10,6 @@ counter
 .DS_Store
 Thumbs.db
 *.swp
+
+# Ajan çalışma kuralları — yalnız geliştirme makinesinde
+CLAUDE.md

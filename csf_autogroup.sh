@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.13.3"   # sürüm — başlangıç log satırında görünür
+VERSION="1.13.4"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1223,10 +1223,12 @@ expire_blocks() { # KİM → BLOCK_EXPIRE_DAYS'ten eski blok banlarını kaldır
     done
 }
 # Güvenlik duvarının durumu. systemd'nin "csf" servisine bakılmaz: kurallar yüklüyken bile "failed"
-# görünebiliyor (sunucuda görüldü). → H_CSF: ok|off|testing|norules|unknown, H_LFD: ok|down
+# görünebiliyor (sunucuda görüldü). → H_CSF: ok|off|testing|norules|unknown, H_LFD: ok|down,
+# H_LFDAGE: lfd kaç saniyedir çalışıyor (-1 bilinmiyor). lfd yeni başlamışken ülke/ASN kümeleri boştur, dolması sürer;
+# panel o arada "boş" yerine "yükleniyor" der.
 health_check() {
     local pid="" ipt
-    H_CSF=ok; H_LFD=down
+    H_CSF=ok; H_LFD=down; H_LFDAGE=-1
     if [ -f "${CSF_CONF%/*}/csf.disable" ]; then H_CSF=off
     elif [ "$(conf_val TESTING)" = 1 ]; then H_CSF=testing
     else
@@ -1237,7 +1239,11 @@ health_check() {
     fi
     [ -r /var/run/lfd.pid ] && read -r pid < /var/run/lfd.pid 2>/dev/null
     if [[ "$pid" =~ ^[0-9]+$ ]] && [ -r "/proc/$pid/cmdline" ] && tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -q '^lfd'; then H_LFD=ok
-    elif command -v pgrep >/dev/null 2>&1 && pgrep -f '^lfd' >/dev/null 2>&1; then H_LFD=ok
+    elif command -v pgrep >/dev/null 2>&1 && pgrep -f '^lfd' >/dev/null 2>&1; then H_LFD=ok; pid=$(pgrep -of '^lfd' 2>/dev/null)
+    fi
+    if [ "$H_LFD" = ok ] && [[ "$pid" =~ ^[0-9]+$ ]]; then
+        H_LFDAGE=$(ps -o etimes= -p "$pid" 2>/dev/null | tr -d ' ')
+        [[ "$H_LFDAGE" =~ ^[0-9]+$ ]] || H_LFDAGE=-1
     fi
 }
 owner_kv() {     # son owner_lookup sonucunu ev() argümanlarına çevirir → OKV dizisi
@@ -2147,7 +2153,7 @@ do_status() {
         health_check
         printf '"review_prev":%s,"review_win":{%s},' "$(num "$rprev")" "$rwin"
         printf '"enabled":%s,' "$([ "$ENABLED" = 0 ] && echo false || echo true)"
-        printf '"health":{"csf":"%s","lfd":"%s"},"expire":{"days":%s,"auto":%s},"repeat_min":%s,' "$H_CSF" "$H_LFD" "$(num "$BLOCK_EXPIRE_DAYS")" "$([ "$BLOCK_EXPIRE_AUTO" = 1 ] && echo true || echo false)" "$(num "$REPEAT16_MIN")"
+        printf '"health":{"csf":"%s","lfd":"%s","lfd_age":%s},"expire":{"days":%s,"auto":%s},"repeat_min":%s,' "$H_CSF" "$H_LFD" "${H_LFDAGE:--1}" "$(num "$BLOCK_EXPIRE_DAYS")" "$([ "$BLOCK_EXPIRE_AUTO" = 1 ] && echo true || echo false)" "$(num "$REPEAT16_MIN")"
         printf '"config":{"t24":%s,"t24p":%s,"t16":%s,"tt24":%s,"tt16":%s,"retention":%s,"review_days":%s,"lookup":%s},' \
             "$(num "$THRESHOLD_24")" "$(num "$THRESHOLD_24_PERMANENT")" "$(num "$THRESHOLD_16")" "$(num "$THRESHOLD_TEMP_24")" \
             "$(num "$THRESHOLD_TEMP_16")" "$(num "$SAYAC_RETENTION_DAYS")" "$(num "$REVIEW_DAYS")" "$([ "$LOOK_INIT" = 1 ] && echo true || echo false)"

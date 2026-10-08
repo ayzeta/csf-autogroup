@@ -61,6 +61,13 @@
 .ag-sync { position: sticky; top: 8px; z-index: 30; display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%; margin: 0 auto 12px;
   padding: 7px 14px; border-radius: 999px; background: var(--ag-card); border: 1px solid var(--ag-line); box-shadow: 0 4px 14px rgba(15, 23, 42, .08); font-size: 13px; color: var(--ag-text-2); }
 .ag-stale [data-act]:not([data-act="tab"]), .ag-stale [data-dr] { pointer-events: none; opacity: .45; }
+/* işlem sürerken: ekranın ortasında kutu; sayfa nerede kaydırılmış olursa olsun görünür, arkası tıklanmaz */
+.ag-wait { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(15, 23, 42, .18); }
+.ag-wait-b { display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 340px; padding: 22px 26px; text-align: center;
+  background: var(--ag-card); border: 1px solid var(--ag-line); border-radius: 14px; box-shadow: 0 12px 40px rgba(15, 23, 42, .18); }
+.ag-wait-b b { font-size: 15px; font-weight: 650; color: var(--ag-text); }
+.ag-wait-b > span { font-size: 13px; color: var(--ag-text-3); line-height: 1.45; }
+.ag-wait-t { font-size: 12px; color: var(--ag-text-3); font-variant-numeric: tabular-nums; }
 
 /* ── Header ─────────────────────────────────────────────────────── */
 .ag-head { display: flex; align-items: center; gap: 16px; row-gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -382,8 +389,9 @@
 .ag-asn-b i { display: block; height: 100%; background: linear-gradient(90deg, #6366f1, #4338ca); }
 .ag-asn-b i.o { background: #c7d2fe; }
 
-.ag-chips-full { width: 100%; display: flex; }
-.ag-chips-full .ag-chip { flex: 1; }
+/* sekme şeridi: dar sütunda (WHM menüsü açıkken sağ sütun) sığmayan sekme alt satıra geçer, kesilmez */
+.ag-chips-full { width: 100%; display: flex; flex-wrap: wrap; }
+.ag-chips-full .ag-chip { flex: 1 1 auto; }
 .ag-imc { font-weight: 650; color: var(--ag-text); margin-right: 6px; font-variant-numeric: tabular-nums; }
 .ag-reasons { display: inline-flex; flex-wrap: wrap; gap: 4px; vertical-align: middle; }
 .ag-reason { font-family: var(--ag-mono); font-size: 10.5px; padding: 1px 6px; border-radius: 5px; background: var(--ag-neutral-soft); color: var(--ag-text-2); }
@@ -781,8 +789,6 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
   /* kart başlığındaki filtreler ve sekmeler: sığmayan alt satıra geçer (yana kaydırınca sondakiler hiç görülmüyordu) */
   .ag-card-h .ag-tools .ag-chips { display: flex; flex-wrap: wrap; max-width: 100%; }
   .ag-card-h .ag-tools .ag-chip { flex: none; }
-  .ag-chips-full { flex-wrap: wrap; }
-  .ag-chips-full .ag-chip { flex: 1 1 auto; }
   /* tablo satırı: 1) adres · durum · menü  2) ülke · ASN · kurum · kapsayan ban (tam genişlik)  3) tekil · eklendi */
   .ag-tbl > .ag-item > .ag-tr:not(.ag-tr-p) { grid-template-columns: auto minmax(0, 1fr) auto 32px; grid-template-areas: "main main state act" "own own own own" "num when when when";
     column-gap: 8px; row-gap: 5px; padding: 10px 10px 10px 16px; }
@@ -1000,3 +1006,6 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-hint-l { order: 9; flex-basis: 100%; }
 .ag-lay .ag-kpi-m { white-space: normal; overflow: visible; }
 @media (max-width: 600px) { .ag-band-m { min-width: 0; } }   /* üç sütun telefonda sığsın; 120 px alt sınır hücreleri üst üste bindiriyordu */
+/* sahip hücresi: ad en az birkaç harf görünür; etiket de sığmazsa … ile kısalır (tam metni ipucunda) */
+.ag-td-own .ag-org { min-width: 56px; flex: 0 1 auto; white-space: nowrap; }
+.ag-td-own .ag-ctag { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }

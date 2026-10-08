@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.13.4 — 2026-10-08
+
+- **Waiting box in the middle of the screen:** while an action runs, a box in
+  the centre says what is being done and what it waits for — CSF rebuilding
+  its rules after a ban change, CSF plus an LFD restart after provider
+  settings, or "CSF is not touched" for ignore / stop watching — with the
+  seconds passed. The old line at the top of the page could sit under WHM's
+  header.
+- **"Empty in CSF" right after a reload:** while LFD has just restarted, the
+  provider sets are still being filled; the Providers tab now says
+  "CSF is loading…" instead of "empty / not loaded" and checks again every 10
+  seconds until they are filled. The status output carries how long LFD has
+  been running (`health.lfd_age`).
+- **Active block bans:** the "in a provider ban" / "in a rented-server list"
+  tag no longer pushes the owner's name out of a narrow column; on tagged rows
+  the AS number moves to the tip, the tag is shorter.
+- **Most blocked providers:** the tabs wrap instead of cutting *Banned* off in
+  a narrow column; *Banned* lost its own count (the header shows the selected
+  tab's total, like the others); the Imunify360 note no longer says
+  "information only" next to rows that have a *Ban…* button.
+
 ## 1.13.3 — 2026-10-07
 
 - **Full lists, short at first:** Most blocked providers, provider ban events
