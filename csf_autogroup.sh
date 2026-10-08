@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.13.1"   # sürüm — başlangıç log satırında görünür
+VERSION="1.13.3"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -318,12 +318,12 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_ASN_SELF="Sağlayıcı banı uygulanmadı: %s bu sunucunun kendi sağlayıcısı"
   M_SVC_APPLIED="İzinli servisler güncellendi: %s"
   M_SVC_REMOVED="İzinli servisler kapatıldı; csf.allow'daki Include satırı ve liste kaldırıldı"
-  M_PAUSED="CSF Auto-Group duraklatıldı: yeni ban konmuyor; sağlayıcı ve bulut listesi banı CSF'te kaldırıldı (Ayarlar → Zamanlama'dan açılır)"
-  M_CLOUD_REMOVED="Bulut listeleriyle ban kapatıldı; kural, adres kümesi ve csfpost.sh satırı kaldırıldı"
-  M_CLOUD_FAIL_SUBJ="bulut listesi indirilemiyor (%s)"
-  M_CLOUD_FAIL_BODY="Şu bulut listeleri 3 günden uzun süredir indirilemiyor: %s. Eski listeler kullanılmaya devam ediyor; ama sağlayıcı yeni adresler aldıysa onlar banlı değildir. Adresi panelden düzeltebilirsiniz: Sağlayıcılar → Bulut listeleriyle ban → Kaynak adresleri."
-  M_CLOUD_FAIL_OK="Bulut listeleri yeniden indirilebiliyor"
-  M_DG_CLOUD="Bulut listeleri: %s · kapalı %s"
+  M_PAUSED="CSF Auto-Group duraklatıldı: yeni ban konmuyor; sağlayıcı banı ve kiralık sunucu banı CSF'te kaldırıldı (Ayarlar → Zamanlama'dan açılır)"
+  M_CLOUD_REMOVED="Kiralık sunucu banı kapatıldı; kural, adres kümesi ve csfpost.sh satırı kaldırıldı"
+  M_CLOUD_FAIL_SUBJ="kiralık sunucu listesi indirilemiyor (%s)"
+  M_CLOUD_FAIL_BODY="Şu kiralık sunucu listeleri 3 günden uzun süredir indirilemiyor: %s. Eski listeler kullanılmaya devam ediyor; ama sağlayıcı yeni adresler aldıysa onlar banlı değildir. Adresi panelden düzeltebilirsiniz: Sağlayıcılar → Kiralık sunucular → kutucuktaki Adres düğmesi."
+  M_CLOUD_FAIL_OK="Kiralık sunucu listeleri yeniden indirilebiliyor"
+  M_DG_CLOUD="Kiralık sunucular: %s · kapalı %s"
   M_ASN_REFRESH="CSF'in ASN verisi %s günlüktü; yenilensin diye lfd yeniden başlatıldı (ASN banı: %s)"
   M_ASN_REFRESH_FAIL="CSF'in ASN verisi eski (%s gün) ama lfd yeniden başlatılamadı; ASN banı eski adreslerle çalışıyor"
   M_ORPHANS="Banı CSF ekranından kaldırılmış %s eski kayıt temizlendi (kurtarma kopyası / izin satırı)"
@@ -551,12 +551,12 @@ else
   M_ASN_SELF="Provider ban not applied: %s is this server's own provider"
   M_SVC_APPLIED="Allowed services updated: %s"
   M_SVC_REMOVED="Allowed services turned off; the Include line in csf.allow and the list were removed"
-  M_PAUSED="CSF Auto-Group is paused: no new bans; provider and cloud list bans are off in CSF (turn it back on in Settings → Schedule)"
-  M_CLOUD_REMOVED="Cloud list ban turned off; the rule, the address set and the csfpost.sh line were removed"
-  M_CLOUD_FAIL_SUBJ="cloud list can't be downloaded (%s)"
-  M_CLOUD_FAIL_BODY="These cloud lists haven't downloaded for more than 3 days: %s. The old lists are still used, but addresses the provider added since aren't banned. You can fix the address in the panel: Providers → Cloud list ban → Source addresses."
-  M_CLOUD_FAIL_OK="Cloud lists download again"
-  M_DG_CLOUD="Cloud lists: %s · blocked %s"
+  M_PAUSED="CSF Auto-Group is paused: no new bans; the provider ban and the rented-server ban are off in CSF (turn it back on in Settings → Schedule)"
+  M_CLOUD_REMOVED="Rented-server ban turned off; the rule, the address set and the csfpost.sh line were removed"
+  M_CLOUD_FAIL_SUBJ="rented-server list can't be downloaded (%s)"
+  M_CLOUD_FAIL_BODY="These rented-server lists haven't downloaded for more than 3 days: %s. The old lists are still used, but addresses the provider added since aren't banned. You can fix the address in the panel: Providers → Rented servers → the Address button on the tile."
+  M_CLOUD_FAIL_OK="Rented-server lists download again"
+  M_DG_CLOUD="Rented servers: %s · blocked %s"
   M_ASN_REFRESH="CSF's ASN data was %s days old; lfd restarted to refresh it (ASN ban: %s)"
   M_ASN_REFRESH_FAIL="CSF's ASN data is old (%s days) but lfd couldn't be restarted; the ASN ban uses old addresses"
   M_ORPHANS="Cleaned up %s leftover entries of bans removed outside the plugin (restore copies / allow lines)"
@@ -2053,22 +2053,24 @@ do_status() {
         [ -n "${OWN_A[$p]}" ] || continue
         jstr "${OWN_N[$p]}"; owners+=("\"$p\":[\"${OWN_A[$p]}\",\"${OWN_C[$p]}\",$REPLY]")
     done
-    asn_top 10
+    asn_top 500                    # tam liste (panel kısa gösterir, ister genişletir)
     local tops=() a nm cc g bl sg den cl
     if [ -n "$ASN_TOP" ]; then
-        while IFS='|' read -r a nm cc g bl sg den cl; do
-            jstr "$nm"; tops+=("{\"asn\":\"$a\",\"name\":$REPLY,\"cc\":\"$cc\",\"groups\":$g,\"blocks\":$bl,\"singles\":$sg,\"cloud\":$(num "$cl"),\"denied\":$([ "$den" = 1 ] && echo true || echo false)}")
+        while IFS='|' read -r a nm cc g bl sg den cl cs; do
+            jstr "${AWHY[$a]:-}"; local wj="$REPLY"
+            jstr "$nm"; tops+=("{\"asn\":\"$a\",\"name\":$REPLY,\"why\":$wj,\"cs\":\"$cs\",\"cc\":\"$cc\",\"groups\":$g,\"blocks\":$bl,\"singles\":$sg,\"cloud\":$(num "$cl"),\"denied\":$([ "$den" = 1 ] && echo true || echo false)}")
         done <<< "$ASN_TOP"
     fi
-    asn_top 10 blocks
+    asn_top 500 blocks
     local btops=()
     if [ -n "$ASN_TOP" ]; then
-        while IFS='|' read -r a nm cc g bl sg den cl; do
-            jstr "$nm"; btops+=("{\"asn\":\"$a\",\"name\":$REPLY,\"cc\":\"$cc\",\"groups\":$g,\"blocks\":$bl,\"singles\":$sg,\"cloud\":$(num "$cl"),\"denied\":$([ "$den" = 1 ] && echo true || echo false)}")
+        while IFS='|' read -r a nm cc g bl sg den cl cs; do
+            jstr "${AWHY[$a]:-}"; local wj="$REPLY"
+            jstr "$nm"; btops+=("{\"asn\":\"$a\",\"name\":$REPLY,\"why\":$wj,\"cs\":\"$cs\",\"cc\":\"$cc\",\"groups\":$g,\"blocks\":$bl,\"singles\":$sg,\"cloud\":$(num "$cl"),\"denied\":$([ "$den" = 1 ] && echo true || echo false)}")
         done <<< "$ASN_TOP"
     fi
     local imj='{"present":false}' itops=() icnt rs r1 rn rj
-    if imunify_top 10; then
+    if imunify_top 500; then
         if [ -n "$IM_TOP" ]; then
             while IFS='|' read -r a nm cc icnt rs; do
                 rj=""
@@ -2341,7 +2343,7 @@ inside_scan() {  # CIDR
 restore_file() { REPLY="$RESTORE_DIR/${1//\//_}"; }   # CIDR → saklanan satırların dosyası
 # Ban sebebinden servis: LFD sebebi servisi söyler ("(sshd) … [LF_SSHD]"); tanınmayanlar "other", port taraması "scan",
 # LFD'nin tekrar eden saldırganı kalıcıya alması (PERMBLOCK) "repeat" — servis değil, öneri oranına girmez.
-# Panelde aynı kural ag.js'teki svcOfReason'da (Dikkat edilecekler için) — birini değiştirirsen ötekini de değiştir.
+# Panelde aynı kural ag.js'teki svcOfReason'da (Kontrol edilecekler için) — birini değiştirirsen ötekini de değiştir.
 AWK_CLS='function cls(r) {
     r = tolower(r)
     if (r ~ /permblock/) return "repeat"         # LFD: çok geçici ban almış IP kalıcıya alındı (servisi söylemez)
@@ -3093,6 +3095,22 @@ cloud_pot() {    # → REPLY = JSON nesnesi {"gcp":12,…}: olay kaydındaki ve 
     fi
     rm -f "$qf"; REPLY="{$out}"
 }
+prov_cloudpct() { # ASNNN → "yüzde kaynak": CSF'in o sağlayıcı için yüklediği adreslerin yüzde kaçı etkin kiralık sunucu listelerinde
+    local IFS=$' \t\n' x rf
+    command -v ipset >/dev/null 2>&1 || return 0
+    rf=$(mktemp) || return 0
+    for x in $CLOUD_ACTIVE; do
+        [ -r "$CLOUD_DIR/$x.txt" ] && awk -F'[./]' -v s="$x" 'NF >= 4 { b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "C %.0f %.0f %s\n", lo, lo + 2 ^ (32 - b) - 1, s }' "$CLOUD_DIR/$x.txt"
+    done > "$rf"
+    ipset list "cc_${1,,}" 2>/dev/null | awk '$1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\/[0-9]+)?$/ { split($1, s, "/"); split(s[1], p, "."); b = (s[2] == "" ? 32 : s[2] + 0)
+        lo = ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4]; printf "A %.0f %.0f -\n", lo, lo + 2 ^ (32 - b) - 1 }' >> "$rf"
+    # her ASN aralığı için listelerle kesişen adres sayısı (aralıklar küçük, listeler birkaç bin satır: doğrudan karşılaştırma yeter)
+    awk '$1 == "C" { n++; L[n] = $2 + 0; H[n] = $3 + 0; S[n] = $4; next }
+         { lo = $2 + 0; hi = $3 + 0; tot += hi - lo + 1
+           for (i = 1; i <= n; i++) { a = (L[i] > lo ? L[i] : lo); b = (H[i] < hi ? H[i] : hi); if (b >= a) { cov += b - a + 1; by[S[i]] += b - a + 1 } } }
+         END { if (!tot) exit; best = ""; for (k in by) if (best == "" || by[k] > by[best]) best = k; p = int(cov * 100 / tot); if (p > 100) p = 100; print p, best }' "$rf"
+    rm -f "$rf"
+}
 cloud_has() {    # IP → 0: etkin bir bulut listesinde (REPLY = kaynak adı)
     local IFS=$' \t\n' x ip="$1" v
     REPLY=""
@@ -3269,7 +3287,11 @@ prov_json() {    # → REPLY = durum JSON'u: izinli servisler (kaynak başına s
     fi
     for a in $(list_plus "$ASN_LIST" "$ASN_ALL" | tr ',' ' '); do
         asn_setn "$a"; c="$REPLY"
-        asn_name "$a"; jstr "$REPLY"; sets+="${sets:+,}{\"a\":\"$a\",\"n\":$c,\"d\":$REPLY}"     # n -1: ipset yok, bilinmiyor
+        local clp="" cls=""
+        if [ "$CLOUD_BAN" = 1 ] && [ "$c" -gt 0 ] 2>/dev/null; then
+            read -r clp cls < <(prov_cloudpct "$a")
+        fi
+        asn_name "$a"; jstr "$REPLY"; sets+="${sets:+,}{\"a\":\"$a\",\"n\":$c,\"d\":$REPLY,\"cl\":$(num "$clp"),\"cls\":\"$cls\"}"     # n -1: ipset yok, bilinmiyor
     done
     [ -e "$geo" ] && gt=$(stat -c %Y "$geo" 2>/dev/null || echo 0)
     local catj="" ck
@@ -3702,8 +3724,9 @@ cloud_cover() {  # DOSYA ("anahtar lo hi" satırları) → stdout "anahtar kayna
     rm -f "$rf"
 }
 declare -A CLB_S=()   # bütün banları bulut listesinde kalan sağlayıcılar → kaynak (asn_top doldurur)
+declare -A AWHY=()    # sağlayıcı → en sık ban sebebi (tekil ban notlarından; asn_top doldurur)
 CLB_A=()
-asn_top() {      # [N] [evidence|blocks] → ASN_TOP satırları: "ASN|KURUM|CC|grup|blok|tekil|cc_deny(0/1)|bulutta"
+asn_top() {      # [N] [evidence|blocks] → ASN_TOP satırları: "ASN|KURUM|CC|grup|blok|tekil|cc_deny(0/1)|bulutta|bulut listesi"
     # Sıralama saldırı kanıtına göre: kendi grup banlarımız + tekil banlar (lfd'nin yakaladıkları).
     # csf.deny'deki başka kaynaklı bloklar (elle / başka araç) gösterilir ama sıralamaya girmez.
     local -A G=() B=() T=() NM=() CC=() IS_AG=() DEN=() M=() IS_M=() CCOV=() CV=() CVS=()
@@ -3738,6 +3761,11 @@ asn_top() {      # [N] [evidence|blocks] → ASN_TOP satırları: "ASN|KURUM|CC|
         [ -n "${IS_M[${DC_TXT[i]}]}" ] && M[$a]=$(( ${M[$a]:-0} + 1 ))
         NM[$a]="${OWN_N[$p]}"; CC[$a]="${OWN_C[$p]}"
     done
+    # en sık ban sebebi: lfd notunun "(sshd) Failed SSH login" / "(mod_security) … (id:2008) triggered" kısmı (panel ModSecurity mesajını ekler)
+    AWHY=()
+    while IFS='|' read -r a k; do AWHY[$a]="$k"; done < <(for c in "${!SINGLE_NOTE[@]}"; do p="${c%.*}"; [ -n "${OWN_A[$p]}" ] && printf '%s|%s\n' "${OWN_A[$p]}" "${SINGLE_NOTE[$c]}"; done |
+        awk -F'|' '{ r = $2; sub(/^[^:]*lfd[^:]*: */, "", r); sub(/^lfd - */, "", r); sub(/ (from|by) [0-9].*$/, "", r); gsub(/[|"\\]/, " ", r); if (r == "") next
+                     C[$1, r]++; if (C[$1, r] > B[$1]) { B[$1] = C[$1, r]; W[$1] = r } } END { for (a in W) print a "|" substr(W[a], 1, 120) }')
     # bütün banları bulut listesinde kalan sağlayıcı sıralamaya girmez, "banlı" satırında listeyle görünür
     CLB_A=(); CLB_S=()
     for a in "${!CV[@]}"; do
@@ -3745,10 +3773,10 @@ asn_top() {      # [N] [evidence|blocks] → ASN_TOP satırları: "ASN|KURUM|CC|
     done
     ASN_TOP=$(for a in $(printf '%s\n' "${!G[@]}" "${!B[@]}" "${!T[@]}" | sort -u); do
         [ -n "${ASB[$a]}" ] && continue
-        printf '%s|%s|%s|%s|%s|%s|%s|%s|%s\n' "$a" "${NM[$a]//|/ }" "${CC[$a]}" "${G[$a]:-0}" "${B[$a]:-0}" "${T[$a]:-0}" \
-            $(( ${#DEN[AS$a]} > 0 )) "${CV[$a]:-0}" $(( (${G[$a]:-0} - ${M[$a]:-0}) * 4 + ${T[$a]:-0} ))
-    done | if [ "${2:-evidence}" = blocks ]; then awk -F'|' '$5 > 0' | sort -t'|' -k5,5nr; else sort -t'|' -k9,9nr -k5,5nr; fi \
-         | cut -d'|' -f1-8 | awk -v n="${1:-10}" 'NR <= n')   # head değil: bkz. SIGPIPE notu
+        printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' "$a" "${NM[$a]//|/ }" "${CC[$a]}" "${G[$a]:-0}" "${B[$a]:-0}" "${T[$a]:-0}" \
+            $(( ${#DEN[AS$a]} > 0 )) "${CV[$a]:-0}" "${CVS[$a]:-}" $(( (${G[$a]:-0} - ${M[$a]:-0}) * 4 + ${T[$a]:-0} ))
+    done | if [ "${2:-evidence}" = blocks ]; then awk -F'|' '$5 > 0' | sort -t'|' -k5,5nr; else sort -t'|' -k10,10nr -k5,5nr; fi \
+         | cut -d'|' -f1-9 | awk -v n="${1:-10}" 'NR <= n')   # head değil: bkz. SIGPIPE notu
 }
 
 # ── Imunify360: sunucunun KENDİ kara listesi (scope local, purpose drop) ────
@@ -3981,7 +4009,7 @@ digest_build() { # → DG_SUBJ, DG_BODY
     DG_BODY+="$M_DG_TOP$NL"
     asn_top 5
     if [ -n "$ASN_TOP" ]; then
-        while IFS='|' read -r a owner k b bl line den cl; do
+        while IFS='|' read -r a owner k b bl line den cl cs; do
             DG_BODY+="$(m "$M_DG_TOPL" "AS$a" "${owner:0:44}" "$(asn_parts "$b" "$bl" "$line")")$NL"   # kurum adı ülkeyle bitiyor
             h_esc "$owner"; hi=$((hi + 1))
             hr+="<tr$([ $((hi % 2)) = 0 ] && echo ' bgcolor="#f7f8fa" style="background:#f7f8fa;"')><td style=\"padding:8px 8px 8px 18px;\"><b style=\"font-family:$H_MONO;color:#4338ca;\">AS$a</b> $REPLY</td>"

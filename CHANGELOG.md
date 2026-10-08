@@ -1,5 +1,52 @@
 # Changelog
 
+## 1.13.3 — 2026-10-07
+
+- **Full lists, short at first:** Most blocked providers, provider ban events
+  and Bans no longer needed show the first few rows with the total in the
+  header; *More*, *Show all* and *Collapse* sit under the list. The ranking now
+  holds every provider (was cut at 10, so "show all" had nothing more).
+- **One name per concept:** *Cloud lists* is now **Rented servers** (the
+  servers cloud companies rent to anyone), "inside a cloud list" is
+  **Bans no longer needed**, *Needs attention* is **Needs review** everywhere
+  (panel, mail, log). The Providers tab opens with one sentence on how the three
+  layers fit together, rented servers first.
+- A provider in the ranking that is partly inside a rented-server list says how
+  much of its address space is already closed there, so a provider ban that
+  would add little is visible before you add it.
+- **Terms** button in the header: a short glossary of the words the panel uses.
+- Active block bans says in one line what it lists.
+- History shows owners with their short name, as the tables do
+  ("AS15169 Google LLC, US").
+- **Phone:** filters and tabs wrap to a second line instead of hiding off the
+  edge; Active block bans rows give the owner a full line (names were cut to one
+  letter) and drop the empty "—"; the run band's three values no longer overlap.
+- Wider screens: the block column fits "temp ban: 11 h 58 min left"; the layer
+  cards' warning ("4 lists can't be downloaded") wraps instead of being cut.
+- New checks for development: `tests/ayar-tutarliligi` (every setting value
+  the panel can send passes both the panel and the engine) and `tests/metin`
+  (no old concept names left).
+
+## 1.13.2 — 2026-10-07
+
+- **Fix:** turning on Microsoft 365 in Allowed services couldn't be saved
+  ("bad_value: SVC_SOURCES") — the panel's check didn't allow digits in source
+  names. The save dialog lists what was added and removed in lists instead of
+  the whole list on one line.
+- **Active block bans:** every row is one line again. The state is one badge
+  ("partial · Web", "temp · 5 h", full text in its tip); "inside /16",
+  "in the provider ban", "in a cloud list" moved next to the owner; owners show
+  their short name ("DigitalOcean, LLC").
+- **Most blocked providers:** tabs say what they hold — *Attacks*, *Added by
+  hand* (was "Other blocks"), *Imunify360* and a new *Banned* tab (the banned
+  providers used to be stuck under the list); each tab has a one-line note,
+  on Overview too. Every row has a reason (from the single bans' notes when the
+  event log has none, else "no reason recorded"), a blue "69 in the Azure
+  list" tag when part of it is closed by a cloud list, short names, and at most
+  two lines.
+- Providers tab: the layer cards are buttons (no underlined text), and jumping
+  to a card leaves room for WHM's fixed header.
+
 ## 1.13.1 — 2026-10-07
 
 **Overview and History simplified:**

@@ -158,9 +158,9 @@ switch ($a) {
                  'SVC_ALLOW', 'SVC_SOURCES', 'SVC_EXTRA', 'SVC_URLS', 'ASN_BAN', 'ASN_LIST', 'ASN_ALL', 'ASN_MODE', 'ASN_TCP', 'ASN_UDP',
                  'CLOUD_BAN', 'CLOUD_SOURCES', 'CLOUD_TCP', 'CLOUD_UDP', 'CLOUD_URLS', 'CLOUD_EXTRA', 'ENABLED'];
         // listeler virgül, elle eklenen servisler boşluk ve "ad|adres" içerir; diğerleri tek değer
-        $re = ['SVC_EXTRA' => '/^[A-Za-z0-9._~:\/?#@=%+&|, -]{0,16000}$/', 'SVC_SOURCES' => '/^[a-z,]{0,200}$/', 'SVC_URLS' => '/^[A-Za-z0-9._~:\/?#@=%+&|, -]{0,6000}$/', 'ASN_LIST' => '/^[A-Za-z0-9, ]{0,800}$/', 'ASN_ALL' => '/^[A-Za-z0-9, ]{0,800}$/',
+        $re = ['SVC_EXTRA' => '/^[A-Za-z0-9._~:\/?#@=%+&|, -]{0,16000}$/', 'SVC_SOURCES' => '/^[a-z0-9,]{0,300}$/', 'SVC_URLS' => '/^[A-Za-z0-9._~:\/?#@=%+&|, -]{0,6000}$/', 'ASN_LIST' => '/^[A-Za-z0-9, ]{0,800}$/', 'ASN_ALL' => '/^[A-Za-z0-9, ]{0,800}$/',
                'ASN_TCP' => '/^[0-9,:]{0,200}$/', 'ASN_UDP' => '/^[0-9,:]{0,200}$/', 'CLOUD_TCP' => '/^[0-9,:]{0,200}$/', 'CLOUD_UDP' => '/^[0-9,:]{0,200}$/',
-               'CLOUD_SOURCES' => '/^[a-z,]{0,200}$/', 'CLOUD_URLS' => '/^[A-Za-z0-9._~:\/?#@=%+&|, -]{0,3000}$/', 'CLOUD_EXTRA' => '/^[A-Za-z0-9._~:\/?#@=%+&|, -]{0,6000}$/'];
+               'CLOUD_SOURCES' => '/^[a-z0-9,]{0,300}$/', 'CLOUD_URLS' => '/^[A-Za-z0-9._~:\/?#@=%+&|, -]{0,3000}$/', 'CLOUD_EXTRA' => '/^[A-Za-z0-9._~:\/?#@=%+&|, -]{0,6000}$/'];
         $args = ['--config', 'set'];
         foreach ((array) ($_POST['v'] ?? []) as $k => $v) {
             $v = trim((string) $v);

@@ -146,16 +146,22 @@ settings, with no prompts. `config.env` is left untouched.
 - **Ban announced range** — when the range the IP's owner announces is between
   /17 and /23, the IP card offers to ban just that range instead of the /16;
   a suspicious network whose IPs mostly sit in one such range offers it too.
-- **Most blocked providers** (by ASN) — three tabs:
-  - *CSF* — ranked by block bans and single bans, with each provider's most
+- **Most blocked providers** (by ASN) — four tabs:
+  - *Attacks* — ranked by block bans and single bans, with each provider's most
     common ban reason. A provider with 5+ block bans gets a suggestion to add
-    it to the provider ban.
-  - *Other blocks* — ranges in `csf.deny` added outside CSF Auto-Group.
-  - *Imunify* (only with Imunify360) — providers in Imunify360's **own** block
+    it to the provider ban. A provider partly inside a rented-server list is
+    tagged with how much of it is already closed there.
+  - *Added by hand* — ranges in `csf.deny` added outside CSF Auto-Group.
+  - *Imunify360* (only with Imunify360) — providers in Imunify360's **own** block
     list on this server, with the block reasons. Read-only.
+  - *Banned* — providers closed by a provider ban or fully covered by a
+    rented-server list; they are left out of the other rankings (and the
+    weekly summary's).
 
-  Providers already banned in CSF are left out of all three rankings (and the
-  weekly summary's); a line under the list names them.
+  Each list shows the first 5 with the total in its header; *More* and
+  *Show all* open the rest, *Collapse* closes them again.
+- **Terms** (header button) — a short glossary of the words the panel uses
+  (single, block, watched, partial, provider ban, rented servers…).
 - **Since your last visit** — what happened since you last opened the page; new
   rows carry a dot.
 
@@ -396,7 +402,7 @@ tab. Key options:
 
 ## Uninstall
 
-First turn off **Provider ban**, **Cloud list ban** and **Allowed services** in
+First turn off **Provider ban**, **Rented servers** and **Allowed services** in
 the Providers tab: that removes what the plugin added to CSF.
 
 ```bash
@@ -441,7 +447,7 @@ restoring `config.env` is enough.
   covers web attacks, not SSH ones); no warning is sent for it.
 - Block bans already inside a banned provider stay in `csf.deny`; they are
   marked *inside a provider ban* (checked against the ranges CSF loaded) and
-  the Providers tab can remove them.
+  the Providers tab lists them under *Bans no longer needed* and can remove them.
 - The weekly summary lists the banned providers, what is blocked and how many
   ranges CSF loaded.
 - **CSF's ASN data:** lfd downloads `/var/lib/csf/Geo/ip2asn-combined.tsv` only
@@ -470,7 +476,7 @@ Overview, History) until it works again.
 `tools/services-allow.sh` does the downloading; the plugin runs it. It also
 works by hand (`--check` shows what would change, `--remove` takes it out).
 
-**Cloud list ban (experimental).** Cloud providers publish the addresses they
+**Rented servers (experimental).** Cloud providers publish the addresses they
 rent out to anyone (virtual servers); the Providers tab can block those on chosen ports
 (default web): Google Cloud, AWS (EC2), Azure, Oracle Cloud, DigitalOcean,
 Linode and Vultr. Unlike a provider ban, the providers' own services stay reachable — the
@@ -496,6 +502,14 @@ screen offers in that state. It checks them against a few rules: no ban that
 would have no effect, the same label for the same action everywhere, and no
 button that the ban dialog would then refuse. Needs bash and node; nothing is
 written to the system.
+
+`bash tests/ayar-tutarliligi/calistir.sh` builds a sample value for every
+setting the panel can send (from the engine's own source lists and default
+addresses) and checks that both the panel's save check (`whm/api.php`) and the
+engine's `--config set` accept it. Needs bash and php.
+
+`bash tests/metin/calistir.sh` checks that every concept keeps one name in the
+panel, mails and log: old or duplicate names listed in the script fail it.
 
 ## License
 
