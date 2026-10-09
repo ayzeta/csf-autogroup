@@ -13,3 +13,6 @@ Thumbs.db
 
 # Ajan çalışma kuralları — yalnız geliştirme makinesinde
 CLAUDE.md
+
+# Sunucudan alınan CSF kopyası (sunucunun csf.conf dosyasını içerir) — depoya girmez
+csf-kopya.tgz

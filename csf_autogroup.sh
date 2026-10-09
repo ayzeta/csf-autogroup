@@ -88,6 +88,7 @@ BLOCK_EXPIRE_DAYS="${BLOCK_EXPIRE_DAYS:-365}"   # bu süreden eski blok banları
 BLOCK_EXPIRE_AUTO="${BLOCK_EXPIRE_AUTO:-0}"     # 1 = eski blok banları her turda kaldırılır
 REPEAT16_MIN="${REPEAT16_MIN:-3}"               # şüpheli ağ, kontrol süresi içinde bu kadar ayrı günde işaretlenirse "tekrar eden"
 SAYAC_RETENTION_DAYS="${SAYAC_RETENTION_DAYS:-180}"
+BLOCK_ACTIVE_DAYS=30                          # bu süre içinde denenen (sayacına paket gelen) blok "eski" sayılmaz, kaldırılmaz
 EVENTS_FILE="${EVENTS_FILE:-$(dirname "$SAYAC_FILE")/events.jsonl}"   # WHM eklentisi / --status okur
 EVENTS_MAX="${EVENTS_MAX:-5000}"   # banlar/uyarılar/elle işlemler; tur kayıtları ayrıca son RUNS_MAX
 RUNS_MAX="${RUNS_MAX:-1000}"
@@ -136,11 +137,14 @@ CLOUD_ACTIVE="${CLOUD_SOURCES//,/ }"; for _x in $CLOUD_EXTRA; do CLOUD_ACTIVE+="
 # Kapsama kararları (uyarı gizleme, gereksizleşen ban, sıralama, IP kartı, ban penceresi) için: liste gerçekten etkin mi.
 # Ayar açık ama duraklatılmış (ENABLED=0) ya da ipset varken ag_cloud kümesi yüklü değilse kapalı sayılır — liste dosyaları
 # diskte kalsa da. Uygulama (cloud_enforce) ve ayar gösterimi CLOUD_BAN'a bakmaya devam eder.
-CLOUD_ON=0
-if [ "$CLOUD_BAN" = 1 ] && [ "$ENABLED" != 0 ]; then
-    CLOUD_ON=1
-    command -v ipset >/dev/null 2>&1 && ! ipset list -n ag_cloud >/dev/null 2>&1 && CLOUD_ON=0
-fi
+cloud_on_calc() {
+    CLOUD_ON=0
+    if [ "$CLOUD_BAN" = 1 ] && [ "$ENABLED" != 0 ]; then
+        CLOUD_ON=1
+        command -v ipset >/dev/null 2>&1 && ! ipset list -n ag_cloud >/dev/null 2>&1 && CLOUD_ON=0
+    fi
+}
+cloud_on_calc   # tur, liste uygulandıktan sonra yeniden hesaplar (ilk açılışta küme turun içinde kurulur)
 TODAY=$(date '+%Y-%m-%d')
 NL=$'\n'
 
@@ -272,6 +276,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_EXP_LINE="%s -> %s gün önce eklenmişti"
   M_EXP_LOG="ESKİ BLOK KALDIRILDI: %s (%s gün)"
   M_EXP_FAIL="HATA eski blok kaldırılamadı: %s"
+  M_EXP_ACTIVE="Eski blok kaldırılmadı: %s hâlâ deneniyor (son deneme %s gün önce)"
   M_A_EXPIRED="%s eski blok banı kaldırıldı"
   M_A_EXPNONE="Kaldırılacak eski blok banı yok"
   M_DG_UPD="Yeni sürüm var: v%s → v%s. Eklentideki Güncelle düğmesiyle ya da update.sh ile kurulabilir."
@@ -507,6 +512,7 @@ else
   M_EXP_LINE="%s -> added %s days ago"
   M_EXP_LOG="OLD BLOCK REMOVED: %s (%s days)"
   M_EXP_FAIL="ERROR could not remove old block: %s"
+  M_EXP_ACTIVE="Old block kept: %s is still being tried (last attempt %s days ago)"
   M_A_EXPIRED="%s old block ban(s) removed"
   M_A_EXPNONE="No old block bans to remove"
   M_DG_UPD="A new version is available: v%s → v%s. Install it with the Update button in the plugin or update.sh."
@@ -1210,15 +1216,39 @@ perm_remove() {  # CIDR → csf.deny'den kaldır ("do not delete" ise önce işa
     csf_run -dr "$1"
     ! deny_has "$1"
 }
+HITS_FILE="$(dirname "$SAYAC_FILE")/block_hits"   # "CIDR EPOCH": banlı bloğa en son paket gelen tur
+declare -A HIT=()
+hits_load() {    # → HIT[CIDR] = en son deneme (epoch)
+    local c e
+    HIT=()
+    [ -r "$HITS_FILE" ] || return 0
+    while read -r c e; do [[ "$e" =~ ^[0-9]+$ ]] && HIT[$c]="$e"; done < "$HITS_FILE"
+}
+hits_update() {  # sayaçları oku → paket gelen bloğa bugünün tarihi; sonra küme/kural/csfpost satırı güncellenir (sayaçlar sıfırlanır)
+    local tool="$SELF_DIR/tools/block-hits.sh" now c p tmp
+    [ -r "$tool" ] && command -v ipset >/dev/null 2>&1 || return 0
+    now=$(date +%s); hits_load
+    while read -r c p; do [ -n "$c" ] && HIT[$c]="$now"; done < <(DENY="$DENY_FILE" LOG_FILE="$LOG_FILE" bash "$tool" --read 2>/dev/null)
+    tmp="$HITS_FILE.tmp.$$"
+    for c in "${!HIT[@]}"; do (( now - HIT[$c] < 400 * 86400 )) && echo "$c ${HIT[$c]}"; done | sort > "$tmp" && mv -f "$tmp" "$HITS_FILE"
+    DENY="$DENY_FILE" CSF_DIR="$CSF_DIR" LOG_FILE="$LOG_FILE" timeout 60 bash "$tool" --sync >/dev/null 2>&1 9>&-
+}
+hits_remove() {  # duraklatma: sayan kural, küme ve csfpost satırı kaldırılır (kayıtlı tarihler kalır)
+    local tool="$SELF_DIR/tools/block-hits.sh"
+    [ -r "$tool" ] && command -v ipset >/dev/null 2>&1 || return 0
+    ipset list -n ag_hits >/dev/null 2>&1 || grep -qF "# csf_autogroup hits" "$CSF_DIR/csfpost.sh" 2>/dev/null || return 0
+    DENY="$DENY_FILE" CSF_DIR="$CSF_DIR" LOG_FILE="$LOG_FILE" timeout 60 bash "$tool" --remove >/dev/null 2>&1 9>&-
+}
 expire_blocks() { # KİM → BLOCK_EXPIRE_DAYS'ten eski blok banlarını kaldır (yalnız otomatik eklenenler) → EXP_N, EXP_BODY
     local line tok ds ep age now re_d='- ([A-Z][a-z]{2} [A-Z][a-z]{2} +[0-9]{1,2} [0-9:]{8} [0-9]{4})[[:space:]]*$' list=()
     EXP_N=0; EXP_BODY=""
-    now=$(date +%s)
+    now=$(date +%s); hits_load
     while IFS= read -r line; do
         tok="${line%%[[:space:]]*}"
         [[ "$tok" =~ $CIDR4_RE && "$tok" == */24 ]] || continue
         [[ "$line" == *Auto-grouped* ]] || continue          # elle eklenenlere (csf_autogroup:) dokunulmaz
         is_dnd "$line" && continue                           # do not delete (tekrar gelip kalıcıya alınan / elle işaretlenen) korunur
+        [ -n "${HIT[$tok]}" ] && (( now - HIT[$tok] < BLOCK_ACTIVE_DAYS * 86400 )) && { logr "$(m "$M_EXP_ACTIVE" "$tok" "$(( (now - HIT[$tok]) / 86400 ))")"; continue; }   # hâlâ deneniyor
         [[ "$line" =~ $re_d ]] || continue
         ds="${BASH_REMATCH[1]}"
         ep=$(LC_ALL=C date -d "$ds" +%s 2>/dev/null) || continue
@@ -1868,7 +1898,7 @@ do_status() {
     local re_n=': ([0-9]+) ' re_d='- ([A-Z][a-z]{2} [A-Z][a-z]{2} +[0-9]{1,2} [0-9:]{8} [0-9]{4})[[:space:]]*$'
     now=$(date +%s)
     parse_deny "$DENY_FILE" 1
-    read_temp_groups
+    read_temp_groups; hits_load
     limit=$(num "$(conf_val DENY_IP_LIMIT)"); tlimit=$(num "$(conf_val DENY_TEMP_IP_LIMIT)")
     pc=$(deny_count)
     # Geçici liste doluluğu: her sayfa yoklamasında csf -t (Perl) başlatmak yerine csf.tempban'ın
@@ -1931,7 +1961,7 @@ do_status() {
                 grip=$(grep -oE '^[0-9][0-9./]+' "$REPLY" | head -n 6 | paste -sd, -)   # pencerede gösterilecek ilk adresler
             fi
         fi
-        groups+=("{\"cidr\":\"$tok\",\"kind\":\"$kind\",\"dnd\":$dnd,\"n\":${g_n[gi]},\"added\":$added,\"ttl\":0${gu:+,\"under\":\"$gu\"}${PCOV[$tok]:+,\"pcov\":\"${PCOV[$tok]}\"}$([ "$grn" -gt 0 ] && echo ",\"restore\":$grn,\"rips\":\"$grip\"")$([ -n "${EXC_S[$tok]+x}" ] && echo ",\"open\":\"${EXC_S[$tok]}\",\"open_extra\":\"${EXC_X[$tok]}\"")}")
+        groups+=("{\"cidr\":\"$tok\",\"kind\":\"$kind\",\"dnd\":$dnd,${HIT[$tok]:+\"hit\":${HIT[$tok]},}\"n\":${g_n[gi]},\"added\":$added,\"ttl\":0${gu:+,\"under\":\"$gu\"}${PCOV[$tok]:+,\"pcov\":\"${PCOV[$tok]}\"}$([ "$grn" -gt 0 ] && echo ",\"restore\":$grn,\"rips\":\"$grip\"")$([ -n "${EXC_S[$tok]+x}" ] && echo ",\"open\":\"${EXC_S[$tok]}\",\"open_extra\":\"${EXC_X[$tok]}\"")}")
         [ "$added" -gt 0 ] && ghist+="$added $kind $tok"$'\n'
         [ "$JSON" = 1 ] || gtext+=("$(printf '%-18s %-9s %s' "$tok" "$kind" "$([ "$dnd" = true ] && echo 'do not delete')")")
     done
@@ -4438,7 +4468,7 @@ owners_load
 RUN_MODE=1
 logr "$M_START (v$VERSION)"
 if [ "$ENABLED" = 0 ]; then
-    [ "$DRY" = 1 ] || { ASN_BAN=0 asn_enforce; CLOUD_BAN=0 cloud_enforce 0; }    # sağlayıcı ve bulut banı CSF'te kapalı kalsın
+    [ "$DRY" = 1 ] || { ASN_BAN=0 asn_enforce; CLOUD_BAN=0 cloud_enforce 0; hits_remove; }    # sağlayıcı ve bulut banı, sayaç CSF'te kapalı kalsın
     logr "$M_PAUSED"
     ev run "" "v=\"$VERSION\"" "dur=$(( $(date +%s) - RUN_T0 ))" "added=0" "warn16=0" "paused=true"
     exit 0
@@ -4490,7 +4520,7 @@ fi
 parse_deny "$DENY_FILE" 1
 [ "$DRY" = 1 ] || orphans_clean       # eklenti dışından kaldırılmış elle banların artıkları
 [ "$DRY" = 1 ] || proto_fix           # eski kısmi ban / istisnalara eksik UDP 443 (HTTP/3)
-[ "$DRY" = 1 ] || { svc_enforce 0; asn_enforce; cloud_enforce 0; }   # izinli servisler, sağlayıcı banı, bulut listeleri: istenen durum CSF'te mi
+[ "$DRY" = 1 ] || { svc_enforce 0; asn_enforce; cloud_enforce 0; cloud_on_calc; hits_update; }   # izinli servisler, sağlayıcı banı, bulut listeleri: istenen durum CSF'te mi
 [ "$DRY" = 1 ] || daily_tasks         # günde bir: servis izin listeleri, CSF'in ASN verisi
 [ "$DRY" = 1 ] || { svc_health; cloud_health; }   # indirilemeyen izinli servis / bulut listesi: bildirim
 
@@ -4592,7 +4622,9 @@ for prefix in $(printf '%s\n' "${!temp_count24[@]}" | sort -V); do
         if wl_check "$prefix" "${temp_ips24[$prefix]}"; then
             wl_skip "${prefix}.0/24" "$n" "$prefix" "${temp_ips24[$prefix]}" temp; continue
         fi
-        if grep -qE "^${prefix//./\\.} " "$SAYAC_FILE"; then
+        # izleniyor mu: sayaç satırı izleme süresi içinde olmalı (süresi dolmuş satırlar turun SONUNDA silinir; o turda
+        # süresi dolan blok kalıcıya değil yeniden geçiciye gitsin)
+        if awk -v p="$prefix" -v d="$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')" '$1 == p && $2 >= d { f = 1 } END { exit !f }' "$SAYAC_FILE" 2>/dev/null; then
             csf_run -d "${prefix}.0/24" "$(m "$M_TC24_PERM" "$n")"
             if perm_added "${prefix}.0/24"; then
                 DC_LO+=("$lo"); DC_HI+=($((lo + 255)))
@@ -4651,10 +4683,6 @@ for prefix in $(printf '%s\n' "${!count16[@]}" | sort -V); do
         ip2int "$prefix.0.0"; lo=$REPLY
         if perm_covers "$lo" $((lo + 65535)); then logr "$(m "$M_TSKIP16" "$prefix")"; continue; fi
         if ign_until "$prefix.0.0/16"; then logr "$(m "$M_IGN16" "$prefix" "$IGN_UNTIL")"; continue; fi
-        if cover_any; then
-            pcl=""; for ip in ${ips16[$prefix]}; do pcl+="$ip|${SINGLE_NOTE[$ip]:-${TNOTE[$ip]}}|"$'\n'; done
-            prov_cover <<< "$pcl" && { logr "$(m "$M_PROV16" "$prefix" "$PC_ASN")"; continue; }
-        fi
         np="${perm16[$prefix]:-0}"; nt="${tmp16[$prefix]:-0}"
         # ağa eklentinin kısmi banı konmuşsa ondan önceki tekiller o kararla ele alınmıştır: yalnız sonrakiler sayılır
         pe=0; pnote=""; pl=$(grep -F "|s=$prefix.0.0/16 # csf_autogroup:" "$DENY_FILE" | head -n 1)
@@ -4679,6 +4707,12 @@ for prefix in $(printf '%s\n' "${!count16[@]}" | sort -V); do
             done
             [ -n "$pin" ] && pnote+="$(m "$M_PART_LEAK" "$pin" "$prefix.0.0/16")$NL"
             [ -n "$pout" ] && pnote+="$(m "$M_PART_MORE" "$pout")$NL"
+        fi
+        # geniş bir katman (sağlayıcı / kiralık liste / ülke) saldırılan servisleri kapatıyorsa uyarı yok — kısmi ban varsa yalnız
+        # bandan sonraki IP'lerle (uyarıya yazılan ve Kontrol edilecekler'in yeniden karar verdiği küme)
+        if cover_any; then
+            pcl=""; for ip in ${ips16[$prefix]}; do pcl+="$ip|${SINGLE_NOTE[$ip]:-${TNOTE[$ip]}}|"$'\n'; done
+            prov_cover <<< "$pcl" && { logr "$(m "$M_PROV16" "$prefix" "$PC_ASN")"; continue; }
         fi
         # aynı ağ için son uyarıdan bu yana yeni IP gelmediyse tekrar bildirilmez (Kontrol edilecekler'de zaten duruyor)
         lw=$(grep -F "\"type\":\"warn16\",\"cidr\":\"$prefix.0.0/16\"" "$EVENTS_FILE" 2>/dev/null | tail -n 1)

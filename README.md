@@ -268,7 +268,13 @@ history):
 - **Lookups** — owner/hostname lookups on or off, DNS timeout.
 - **Retention** — watch period, review days, old-block limit (default 365 days)
   and whether old block bans are removed automatically (default off; manual bans
-  are never touched), log size and archive count. The
+  are never touched), log size and archive count. Old-block removal keeps
+  blocks marked "do not delete" and blocks still being tried: a banned block's
+  traffic never reaches lfd, so the plugin counts it itself — an `ag_hits` ipset
+  with a counter per banned range and one rule at the top of `LOCALINPUT` that
+  only counts (it neither blocks nor allows anything); `csfpost.sh` puts it back
+  after CSF reloads. A block with an attempt in the last 30 days is kept, and
+  its last attempt shows in the state tip. The
   log is rotated by the system's logrotate (`/etc/logrotate.d/csf_autogroup`,
   written from these settings; default 1 MB, 5 compressed archives); where
   logrotate is missing, a log line limit is used instead. A run where
@@ -405,7 +411,9 @@ tab. Key options:
 ## Uninstall
 
 First turn off **Provider ban**, **Rented servers** and **Allowed services** in
-the Providers tab: that removes what the plugin added to CSF.
+the Providers tab and pause the plugin (Settings → Schedule): that removes what
+the plugin added to CSF, including the block counter (`ag_hits`). Without the
+panel, `bash tools/block-hits.sh --remove` removes the counter.
 
 ```bash
 crontab -l | grep -v 'csf_autogroup.sh' | crontab -
@@ -518,6 +526,12 @@ and checks whether a suspicious network is hidden or shown, which services stay
 open, and whether a block is banned or skipped. `bash tests/senaryo/siniflama.sh`
 checks that the engine and the panel put the same lfd notes on the same service;
 `bash tests/senaryo/birim.sh` checks small engine helpers on their own.
+`bash tests/senaryo/gercek.sh` runs the same scenario matrix against a real
+CSF/lfd in a local test VM (WSL2 with CSF installed): bans go into the real
+`csf.deny` and are loaded with `csf -r`, rented-server lists are applied with
+the real tool (ipset, rule, `csfpost.sh`), provider and country bans go into the
+real `csf.conf`, owner lookups use real Team Cymru DNS. The VM's CSF files are
+backed up first and restored after every scenario.
 
 `bash tests/metin/calistir.sh` checks that every concept keeps one name in the
 panel, mails and log: old or duplicate names listed in the script fail it.

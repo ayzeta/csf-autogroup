@@ -25,6 +25,16 @@
   are not counted. Providers banned on everything stay out of the ranking.
 - **Bans no longer needed** also lists blocks inside a `/16` (or wider) ban;
   *Remove all* covers them.
+- **Old block removal keeps blocks that are still being tried.** A banned
+  block's traffic is dropped by the firewall and never reaches lfd, so the
+  plugin now counts it itself: an `ag_hits` ipset with a counter per banned
+  range and one rule at the top of `LOCALINPUT` that only counts (it neither
+  blocks nor allows; tested against a real CSF — bans keep working, the counter
+  rises per block). CSF deletes both on every reload; a `csfpost.sh` line
+  rebuilds them from `csf.deny`, and each run reads the counters first. A
+  block with an attempt in the last 30 days is not "old" and is not removed;
+  its last attempt shows in the state tip of Active block bans. Pausing the
+  plugin removes the rule and the set.
 - **Old block removal keeps "do not delete" blocks** (blocks that came back and
   were made permanent, and blocks marked by hand); the *Old* filter matches.
 - The ban window picks the widest ban already covering a range (it depended on
@@ -47,6 +57,20 @@
   connections from listed addresses while `csf.allow` still lets them in, and
   that a newly added provider's set stays empty until lfd restarts (~12 s)
   while filled sets are never emptied by a reload.
+- **Fix — the first run after turning on a rented-server list** didn't count
+  it: whether the list is really active was decided before the run applied it,
+  so that run could add a block ban the list already made unnecessary. It is
+  now decided again right after the list is applied.
+- **Fix — a warning mail with no matching row in *Needs review* (or the other
+  way round).** With a partial ban on a network, the engine checked whether a
+  wider layer closes the attacks using the attacks from *before* the ban too,
+  while the warning and *Needs review* use only those after it. Both now use the
+  attacks after the ban.
+- A watched block whose watch period ran out during a run gets a new temp ban
+  instead of being made permanent (expired watch entries were only cleared at
+  the end of the run).
+- Tests: `tests/senaryo/gercek.sh` runs the scenario matrix against a real
+  CSF/lfd (16.33) in a local test VM.
 - Tests: `tests/senaryo/calistir.sh` grew to ~50 scenarios (country bans,
   own-provider protection, ranking, old blocks, block thresholds, ban window,
   `csf.rignore`); `tests/senaryo/birim.sh` checks the port-range helper. The

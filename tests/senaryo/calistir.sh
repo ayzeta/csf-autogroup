@@ -68,6 +68,54 @@ check() {    # AD BEKLENEN GERÇEK
     N=$((N + 1))
     if [ "${3%%:*}" = "$2" ]; then OUT+="  ✓ $1 → $3"$'\n'; else F=$((F + 1)); OUT+="  ✗ $1 → $3 (beklenen $2)"$'\n'; fi
 }
+# ── GERÇEK MOD (GERCEK=1): taklit yerine çalışan gerçek CSF/lfd (test sanal makinesi; root) ──
+# Banlar gerçek csf.deny'ye yazılır ve csf -r ile güvenlik duvarına yüklenir; kiralık liste gerçek araçla (curl, ipset,
+# AG_CLOUD kuralı, csfpost.sh) kurulur — listenin kaynağı yerel dosya (file://), çünkü gerçek bulut listelerinde test ağı
+# yok; sağlayıcı / ülke banları gerçek csf.conf'a eklenir; sahip sorguları gerçek Team Cymru DNS'ine gider. CSF dosyaları
+# test başında yedeklenir, her senaryoda ve sonda geri konur. Sunucunun kendi sağlayıcısı (özel IP) ve csf.rignore (taklit
+# DNS) senaryoları bu modda atlanır.
+if [ "${GERCEK:-0}" = 1 ]; then
+    [ -x /usr/sbin/csf ] && [ "$(id -u)" = 0 ] || { echo "gerçek mod: root ve kurulu CSF gerekir"; exit 2; }
+    BK=/root/senaryo-yedek; LST=/root/senaryo-liste.txt; mkdir -p "$BK"
+    CSFF="csf.deny csf.allow csf.conf csf.rignore csf.ignore csfpost.sh"
+    for f in $CSFF; do [ -e "/etc/csf/$f" ] && cp -a "/etc/csf/$f" "$BK/$f"; done
+    restore() { local f; for f in $CSFF; do [ -e "$BK/$f" ] && cp -a "$BK/$f" "/etc/csf/$f"; done; }
+    cloud_off() { CACHE="${R:-/tmp}/var/lib/csf_autogroup/cloud" CSF_DIR=/etc/csf bash "$REPO/tools/cloud-ban.sh" --remove >/dev/null 2>&1; }
+    trap 'cloud_off; restore; csf -tf >/dev/null 2>&1; csf -r >/dev/null 2>&1; rm -rf "$W" "$LST"' EXIT
+    mk() {
+        R="$W/r$N"; rm -rf "$R"; mkdir -p "$R/app/tools" "$R/var/lib/csf_autogroup/cloud"
+        D=/etc/csf/csf.deny; T=/var/lib/csf/csf.tempban; A=/etc/csf/csf.allow; C="$R/var/lib/csf_autogroup/counter"; CF=/etc/csf/csf.conf
+        cloud_off; restore; csf -tf >/dev/null 2>&1; : > "$C"; : > "$R/lfd.log"
+        cp "$REPO/csf_autogroup.sh" "$R/app/csf_autogroup.sh"; cp "$REPO"/tools/*.sh "$R/app/tools/"
+        printf '%s\n' "MSG_LANG=tr" "ALERT_MAIL=" "DENY_FILE=$D" "CSF_CONF=$CF" "CSF_BIN=/usr/sbin/csf" "CSF_VAR=/var/lib/csf" \
+            "LOG_FILE=$R/autogroup.log" "SAYAC_FILE=$C" "LFD_LOG=$R/lfd.log" > "$R/app/config.env"
+        NEEDR=1
+    }
+    run() {   # csf.deny / csf.conf değiştiyse önce gerçek CSF'e yüklenir
+        [ "$NEEDR" = 1 ] && { csf -r >/dev/null 2>&1; NEEDR=0; }
+        env PATH="/usr/local/sbin:/usr/sbin:/usr/bin:/bin" AG_BY=root bash "$R/app/csf_autogroup.sh" "$@"
+    }
+    single() { printf '%s\n' "$1 # lfd: $(why "$2" "$1") (FR/France/-): 5 in the last 3600 secs - ${3:-$DT}" >> "$D"; NEEDR=1; }
+    addconf() { local k="$1" v="$2" cur; cur=$(grep -E "^$k = " "$CF" | cut -d'"' -f2); sed -i "s|^$k = .*|$k = \"${cur:+$cur,}$v\"|" "$CF"; NEEDR=1; }
+    setconf() { sed -i "s|^$1 = .*|$1 = \"$2\"|" "$CF"; NEEDR=1; }
+    layer() {
+        case "$1" in
+            yok) ;;
+            liste-web)
+                echo "151.80.0.0/16" > "$LST"
+                printf '%s\n' CLOUD_BAN=1 CLOUD_SOURCES= CLOUD_TCP=80,443 CLOUD_UDP=443 "CLOUD_EXTRA=\"test|file://$LST\"" >> "$R/app/config.env"   # | içeren değer tırnaklı (motor da öyle yazar)
+                local CA="$R/var/lib/csf_autogroup/cloud"; echo "x-test" > "$CA/active"; printf 'tcp=80,443\nudp=443\n' > "$CA/ports"; echo "" > "$CA/self"
+                SRC="x-test|file://$LST" CACHE="$CA" CSF_DIR=/etc/csf LOG_FILE="$R/autogroup.log" bash "$R/app/tools/cloud-ban.sh" >/dev/null 2>&1 ;;
+            asn-web)   addconf CC_DENY_PORTS AS16276; setconf CC_DENY_PORTS_TCP 80,443; setconf CC_DENY_PORTS_UDP 443 ;;
+            asn-posta) addconf CC_DENY_PORTS AS16276; setconf CC_DENY_PORTS_TCP 465,587,110,995,143,993 ;;
+            asn-hepsi) addconf CC_DENY AS16276 ;;
+            ulke-hepsi) addconf CC_DENY FR ;;
+            ulke-web)  addconf CC_DENY_PORTS FR; setconf CC_DENY_PORTS_TCP 80,443; setconf CC_DENY_PORTS_UDP 443 ;;
+            kismi-once) printf '%s\n' "tcp|in|d=80,443|s=151.80.0.0/16 # csf_autogroup: elle /16 kısmi ban (root) [svc=web] - do not delete - $OLD" "udp|in|d=443|s=151.80.0.0/16 # csf_autogroup: elle /16 kısmi ban (root) [svc=web] - do not delete - $OLD" >> "$D"; NEEDR=1 ;;
+        esac
+    }
+fi
+
 # ── 1) Kapsama: ağ yalnız saldırdığı her servis gerçekten kapalıysa Kontrol edilecekler'den düşer ──
 cell() {   # KATMAN SALDIRI BEKLENEN — kısmi ban önceden konmuşsa saldırılar bandan sonra (bugün), uyarıyı motor üretir
     mk; layer "$1"; attack "$2"; run >/dev/null 2>&1; check "kapsama · $1 · $2" "$3" "$(review)"
@@ -89,7 +137,10 @@ mk; attack web; run >/dev/null 2>&1; layer liste-web
 check "kapsama · liste sonradan açılınca eski uyarı gizlenir" - "$(review)"
 echo ENABLED=0 >> "$R/app/config.env"
 check "kapsama · eklenti duraklatılmışken liste kapalı sayılmaz" G "$(review)"
-mk; layer liste-web; attack web; XB="$W/noset"; run >/dev/null 2>&1; r=$(review); XB=""
+if [ "${GERCEK:-0}" = 1 ]; then      # gerçek: liste kurulup tur çalıştıktan sonra küme ve kural kaldırılır, ayar açık kalır
+    # uyarı liste yokken oluşur (liste etkinken motor uyarı hiç üretmez), sonra liste açılır ve kümesi bozulur
+    mk; attack web; run >/dev/null 2>&1; layer liste-web; cloud_off; r=$(review)
+else mk; layer liste-web; attack web; XB="$W/noset"; run >/dev/null 2>&1; r=$(review); XB=""; fi
 check "kapsama · ag_cloud kümesi yüklü değilken liste kapalı sayılmaz" G "$r"
 
 # ── 2) Kısmi ban saldırılardan SONRA konduysa öncekiler uyarı üretmez ──
@@ -97,19 +148,30 @@ mk; attack web "$OLD"; run >/dev/null 2>&1
 printf '%s\n' "tcp|in|d=80,443|s=151.80.0.0/16 # csf_autogroup: elle /16 kısmi ban (root) [svc=web] - do not delete - $DT" >> "$D"
 check "kısmi ban sonradan konunca eski uyarı gizlenir" - "$(review)"
 
+# kısmi ban varken kapsama yalnız bandan SONRAKİ saldırılarla değerlendirilir (uyarıya / maile yazılanla aynı küme)
+P5=$(LC_ALL=C date -d '-5 days' '+%a %b %d %H:%M:%S %Y')
+mk; layer liste-web; layer kismi-once
+for x in 11.1 11.2 12.1 12.2 13.1 13.2; do single 151.80.$x ssh "$P5"; done   # bandan önce, SSH
+attack web; run >/dev/null 2>&1                                               # bandan sonra, web (listeyle de kapalı)
+check "kısmi ban · bandan önceki SSH, sonraki web (kapalı) → uyarı/mail üretilmez" - "$(grep -q '"type":"warn16","cidr":"151.80.0.0/16"' "$R/var/lib/csf_autogroup/events.jsonl" 2>/dev/null && echo G || echo -)"
+
 # ── 3) İzinli servisler beyaz liste sayılır: o aralıkta blok banı konmaz, "atlandı" diye görünür ──
-mk; printf 'Include %s\n' "$R/etc/csf/csf_autogroup.services.allow" >> "$A"
-echo "151.80.7.0/24 # csf_autogroup: service google-common" > "$R/etc/csf/csf_autogroup.services.allow"
+mk; SVA="$(dirname "$A")/csf_autogroup.services.allow"
+if [ "${GERCEK:-0}" = 1 ]; then     # gerçek: panelin yaptığı gibi özellik açılır, dosyayı ve Include'u eklentinin aracı yazar
+    printf '%s\n' SVC_ALLOW=1 SVC_SOURCES= 'SVC_EXTRA="test|151.80.7.0/24"' >> "$R/app/config.env"; run --prov-apply >/dev/null 2>&1
+else printf 'Include %s\n' "$SVA" >> "$A"; echo "151.80.7.0/24 # csf_autogroup: service google-common" > "$SVA"; fi
+NEEDR=1
 for x in 1 2 3 4 5 6; do single 151.80.7.$x web; done; run >/dev/null 2>&1
 check "izinli servis aralığına blok banı konmaz" - "$(grep -q '^151.80.7.0/24 ' "$D" && echo G || echo -)"
 check "izinli servis aralığı 'beyaz liste yüzünden atlandı' olarak görünür" G "$(grep -q '"type":"skip_wl","cidr":"151.80.7.0/24"' "$R/var/lib/csf_autogroup/events.jsonl" && echo G || echo -)"
+[ "${GERCEK:-0}" = 1 ] && rm -f "$SVA"
 # eklentinin kendi port istisnası ise beyaz liste değildir
 mk; printf '%s\n' "tcp|in|d=80,443|s=151.80.7.0/24 # csf_autogroup: exception for 151.80.7.0/24 [svc=web]" >> "$A"
 for x in 1 2 3 4 5 6; do single 151.80.7.$x ssh; done; run >/dev/null 2>&1
 check "eklentinin port istisnası beyaz liste sayılmaz (blok banlanır)" G "$(grep -q '^151.80.7.0/24 ' "$D" && echo G || echo -)"
 
 # csf.rignore: IP kartı motorla aynı kurala bakar (lfd'nin düzenli ifade biçimi de, ileri doğrulama da)
-for rg in '.googlebot.com' '.*\.googlebot\.com$'; do
+[ "${GERCEK:-0}" = 1 ] || for rg in '.googlebot.com' '.*\.googlebot\.com$'; do
   mk; printf '%s\n' "$rg" > "$R/etc/csf/csf.rignore"; export PTR_GOOGLE=1
   r=$(run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '"rig":"[^"]' && echo G || echo -); unset PTR_GOOGLE
   check "IP kartı · csf.rignore «$rg» tanınır" G "$r"
@@ -144,15 +206,41 @@ check "sıralama · ve 'port listesiyle banlı' işaretli" G "$([ "$r" = G:pb ] 
 mk; layer asn-hepsi; for x in 7.1 8.1 9.1; do single 151.80.$x ssh; done; run >/dev/null 2>&1
 check "sıralama · her şey banlı sağlayıcı → görünmez" - "$(rank)"
 
+# ── 3f) İzlenen blok: izleme süresi (180 gün) içinde yeniden saldırırsa kalıcı, süre dolduysa yeniden geçici ──
+watchc() {   # GÜN_ÖNCE → "K" kalıcıya alındı, "G" geçici banlandı, "-" hiçbiri
+    mk; local t; t=$(date +%s)
+    printf '151.80.7 %s\n' "$(date -d "-$1 days" +%F)" >> "$C"
+    for x in 1 2 3; do printf '%s|151.80.7.%s||in|43200|lfd: (sshd) Failed SSH login from 151.80.7.%s\n' "$t" "$x" "$x" >> "$T"; done
+    NEEDR=1; run >/dev/null 2>&1
+    if grep -q '^151.80.7.0/24 ' "$D"; then echo K; elif grep -qF '|151.80.7.0/24|' "$T"; then echo G; else echo -; fi
+}
+check "izlenen blok · 10 gün sonra yeniden saldırı → kalıcı" K "$(watchc 10)"
+check "izlenen blok · 200 gün sonra (süre dolmuş) saldırı → yeniden geçici" G "$(watchc 200)"
+
 # ── 3c) Eski blok temizliği: do not delete (tekrar gelip kalıcıya alınan) bloklar korunur ──
 mk; D400=$(LC_ALL=C date -d '-400 days' '+%a %b %d %H:%M:%S %Y')
 printf '%s\n' "151.80.7.0/24 # Auto-grouped from temp /24: 3 geçici tekil, 2. kez grup saldırısı nedeniyle kalıcı banlandı - do not delete - $D400" \
               "151.80.8.0/24 # Auto-grouped /24: 3 kalıcı tekil nedeniyle kalıcı banlandı - $D400" >> "$D"
-run --action expire 365 >/dev/null 2>&1
+printf '%s\n' "151.80.9.0/24 # Auto-grouped /24: 3 kalıcı tekil nedeniyle kalıcı banlandı - $D400" >> "$D"
+echo "151.80.9.0/24 $(( $(date +%s) - 5 * 86400 ))" > "$(dirname "$C")/block_hits"      # 5 gün önce denenmiş (sayaç)
+NEEDR=1; run --action expire 365 >/dev/null 2>&1
 check "eski blok temizliği · do not delete blok kalır" G "$(grep -q '^151.80.7.0/24 ' "$D" && echo G || echo -)"
 check "eski blok temizliği · sıradan eski blok kalkar" - "$(grep -q '^151.80.8.0/24 ' "$D" && echo G || echo -)"
+check "eski blok temizliği · son 30 günde denenen blok kalır" G "$(grep -q '^151.80.9.0/24 ' "$D" && echo G || echo -)"
+
+# ── 3g) Banlı blok sayacı (yalnız gerçek CSF): eylemsiz sayan kural + sayaçlı küme; csf -r sonrası csfpost.sh ile geri gelir ──
+if [ "${GERCEK:-0}" = 1 ]; then
+    mk; printf '%s\n' "198.51.100.0/24 # Auto-grouped /24: 3 kalıcı tekil nedeniyle kalıcı banlandı - $DT" >> "$D"; NEEDR=1; run >/dev/null 2>&1
+    hs() { echo "$(ipset list -n 2>/dev/null | grep -cx ag_hits)/$(iptables -S LOCALINPUT 2>/dev/null | grep -c 'match-set ag_hits')/$(ipset list ag_hits 2>/dev/null | grep -c '^198.51.100.0/24 ')"; }
+    check "sayaç · turdan sonra küme, kural ve banlı blok yerinde" G "$([ "$(hs)" = 1/1/1 ] && echo G || echo "-:$(hs)")"
+    check "sayaç · kural LOCALINPUT'un başında (CSF'in banlarından önce)" G "$(iptables -S LOCALINPUT | sed -n 2p | grep -q ag_hits && echo G || echo -)"
+    csf -r >/dev/null 2>&1
+    check "sayaç · csf -r sonrası csfpost.sh ile geri geldi" G "$([ "$(hs)" = 1/1/1 ] && echo G || echo "-:$(hs)")"
+    DENY="$D" CSF_DIR=/etc/csf bash "$REPO/tools/block-hits.sh" --remove >/dev/null 2>&1
+fi
 
 # ── 4) Sunucunun kendi sağlayıcısı (taklit: 203.0.113.10 → AS64500) hiçbir durumda banlanmaz ──
+if [ "${GERCEK:-0}" != 1 ]; then     # taklit DNS gerekir (gerçek modda sunucu IP'si özel adres, Cymru cevap vermez)
 prov() { run --config set "$@" >/dev/null 2>&1; run --prov-apply >/dev/null 2>&1; }
 inconf() { grep -q "^CC_DENY = \".*$1" "$CF" && echo G || echo -; }
 mk; prov ASN_BAN=1 ASN_ALL=AS64500,AS14061
@@ -164,6 +252,7 @@ mk; mkdir -p "$R/var/lib/csf/Geo"; printf '203.0.113.0\t203.0.113.255\t64500\tUS
 export NO_DNS=1; prov ASN_BAN=1 ASN_ALL=AS64500,AS14061; unset NO_DNS
 check "DNS sessiz ama CSF'in ASN verisi var: kendi sağlayıcısı oradan tanınır" - "$(inconf AS64500)"
 check "DNS sessiz ama CSF'in ASN verisi var: öteki sağlayıcı yazılır" G "$(inconf AS14061)"
+fi
 
 printf 'Senaryolar\n%s' "$OUT"
 echo "$N senaryo, $F beklenmeyen"
