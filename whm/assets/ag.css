@@ -68,7 +68,6 @@
   background: var(--ag-card); border: 1px solid var(--ag-line); border-radius: 14px; box-shadow: 0 12px 40px rgba(15, 23, 42, .18); }
 .ag-wait-b b { font-size: 15px; font-weight: 650; color: var(--ag-text); }
 .ag-wait-b > span { font-size: 13px; color: var(--ag-text-3); line-height: 1.45; }
-.ag-wait-t { font-size: 12px; color: var(--ag-text-3); font-variant-numeric: tabular-nums; }
 
 /* ── Header ─────────────────────────────────────────────────────── */
 .ag-head { display: flex; align-items: center; gap: 16px; row-gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }

@@ -149,7 +149,8 @@ settings, with no prompts. `config.env` is left untouched.
   a suspicious network whose IPs mostly sit in one such range offers it too.
 - **Most blocked providers** (by ASN) — four tabs:
   - *Attacks* — ranked by block bans and single bans, with each provider's most
-    common ban reason. A provider with 5+ block bans gets a suggestion to add
+    common ban reason, the attacked services (web, mail, SSH…) with their
+    counts, and when the last attack was. A provider with 5+ block bans gets a suggestion to add
     it to the provider ban. A provider partly inside a rented-server list is
     tagged with how much of it is already closed there.
   - *Added by hand* — ranges in `csf.deny` added outside CSF Auto-Group.
@@ -265,7 +266,9 @@ history):
 - **Thresholds** — block ban (`/24`), `do not delete`, suspicious network (`/16`,
   permanent and temp single bans counted together) and temp block ban (`/24`).
 - **Schedule** — cron every 5 / 10 / 15 / 30 minutes or hourly.
-- **Lookups** — owner/hostname lookups on or off, DNS timeout.
+- **Lookups** — owner/hostname lookups on or off, DNS timeout, how long a
+  block's owner is kept before it is looked up again (default 30 days) and how
+  often Imunify360's list is read (default 60 minutes).
 - **Retention** — watch period, review days, old-block limit (default 365 days)
   and whether old block bans are removed automatically (default off; manual bans
   are never touched), log size and archive count. Old-block removal keeps
@@ -273,7 +276,7 @@ history):
   traffic never reaches lfd, so the plugin counts it itself — an `ag_hits` ipset
   with a counter per banned range and one rule at the top of `LOCALINPUT` that
   only counts (it neither blocks nor allows anything); `csfpost.sh` puts it back
-  after CSF reloads. A block with an attempt in the last 30 days is kept, and
+  after CSF reloads. A block with an attempt within the set period (default 30 days) is kept, and
   its last attempt shows in the state tip. The
   log is rotated by the system's logrotate (`/etc/logrotate.d/csf_autogroup`,
   written from these settings; default 1 MB, 5 compressed archives); where
@@ -448,7 +451,8 @@ restoring `config.env` is enough.
   save).
 - **Measure impact** before saving: the last 24 hours of web logs, for that
   provider — response codes, successful requests, successful POSTs (payment
-  notifications, webhooks) and non-browser clients, by site.
+  notifications, webhooks), examples of failed requests (403, 404, 5xx…: code,
+  site, request and an example IP) and non-browser clients, by site.
 - After saving, the setting is written to CSF right away and lfd is restarted
   (lfd fills the address sets); the screen shows how many ranges are loaded.
   Turning it off removes only what the plugin added.
@@ -461,8 +465,8 @@ restoring `config.env` is enough.
 - The weekly summary lists the banned providers, what is blocked and how many
   ranges CSF loaded.
 - **CSF's ASN data:** lfd downloads `/var/lib/csf/Geo/ip2asn-combined.tsv` only
-  when it is missing, so the addresses go stale; once a day the plugin refreshes
-  it when it is older than 25 days.
+  when it is missing, so the addresses go stale; the plugin has lfd download it
+  again when it is older than the period set in the card (default 25 days).
 - A provider ban set up by hand in CSF is adopted the first time.
 - This server's own provider is never banned.
 
@@ -474,14 +478,16 @@ Online) and the site monitors UptimeRobot, Pingdom and StatusCake, plus your own
 (`name|https://list` or `name|IP`). They are written to a file included from
 `csf.allow` (plain addresses, kept in an ipset); CSF checks the allow list
 first, so they pass country and provider bans, on every port. Lists are
-downloaded again every day; a list that fails to download, or returns far fewer
+downloaded again as often as set under **Refresh** in the card (default every
+day); a list that fails to download, or returns far fewer
 addresses than before, keeps its previous version; ranges wider than /16 are
 refused. Yandex and Facebook don't publish address lists.
 
 The card shows when the lists were last downloaded and where each one comes
 from; a built-in source's address can be changed there if the provider moves
-it. A source that can't be downloaded for 3 days is reported (mail, Slack,
-Overview, History) until it works again.
+it. A source that can't be downloaded for the warning period (default 3 days)
+is reported (mail, Slack, Overview, History) until it works again. The rented-
+server lists have the same two settings in their card.
 
 `tools/services-allow.sh` does the downloading; the plugin runs it. It also
 works by hand (`--check` shows what would change, `--remove` takes it out).
@@ -512,6 +518,13 @@ screen offers in that state. It checks them against a few rules: no ban that
 would have no effect, the same label for the same action everywhere, and no
 button that the ban dialog would then refuse. Needs bash and node; nothing is
 written to the system.
+
+`bash tests/hiz/calistir.sh` times the state the panel loads on opening
+(`--status --json`) on generated server-sized data (1,500 bans, 450,000 lfd log
+lines, 6,000 Imunify360 entries, banned providers with 3,000 ranges each) and
+lists the slow parts; `SINIR=15` makes it fail above 15 seconds. Run it on
+Linux for realistic times. On a server, `AG_PROF=1 csf_autogroup.sh --status
+--json >/dev/null` prints the same breakdown for real data.
 
 `bash tests/ayar-tutarliligi/calistir.sh` builds a sample value for every
 setting the panel can send (from the engine's own source lists and default

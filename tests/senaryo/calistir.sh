@@ -203,6 +203,10 @@ check "sıralama · web banlı sağlayıcı, yalnız web saldırısı → görü
 mk; layer asn-web; for x in 7.1 8.1 9.1; do single 151.80.$x ssh; done; run >/dev/null 2>&1
 r=$(rank); check "sıralama · web banlı sağlayıcı, SSH saldırısı → görünür" G "$r"
 check "sıralama · ve 'port listesiyle banlı' işaretli" G "$([ "$r" = G:pb ] && echo G || echo -)"
+r=$(node -e "const j=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
+  const a=(j.asn_top||[]).find(x=>x.asn==='16276')||{}; const age=Date.now()/1000-(a.last||0);
+  console.log(a.svc==='ssh:3' && a.last>0 && age<86400 ? 'G' : '-:'+a.svc+':'+a.last);" "$(wp "$R/st.json")" 2>&1)
+check "sıralama · saldırılan servis (ssh:3) ve son saldırı zamanı satırda" G "$r"
 mk; layer asn-hepsi; for x in 7.1 8.1 9.1; do single 151.80.$x ssh; done; run >/dev/null 2>&1
 check "sıralama · her şey banlı sağlayıcı → görünmez" - "$(rank)"
 

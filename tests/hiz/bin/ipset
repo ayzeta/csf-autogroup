@@ -1,0 +1,18 @@
+#!/bin/bash
+# cc_asN: 3000 aralık (N'ye göre), ag_cloud: yalnız başlık; -t yalnız başlık
+t=0; [ "$2" = -t ] && { t=1; set -- "$1" "${@:3}"; }
+case "$1" in
+  list)
+    case "$2" in
+      -n) [ "$3" = ag_cloud ] && exit 0; exit 1 ;;
+      cc_as*) n=${2#cc_as}
+        printf 'Name: %s\nType: hash:net\nHeader: family inet hashsize 4096 maxelem 65536\nSize in memory: 1\nReferences: 1\nNumber of entries: 3000\n' "$2"
+        [ $t = 1 ] && exit 0
+        echo "Members:"
+        awk -v n="$n" 'BEGIN { srand(n); for (i = 0; i < 3000; i++) printf "%d.%d.%d.0/24\n", 20 + int(rand() * 40), int(rand() * 256), int(rand() * 256) }' ;;
+      ag_cloud) printf 'Name: ag_cloud\nNumber of entries: 6000\n' ;;
+      *) exit 1 ;;
+    esac ;;
+  test) exit 1 ;;
+  *) exit 0 ;;
+esac

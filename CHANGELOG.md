@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.13.6 — 2026-10-09
+
+- **The panel opens much faster.** Reading the server's state repeated costly
+  work per provider and per single ban: the lfd log was searched once per
+  PERMBLOCK address, each banned provider's whole address set was listed just
+  to count it, the rented-server share compared every range with every list
+  range, and the provider ranking was computed twice. All of these now run in
+  one pass. On a test server with 1,500 bans, 450,000 lfd log lines and 6,000
+  Imunify360 entries, the state went from about 2 minutes to under 8 seconds;
+  the output is the same. Set `AG_PROF=1` when running
+  `csf_autogroup.sh --status --json` to see where the time goes.
+- **Fix — "already in a rented-server list" share was too high** when list
+  ranges overlapped (the same addresses were counted once per list). It is now
+  the exact share of the provider's addresses inside the lists.
+
+- **Refresh and timing periods are settings now** (they were fixed in the
+  code). Rented-server and allowed-service cards get a *Refresh* section:
+  how often the lists are downloaded again (default every day) and after how
+  many days of failed downloads it is reported (default 3). The provider-ban
+  card: how old CSF's ASN data may get before lfd downloads it again (default
+  25 days). Settings → Lookups: how long a block's owner is kept (30 days) and
+  how often Imunify360's list is read (60 minutes). Settings → Retention: how
+  recent an attempt keeps a block from being "old" (30 days). All are also
+  `config.env` keys (`CLOUD_REFRESH_DAYS`, `CLOUD_FAIL_DAYS`,
+  `SVC_REFRESH_DAYS`, `SVC_FAIL_DAYS`, `GEO_REFRESH_DAYS`, `OWNER_TTL_DAYS`,
+  `IMUNIFY_REFRESH_MIN`, `BLOCK_ACTIVE_DAYS`).
+- **Most blocked providers:** each row shows the attacked services with their
+  counts (web, mail, SSH…) and when the last attack was.
+- **Measure impact** also lists examples of failed requests (403, 404, 5xx…)
+  with the site, the request and an example IP — not only the successful ones.
+- Waiting screens (opening, actions, Measure impact) no longer count seconds;
+  they only say what is being waited for.
+
 ## 1.13.5 — 2026-10-09
 
 - **Fix — the server's own provider could be banned.** The protection asked

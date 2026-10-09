@@ -40,6 +40,9 @@ SVC=$(cat_of SVC_CATALOG); CLD=$(cat_of CLOUD_CATALOG)
     printf 'DIGEST_DAY\t%s\n' 1 7
     printf 'THRESHOLD_24\t3\nTHRESHOLD_24_PERMANENT\t5\nTHRESHOLD_16\t5\nTHRESHOLD_TEMP_24\t3\nTHRESHOLD_TEMP_16\t5\n'
     printf 'LOOKUP_TIMEOUT\t3\nSAYAC_RETENTION_DAYS\t180\nREVIEW_DAYS\t7\nLOG_MAX_LINES\t5000\nLOG_ROTATE_MB\t10\nLOG_ROTATE_KEEP\t4\nBLOCK_EXPIRE_DAYS\t365\n'
+    # yenileme ve süre ayarları (varsayılanlar ve uçlar)
+    printf 'CLOUD_REFRESH_DAYS\t%s\n' 1 30; printf 'CLOUD_FAIL_DAYS\t%s\n' 3 30; printf 'SVC_REFRESH_DAYS\t%s\n' 1 7; printf 'SVC_FAIL_DAYS\t%s\n' 1 3
+    printf 'GEO_REFRESH_DAYS\t%s\n' 7 25 90; printf 'OWNER_TTL_DAYS\t%s\n' 1 30 180; printf 'IMUNIFY_REFRESH_MIN\t%s\n' 10 60 1440; printf 'BLOCK_ACTIVE_DAYS\t%s\n' 1 30 365
 } > "$W/values.tsv"
 
 # ── panel: api.php'deki anahtar listesi ve desenler (php ile, dosya çalıştırılmadan okunur) ──
