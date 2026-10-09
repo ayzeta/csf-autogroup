@@ -1301,9 +1301,18 @@
       '<div class="ag-field-h">' + t('h_BLOCK_EXPIRE_AUTO') + '</div></div>' +
       '<div class="ag-field"><div class="ag-field-l"><label>' + t('k_logfile') + '</label></div><div class="ag-loginfo">' +
       (rot ? t('log_rot', esc(bytes(LG.bytes)), num(LG.archives), num(CFG.values.LOG_ROTATE_MB || 1), num(CFG.values.LOG_ROTATE_KEEP || 5)) : t('log_lines', num(LG.lines), num(cv('LOG_MAX_LINES')))) + '</div></div>';
+    // sınırın yanında doluluk: Genel bakıştaki kartlarla aynı veri (S.usage) ve aynı eşikler (%80 turuncu, %90 kırmızı)
+    function fill(pair, limit) {
+      var used = (pair || [])[0] || 0, lim = (pair || [])[1] || limit || 0;
+      if (!lim) return '—';
+      var p = Math.round(used * 100 / lim), cls = p >= 90 ? ' bad' : p >= 80 ? ' warn' : '';
+      return '<div class="ag-left ag-fill' + cls + '"><span>' + esc(t('k_lines', num(used), num(lim))) + ' · ' + (LANG === 'tr' ? '%' + p : p + '%') + '</span>' +
+        '<div class="ag-days"><i style="width:' + Math.min(100, p) + '%"></i></div></div>';
+    }
+    var U = (S && S.usage) || {};
     var csf = '<dl class="ag-kv" style="padding:0">' +
-      '<dt>' + t('csf_deny') + '</dt><dd>' + (CFG.csf.deny_limit ? num(CFG.csf.deny_limit) : '—') + '</dd>' +
-      '<dt>' + t('csf_temp') + '</dt><dd>' + (CFG.csf.temp_limit ? num(CFG.csf.temp_limit) : '—') + '</dd></dl>' +
+      '<dt>' + t('csf_deny') + '</dt><dd>' + fill(U.perm, CFG.csf.deny_limit) + '</dd>' +
+      '<dt>' + t('csf_temp') + '</dt><dd>' + fill(U.temp, CFG.csf.temp_limit) + '</dd></dl>' +
       '<a class="ag-btn ag-btn-sm" href="../configserver/csf.cgi" target="_top">' + IC.ext + t('csf_open') + '</a>';
     var secs = settingsSections(), cur = secs.filter(function (x) { return x.k === UI.st; })[0] || secs[0];
     var body = cur.k === 'notify' ? card('inbox', t('st_notify'), '', notify)

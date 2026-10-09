@@ -36,6 +36,17 @@
   lock up to 5 minutes when the server can't reach out).
 - A provider banned with the port list and also inside a rented-server list is
   no longer reported as "port missing" for a service the list closes.
+- **Settings → Server → CSF list limits** shows how full each list is
+  ("9 / 1,000 lines · 1%" with a bar; orange from 80%, red from 90%, as on
+  Overview).
+- LFD PERMBLOCK: when the IP's earlier temp blocks are no longer in the log,
+  the service is taken from the PERMBLOCK line's own trigger tag
+  (`[LF_SSHD]`). Checked against a real CSF/lfd, which also confirmed the
+  csf.deny and lfd.log formats the engine reads, that the rented-server rule
+  survives `csf -r` and a full restart via `csfpost.sh`, that it drops new
+  connections from listed addresses while `csf.allow` still lets them in, and
+  that a newly added provider's set stays empty until lfd restarts (~12 s)
+  while filled sets are never emptied by a reload.
 - Tests: `tests/senaryo/calistir.sh` grew to ~50 scenarios (country bans,
   own-provider protection, ranking, old blocks, block thresholds, ban window,
   `csf.rignore`); `tests/senaryo/birim.sh` checks the port-range helper. The

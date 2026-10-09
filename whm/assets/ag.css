@@ -1010,3 +1010,4 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 /* sahip hücresi: ad en az birkaç harf görünür; etiket de sığmazsa … ile kısalır (tam metni ipucunda) */
 .ag-td-own .ag-org { min-width: 56px; flex: 0 1 auto; white-space: nowrap; }
 .ag-td-own .ag-ctag { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ag-fill .ag-days { width: 140px; }   /* CSF liste sınırları: doluluk çubuğu */

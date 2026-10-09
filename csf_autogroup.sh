@@ -3729,6 +3729,19 @@ perm_cls() {     # IP → REPLY = PERMBLOCK alan IP'nin lfd günlüğündeki son
         REPLY=$(awk -v r="$l" "$AWK_CLS"' BEGIN { print cls(r) }')
         case "$REPLY" in repeat|other) REPLY="" ;; esac
     fi
+    # yedek: lfd günlüğündeki PERMBLOCK satırı tetikleyen kuralın etiketini taşır ("… *Blocked in csf* [LF_SSHD]";
+    # gerçek lfd ile ölçüldü 2026-10-09). Genel tetikleyicide ([LF_TRIGGER], ModSecurity) servis çıkmaz.
+    if [ -z "$REPLY" ]; then
+        for f in "$LFD_LOG" "$LFD_LOG.1"; do
+            [ -r "$f" ] || continue
+            l=$(grep -hF "(PERMBLOCK) $ip " "$f" 2>/dev/null | grep -oE '\[LF_[A-Z_]+\]' | awk 'END { print }')
+            [ -n "$l" ] && break
+        done
+        if [ -n "$l" ]; then
+            REPLY=$(awk -v r="$l" "$AWK_CLS"' BEGIN { print cls(r) }')
+            case "$REPLY" in repeat|other) REPLY="" ;; esac
+        fi
+    fi
     PERM_CLS[$ip]="$REPLY"
 }
 prov_cover() {   # stdin "ip|sebep|asn" → 0: her IP CSF'te banlı bir sağlayıcıda ve ban saldırılan servisi kapatıyor

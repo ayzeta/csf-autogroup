@@ -39,6 +39,8 @@ attack() {   # TÜR [TARİH] → 6 tekil, 4 blok; mix = 5 web + 1 ssh; pweb/pssh
     for ip in 151.80.7.1 151.80.7.2 151.80.8.1 151.80.8.2 151.80.9.1; do single "$ip" "$(case $k in mail|ssh) echo $k;; *) echo web;; esac)" "$d"; done
     case "$k" in
         mix) single 151.80.10.1 ssh "$d" ;;
+        ptag) single 151.80.10.1 perm "$d"       # günlükte yalnız PERMBLOCK satırı; tetikleyen kural etiketinde (gerçek lfd biçimi)
+            echo "Oct  9 14:30:46 lin lfd[1]: (PERMBLOCK) 151.80.10.1 (FR/France/-) has had more than 3 temp blocks in the last 259200 secs - *Blocked in csf* [LF_SSHD]" >> "$R/lfd.log" ;;
         pweb|pssh|pyok) single 151.80.10.1 perm "$d"
             [ "$k" = pweb ] && echo "Oct  4 20:33:04 lin lfd[1]: $(why web 151.80.10.1) (FR/France/-): 10 in the last 3600 secs - *Blocked in csf* for 43200 secs [LF_TRIGGER]" >> "$R/lfd.log"
             [ "$k" = pssh ] && echo "Oct  4 20:33:04 lin lfd[1]: $(why ssh 151.80.10.1) (FR/France/-): 5 in the last 3600 secs - *Blocked in csf* for 3600 secs [LF_SSHD]" >> "$R/lfd.log" ;;
@@ -74,6 +76,7 @@ for k in liste-web asn-web; do
     cell $k web -; cell $k mail G; cell $k ssh G; cell $k mix G; cell $k pweb -; cell $k pssh G; cell $k pyok -
 done
 cell yok web G
+cell liste-web ptag G      # PERMBLOCK satırının [LF_SSHD] etiketinden: SSH, listeyle kapalı değil
 cell asn-posta web G; cell asn-posta mail -; cell asn-posta mix G
 cell asn-hepsi web -; cell asn-hepsi ssh -; cell asn-hepsi mix -
 cell ulke-hepsi web -; cell ulke-hepsi ssh -

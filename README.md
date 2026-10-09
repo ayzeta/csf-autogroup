@@ -281,7 +281,7 @@ sqlite3) and what happens when one of them is missing.
 *Try before saving* runs a dry run with the unsaved thresholds. Saving writes
 `config.env` (previous file kept as `config.env.bak`), updates the crontab and
 logs each change as `SETTING (user): KEY: old → new`. CSF's own list limits
-(`DENY_IP_LIMIT`, `DENY_TEMP_IP_LIMIT`) are shown read-only; change them in CSF.
+(`DENY_IP_LIMIT`, `DENY_TEMP_IP_LIMIT`) are shown read-only with how full each list is; change them in CSF.
 
 ## How grouping works
 
