@@ -53,7 +53,8 @@
 .ag-wrap { max-width: 1320px; margin: 0 auto; }
 
 /* ── Boot / spinner ─────────────────────────────────────────────── */
-.ag-boot { display: flex; justify-content: center; padding: 120px 0; }
+.ag-boot { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 120px 16px; text-align: center; }
+.ag-boot-t { max-width: 420px; font-size: 13px; color: var(--ag-text-3); line-height: 1.45; }
 .ag-spin { width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid var(--ag-line); border-top-color: var(--ag-accent); animation: ag-rot .7s linear infinite; display: inline-block; }
 .ag-spin-sm { width: 14px; height: 14px; border-width: 2px; vertical-align: -2px; }
 @keyframes ag-rot { to { transform: rotate(360deg); } }

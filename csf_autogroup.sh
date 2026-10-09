@@ -133,6 +133,14 @@ CLOUD_UDP="${CLOUD_UDP-443}"
 CLOUD_URLS="${CLOUD_URLS:-}"            # değiştirilmiş kaynak adresleri: "gcp|https://… aws|https://…"
 CLOUD_EXTRA="${CLOUD_EXTRA:-}"          # kendi listeleriniz: "ad|https://liste" (düz IP listesi ya da JSON), boşlukla
 CLOUD_ACTIVE="${CLOUD_SOURCES//,/ }"; for _x in $CLOUD_EXTRA; do CLOUD_ACTIVE+=" x-${_x%%|*}"; done   # etkin listelerin adları (ek listeler x- önekli)
+# Kapsama kararları (uyarı gizleme, gereksizleşen ban, sıralama, IP kartı, ban penceresi) için: liste gerçekten etkin mi.
+# Ayar açık ama duraklatılmış (ENABLED=0) ya da ipset varken ag_cloud kümesi yüklü değilse kapalı sayılır — liste dosyaları
+# diskte kalsa da. Uygulama (cloud_enforce) ve ayar gösterimi CLOUD_BAN'a bakmaya devam eder.
+CLOUD_ON=0
+if [ "$CLOUD_BAN" = 1 ] && [ "$ENABLED" != 0 ]; then
+    CLOUD_ON=1
+    command -v ipset >/dev/null 2>&1 && ! ipset list -n ag_cloud >/dev/null 2>&1 && CLOUD_ON=0
+fi
 TODAY=$(date '+%Y-%m-%d')
 NL=$'\n'
 
@@ -577,7 +585,7 @@ else
   M_S_TITLE="CSF Auto-Group %s — status"
   M_S_LAST="Last run"; M_S_NEVER="none yet"; M_S_RUNNING="running now"
   M_S_USAGE="Usage"; M_S_PERM="permanent"; M_S_TEMP="temp"
-  M_S_REVIEW="To review (%s days)"; M_S_PENDING="Watched"
+  M_S_REVIEW="Needs review (%s days)"; M_S_PENDING="Watched"
   M_S_GROUPS="Active block bans"; M_S_IGNORED="Ignored"; M_S_RECENT="Recent actions"
   M_S_NONE="none"; M_S_DAYSLEFT="%s days left"; M_S_TTL="temp ban %s left"
   M_L_HOST="Hostname"; M_L_FWD="forward-confirmed"; M_L_NOFWD="not forward-confirmed"
@@ -1524,7 +1532,11 @@ wl_load() {      # FILE LABEL [DEPTH] — IP, CIDR, gelişmiş satır (tcp|in|d=
     [ -r "$file" ] || return
     while IFS= read -r line || [ -n "$line" ]; do
         line="${line%$'\r'}"
-        [[ "$line" == *csf_autogroup* ]] && continue      # eklentinin kendi satırları (ör. banlı aralığa port istisnası) korunan kayıt değil
+        # eklentinin kendi port istisnası (banlı aralıkta seçilen servisler açık) korunan kayıt değil. Yalnız o atlanır:
+        # izinli servisler ("# csf_autogroup: service google-common", csf_autogroup.services.allow Include'u) CSF'te gerçek
+        # izindir — önce "csf_autogroup" geçen her satır atlanıyor, Googlebot vb. beyaz liste sayılmıyordu.
+        [[ "$line" == *"csf_autogroup: exception"* ]] && continue
+        local svn=""; [[ "$line" =~ csf_autogroup:\ service\ ([A-Za-z0-9_-]+) ]] && svn=" (${BASH_REMATCH[1]})"
         line="${line%%#*}"; line="${line#"${line%%[![:space:]]*}"}"
         [ -z "$line" ] && continue
         if [[ "$line" =~ ^Include[[:space:]]+([^[:space:]]+) ]]; then
@@ -1543,7 +1555,7 @@ wl_load() {      # FILE LABEL [DEPTH] — IP, CIDR, gelişmiş satır (tcp|in|d=
         while [[ "$rest" =~ ([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(/[0-9]{1,2})?) ]]; do
             ip="${BASH_REMATCH[1]}"          # wl_add içindeki regex BASH_REMATCH'i ezer
             rest="${rest#*"$ip"}"
-            wl_add "$ip" "$label: $ip"; mt=1
+            wl_add "$ip" "$label$svn: $ip"; mt=1
         done
         # csf.allow'da hostname olabilir → çöz
         if [ "$mt" = 0 ] && [[ "$label" == csf.allow* ]] && [[ "$tok" =~ ^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$ ]] && [[ "$tok" =~ [A-Za-z] ]]; then
@@ -1966,8 +1978,8 @@ do_status() {
             [ -n "${seen[$c]}" ] && continue; seen[$c]=1
             ign_until "$c" && continue
             cidr_range "$c" && perm_covers "$R_LO" "$R_HI" && continue
-            { [ -n "$ASB_ORD" ] || [ "$CLOUD_BAN" = 1 ]; } && [[ "$line" == *'"ips":[{'* ]] && ev_ipsrc "$line" | prov_cover && continue
-            if { [ -n "$ASB_ORD" ] || [ "$CLOUD_BAN" = 1 ]; } && [[ "$line" == *'"ips":[{'* ]] && prov_near < <(ev_ipsrc "$line"); then
+            { [ -n "$ASB_ORD" ] || [ "$CLOUD_ON" = 1 ]; } && [[ "$line" == *'"ips":[{'* ]] && ev_ipsrc "$line" | prov_cover && continue
+            if { [ -n "$ASB_ORD" ] || [ "$CLOUD_ON" = 1 ]; } && [[ "$line" == *'"ips":[{'* ]] && prov_near < <(ev_ipsrc "$line"); then
                 jstr "$PN_SRC"; line="${line%\}},\"pnear\":$REPLY,\"pnsvc\":\"$PN_SVC\"}"
             fi
             # aynı aralığa uyarıdan SONRA kısmi ban konduysa uyarı ele alınmıştır; bandan sonra gelen yeni uyarı görünür
@@ -2353,7 +2365,9 @@ restore_file() { REPLY="$RESTORE_DIR/${1//\//_}"; }   # CIDR → saklanan satır
 # Panelde aynı kural ag.js'teki svcOfReason'da (Kontrol edilecekler için) — birini değiştirirsen ötekini de değiştir.
 AWK_CLS='function cls(r) {
     r = tolower(r)
+    gsub(/ \([a-z][a-z]\/[^)]*\)/, "", r)          # "(us/united states/mail.smtp.example)" — ülke ve rDNS servis değildir
     if (r ~ /permblock/) return "repeat"         # LFD: çok geçici ban almış IP kalıcıya alındı (servisi söylemez)
+    if (r ~ /mod_?security|lf_modsec/) return "web"   # ModSecurity yalnız web trafiğinde çalışır; kural mesajı yanıltmasın
     if (r ~ /port ?scan|ps_limit|lf_distattack/) return "scan"
     if (r ~ /sshd|lf_sshd/) return "ssh"
     if (r ~ /ftpd|lf_ftpd|lf_distftp/) return "ftp"
@@ -2464,7 +2478,7 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
         o="{\"ok\":true,\"cidr\":\"$c\""
         jstr "$IN_COVER"; o+=",\"cover\":$REPLY"
         local cqf csrc=""
-        if [ "$CLOUD_BAN" = 1 ] && cqf=$(mktemp); then
+        if [ "$CLOUD_ON" = 1 ] && cqf=$(mktemp); then
             echo "r $clo $chi" > "$cqf"; csrc=$(cloud_cover "$cqf" | awk '{ print $2; exit }'); rm -f "$cqf"
         fi
         o+=",\"cloud\":\"$csrc\",\"cloud_tcp\":\"$CLOUD_TCP\",\"cloud_udp\":\"$CLOUD_UDP\""
@@ -3121,7 +3135,7 @@ prov_cloudpct() { # ASNNN → "yüzde kaynak": CSF'in o sağlayıcı için yükl
 cloud_has() {    # IP → 0: etkin bir bulut listesinde (REPLY = kaynak adı)
     local IFS=$' \t\n' x ip="$1" v
     REPLY=""
-    [ "$CLOUD_BAN" = 1 ] || return 1
+    [ "$CLOUD_ON" = 1 ] || return 1
     # CSF'e yüklenmiş küme varsa önce ona sorulur (hızlı; sunucu IP'leri nomatch); hangi listede olduğu dosyalardan
     if command -v ipset >/dev/null 2>&1 && ipset list -n ag_cloud >/dev/null 2>&1; then ipset test ag_cloud "$ip" >/dev/null 2>&1 || return 1; fi
     ip2int "$ip" || return 1; v="$REPLY"; REPLY=""
@@ -3295,7 +3309,7 @@ prov_json() {    # → REPLY = durum JSON'u: izinli servisler (kaynak başına s
     for a in $(list_plus "$ASN_LIST" "$ASN_ALL" | tr ',' ' '); do
         asn_setn "$a"; c="$REPLY"
         local clp="" cls=""
-        if [ "$CLOUD_BAN" = 1 ] && [ "$c" -gt 0 ] 2>/dev/null; then
+        if [ "$CLOUD_ON" = 1 ] && [ "$c" -gt 0 ] 2>/dev/null; then
             read -r clp cls < <(prov_cloudpct "$a")
         fi
         asn_name "$a"; jstr "$REPLY"; sets+="${sets:+,}{\"a\":\"$a\",\"n\":$c,\"d\":$REPLY,\"cl\":$(num "$clp"),\"cls\":\"$cls\"}"     # n -1: ipset yok, bilinmiyor
@@ -3667,7 +3681,7 @@ prov_covmap() {  # "CIDR:TÜR:TCP:SERVİS" … → PCOV[CIDR]=ASNNN (çağıran 
     local IFS=$' \t\n' x c k tp sv a q="" el dt du rf ok pt
     PCOV=()
     asn_banned
-    { [ ${#ASB_A[@]} -gt 0 ] && command -v ipset >/dev/null 2>&1; } || [ "$CLOUD_BAN" = 1 ] || return 0
+    { [ ${#ASB_A[@]} -gt 0 ] && command -v ipset >/dev/null 2>&1; } || [ "$CLOUD_ON" = 1 ] || return 0
     dt=",$(conf_val CC_DENY_PORTS_TCP | tr -d ' '),"; du=",$(conf_val CC_DENY_PORTS_UDP | tr -d ' '),"
     local ct=",${CLOUD_TCP// /}," cu=",${CLOUD_UDP// /}," cx
     for x in "$@"; do
@@ -3684,7 +3698,7 @@ prov_covmap() {  # "CIDR:TÜR:TCP:SERVİS" … → PCOV[CIDR]=ASNNN (çağıran 
             fi
         done
         # bulut listesi (kendi port listesiyle; yalnız kısmi banlar — tam ban her şeyi kapatır, liste yalnız seçilen portları)
-        if [ "$CLOUD_BAN" = 1 ] && [ "$k" = partial ] && [ -n "$tp" ]; then
+        if [ "$CLOUD_ON" = 1 ] && [ "$k" = partial ] && [ -n "$tp" ]; then
             ok=1
             for pt in ${tp//,/ }; do [[ "$ct" == *",$pt,"* ]] || { ok=0; break; }; done
             [[ ",$sv," == *,web,* && "$cu" != *,443,* ]] && ok=0
@@ -3700,7 +3714,7 @@ prov_covmap() {  # "CIDR:TÜR:TCP:SERVİS" … → PCOV[CIDR]=ASNNN (çağıran 
             split($1, s, "/"); split(s[1], p, "."); b = (s[2] == "" ? 32 : s[2] + 0)
             lo = ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4]; printf "%s %.0f %.0f\n", a, lo, lo + 2 ^ (32 - b) - 1 }'
     done > "$rf.a"
-    if [ "$CLOUD_BAN" = 1 ]; then
+    if [ "$CLOUD_ON" = 1 ]; then
         for cx in $CLOUD_ACTIVE; do
             [ -r "$CLOUD_DIR/$cx.txt" ] && awk -F'[./]' -v a="c_$cx" 'NF >= 4 { b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%s %.0f %.0f\n", a, lo, lo + 2 ^ (32 - b) - 1 }' "$CLOUD_DIR/$cx.txt"
         done >> "$rf.a"
@@ -3744,7 +3758,7 @@ ev_ipsrc() {     # OLAY_SATIRI → stdout "ip|sebep|asn" (olaydaki IP listesinde
 }
 cloud_cover() {  # DOSYA ("anahtar lo hi" satırları) → stdout "anahtar kaynak": etkin bir bulut listesinin içinde kalanlar
     local IFS=$' \t\n' x rf
-    [ "$CLOUD_BAN" = 1 ] && [ -n "${CLOUD_ACTIVE// /}" ] && [ -s "$1" ] || return 0
+    [ "$CLOUD_ON" = 1 ] && [ -n "${CLOUD_ACTIVE// /}" ] && [ -s "$1" ] || return 0
     rf=$(mktemp) || return 0
     for x in $CLOUD_ACTIVE; do
         [ -r "$CLOUD_DIR/$x.txt" ] && awk -F'[./]' -v s="$x" 'NF >= 4 { b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%.0f %.0f %s\n", lo, lo + 2 ^ (32 - b) - 1, s }' "$CLOUD_DIR/$x.txt"
@@ -3767,7 +3781,7 @@ asn_top() {      # [N] [evidence|blocks] → ASN_TOP satırları: "ASN|KURUM|CC|
     local c i p a qf k src
     asn_banned
     # bulut listesinin kapsadığı tekiller ve bloklar sayılmaz (saldırdıkları sunucular zaten kapalı); ayrıca sayılır
-    if [ "$CLOUD_BAN" = 1 ] && qf=$(mktemp); then
+    if [ "$CLOUD_ON" = 1 ] && qf=$(mktemp); then
         { for c in "${!SINGLE_NOTE[@]}"; do ip2int "$c"; echo "$c $REPLY $REPLY"; done
           for i in "${!DC_TXT[@]}"; do echo "${DC_TXT[i]} ${DC_LO[i]} ${DC_HI[i]}"; done; } > "$qf"
         while read -r k src; do CCOV[$k]="$src"; done < <(cloud_cover "$qf")
@@ -4517,7 +4531,7 @@ for prefix in $(printf '%s\n' "${!count16[@]}" | sort -V); do
         ip2int "$prefix.0.0"; lo=$REPLY
         if perm_covers "$lo" $((lo + 65535)); then logr "$(m "$M_TSKIP16" "$prefix")"; continue; fi
         if ign_until "$prefix.0.0/16"; then logr "$(m "$M_IGN16" "$prefix" "$IGN_UNTIL")"; continue; fi
-        if [ -n "$ASB_ORD" ] || [ "$CLOUD_BAN" = 1 ]; then
+        if [ -n "$ASB_ORD" ] || [ "$CLOUD_ON" = 1 ]; then
             pcl=""; for ip in ${ips16[$prefix]}; do pcl+="$ip|${SINGLE_NOTE[$ip]:-${TNOTE[$ip]}}|"$'\n'; done
             prov_cover <<< "$pcl" && { logr "$(m "$M_PROV16" "$prefix" "$PC_ASN")"; continue; }
         fi

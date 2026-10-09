@@ -16,6 +16,27 @@
 - **Active block bans:** the "in a provider ban" / "in a rented-server list"
   tag no longer pushes the owner's name out of a narrow column; on tagged rows
   the AS number moves to the tip, the tag is shorter.
+- **Fix — allowed services were not treated as whitelisted.** Lines of the
+  plugin's own allow file (Googlebot, Bing, payment notifications…) and its
+  `Include` line were skipped together with the plugin's port exceptions, so a
+  block of an allowed service could get a block ban. Now only the port
+  exceptions are skipped; the allowed services count as whitelist, a block
+  there is "skipped (whitelist)" and names the service.
+- **Fix — rented-server lists counted as closed when they weren't.** With the
+  plugin paused, or when the `ag_cloud` set isn't loaded in the firewall, the
+  downloaded list files still made networks look closed: warnings were hidden
+  and *Bans no longer needed* could suggest removing bans. Coverage now
+  requires the list to be really active.
+- **Fix — attack type from the wrong part of the note.** The country and
+  reverse-DNS part of an lfd note ("…from IP (US/United States/mail.smtp…)")
+  and words in a ModSecurity rule message ("cPanel", "spam") could put an
+  attack on the wrong service. ModSecurity is always web; the country/rDNS part
+  is ignored (engine and panel alike).
+- **IP card:** an IP in `csf.ignore` (or GLOBAL_IGNORE) is no longer reported as
+  "allowed" — those only stop lfd; firewall bans still apply. A port-only allow
+  line is not a full allow either; both get a note under the result.
+- The English panel calls the card *Needs review* everywhere (some texts said
+  "To review").
 - **Fix — LFD PERMBLOCK:** an IP that LFD made permanent after repeated temp
   blocks (LF_PERMBLOCK) was treated as "service unknown", so a suspicious
   network whose attacks were all closed (e.g. web attacks inside a rented-server

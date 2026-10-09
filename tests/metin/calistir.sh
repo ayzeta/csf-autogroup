@@ -16,6 +16,7 @@ YASAK=(
   "grup banı|blok banı"
   "cloud list|rented-server list"
   "Other blocks|Added by hand"
+  "To review|Needs review"
 )
 # kullanıcıya görünen metinler: ag.js sözlüğündeki 'anahtar: "metin"' değerleri ve motorun M_* değişkenleri
 texts() {

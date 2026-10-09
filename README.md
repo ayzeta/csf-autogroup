@@ -508,6 +508,14 @@ setting the panel can send (from the engine's own source lists and default
 addresses) and checks that both the panel's save check (`whm/api.php`) and the
 engine's `--config set` accept it. Needs bash and php.
 
+`bash tests/senaryo/calistir.sh` runs the engine's decisions against a scenario
+matrix: each protection layer (provider ban with a port list or everything,
+rented-server list, partial `/16` ban before or after the attacks, allowed
+services) × each attack type (web, mail, SSH, mixed, LFD PERMBLOCK) × timing,
+and checks whether a suspicious network is hidden or shown, which services stay
+open, and whether a block is banned or skipped. `bash tests/senaryo/siniflama.sh`
+checks that the engine and the panel put the same lfd notes on the same service.
+
 `bash tests/metin/calistir.sh` checks that every concept keeps one name in the
 panel, mails and log: old or duplicate names listed in the script fail it.
 
