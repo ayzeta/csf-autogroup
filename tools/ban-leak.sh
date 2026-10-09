@@ -16,12 +16,18 @@ set -u
 H="${1:-24}"; [[ "$H" =~ ^[0-9]+$ ]] || H=24
 CSF_DIR="${CSF_DIR:-/etc/csf}"; CSF_VAR="${CSF_VAR:-/var/lib/csf}"; LFD_LOG="${LFD_LOG:-/var/log/lfd.log}"
 W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
-NOW=$(date +%s); SINCE=$(( NOW - H * 3600 ))
+NOW=$(date +%s); SINCE=$(( NOW - H * 3600 )); SKEY=$(date -d "@$SINCE" +%Y%m%d%H%M%S)
+# çıktı ekrana ve rapor dosyasına (uzun çıktı terminalde kaybolmasın)
+OUT="${OUT:-/root/ban-leak-$(date +%Y%m%d-%H%M).txt}"; { : > "$OUT"; } 2>/dev/null || OUT="$W/rapor.txt"
+exec > >(tee "$OUT") 2>&1
+adim() { printf '[%3d sn] %s\n' "$SECONDS" "$*"; }
+echo "Ban sızıntısı denetimi — son $H saat · rapor: $OUT"
 
 conf() { sed -n "s/^$1 *= *\"\(.*\)\".*/\1/p" "$CSF_DIR/csf.conf" 2>/dev/null | head -n 1 | tr -d ' ' | tr '[:lower:]' '[:upper:]'; }
 CCD=",$(conf CC_DENY),"; CCP=",$(conf CC_DENY_PORTS),"; CCPT=",$(conf CC_DENY_PORTS_TCP),"
 
 # 1) izin listesi: csf.allow (+ Include) ve izinli servisler — bunlardan gelen istekler sayılmaz
+adim "izin listesi okunuyor (csf.allow, izinli servisler)"
 { cat "$CSF_DIR/csf_autogroup.services.allow" 2>/dev/null
   [ -r "$CSF_DIR/csf.allow" ] && { cat "$CSF_DIR/csf.allow"; awk '/^[[:space:]]*Include[[:space:]]/ { print $2 }' "$CSF_DIR/csf.allow" | while read -r f; do [ -r "$f" ] && cat "$f"; done; }
 } | sed 's/#.*//' | awk '{ a = ""; if ($1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\/[0-9]+)?$/) a = $1
@@ -29,6 +35,8 @@ CCD=",$(conf CC_DENY),"; CCP=",$(conf CC_DENY_PORTS),"; CCPT=",$(conf CC_DENY_PO
       if (a == "") next; n = split(a, p, "/"); if (n == 2 && p[2] + 0 < 8) next; print a }' | sort -u |
   awk -F'[./]' '{ b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%.0f %.0f\n", lo, lo + 2 ^ (32 - b) - 1 }' | sort -n -k1,1 > "$W/allow"
 
+adim "izinli aralık: $(grep -c . "$W/allow")"
+adim "banlar okunuyor (csf.deny, lfd günlüğü, csf.tempban)"
 # 2) zamanlı banlar: "CIDR|başlangıç|bitiş|katman|portlar"  (portlar boş = bütün portlar)
 # 2a) csf.deny: tarih yorumun sonunda ("- Thu Oct  9 14:02:38 2026")
 awk -v now="$NOW" '
@@ -62,23 +70,28 @@ awk -F'|' '$2 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\/[0-9]+)?$/ { k = ($2 ~ /\//) 
 
 # 3) kümeler (zamansız): sağlayıcı/ülke banları (cc_*) ve kiralık sunucu listesi (ag_cloud; nomatch muaf); Imunify gri listesi (yalnız not)
 # "küme lo hi" (kümeye ve başlangıca göre sıralı) + "küme|tür|portlar" tanımları; kiralık listenin nomatch girdileri ayrı küme
+adim "zamanlı ban: $(grep -c . "$W/bans")"
+adim "kümeler okunuyor (sağlayıcı/ülke, kiralık liste, Imunify gri listesi)"
 CPT=$(sed -n 's/^tcp=//p' /var/lib/csf_autogroup/cloud/ports 2>/dev/null); [ -n "$CPT" ] || CPT="80,443"
-ipset save 2>/dev/null | awk -v ccd="$CCD" -v ccp="$CCP" -v ccpt="$CCPT" -v cpt="$CPT" -v df="$W/setdef" '
+ipset save 2>/dev/null | grep -E '^add (cc_|ag_cloud |[^ ]*graylist )' > "$W/ipset"     # yalnız gereken kümeler, bir kez
+awk -v ccd="$CCD" -v ccp="$CCP" -v ccpt="$CCPT" -v cpt="$CPT" -v df="$W/setdef" '
     function out(k, c,  s, p, b, lo) { split(c, s, "/"); split(s[1], p, "."); b = (s[2] == "" ? 32 : s[2] + 0); lo = ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4]
         printf "%s %.0f %.0f\n", k, lo, lo + 2 ^ (32 - b) - 1 }
     $1 == "add" && $2 ~ /^cc_/ { c = toupper(substr($2, 4))
         if (index(ccd, "," c ",")) { if (!D[$2]++) print $2 "|sağlayıcı / ülke banı (her şey): " c "|" > df; out($2, $3) }
         else if (index(ccp, "," c ",")) { if (!D[$2]++) print $2 "|sağlayıcı / ülke banı (port listesi): " c "|" substr(ccpt, 2, length(ccpt) - 2) > df; out($2, $3) } }
     $1 == "add" && $2 == "ag_cloud" { k = ($4 == "nomatch") ? "ag_cloud_nomatch" : "ag_cloud"
-        if (!D[k]++) print k "|" (k == "ag_cloud" ? "kiralık sunucu listesi" : "muaf") "|" (k == "ag_cloud" ? cpt : "") > df; out(k, $3) }' | sort -k1,1 -k2,2n > "$W/sets"
-ipset save 2>/dev/null | awk '$1 == "add" && $2 ~ /graylist$/ { print $3 }' > "$W/gray"
+        if (!D[k]++) print k "|" (k == "ag_cloud" ? "kiralık sunucu listesi" : "muaf") "|" (k == "ag_cloud" ? cpt : "") > df; out(k, $3) }' "$W/ipset" | sort -k1,1 -k2,2n > "$W/sets"
+awk '$2 ~ /graylist$/ { print $3 }' "$W/ipset" > "$W/gray"
+adim "küme aralığı: $(grep -c . "$W/sets") · gri listede: $(grep -c . "$W/gray")"
 
 # 4) web günlükleri: son H saatte değişmiş dosyalar, her istek → ban anında mıydı?
 DIR=""; for d in ${DOMLOGS:-} /var/log/apache2/domlogs /usr/local/apache/domlogs /etc/apache2/logs/domlogs; do [ -d "$d" ] && { DIR="$d"; break; }; done
 [ -n "$DIR" ] || { echo "Web günlükleri bulunamadı (domlogs)."; exit 1; }
 find -L "$DIR" -type f -mmin -$(( H * 60 )) ! -name '*bytes_log*' ! -name '*.offset*' ! -name '*.gz' 2>/dev/null | sort -u > "$W/files"
+adim "web günlükleri taranıyor: $(grep -c . "$W/files") dosya, $(tr '\n' '\0' < "$W/files" | xargs -0 -r stat -L -c %s 2>/dev/null | awk '{ t += $1 } END { printf "%.0f MB", t / 1048576 }')"
 
-awk -v since="$SINCE" -v bf="$W/bans" -v sf="$W/sets" -v df="$W/setdef" -v af="$W/allow" -v gf="$W/gray" -v lf="$W/files" '
+awk -v since="$SINCE" -v skey="$SKEY" -v bf="$W/bans" -v sf="$W/sets" -v df="$W/setdef" -v af="$W/allow" -v gf="$W/gray" -v lf="$W/files" '
     function v4(s,  p) { split(s, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
     function rg(c, r,  s, b) { split(c, s, "/"); b = (s[2] == "" ? 32 : s[2] + 0); r[1] = v4(s[1]); r[2] = r[1] + 2 ^ (32 - b) - 1 }
     function inport(port, list,  n, a, i, x) { if (list == "") return 1; gsub(/_/, ":", list); n = split(list, a, ","); for (i = 1; i <= n; i++) { split(a[i], x, ":"); if (x[2] == "") x[2] = x[1]; if (port >= x[1] + 0 && port <= x[2] + 0) return 1 }; return 0 }
@@ -89,7 +102,8 @@ awk -v since="$SINCE" -v bf="$W/bans" -v sf="$W/sets" -v df="$W/setdef" -v af="$
         while ((getline l < af) > 0) { split(l, x, " "); lo = x[1] + 0; hi = x[2] + 0          # izin aralıkları (sıralı) → birleşik
             if (an && lo <= AH[an] + 1) { if (hi > AH[an]) AH[an] = hi } else { an++; AL[an] = lo; AH[an] = hi } }
         while ((getline l < bf) > 0) { split(l, x, "|"); bn++; BC[bn] = x[1]; BS[bn] = x[2] + 0; BE[bn] = x[3] + 0; BK[bn] = x[4]; BP[bn] = x[5]
-            if (x[1] ~ /\//) { rg(x[1], r); BLO[bn] = r[1]; BHI[bn] = r[2]; CID[++cn] = bn } else EXB[x[1]] = EXB[x[1]] " " bn }
+            if (x[1] ~ /\//) { rg(x[1], r); BLO[bn] = r[1]; BHI[bn] = r[2]; o8 = int(r[1] / 16777216); h8 = int(r[2] / 16777216)
+                for (j = o8; j <= h8; j++) OCT[j] = OCT[j] " " bn } else EXB[x[1]] = EXB[x[1]] " " bn }
         while ((getline l < sf) > 0) { split(l, x, " "); k = x[1]; n = ++SN[k]; SL[k, n] = x[2] + 0; h = x[3] + 0
             SM[k, n] = (n > 1 && SM[k, n - 1] > h) ? SM[k, n - 1] : h }
         while ((getline l < df) > 0) { split(l, x, "|"); KN[++kn] = x[1]; KK[x[1]] = x[2]; KP[x[1]] = x[3] }
@@ -99,17 +113,19 @@ awk -v since="$SINCE" -v bf="$W/bans" -v sf="$W/sets" -v df="$W/setdef" -v af="$
     function allowed(ip,  v, a, z, c, j) { v = v4(ip); a = 1; z = an; j = 0
         while (a <= z) { c = int((a + z) / 2); if (AL[c] <= v) { j = c; a = c + 1 } else z = c - 1 }
         return j && AH[j] >= v }
-    function hits(ip,  v, i, o, k) {     # bu IP için eşleşen banlar: numara (zamanlı) ya da "s:küme" (zamansız), IP başına bir kez
-        v = v4(ip); o = EXB[ip]
-        for (i = 1; i <= cn; i++) { k = CID[i]; if (v >= BLO[k] && v <= BHI[k]) o = o " " k }
+    function hits(ip,  v, i, o, k, m, cc) {     # bu IP için eşleşen banlar: numara (zamanlı) ya da "s:küme" (zamansız), IP başına bir kez
+        v = v4(ip); o = EXB[ip]; m = split(OCT[int(v / 16777216)], cc, " ")
+        for (i = 1; i <= m; i++) { k = cc[i] + 0; if (v >= BLO[k] && v <= BHI[k]) o = o " " k }
         if (SN["ag_cloud_nomatch"] && bs("ag_cloud_nomatch", v)) NOM[ip] = 1
         for (i = 1; i <= kn; i++) { k = KN[i]; if (k == "ag_cloud_nomatch") continue; if (k == "ag_cloud" && NOM[ip]) continue; if (bs(k, v)) o = o " s:" k }
         return o }
-    { ip = $1; if (ip !~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) next
+    { if (substr($4, 1, 1) != "[") next
+      split(substr($4, 2), a, /[\/:]/); tk = a[3] sprintf("%02d", MI[a[2]]) a[1] a[4] a[5] a[6]; if (tk < skey) next     # pencere dışı: hiçbir kontrol yok
+      ip = $1; if (ip !~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) next
+      LINES++
       if (!(ip in AW)) AW[ip] = allowed(ip); if (AW[ip]) next
       if (!(ip in HT)) HT[ip] = hits(ip); if (HT[ip] == "") next
-      if (!match($4, /\[[0-9][0-9]\/[A-Z][a-z][a-z]\/[0-9]+:[0-9]+:[0-9]+:[0-9]+/)) next
-      split(substr($4, RSTART + 1), a, /[\/:]/); ts = mktime(a[3] " " MI[a[2]] " " a[1] " " a[4] " " a[5] " " a[6]); if (ts < since) next
+      ts = mktime(a[3] " " MI[a[2]] " " a[1] " " a[4] " " a[5] " " a[6])
       port = (FILENAME ~ /-ssl_log$/) ? 443 : 80
       site = FILENAME; sub(/.*\//, "", site); sub(/-ssl_log$/, "", site)
       q = index($0, "\""); rq = substr($0, q + 1); e = index(rq, "\""); rq = substr(rq, 1, e - 1); rest = substr($0, q + e + 2); split(rest, f, " ")
@@ -123,6 +139,7 @@ awk -v since="$SINCE" -v bf="$W/bans" -v sf="$W/sets" -v df="$W/setdef" -v af="$
           TOT++; TIP[ip] = 1
           break } }                           # bir istek tek katmanda sayılır (ilk eşleşen)
     END {
+        printf "\npencere içindeki istek: %d\n\n", LINES
         if (!TOT) { print "Ban yürürlükteyken siteye ulaşan istek yok."; exit }
         nt = 0; for (i in TIP) nt++
         printf "Ban yürürlükteyken siteye ulaşan istek: %d (%d IP)\n\n", TOT, nt
@@ -130,11 +147,13 @@ awk -v since="$SINCE" -v bf="$W/bans" -v sf="$W/sets" -v df="$W/setdef" -v af="$
             c = 0; for (k in LI) { split(k, x, SUBSEP); if (x[1] != lay) continue; T[x[2]] = LI[k] }
             while (c < 6) { b = ""; bv = 0; for (ip in T) if (T[ip] > bv) { bv = T[ip]; b = ip }; if (b == "") break
                 printf "    %-15s %5d istek%s · %s\n", b, bv, (b in GRAY ? " · Imunify gri listesinde" : ""), EX[lay, b]; delete T[b]; c++ }
-            for (ip in T) delete T[ip]; print "" } }' 2>/dev/null
+            for (ip in T) delete T[ip]; print "" } }'
 
 # 5) atlatma yolları: CSF'ten (LOCALINPUT) önce adres çeviren ya da kabul eden kurallar
+echo; adim "bitti"
 echo "CSF'ten önce çalışan çeviri/kabul kuralları (CSF banlarını atlatabilir):"
 iptables -t nat -S PREROUTING 2>/dev/null | grep -E 'DNAT|REDIRECT|-j [A-Za-z_]+' | grep -v '^-P' | sed 's/^/  nat  /'
 iptables -t nat -S 2>/dev/null | grep -E -- '-j (DNAT|REDIRECT)' | grep -vE 'remote_proxy' | awk '{ print "  nat  " $0 }' | head -n 20
 iptables -S INPUT 2>/dev/null | awk '/-j LOCALINPUT/ { exit } /^-A/ { print "  filter  " $0 }'
 iptables -S 2>/dev/null | grep -- '-j ACCEPT' | grep -E 'INPUT_imunify360 ' | sed 's/^/  filter  /' | head -n 20
+echo; echo "Rapor: $OUT"
