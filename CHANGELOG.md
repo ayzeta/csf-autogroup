@@ -1,5 +1,46 @@
 # Changelog
 
+## 1.13.5 — 2026-10-09
+
+- **Fix — the server's own provider could be banned.** The protection asked
+  Team Cymru (DNS) for the server's provider; on a fresh install with DNS not
+  answering it stayed empty. It now falls back to CSF's own ASN data
+  (`ip2asn`), and if that is missing too, no new provider is added to the ban
+  (those already applied stay) and the reason is shown.
+- **Fix — country bans were not taken into account** when deciding whether a
+  suspicious network is already closed: a network in a country listed in
+  `CC_DENY` (or in `CC_DENY_PORTS` for the attacked ports) no longer stays in
+  *Needs review*.
+- **Fix — port ranges** (`1000:2000` in CSF's port lists, `30000_35000` in a
+  partial ban) are understood when checking whether a service is closed.
+- **Automatic block bans count only attacks on open services.** Single bans
+  whose service is already closed by a wider layer (provider ban, active
+  rented-server list, country ban, or a partial ban covering the block) are
+  attacks from before that layer existed; they no longer push a block over the
+  threshold. Attacks on a service that is still open (e.g. SSH under a web-only
+  list) still do. Same rule as for suspicious networks.
+- **Most blocked providers:** a provider banned with the port list only shows
+  up again when attacks continue on services that list leaves open, tagged
+  "banned on TCP 80,443; attacks on open services". Attacks on the closed ports
+  are not counted. Providers banned on everything stay out of the ranking.
+- **Bans no longer needed** also lists blocks inside a `/16` (or wider) ban;
+  *Remove all* covers them.
+- **Old block removal keeps "do not delete" blocks** (blocks that came back and
+  were made permanent, and blocks marked by hand); the *Old* filter matches.
+- The ban window picks the widest ban already covering a range (it depended on
+  the order of lines in `csf.deny`).
+- The IP card uses the engine's `csf.rignore` matching (regular expression and
+  forward check, like lfd) instead of a plain suffix match.
+- A rented-server list that fails to download is retried at most once an hour
+  for the same settings (a changed source was retried every run, holding the
+  lock up to 5 minutes when the server can't reach out).
+- A provider banned with the port list and also inside a rented-server list is
+  no longer reported as "port missing" for a service the list closes.
+- Tests: `tests/senaryo/calistir.sh` grew to ~50 scenarios (country bans,
+  own-provider protection, ranking, old blocks, block thresholds, ban window,
+  `csf.rignore`); `tests/senaryo/birim.sh` checks the port-range helper. The
+  test stand-ins give the server an IP and provider (`ip`, `dig`).
+
 ## 1.13.4 — 2026-10-08
 
 - **Waiting box in the middle of the screen:** while an action runs, a box in

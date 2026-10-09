@@ -1,0 +1,7 @@
+#!/bin/bash
+# ip taklidi: sunucunun kendi IP'si 203.0.113.10 (taklit DNS'te AS64500). NO_SELF_IP=1 ise IP yok (kendi sağlayıcısı bilinmiyor).
+[ -n "$NO_SELF_IP" ] && exit 0
+case "$*" in
+  "-4 -o addr show") echo "2: eth0    inet 203.0.113.10/24 brd 203.0.113.255 scope global eth0\       valid_lft forever preferred_lft forever" ;;
+esac
+exit 0

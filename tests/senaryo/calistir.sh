@@ -52,6 +52,8 @@ layer() {    # koruma katmanı
         asn-web)   sed -i 's/^CC_DENY_PORTS = ""/CC_DENY_PORTS = "AS16276"/; s/^CC_DENY_PORTS_TCP = ""/CC_DENY_PORTS_TCP = "80,443"/; s/^CC_DENY_PORTS_UDP = ""/CC_DENY_PORTS_UDP = "443"/' "$CF" ;;
         asn-posta) sed -i 's/^CC_DENY_PORTS = ""/CC_DENY_PORTS = "AS16276"/; s/^CC_DENY_PORTS_TCP = ""/CC_DENY_PORTS_TCP = "465,587,110,995,143,993"/' "$CF" ;;
         asn-hepsi) sed -i 's/^CC_DENY = ""/CC_DENY = "AS16276"/' "$CF" ;;
+        ulke-hepsi) sed -i 's/^CC_DENY = ""/CC_DENY = "FR"/' "$CF" ;;
+        ulke-web)  sed -i 's/^CC_DENY_PORTS = ""/CC_DENY_PORTS = "FR"/; s/^CC_DENY_PORTS_TCP = ""/CC_DENY_PORTS_TCP = "80,443"/; s/^CC_DENY_PORTS_UDP = ""/CC_DENY_PORTS_UDP = "443"/' "$CF" ;;
         kismi-once) printf '%s\n' "tcp|in|d=80,443|s=151.80.0.0/16 # csf_autogroup: elle /16 kısmi ban (root) [svc=web] - do not delete - $OLD" "udp|in|d=443|s=151.80.0.0/16 # csf_autogroup: elle /16 kısmi ban (root) [svc=web] - do not delete - $OLD" >> "$D" ;;
     esac
 }
@@ -74,6 +76,8 @@ done
 cell yok web G
 cell asn-posta web G; cell asn-posta mail -; cell asn-posta mix G
 cell asn-hepsi web -; cell asn-hepsi ssh -; cell asn-hepsi mix -
+cell ulke-hepsi web -; cell ulke-hepsi ssh -
+cell ulke-web web -; cell ulke-web ssh G
 cell kismi-once web G; cell kismi-once mail G; cell kismi-once ssh G     # web kısmi banından sonra web gelmesi = sızıntı, o da görünür
 
 # kiralık liste ayarı açık ama gerçekte etkin değilse kapsama sayılmaz (liste dosyaları diskte kalsa da)
@@ -100,6 +104,63 @@ check "izinli servis aralığı 'beyaz liste yüzünden atlandı' olarak görün
 mk; printf '%s\n' "tcp|in|d=80,443|s=151.80.7.0/24 # csf_autogroup: exception for 151.80.7.0/24 [svc=web]" >> "$A"
 for x in 1 2 3 4 5 6; do single 151.80.7.$x ssh; done; run >/dev/null 2>&1
 check "eklentinin port istisnası beyaz liste sayılmaz (blok banlanır)" G "$(grep -q '^151.80.7.0/24 ' "$D" && echo G || echo -)"
+
+# csf.rignore: IP kartı motorla aynı kurala bakar (lfd'nin düzenli ifade biçimi de, ileri doğrulama da)
+for rg in '.googlebot.com' '.*\.googlebot\.com$'; do
+  mk; printf '%s\n' "$rg" > "$R/etc/csf/csf.rignore"; export PTR_GOOGLE=1
+  r=$(run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '"rig":"[^"]' && echo G || echo -); unset PTR_GOOGLE
+  check "IP kartı · csf.rignore «$rg» tanınır" G "$r"
+done
+
+# ── 3b) Ban penceresi: kendi /24 banı ve onu kapsayan /16 varken "zaten kapsayan" en geniş olan (dosya sırasından bağımsız) ──
+for ord in 24-16 16-24; do
+  mk; l24="151.80.7.0/24 # csf_autogroup: elle /24 ban (root) - do not delete - $DT"; l16="151.80.0.0/16 # Manually denied: hosting - $DT"
+  if [ "$ord" = 24-16 ]; then printf '%s\n%s\n' "$l24" "$l16" >> "$D"; else printf '%s\n%s\n' "$l16" "$l24" >> "$D"; fi
+  check "ban penceresi · kapsayan en geniş ban ($ord sırası)" G "$(run --inside 151.80.7.0/24 --json 2>/dev/null | grep -q '"cover":"151.80.0.0/16' && echo G || echo -)"
+done
+
+# ── 3e) Otomatik blok banı: servisi zaten kapalı tekiller (katman konmadan önceki saldırılar) eşiğe sayılmaz ──
+b24() { mk; layer "$1"; for x in 1 2 3; do single 151.80.7.$x "$2" "$OLD"; done; run >/dev/null 2>&1; grep -q '^151.80.7.0/24 ' "$D" && echo G || echo -; }
+check "blok banı · katman yok, web saldırısı → banlanır" G "$(b24 yok web)"
+check "blok banı · liste web'i kapatıyor, web saldırısı → banlanmaz" - "$(b24 liste-web web)"
+check "blok banı · liste web'i kapatıyor, SSH saldırısı → banlanır" G "$(b24 liste-web ssh)"
+check "blok banı · /16 kısmi web banı var, web saldırısı → banlanmaz" - "$(b24 kismi-once web)"
+check "blok banı · /16 kısmi web banı var, SSH saldırısı → banlanır" G "$(b24 kismi-once ssh)"
+
+# ── 3d) Sağlayıcı sıralaması: port listesiyle banlı sağlayıcı yalnız açık servislere saldırı sürüyorsa görünür ──
+rank() {   # → "-" sıralamada yok, "G" var, "G:pb" var ve port listesiyle banlı işaretli
+    run --status --json 2>/dev/null > "$R/st.json"
+    node -e "const j=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
+      const a=(j.asn_top||[]).find(x=>x.asn==='16276'); console.log(a ? 'G' + (a.denied ? ':pb' : '') : '-');" "$(wp "$R/st.json")" 2>&1
+}
+mk; layer asn-web; for x in 7.1 8.1 9.1; do single 151.80.$x web; done; run >/dev/null 2>&1
+check "sıralama · web banlı sağlayıcı, yalnız web saldırısı → görünmez" - "$(rank)"
+mk; layer asn-web; for x in 7.1 8.1 9.1; do single 151.80.$x ssh; done; run >/dev/null 2>&1
+r=$(rank); check "sıralama · web banlı sağlayıcı, SSH saldırısı → görünür" G "$r"
+check "sıralama · ve 'port listesiyle banlı' işaretli" G "$([ "$r" = G:pb ] && echo G || echo -)"
+mk; layer asn-hepsi; for x in 7.1 8.1 9.1; do single 151.80.$x ssh; done; run >/dev/null 2>&1
+check "sıralama · her şey banlı sağlayıcı → görünmez" - "$(rank)"
+
+# ── 3c) Eski blok temizliği: do not delete (tekrar gelip kalıcıya alınan) bloklar korunur ──
+mk; D400=$(LC_ALL=C date -d '-400 days' '+%a %b %d %H:%M:%S %Y')
+printf '%s\n' "151.80.7.0/24 # Auto-grouped from temp /24: 3 geçici tekil, 2. kez grup saldırısı nedeniyle kalıcı banlandı - do not delete - $D400" \
+              "151.80.8.0/24 # Auto-grouped /24: 3 kalıcı tekil nedeniyle kalıcı banlandı - $D400" >> "$D"
+run --action expire 365 >/dev/null 2>&1
+check "eski blok temizliği · do not delete blok kalır" G "$(grep -q '^151.80.7.0/24 ' "$D" && echo G || echo -)"
+check "eski blok temizliği · sıradan eski blok kalkar" - "$(grep -q '^151.80.8.0/24 ' "$D" && echo G || echo -)"
+
+# ── 4) Sunucunun kendi sağlayıcısı (taklit: 203.0.113.10 → AS64500) hiçbir durumda banlanmaz ──
+prov() { run --config set "$@" >/dev/null 2>&1; run --prov-apply >/dev/null 2>&1; }
+inconf() { grep -q "^CC_DENY = \".*$1" "$CF" && echo G || echo -; }
+mk; prov ASN_BAN=1 ASN_ALL=AS64500,AS14061
+check "kendi sağlayıcısı listeye eklense de CSF'e yazılmaz" - "$(inconf AS64500)"
+check "öteki sağlayıcı yazılır" G "$(inconf AS14061)"
+mk; export NO_DNS=1; prov ASN_BAN=1 ASN_ALL=AS14061; unset NO_DNS
+check "DNS sessiz, önceki bilgi yok: yeni sağlayıcı eklenmez (kendi sağlayıcısı bilinmiyor)" - "$(inconf AS14061)"
+mk; mkdir -p "$R/var/lib/csf/Geo"; printf '203.0.113.0\t203.0.113.255\t64500\tUS\tEXAMPLE-HOSTING\n' > "$R/var/lib/csf/Geo/ip2asn-combined.tsv"
+export NO_DNS=1; prov ASN_BAN=1 ASN_ALL=AS64500,AS14061; unset NO_DNS
+check "DNS sessiz ama CSF'in ASN verisi var: kendi sağlayıcısı oradan tanınır" - "$(inconf AS64500)"
+check "DNS sessiz ama CSF'in ASN verisi var: öteki sağlayıcı yazılır" G "$(inconf AS14061)"
 
 printf 'Senaryolar\n%s' "$OUT"
 echo "$N senaryo, $F beklenmeyen"

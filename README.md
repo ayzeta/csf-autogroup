@@ -142,7 +142,8 @@ settings, with no prompts. `config.env` is left untouched.
   links to bgp.he.net and AbuseIPDB, and buttons to ban its `/24` or `/16`.
   Recently viewed IPs stay one click away.
 - **Inside a wider ban** — a block inside a banned `/16` (or any wider range) is
-  tagged *inside /16* in Active block bans and Watched.
+  tagged *inside /16* in Active block bans and Watched, and listed under
+  *Bans no longer needed* in the Providers tab.
 - **Ban announced range** — when the range the IP's owner announces is between
   /17 and /23, the IP card offers to ban just that range instead of the /16;
   a suspicious network whose IPs mostly sit in one such range offers it too.
@@ -156,7 +157,8 @@ settings, with no prompts. `config.env` is left untouched.
     list on this server, with the block reasons. Read-only.
   - *Banned* — providers closed by a provider ban or fully covered by a
     rented-server list; they are left out of the other rankings (and the
-    weekly summary's).
+    weekly summary's). A provider banned with the port list only comes back
+    to *Attacks* while attacks continue on services that list leaves open.
 
   Each list shows the first 5 with the total in its header; *More* and
   *Show all* open the rest, *Collapse* closes them again.
@@ -514,7 +516,8 @@ rented-server list, partial `/16` ban before or after the attacks, allowed
 services) × each attack type (web, mail, SSH, mixed, LFD PERMBLOCK) × timing,
 and checks whether a suspicious network is hidden or shown, which services stay
 open, and whether a block is banned or skipped. `bash tests/senaryo/siniflama.sh`
-checks that the engine and the panel put the same lfd notes on the same service.
+checks that the engine and the panel put the same lfd notes on the same service;
+`bash tests/senaryo/birim.sh` checks small engine helpers on their own.
 
 `bash tests/metin/calistir.sh` checks that every concept keeps one name in the
 panel, mails and log: old or duplicate names listed in the script fail it.
