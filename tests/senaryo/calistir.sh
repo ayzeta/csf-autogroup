@@ -243,6 +243,64 @@ if [ "${GERCEK:-0}" = 1 ]; then
     DENY="$D" CSF_DIR=/etc/csf bash "$REPO/tools/block-hits.sh" --remove >/dev/null 2>&1
 fi
 
+# ── 3h) Kiralık liste kuralının yeri (yalnız gerçek CSF): INPUT'un başında, Imunify360'tan önce; yönlendirmeden önceki port ──
+# Imunify360 gri listeyi nat'ta WebShield portuna çevirip CSF'ten önce kabul ediyordu; kural LOCALINPUT'un sonundayken bu
+# trafiği hiç görmüyordu (sunucuda ölçüldü 2026-10-10). Burada Imunify'ın zinciri taklit edilir (IMU_T, INPUT'un başına).
+if [ "${GERCEK:-0}" = 1 ]; then
+    mk; layer liste-web; run >/dev/null 2>&1
+    top() {   # kuralın önünde yalnız eklentinin kendi zinciri (ban koruması) olabilir
+        local s n; s=$(iptables -S INPUT | grep -- '^-A'); n=$(printf '%s\n' "$s" | grep -n -- '-j AG_CLOUD$' | cut -d: -f1)
+        [ -n "$n" ] && ! printf '%s\n' "$s" | head -n $(( n - 1 )) | grep -vq -- '-j AG_GUARD$' && echo G || echo "-:$(printf '%s\n' "$s" | head -n 2 | tr '\n' ' ')"; }
+    check "kiralık liste · kural INPUT'un başında" G "$(top)"
+    check "kiralık liste · CSF'in LOCALINPUT zincirinde kural yok" - "$(iptables -C LOCALINPUT ! -i lo -j AG_CLOUD 2>/dev/null && echo G || echo -)"
+    check "kiralık liste · yönlendirmeden önceki porta bakar (tcp 80, tcp 443, udp 443)" G "$([ "$(iptables -S AG_CLOUD | grep -c ctorigdstport)" = 3 ] && echo G || echo "-:$(iptables -S AG_CLOUD | grep -c ctorigdstport)")"
+    iptables -N IMU_T 2>/dev/null; iptables -I INPUT 1 -j IMU_T
+    run >/dev/null 2>&1
+    check "kiralık liste · başka zincir öne geçince tur kuralı yeniden başa alır" G "$(top)"
+    printf '151.80.5.5 # test müşterisi\n' >> "$A"; run >/dev/null 2>&1
+    check "kiralık liste · csf.allow'daki adres kümede muaf" - "$(ipset test ag_cloud 151.80.5.5 >/dev/null 2>&1 && echo G || echo -)"
+    check "kiralık liste · aynı aralıkta izinsiz adres kümede" G "$(ipset test ag_cloud 151.80.6.6 >/dev/null 2>&1 && echo G || echo -)"
+    csf -r >/dev/null 2>&1
+    check "kiralık liste · csf -r sonrası csfpost.sh kuralı yine başa kurar" G "$(top)"
+    iptables -D INPUT -j IMU_T 2>/dev/null; iptables -F IMU_T 2>/dev/null; iptables -X IMU_T 2>/dev/null; cloud_off
+fi
+
+# ── 3i) Ban koruması (yalnız gerçek CSF): Imunify360'ın yönlendirdiği bağlantıda porta bağlı banlar ──
+# Ayrı bir ağ alanında dış istemci (10.99.0.2); Imunify taklidi istemcinin 80'ini 52224'e çevirip CSF'ten önce kabul eder.
+# Web kısmi banı korumasız sızar (ilk denetim), tur korumayı kurunca kesilir; SSH kısmi banı ve izin listesi web'i açık bırakır.
+if [ "${GERCEK:-0}" = 1 ] && command -v ip >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+    NC=10.99.0.2; NS=10.99.0.1
+    nsup() { ip netns del agcli 2>/dev/null; ip link del agv0 2>/dev/null; ip netns add agcli; ip link add agv0 type veth peer name agv1
+             ip link set agv1 netns agcli; ip addr add $NS/24 dev agv0; ip link set agv0 up
+             ip netns exec agcli ip addr add $NC/24 dev agv1; ip netns exec agcli ip link set agv1 up
+             (cd /tmp && nohup python3 -m http.server 80 >/dev/null 2>&1 &); (cd /tmp && nohup python3 -m http.server 52224 >/dev/null 2>&1 &); sleep 1; }
+    imu() { ipset create agimu hash:ip -exist; ipset add agimu $NC -exist
+            iptables -t nat -N IMU_T 2>/dev/null; iptables -t nat -F IMU_T; iptables -t nat -A IMU_T -p tcp -m set --match-set agimu src --dport 80 -j DNAT --to-destination :52224
+            iptables -t nat -C PREROUTING -j IMU_T 2>/dev/null || iptables -t nat -I PREROUTING 1 -j IMU_T
+            iptables -N IMU_T 2>/dev/null; iptables -F IMU_T; iptables -A IMU_T -m conntrack ! --ctstate NEW -j RETURN
+            iptables -A IMU_T -p tcp -m set --match-set agimu src -m multiport --dports 52223,52224 -j ACCEPT
+            iptables -C INPUT -j IMU_T 2>/dev/null || iptables -I INPUT 1 -j IMU_T; }
+    web() { [ "$(ip netns exec agcli curl -s -m 4 -o /dev/null -w '%{http_code}' http://$NS/ 2>/dev/null)" = 200 ] && echo G || echo -; }
+    gstate() { STATE="$R/var/lib/csf_autogroup/guard.sum" CSF_DIR=/etc/csf bash "$REPO/tools/ban-guard.sh" "$@" >/dev/null 2>&1; }
+    nsup
+    mk; printf 'tcp|in|d=80,443|s=%s # csf_autogroup: test kısmi ban [svc=web] - %s\n' $NC "$DT" >> "$D"; csf -r >/dev/null 2>&1; NEEDR=0; imu
+    check "ban koruması · koruma yokken web kısmi banı Imunify yönlendirmesiyle sızar" G "$(web)"
+    run >/dev/null 2>&1
+    check "ban koruması · tur korumayı kurar: web kısmi banı kesilir" - "$(web)"
+    check "ban koruması · koruma INPUT'un başında" G "$(iptables -S INPUT | grep -- '^-A' | head -n 1 | grep -q AG_GUARD && echo G || echo -)"
+    csf -r >/dev/null 2>&1; imu
+    check "ban koruması · csf -r sonrası csfpost kurar, Imunify öndeyken tur başa alır" - "$(run >/dev/null 2>&1; web)"
+    mk; printf 'tcp|in|d=22|s=%s # csf_autogroup: test kısmi ban [svc=ssh] - %s\n' $NC "$DT" >> "$D"; csf -r >/dev/null 2>&1; NEEDR=0; imu; run >/dev/null 2>&1
+    check "ban koruması · yalnız SSH kısmi banı: web açık" G "$(web)"
+    mk; printf 'tcp|in|d=80,443|s=%s # test - %s\n' $NC "$DT" >> "$D"; printf '%s # test müşterisi\n' $NC >> "$A"; csf -r >/dev/null 2>&1; NEEDR=0; imu; run >/dev/null 2>&1
+    check "ban koruması · csf.allow + web kısmi banı: izin önce gelir" G "$(web)"
+    echo ENABLED=0 >> "$R/app/config.env"; run >/dev/null 2>&1
+    check "ban koruması · duraklatınca kural ve csfpost satırı kalkar" - "$(iptables -L AG_GUARD -n >/dev/null 2>&1 || grep -qF '# csf_autogroup guard' /etc/csf/csfpost.sh && echo G || echo -)"
+    gstate --remove; iptables -D INPUT -j IMU_T 2>/dev/null; iptables -F IMU_T 2>/dev/null; iptables -X IMU_T 2>/dev/null
+    iptables -t nat -D PREROUTING -j IMU_T 2>/dev/null; iptables -t nat -F IMU_T 2>/dev/null; iptables -t nat -X IMU_T 2>/dev/null; ipset destroy agimu 2>/dev/null
+    pkill -f "http.server" 2>/dev/null; ip netns del agcli 2>/dev/null; ip link del agv0 2>/dev/null
+fi
+
 # ── 4) Sunucunun kendi sağlayıcısı (taklit: 203.0.113.10 → AS64500) hiçbir durumda banlanmaz ──
 if [ "${GERCEK:-0}" != 1 ]; then     # taklit DNS gerekir (gerçek modda sunucu IP'si özel adres, Cymru cevap vermez)
 prov() { run --config set "$@" >/dev/null 2>&1; run --prov-apply >/dev/null 2>&1; }

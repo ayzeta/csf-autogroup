@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.13.7 — 2026-10-10
+
+- **Fix — with Imunify360, port-based bans could be bypassed.** Imunify360
+  redirects addresses on its grey / splash-screen / captcha lists to its
+  WebShield ports and accepts them before CSF. Bans that look at the port
+  (web-only partial bans, `CC_DENY_PORTS` provider and country bans, the
+  rented-server lists) then did not match, and a banned address that passed the
+  WebShield check could open the sites. A new chain at the
+  top of `INPUT` (`tools/ban-guard.sh`) applies those bans to redirected
+  connections on the original port, after CSF's allow list. Full bans were not
+  affected.
+- **Rented-server lists:** the rule moved from the end of CSF's `LOCALINPUT` to
+  the top of `INPUT` and matches the original port. Addresses in `csf.allow`
+  (and the files it includes) are exempt inside the set, since the rule now runs
+  before CSF's allow list. Each run puts the rule back first if another tool's
+  chain went in front of it.
+- **New: `tools/ban-leak.sh`** (read only) — counts requests in the web logs
+  that reached the sites while a ban was in force, layer by layer, and lists the
+  rules that rewrite or accept traffic before CSF.
+- **Settings regrouped:** Notifications · Ban rules (thresholds and the watch
+  period) · Running · Sources and refresh (owner lookups, list refresh, CSF's
+  ASN data, Imunify360) · Old bans · Records · Server · Settings history, with
+  small headings inside each section. The list refresh settings moved here
+  from the Providers cards (the cards link to it); saving them no longer
+  restarts CSF and lfd.
+- **Clearer screens.** Measure impact opens with the question and its answer
+  (what a ban would change), splits requests into allowed services, addresses
+  already closed by a rented-server list and the rest, gives a verdict, and
+  keeps the raw lists in closed sections. Ranking rows show one fact per line.
+  Country, provider (ASN), filter-count and Imunify360 reason badges explain
+  themselves on hover; "do not delete" reads "kept" with an explanation; the
+  History rows put the owner on its own line; list tiles say "not selected"
+  instead of a dash.
+- **Measure impact:** requests are split into allowed services, addresses in an
+  active rented-server list, and the rest. The request examples now show the
+  right site (they sometimes showed the previous log line's site) and each
+  address's current state (temp ban and time left, permanent ban, block ban,
+  Imunify360 block list).
+
 ## 1.13.6 — 2026-10-09
 
 - **The panel opens much faster.** Reading the server's state repeated costly

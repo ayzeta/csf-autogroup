@@ -30,5 +30,9 @@ for e in "${YASAK[@]}"; do
   [ -z "$hits" ] && continue
   bad=$((bad + 1)); echo "  ✗ «$old» yerine «$new»:"; printf '%s\n' "$hits" | cut -c1-140 | sed 's/^/      /'
 done
+# Türkçe panel metinlerinde CSF'in İngilizce terimi tek başına geçmez: "do not delete" yalnız "silinmez" açıklamasıyla
+tr_end=$(grep -n "^    en: {" "$JS" | head -n 1 | cut -d: -f1)
+hits=$(head -n "${tr_end:-1}" "$JS" | grep -oE "[a-z_0-9]+: '([^'\\\\]|\\\\.)*'" | grep -i "do not delete" | grep -vi "silinmez")
+if [ -n "$hits" ]; then bad=$((bad + 1)); echo "  ✗ «do not delete» Türkçe metinde «silinmez» açıklaması olmadan:"; printf '%s\n' "$hits" | cut -c1-140 | sed 's/^/      /'; fi
 if [ "$bad" -eq 0 ]; then echo "Terim tutarlılığı: eski ad kalmadı"; exit 0; fi
 echo "Terim tutarlılığı: $bad eski ad hâlâ kullanılıyor"; exit 1

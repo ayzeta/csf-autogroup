@@ -45,7 +45,7 @@ awk -v now="$NOW" '
         split(a[k - 1], h, ":"); for (i = 1; i <= 12; i++) if (M[i] == a[k - 3]) return mktime(a[k] " " i " " a[k - 2] " " h[1] " " h[2] " " h[3])
         return 0 }
     /^[[:space:]]*(#|$)/ { next }
-    { c = $0; sub(/[ \t]*#.*/, "", c); t = de($0); if (t <= 0) t = 1
+    { c = $0; sub(/[ \t]*#.*/, "", c); t = de($0); if (t <= 0) t = -1          # -1: tarih okunamadı
       if (c ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) { print c "|" t "|9999999999|tekil kalıcı ban|"; next }
       if (c ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\/[0-9]+$/) {
           k = ($0 ~ /Auto-grouped|csf_autogroup/) ? (c ~ /\/16$/ ? "ağ banı (eklenti)" : "blok banı (eklenti)") : "aralık banı (elle / başka araç)"
@@ -132,7 +132,7 @@ awk -v since="$SINCE" -v skey="$SKEY" -v bf="$W/bans" -v sf="$W/sets" -v df="$W/
       nm = split(HT[ip], hh, " ")
       for (i = 1; i <= nm; i++) { h = hh[i]; if (h == "") continue
           if (h ~ /^s:/) { k = substr(h, 3); if (!inport(port, KP[k])) continue; lay = KK[k]; st = 0; det = "şu an kümede" }
-          else { k = h + 0; if (ts < BS[k] + 5 || ts >= BE[k]) continue; if (!inport(port, BP[k])) continue; lay = BK[k]; st = BS[k]; det = BC[k] }
+          else { k = h + 0; if (BS[k] == -1) { UNK++; UNKI[ip] = 1; continue }; if (ts < BS[k] + 5 || ts >= BE[k]) continue; if (!inport(port, BP[k])) continue; lay = BK[k]; st = BS[k]; det = BC[k] }
           LN[lay]++; LI[lay, ip]++; if (!((lay, ip) in LSEEN)) { LSEEN[lay, ip] = 1; LU[lay]++ }
           if (!(lay in LF) || ts < LF[lay]) LF[lay] = ts; if (ts > LL[lay]) LL[lay] = ts
           if (!((lay, ip) in EX)) EX[lay, ip] = strftime("%d.%m %H:%M:%S", ts) " " site " " f[1] " " substr(rq, 1, 60) (st ? " · ban " strftime("%d.%m %H:%M", st) : "") " · " det
@@ -140,6 +140,9 @@ awk -v since="$SINCE" -v skey="$SKEY" -v bf="$W/bans" -v sf="$W/sets" -v df="$W/
           break } }                           # bir istek tek katmanda sayılır (ilk eşleşen)
     END {
         printf "\npencere içindeki istek: %d\n\n", LINES
+        if (UNK) { nu = 0; for (i in UNKI) nu++
+            printf "Not: %d istek (%d IP) tarihi okunamayan bir banın içinde; sızıntı sayılmadı. Tam ban (IP ya da aralık) CSF içinde\n", UNK, nu
+            printf "iki yönlü uygulandığı için atlatılamaz: bu istekler büyük olasılıkla ban konmadan önce geldi.\n\n" }
         if (!TOT) { print "Ban yürürlükteyken siteye ulaşan istek yok."; exit }
         nt = 0; for (i in TIP) nt++
         printf "Ban yürürlükteyken siteye ulaşan istek: %d (%d IP)\n\n", TOT, nt

@@ -4,11 +4,11 @@
 # Saldırıların çoğu bulut sunucularından geliyor; ama bir bulut sağlayıcısının bütün ASN'ini banlamak kendi
 # servislerini de keser (ör. Google'ın AS15169'unda Googlebot ve Gmail de var). Firmalar herkese kiraladıkları
 # sunucuların adreslerini ayrıca yayımlıyor (Google Cloud cloud.json, AWS EC2, Oracle Cloud, DigitalOcean, Linode,
-# Vultr, Azure); bu araç o listeleri indirir, ag_cloud ipset'ine yükler ve CSF'in LOCALINPUT zincirinin sonuna yalnız
-# seçilen portlarda yeni bağlantıları düşüren bir kural ekler. CSF önce izin listesine (csf.allow, izinli
-# servisler) bakar; onlar bu kuralın önünde kalır. Kural yalnız gelen YENİ bağlantıya uygulanır: sunucunun
-# o bulutlara kendi açtığı bağlantılar (yedek hedefleri, API'ler) etkilenmez. Sunucunun kendi IP'leri listeden
-# çıkarılır (nomatch).
+# Vultr, Azure); bu araç o listeleri indirir, ag_cloud ipset'ine yükler ve INPUT zincirinin EN BAŞINA (CSF'ten ve
+# Imunify360'tan önce) yalnız seçilen portlarda yeni bağlantıları düşüren bir kural ekler. Port, yönlendirmeden
+# önceki hedef porttur (Imunify360 gri listeyi kendi WebShield portlarına çeviriyor). İzin listesi (csf.allow ve
+# Include ettikleri, izinli servisler) ve sunucunun kendi IP'leri kümede muaftır (nomatch). Kural yalnız gelen
+# YENİ bağlantıya uygulanır: sunucunun o bulutlara kendi açtığı bağlantılar (yedek hedefleri, API'ler) etkilenmez.
 #
 # CSF her yeniden başlatmada zincirleri sıfırlar; kural /etc/csf/csfpost.sh'taki tek satırla (--apply) geri
 # kurulur. Normalde eklenti yönetir (Sağlayıcılar → Bulut listeleriyle ban):
@@ -76,12 +76,51 @@ hook_del() {
     grep -vF "$MARK" "$POST" > "$POST.ag.tmp" && cat "$POST.ag.tmp" > "$POST"; rm -f "$POST.ag.tmp"
     log "csfpost.sh'tan satır kaldırıldı"
 }
-rules_del() {
+jump_del() {     # zincire bütün atlamalar (eski sürüm LOCALINPUT'un sonundaydı)
+    while iptables -D INPUT ! -i lo -j "$CHAIN" 2>/dev/null; do :; done
     while iptables -D LOCALINPUT ! -i lo -j "$CHAIN" 2>/dev/null; do :; done
+}
+rules_del() {
+    jump_del
     iptables -F "$CHAIN" 2>/dev/null; iptables -X "$CHAIN" 2>/dev/null
     ipset destroy "$SET" 2>/dev/null; ipset destroy "${SET}_t" 2>/dev/null
     return 0
 }
+# Sıra: INPUT'un EN BAŞI. Imunify360 kendi zincirini (INPUT_imunify360) INPUT'un başına koyuyor ve gri listedeki
+# adreslerin 80/443 trafiğini nat'ta kendi WebShield portlarına (52223/52224…) çevirip CSF'ten önce kabul ediyor;
+# kural CSF'in LOCALINPUT zincirinin sonunda kalınca bu trafik ona hiç ulaşmıyordu (sunucuda ölçüldü, WSL'de
+# yeniden üretildi 2026-10-10). Kural yönlendirmeden önceki hedef porta bakar (--ctorigdstport).
+order_ok() {     # 0: atlama INPUT'ta tek, önünde yalnız eklentinin kendi zincirleri (ban koruması); LOCALINPUT'ta yok
+    local s n
+    s=$(iptables -S INPUT 2>/dev/null | grep -- '^-A INPUT ')
+    n=$(printf '%s\n' "$s" | grep -n -- "-j $CHAIN\$" | cut -d: -f1)
+    [ -n "$n" ] && [ "$(printf '%s\n' "$n" | grep -c .)" -eq 1 ] || return 1
+    if [ "$n" -gt 1 ] && printf '%s\n' "$s" | head -n $(( n - 1 )) | grep -vqE -- '-j (AG_GUARD|AG_CLOUD)$'; then return 1; fi
+    ! iptables -C LOCALINPUT ! -i lo -j "$CHAIN" 2>/dev/null
+}
+order_fix() {
+    iptables -L "$CHAIN" -n >/dev/null 2>&1 || return 1
+    order_ok && return 0
+    jump_del; iptables -I INPUT 1 ! -i lo -j "$CHAIN" || { log "INPUT zincirine kural eklenemedi"; return 1; }
+    log "kural INPUT zincirinin başına alındı"
+}
+# İzin listesi: kural CSF'in izin listesinden ÖNCE çalıştığı için csf.allow'daki adresler (Include edilen dosyalarla
+# birlikte) ve izinli servisler kümede muaf tutulur. Gelişmiş satırlardan (tcp|in|d=…|s=…) s= alınır; /8'den geniş
+# aralık izin değil port kuralıdır, alınmaz.
+allow_files() {
+    printf '%s\n' "$CSF_DIR/csf_autogroup.services.allow"
+    [ -r "$CSF_DIR/csf.allow" ] || return 0
+    printf '%s\n' "$CSF_DIR/csf.allow"
+    awk '/^[[:space:]]*Include[[:space:]]/ { print $2 }' "$CSF_DIR/csf.allow"
+}
+allow_list() {
+    local f
+    while IFS= read -r f; do [ -r "$f" ] && cat "$f"; done < <(allow_files) | sed 's/#.*//' | awk '
+        { a = ""; if ($1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\/[0-9]+)?$/) a = $1
+          else if (match($0, /(^|\|)s=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\/[0-9]+)?/)) { a = substr($0, RSTART, RLENGTH); sub(/.*s=/, "", a) }
+          if (a == "") next; n = split(a, p, "/"); if (n == 2 && p[2] + 0 < 8) next; print a }' | sort -u
+}
+allow_sum() { while IFS= read -r f; do [ -r "$f" ] && cat "$f"; done < <(allow_files) | cksum | cut -d' ' -f1; }
 apply() {        # son listelerle ipset'i doldur, zinciri kur (değişmiş olsa da boşluk olmadan: ipset swap)
     local names tcp="" udp="" list n s
     command -v ipset >/dev/null 2>&1 && command -v iptables >/dev/null 2>&1 || { log "ipset ya da iptables yok"; return 1; }
@@ -90,10 +129,22 @@ apply() {        # son listelerle ipset'i doldur, zinciri kur (değişmiş olsa 
     [[ "$tcp" =~ ^[0-9,:]*$ && "$udp" =~ ^[0-9,:]*$ ]] || { tcp=""; udp=""; }
     list=$(for n in $names; do [[ "$n" =~ ^[a-z0-9-]+$ ]] && cat "$CACHE/$n.txt" 2>/dev/null; done | grep -E '^[0-9.]+(/[0-9]+)?$' | sort -u)
     if [ -z "$names" ] || [ -z "$list" ] || [ -z "$tcp$udp" ]; then rules_del; return 0; fi
-    # izinli servisler (Googlebot'un bir kısmı Google Cloud aralıklarında): CSF izin listesi zaten önce gelir; izin
-    # listesi bir sebeple boş kalsa da kesilmesinler diye kümeden ayrıca çıkarılırlar (aynı aralık hiç eklenmez, dar olan nomatch)
-    local allow; allow=$(grep -oE '^[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?' "$CSF_DIR/csf_autogroup.services.allow" 2>/dev/null | sort -u)
-    [ -n "$allow" ] && list=$(comm -23 <(printf '%s\n' "$list") <(printf '%s\n' "$allow"))
+    # izinli adresler (csf.allow + Include, izinli servisler; Googlebot'un bir kısmı Google Cloud aralıklarında): kural
+    # CSF'in izin listesinden önce çalıştığı için kümede muaf. İzinli bir aralığın tamamen içinde kalan liste aralığı
+    # hiç eklenmez; izinli adres daha darsa nomatch olarak eklenir (hash:net'te en dar eşleşme geçerli)
+    local allow; allow=$(allow_list)
+    if [ -n "$allow" ]; then
+        # izinli aralıklar başlangıca göre sıralı ve birleşik; her liste aralığı için ikili arama
+        local alr; alr=$(printf '%s\n' "$allow" | awk -F'[./]' '{ b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%.0f %.0f\n", lo, lo + 2 ^ (32 - b) - 1 }' | sort -n -k1,1)
+        list=$(printf '%s\n' "$list" | awk -v al="$alr" '
+            BEGIN { k = split(al, A, "\n"); n = 0
+                    for (i = 1; i <= k; i++) { split(A[i], x, " "); lo = x[1] + 0; hi = x[2] + 0
+                        if (n && lo <= H[n] + 1) { if (hi > H[n]) H[n] = hi } else { n++; L[n] = lo; H[n] = hi } } }
+            { split($1, s, "/"); split(s[1], p, "."); b = (s[2] == "" ? 32 : s[2] + 0)
+              lo = ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4]; hi = lo + 2 ^ (32 - b) - 1
+              a = 1; z = n; j = 0; while (a <= z) { c = int((a + z) / 2); if (L[c] <= lo) { j = c; a = c + 1 } else z = c - 1 }
+              if (j && H[j] >= hi) next; print }')
+    fi
     ipset create "$SET" hash:net family inet hashsize 4096 maxelem 262144 -exist || return 1
     ipset create "${SET}_t" hash:net family inet hashsize 4096 maxelem 262144 -exist || return 1
     ipset flush "${SET}_t"
@@ -103,14 +154,20 @@ apply() {        # son listelerle ipset'i doldur, zinciri kur (değişmiş olsa 
     } | ipset restore -exist || { log "ipset doldurulamadı"; return 1; }
     ipset swap "${SET}_t" "$SET" && ipset destroy "${SET}_t"
     iptables -N "$CHAIN" 2>/dev/null; iptables -F "$CHAIN" || return 1
-    [ -n "$tcp" ] && iptables -A "$CHAIN" -p tcp -m multiport --dports "$tcp" -m conntrack --ctstate NEW -m set --match-set "$SET" src -j DROP
-    [ -n "$udp" ] && iptables -A "$CHAIN" -p udp -m multiport --dports "$udp" -m conntrack --ctstate NEW -m set --match-set "$SET" src -j DROP
-    iptables -C LOCALINPUT ! -i lo -j "$CHAIN" 2>/dev/null || iptables -A LOCALINPUT ! -i lo -j "$CHAIN" || { log "LOCALINPUT zinciri yok (CSF çalışıyor mu?)"; return 1; }
+    # her port (ya da a:b aralığı) için ayrı kural: --ctorigdstport tek port/aralık alır, yönlendirmeden önceki portu görür
+    for s in ${tcp//,/ }; do iptables -A "$CHAIN" -p tcp -m conntrack --ctstate NEW --ctorigdstport "$s" -m set --match-set "$SET" src -j DROP || return 1; done
+    for s in ${udp//,/ }; do iptables -A "$CHAIN" -p udp -m conntrack --ctstate NEW --ctorigdstport "$s" -m set --match-set "$SET" src -j DROP || return 1; done
+    order_fix || return 1
+    allow_sum > "$CACHE/.allowsum" 2>/dev/null
     return 0
 }
 
 case "${1:-}" in
     --apply) apply; exit $? ;;
+    # her turda (eklenti): kural yerinde ve Imunify'dan önce mi; sıra bozulmuşsa düzelt. csf.allow değiştiyse 3 döner
+    # (muafiyetler yeniden kurulmalı: --sync)
+    --check) iptables -L "$CHAIN" -n >/dev/null 2>&1 || exit 1; order_fix || exit 1
+             [ "$(cat "$CACHE/.allowsum" 2>/dev/null)" = "$(allow_sum)" ] || exit 3; exit 0 ;;
     --sync) hook_add; apply; exit $? ;;          # eklenti: indirmeden csfpost satırı + kural (portlar ya da kaynak seçimi değişti)
     --remove) rules_del; hook_del; rm -f "$CACHE/status" "$CACHE/active"; log "kaldırıldı"; exit 0 ;;
 esac

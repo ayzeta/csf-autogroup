@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.13.6"   # sürüm — başlangıç log satırında görünür
+VERSION="1.13.7"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -247,7 +247,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_T24_DONE="Geçici blok turu bitti. %s yeni geçici blok banı, %s kalıcıya alındı."
   M_MAILT24_BODY="Aşağıdaki bloklar (/24) 12 saatliğine geçici banlandı:"
   M_MAILT24_SUBJ="%s geçici blok banı"
-  M_MAILT24P_BODY="Aşağıdaki bloklar (/24) daha önce geçici banlanmıştı; tekrar geldikleri için kalıcı banlandı (do not delete):"
+  M_MAILT24P_BODY="Aşağıdaki bloklar (/24) daha önce geçici banlanmıştı; tekrar geldikleri için kalıcı ve silinmez (do not delete) olarak banlandı:"
   M_MAILT24P_SUBJ="%s blok kalıcıya alındı"
   M_PROV16="%s.0.0/16: saldıran IP'lerin hepsi sağlayıcı banıyla zaten kapalı (%s), uyarı atlandı"
   M_TWARN16="ŞÜPHELİ AĞ: %s.0.0/16 - geçici banlardan %s IP, %s farklı blok - elle bakın"
@@ -271,7 +271,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_CLEANCNT="Sayaç temizliği yapıldı (%s günden eski kayıtlar silindi)"
   M_LOGTRIM="Günlük %s satırda tutuldu (önceki: %s satır)"
   M_MAIL_PERMFULL_SUBJ="kalıcı liste %%%s dolu"
-  M_MAIL_PERMFULL_BODY="CSF'in kalıcı ban listesi (csf.deny) dolmak üzere. Dolunca CSF en eski banları kendisi siler; do not delete olmayan blok banları da gidebilir. Eski banları kaldırın ya da DENY_IP_LIMIT'i yükseltin."
+  M_MAIL_PERMFULL_BODY="CSF'in kalıcı ban listesi (csf.deny) dolmak üzere. Dolunca CSF en eski banları kendisi siler; silinmez (do not delete) işareti olmayan blok banları da gidebilir. Eski banları kaldırın ya da DENY_IP_LIMIT'i yükseltin."
   M_MAIL_TEMPFULL_SUBJ="geçici liste %%%s dolu"
   M_MAIL_TEMPFULL_BODY="CSF'in geçici ban listesi dolmak üzere. Dolunca yeni geçici banlar eklenemeyebilir. Geçici banların süresinin dolmasını bekleyin ya da DENY_TEMP_IP_LIMIT'i yükseltin."
   M_MAIL_DETAIL="Detay için: tail -100 %s"
@@ -720,7 +720,7 @@ mail() {
 # ── Settings: validation (panel + --config set + --dry-run --set) ──────────
 # Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
 CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_URLS CLOUD_EXTRA ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS OWNER_TTL_DAYS IMUNIFY_REFRESH_MIN BLOCK_ACTIVE_DAYS"
-PROV_KEYS="SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_URLS CLOUD_EXTRA ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS"
+PROV_KEYS="SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_URLS CLOUD_EXTRA ENABLED"
 SVC_CATALOG="google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake microsoft365"
 CLOUD_CATALOG="gcp aws azure oracle digitalocean linode vultr"
 CFG_TRY_KEYS="THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS"
@@ -1248,6 +1248,22 @@ hits_remove() {  # duraklatma: sayan kural, küme ve csfpost satırı kaldırıl
     [ -r "$tool" ] && command -v ipset >/dev/null 2>&1 || return 0
     ipset list -n ag_hits >/dev/null 2>&1 || grep -qF "# csf_autogroup hits" "$CSF_DIR/csfpost.sh" 2>/dev/null || return 0
     DENY="$DENY_FILE" CSF_DIR="$CSF_DIR" LOG_FILE="$LOG_FILE" timeout 60 bash "$tool" --remove >/dev/null 2>&1 9>&-
+}
+# Ban koruması (tools/ban-guard.sh): Imunify360'ın yönlendirdiği (DNAT) bağlantılarda CSF'in banları INPUT'un başında
+# uygulanır; yoksa gri / splash listesindeki banlı adres CSF'i atlayıp sitelere ulaşabiliyordu. Her turda denetlenir.
+guard_update() {
+    local tool="$SELF_DIR/tools/ban-guard.sh" rc
+    [ -r "$tool" ] && command -v iptables >/dev/null 2>&1 || return 0
+    iptables -L LOCALINPUT -n >/dev/null 2>&1 || return 0                        # CSF yüklü değil
+    STATE="$(dirname "$SAYAC_FILE")/guard.sum" CSF_DIR="$CSF_DIR" LOG_FILE="$LOG_FILE" timeout 30 bash "$tool" --check >/dev/null 2>&1 9>&-; rc=$?
+    [ "$rc" = 0 ] && return 0
+    STATE="$(dirname "$SAYAC_FILE")/guard.sum" CSF_DIR="$CSF_DIR" LOG_FILE="$LOG_FILE" timeout 60 bash "$tool" --sync >/dev/null 2>&1 9>&-
+}
+guard_remove() { # duraklatma: kural ve csfpost satırı kaldırılır
+    local tool="$SELF_DIR/tools/ban-guard.sh"
+    [ -r "$tool" ] || return 0
+    iptables -L AG_GUARD -n >/dev/null 2>&1 || grep -qF "# csf_autogroup guard" "$CSF_DIR/csfpost.sh" 2>/dev/null || return 0
+    STATE="$(dirname "$SAYAC_FILE")/guard.sum" CSF_DIR="$CSF_DIR" LOG_FILE="$LOG_FILE" timeout 60 bash "$tool" --remove >/dev/null 2>&1 9>&-
 }
 expire_blocks() { # KİM → BLOCK_EXPIRE_DAYS'ten eski blok banlarını kaldır (yalnız otomatik eklenenler) → EXP_N, EXP_BODY
     local line tok ds ep age now re_d='- ([A-Z][a-z]{2} [A-Z][a-z]{2} +[0-9]{1,2} [0-9:]{8} [0-9]{4})[[:space:]]*$' list=()
@@ -3160,8 +3176,10 @@ cloud_enforce() { # FORCE(1 = listeleri şimdi indir) → bulut listesi banını
                 return 0
             fi
         fi
-        # listeler hazır: kural ve csfpost satırı yerinde mi, kaynak seçimi / portlar / sunucu IP'leri değişti mi
-        if ! iptables -C LOCALINPUT ! -i lo -j AG_CLOUD 2>/dev/null || ! grep -qF "# csf_autogroup cloud" "$CSF_DIR/csfpost.sh" 2>/dev/null ||
+        # listeler hazır: kural yerinde ve Imunify360'ın zincirinden önce mi (araç sırayı kendisi düzeltir), csf.allow
+        # değişti mi (muafiyetler), csfpost satırı yerinde mi, kaynak seçimi / portlar / sunucu IP'leri değişti mi
+        if ! CACHE="$CLOUD_DIR" CSF_DIR="$CSF_DIR" LOG_FILE="$LOG_FILE" timeout 30 bash "$tool" --check >/dev/null 2>&1 9>&- ||
+           ! grep -qF "# csf_autogroup cloud" "$CSF_DIR/csfpost.sh" 2>/dev/null ||
            [ "$(cat "$CLOUD_DIR/.applied" 2>/dev/null)" != "$st" ]; then
             CACHE="$CLOUD_DIR" CSF_DIR="$CSF_DIR" LOG_FILE="$LOG_FILE" timeout 120 bash "$tool" --sync >/dev/null 2>&1 9>&- && printf '%s' "$st" > "$CLOUD_DIR/.applied"
         fi
@@ -3477,11 +3495,26 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
     [ -r "$SVC_OUT" ] && awk '$1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\/[0-9]+)?$/ { nm = $0; sub(/.*service /, "", nm); sub(/[[:space:]].*/, "", nm)
             split($1, s, "/"); split(s[1], p, "."); b = (s[2] == "" ? 32 : s[2] + 0); lo = ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4]
             printf "%.0f %.0f %s\n", lo, lo + 2 ^ (32 - b) - 1, nm }' "$SVC_OUT" | sort -n -k1,1 > "$alw"
+    # etkin kiralık sunucu listeleri: web portlarını (80 ve 443) kapatıyorsa bu adreslerden gelen istekler CSF'te zaten düşer
+    local clf cweb=0 x; clf=$(mktemp) || { rm -f "$rng" "$lst" "$alw"; return 1; }
+    if [ "$CLOUD_ON" = 1 ] && port_in 80 ",${CLOUD_TCP// /}," && port_in 443 ",${CLOUD_TCP// /},"; then
+        cweb=1
+        for x in $CLOUD_ACTIVE; do
+            [ -r "$CLOUD_DIR/$x.txt" ] && awk -F'[./]' -v s="$x" 'NF >= 4 { b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%.0f %.0f %s\n", lo, lo + 2 ^ (32 - b) - 1, s }' "$CLOUD_DIR/$x.txt"
+        done | sort -n -k1,1 > "$clf"
+    fi
+    asn_banned; local ban="${ASB[$n]:-}"
     find -L "$dir" -type f -mmin -1440 ! -name '*bytes_log*' ! -name '*.offset*' ! -name '*.gz' 2>/dev/null > "$lst"
     since=$(date -d '24 hours ago' +%Y%m%d%H%M%S)
     # dosyalar tek awk'a verilir (xargs çok dosyada gruplara bölüp yalnız son grubun sonucunu bırakıyordu)
-    awk -v rf="$rng" -v lf="$lst" -v since="$since" -v af="$alw" '
+    awk -v rf="$rng" -v lf="$lst" -v since="$since" -v af="$alw" -v cf="$clf" -v cweb="$cweb" -v cact="${CLOUD_ACTIVE# }" -v ban="$ban" -v tbf="$CSF_VAR/csf.tempban" -v dnf="$DENY_FILE" -v imf="$IMUNIFY_FILE" -v now="$(date +%s)" '
         BEGIN { while ((getline l < rf) > 0) { split(l, x, " "); m++; LO[m] = x[1] + 0; HI[m] = x[2] + 0 }
+                while ((getline l < cf) > 0) { split(l, x, " "); cn++; CL[cn] = x[1] + 0; h = x[2] + 0
+                    if (cn == 1 || h > CP[cn - 1]) { CP[cn] = h; CN[cn] = x[3] } else { CP[cn] = CP[cn - 1]; CN[cn] = CN[cn - 1] } }
+                # şu anki banlar: geçici (kalan saniye), csf.deny içindeki tek IP ve /24 blok satırları, Imunify360 kara listesi
+                while ((getline l < tbf) > 0) { split(l, x, "|"); if (x[2] ~ /^[0-9.]+$/ && x[1] + x[5] > now) TB[x[2]] = x[1] + x[5] - now }
+                while ((getline l < dnf) > 0) { sub(/[ \t#].*/, "", l); if (l ~ /^[0-9]/) DN[l] = 1 }
+                while ((getline l < imf) > 0) { split(l, x, "|"); if (x[1] ~ /^[0-9.]+$/) IMB[x[1]] = 1 }
                 while ((getline l < af) > 0) { split(l, x, " "); an++; AL[an] = x[1] + 0; h = x[2] + 0
                     if (an == 1 || h > AP[an - 1]) { AP[an] = h; AN[an] = x[3] } else { AP[an] = AP[an - 1]; AN[an] = AN[an - 1] } }
                 while ((getline l < lf) > 0) if (l != "") ARGV[ARGC++] = l
@@ -3500,6 +3533,22 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
             v = ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4]; a = 1; b = an; k = 0
             while (a <= b) { c = int((a + b) / 2); if (AL[c] <= v) { k = c; a = c + 1 } else b = c - 1 }
             return (k && AP[k] >= v) ? AN[k] : "" }
+        function cld(ip,  p, v, a, b, c, k) {   # adresi kapsayan etkin kiralık liste ya da ""
+            if (!cn || split(ip, p, ".") != 4) return ""
+            v = ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4]; a = 1; b = cn; k = 0
+            while (a <= b) { c = int((a + b) / 2); if (CL[c] <= v) { k = c; a = c + 1 } else b = c - 1 }
+            return (k && CP[k] >= v) ? CN[k] : "" }
+        function ipst(ip,  o, p) {   # "temp:SANİYE,deny,deny24,imunify" (şu an hangi listelerde)
+            o = ""; p = ip; sub(/\.[0-9]+$/, "", p)
+            if (ip in TB) o = o (o == "" ? "" : ",") "temp:" TB[ip]
+            if (ip in DN) o = o (o == "" ? "" : ",") "deny"
+            else if ((p ".0/24") in DN) o = o (o == "" ? "" : ",") "deny24"
+            if (ip in IMB) o = o (o == "" ? "" : ",") "imunify"
+            return o }
+        function topip(A, k, X, N,  o, i, best, bk, n) { o = ""   # [IP, istek, başarılı, örnek, şu anki durum]
+            for (n = 0; n < k; n++) { best = 0; bk = ""; for (i in A) if (A[i] > best) { best = A[i]; bk = i }
+                if (bk == "") break; o = o (o == "" ? "" : ",") "[" js(bk) "," best "," (X[bk] + 0) "," js(N[bk]) "," js(ipst(bk)) "]"; delete A[bk] }
+            return "[" o "]" }
         function js(s) { gsub(/\\/, "/", s); gsub(/"/, "", s); gsub(/[[:cntrl:]]/, " ", s); return "\"" s "\"" }   # JSON için: ters bölü ve tırnak sadeleşir
         { ip = $1; if (!(ip in SEEN)) SEEN[ip] = inr(ip); if (!SEEN[ip]) next
           k = tkey($4); if (k != 0 && k < since) next
@@ -3507,11 +3556,18 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
           if (!(ip in AW)) AW[ip] = alw(ip); w = AW[ip]; if (w != "") { atot++; AIP[ip] = 1 }
           q = index($0, "\""); r = substr($0, q + 1); e = index(r, "\""); req = substr(r, 1, e - 1); rest = substr(r, e + 2)
           split(rest, f, " "); code = f[1]; C[code]++
-          if (w != "") { AC[code]++; AS[w]++ } else OC[code]++       # izinli servislerin kodları ayrı: ötekilerin cevabı görünsün
-          if (code !~ /^[23]/ && w == "") {                                  # başarısız istek örnekleri (izinli servisler dışında)
-              split(req, rq3, " "); fk = code " · " site " · " substr(rq3[1], 1, 6) " " substr(rq3[2], 1, 70); FQ[fk]++; if (!(fk in FI)) FI[fk] = ip }
+          site = FILENAME; sub(/.*\//, "", site); sub(/-ssl_log$/, "", site)          # site: bu satırın dosyası (önceki satırınki değil)
+          split(req, rq3, " "); rqs = substr(rq3[1], 1, 6) " " substr(rq3[2], 1, 70)
+          # üç grup: izinli servis (CSF bandan önce geçirir) / etkin kiralık listede (CSF zaten keser) / açık (ban bunları keser)
+          cl = ""; if (w == "") { if (!(ip in CW)) CW[ip] = cld(ip); cl = CW[ip] }
+          if (w != "") { AC[code]++; AS[w]++ }
+          else if (cl != "") { ctot++; CIP[ip] = 1; CC[code]++; CS[cl]++; if (k > clast) clast = k; if (code ~ /^2/) { cok++; COK[ip]++ }
+              CR[ip]++; if (!(ip in CSM)) CSM[ip] = cl " · " site " · " rqs
+              ck = code " · " site " · " rqs; CQ[ck]++; if (!(ck in CI)) CI[ck] = ip }
+          else { otot++; OIPS[ip] = 1; OC[code]++; OR[ip]++; if (k > olast) olast = k; if (code ~ /^2/) { ook++; OOK[ip]++ }
+              if (!(ip in OSM)) OSM[ip] = site " · " rqs
+              if (code !~ /^[23]/) { fk = code " · " site " · " rqs; FQ[fk]++; if (!(fk in FI)) FI[fk] = ip } }   # başarısız istek örnekleri (açık adresler)
           u = rest; sub(/^[^"]*"[^"]*" "/, "", u); sub(/"[^"]*$/, "", u)
-          site = FILENAME; sub(/.*\//, "", site); sub(/-ssl_log$/, "", site)
           if (code ~ /^2/) { ok++; S[site]++
               if (req ~ /^POST /) { split(req, rq, " "); pk = site " · " substr(rq[2], 1, 60) " · " u; P[pk]++; if (!(pk in PI)) PI[pk] = ip; if (w != "") { PA[pk]++; PN[pk] = w } }
               if (u !~ /^Mozilla/) { B[u]++; if (w != "") { BA[u]++; BN[u] = w } } } }
@@ -3520,10 +3576,14 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
                 if (bk == "") break; o = o (o == "" ? "" : ",") "[" js(bk) "," best "," (X[bk] + 0) "," js(N[bk]) "," js(I[bk]) "]"; delete A[bk] }
             return "[" o "]" }
         function obj(A,  o, i) { o = ""; for (i in A) o = o (o == "" ? "" : ",") js(i) ":" A[i]; return "{" o "}" }
-        END { nip = 0; for (i in IPS) nip++; naip = 0; for (i in AIP) naip++
-              printf "{\"ok\":true,\"total\":%d,\"ips\":%d,\"ok2xx\":%d,\"areq\":%d,\"aips\":%d,\"codes\":%s,\"ocodes\":%s,\"acodes\":%s,\"asvc\":%s,\"posts\":%s,\"bots\":%s,\"sites\":%s,\"fails\":%s}\n",
-                  tot, nip, ok, atot, naip, obj(C), obj(OC), obj(AC), obj(AS), top(P, 15, PA, PN, PI), top(B, 15, BA, BN), top(S, 10), top(FQ, 12, FX, FN, FI) }' /dev/null | grep . || echo '{"ok":true,"total":0,"ips":0,"ok2xx":0,"codes":{},"posts":[],"bots":[],"sites":[]}'
-    rm -f "$rng" "$lst" "$alw"
+        END { nip = 0; for (i in IPS) nip++; naip = 0; for (i in AIP) naip++; ncip = 0; for (i in CIP) ncip++; noip = 0; for (i in OIPS) noip++
+              printf "{\"ok\":true,\"total\":%d,\"ips\":%d,\"ok2xx\":%d,\"areq\":%d,\"aips\":%d,\"codes\":%s,\"ocodes\":%s,\"acodes\":%s,\"asvc\":%s,\"posts\":%s,\"bots\":%s,\"sites\":%s,\"fails\":%s,",
+                  tot, nip, ok, atot, naip, obj(C), obj(OC), obj(AC), obj(AS), top(P, 15, PA, PN, PI), top(B, 15, BA, BN), top(S, 10), top(FQ, 12, FX, FN, FI)
+              printf "\"cloud\":{\"web\":%s,\"lists\":%s,\"req\":%d,\"ips\":%d,\"ok\":%d,\"codes\":%s,\"src\":%s,\"last\":\"%s\",\"ex\":%s},",
+                  (cweb == 1 ? "true" : "false"), js(cact), ctot, ncip, cok, obj(CC), obj(CS), clast, topip(CR, 10, COK, CSM)
+              printf "\"open\":{\"req\":%d,\"ips\":%d,\"ok\":%d,\"codes\":%s,\"last\":\"%s\",\"top\":%s},\"ban\":%s}\n",
+                  otot, noip, ook, obj(OC), olast, topip(OR, 10, OOK, OSM), js(ban) }' /dev/null | grep . || echo '{"ok":true,"total":0,"ips":0,"ok2xx":0,"codes":{},"posts":[],"bots":[],"sites":[]}'
+    rm -f "$rng" "$lst" "$alw" "$clf"
 }
 svc_health() {   # izinli servis kaynaklarından uyarı süresinden uzun süredir indirilemeyenler → bildirim
     local st="$(dirname "$SAYAC_FILE")/services/status" n c t e f bad="" now; now=$(date +%s)
@@ -4583,7 +4643,7 @@ owners_load
 RUN_MODE=1
 logr "$M_START (v$VERSION)"
 if [ "$ENABLED" = 0 ]; then
-    [ "$DRY" = 1 ] || { ASN_BAN=0 asn_enforce; CLOUD_BAN=0 cloud_enforce 0; hits_remove; }    # sağlayıcı ve bulut banı, sayaç CSF'te kapalı kalsın
+    [ "$DRY" = 1 ] || { ASN_BAN=0 asn_enforce; CLOUD_BAN=0 cloud_enforce 0; hits_remove; guard_remove; }    # sağlayıcı ve bulut banı, sayaç, ban koruması CSF'te kapalı kalsın
     logr "$M_PAUSED"
     ev run "" "v=\"$VERSION\"" "dur=$(( $(date +%s) - RUN_T0 ))" "added=0" "warn16=0" "paused=true"
     exit 0
@@ -4635,7 +4695,7 @@ fi
 parse_deny "$DENY_FILE" 1
 [ "$DRY" = 1 ] || orphans_clean       # eklenti dışından kaldırılmış elle banların artıkları
 [ "$DRY" = 1 ] || proto_fix           # eski kısmi ban / istisnalara eksik UDP 443 (HTTP/3)
-[ "$DRY" = 1 ] || { svc_enforce 0; asn_enforce; cloud_enforce 0; cloud_on_calc; hits_update; }   # izinli servisler, sağlayıcı banı, bulut listeleri: istenen durum CSF'te mi
+[ "$DRY" = 1 ] || { svc_enforce 0; asn_enforce; cloud_enforce 0; cloud_on_calc; hits_update; guard_update; }   # izinli servisler, sağlayıcı banı, bulut listeleri: istenen durum CSF'te mi
 [ "$DRY" = 1 ] || daily_tasks         # günde bir: servis izin listeleri, CSF'in ASN verisi
 [ "$DRY" = 1 ] || { svc_health; cloud_health; }   # indirilemeyen izinli servis / bulut listesi: bildirim
 

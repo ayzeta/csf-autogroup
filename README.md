@@ -245,8 +245,9 @@ Manual actions are logged as `MANUAL (user): …` and appear on the History tab.
 ### Settings
 
 The same settings as `config.env`, with validation, grouped into sections
-(notifications, thresholds, schedule, lookups, retention, server, settings
-history):
+(notifications, ban rules, running, sources and refresh, old bans, records,
+server, settings history); related settings sit under small headings inside
+each section:
 
 - **Notifications** — channels: *all channels set in WHM* (default: email +
   Slack), *email only* or *Slack only*. Both addresses come from WHM: the
@@ -263,25 +264,32 @@ history):
 
 ![Notification settings](docs/settings.png)
 
-- **Thresholds** — block ban (`/24`), `do not delete`, suspicious network (`/16`,
-  permanent and temp single bans counted together) and temp block ban (`/24`).
-- **Schedule** — cron every 5 / 10 / 15 / 30 minutes or hourly.
-- **Lookups** — owner/hostname lookups on or off, DNS timeout, how long a
-  block's owner is kept before it is looked up again (default 30 days) and how
-  often Imunify360's list is read (default 60 minutes).
-- **Retention** — watch period, review days, old-block limit (default 365 days)
-  and whether old block bans are removed automatically (default off; manual bans
-  are never touched), log size and archive count. Old-block removal keeps
-  blocks marked "do not delete" and blocks still being tried: a banned block's
-  traffic never reaches lfd, so the plugin counts it itself — an `ag_hits` ipset
-  with a counter per banned range and one rule at the top of `LOCALINPUT` that
-  only counts (it neither blocks nor allows anything); `csfpost.sh` puts it back
-  after CSF reloads. A block with an attempt within the set period (default 30 days) is kept, and
-  its last attempt shows in the state tip. The
+- **Ban rules** — block ban (`/24`): permanent singles needed, the count that
+  makes it *kept* (`do not delete`) and the temp block ban; suspicious network
+  (`/16`, permanent and temp single bans counted together); the watch period
+  (a temp-banned block that comes back within it is banned for good).
+- **Running** — pause / run, and how often the cron run starts (every 5 / 10 /
+  15 / 30 minutes or hourly).
+- **Sources and refresh** — owner/hostname lookups on or off, DNS timeout and
+  how long a block's owner is kept before it is looked up again (default 30
+  days); how often the rented-server and allowed-service lists are downloaded
+  again and after how many failed days it is reported; how old CSF's ASN data
+  may get; how often Imunify360's list is read (default 60 minutes). The
+  Providers cards link here.
+- **Old bans** — old-block limit (default 365 days), how recent an attempt
+  keeps a block from being old (default 30 days), and whether old block bans
+  are removed automatically (default off; manual bans are never touched).
+  Old-block removal keeps blocks marked "do not delete" and blocks still being
+  tried: a banned block's traffic never reaches lfd, so the plugin counts it
+  itself — an `ag_hits` ipset with a counter per banned range and one rule at
+  the top of `LOCALINPUT` that only counts (it neither blocks nor allows
+  anything); `csfpost.sh` puts it back after CSF reloads. Its last attempt
+  shows in the state tip.
+- **Records** — how long entries stay in *Needs review*, and the log file. The
   log is rotated by the system's logrotate (`/etc/logrotate.d/csf_autogroup`,
   written from these settings; default 1 MB, 5 compressed archives); where
-  logrotate is missing, a log line limit is used instead. A run where
-  nothing happened leaves a single line in the log.
+  logrotate is missing, a log line limit is used instead. A run where nothing
+  happened leaves a single line in the log.
 
 A **Server requirements** card lists the tools CSF Auto-Group uses (CSF, cron,
 mail, dig/host, logrotate, flock, timeout, git, Imunify360, ModSecurity hit log,
@@ -366,6 +374,33 @@ inside a banned range, but `csf.ignore` only stops LFD, so a `/24` ban would
 block those addresses. If a check can't be completed because DNS isn't
 answering, the block is retried on the next run instead of being banned.
 
+### With Imunify360
+
+Imunify360 puts its own chain at the top of `INPUT`. For addresses on its grey,
+splash-screen or captcha lists it redirects web and cPanel traffic (80, 443,
+2082–2096) to its WebShield ports and accepts it before CSF's rules. Bans that
+look at the port then no longer match, because the connection now goes to
+52223/52224. These are the partial bans (web only), provider and country bans
+with the port list (`CC_DENY_PORTS`), and the rented-server lists. A banned
+address that passes the WebShield check (a real browser does) could still open
+the sites. Full bans (single IPs, blocks, "everything") are not affected: CSF
+applies them in both directions and Imunify360 only accepts a connection's
+first packet.
+
+The plugin closes this with one chain at the top of `INPUT` (`AG_GUARD`,
+`tools/ban-guard.sh`): for redirected connections only, it applies CSF's
+allow list first and then the port bans, matched on the port the connection
+was originally sent to. Other traffic and this server's own outgoing
+connections are not touched. A `csfpost.sh` line puts it back when CSF
+restarts, and each run checks that it is still first. The rented-server
+lists use the same method (see below).
+
+`bash tools/ban-leak.sh [HOURS]` (read only) checks the web logs of the last
+24 hours, or the hours given, for requests that reached the sites while a ban
+was in force, layer by layer. Allowed addresses are left out. It also lists the
+rules that rewrite or accept traffic before CSF. The report is also saved to
+`/root/ban-leak-DATE.txt`.
+
 ## Without cPanel
 
 CSF Auto-Group works on any CSF server. Without cPanel there is no plugin page;
@@ -414,9 +449,10 @@ tab. Key options:
 ## Uninstall
 
 First turn off **Provider ban**, **Rented servers** and **Allowed services** in
-the Providers tab and pause the plugin (Settings → Schedule): that removes what
-the plugin added to CSF, including the block counter (`ag_hits`). Without the
-panel, `bash tools/block-hits.sh --remove` removes the counter.
+the Providers tab and pause the plugin (Settings → Running): that removes what
+the plugin added to CSF, including the block counter (`ag_hits`) and the ban
+guard (`AG_GUARD`). Without the panel, `bash tools/block-hits.sh --remove` and
+`bash tools/ban-guard.sh --remove` remove them.
 
 ```bash
 crontab -l | grep -v 'csf_autogroup.sh' | crontab -
@@ -497,10 +533,16 @@ rent out to anyone (virtual servers); the Providers tab can block those on chose
 (default web): Google Cloud, AWS (EC2), Azure, Oracle Cloud, DigitalOcean,
 Linode and Vultr. Unlike a provider ban, the providers' own services stay reachable — the
 Google Cloud list has no Googlebot or Gmail. The lists go into an ipset with
-one rule at the end of CSF's `LOCALINPUT` chain, so `csf.allow` and the allowed
-services come first; only new incoming connections are dropped, and this
-server's own IPs are excluded. A line in `/etc/csf/csfpost.sh` puts the rule
-back when CSF restarts. If a service you rely on runs in one of these clouds
+one rule at the very top of the `INPUT` chain, ahead of CSF and of Imunify360:
+Imunify360 redirects greylisted addresses to its own WebShield ports and
+accepts them before CSF's rules, so a rule further down never saw that
+traffic. The rule matches the port the connection was originally sent to, so
+the redirect does not hide it. Addresses in `csf.allow` (and the files it
+includes) and the allowed services are exempt inside the set, as are this
+server's own IPs; only new incoming connections are dropped. Each run checks
+that the rule is still first and moves it back if another tool put its own
+chain in front. A line in `/etc/csf/csfpost.sh` puts the rule back when CSF
+restarts. Hostnames in `csf.dyndns` are not exempt. If a service you rely on runs in one of these clouds
 and calls your sites, allow its address. `tools/cloud-ban.sh` does the work;
 the plugin runs it.
 
