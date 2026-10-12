@@ -123,7 +123,9 @@ settings, with no prompts. `config.env` is left untouched.
 - **History** (its own tab) — every ban, promotion, skip, warning and manual
   action, back to the start of the event log: the latest 300 load first and
   **Show more** pages further back. Work from before the event log existed is
-  filled in from the log. Click an address to open its IP card.
+  filled in from the log. Click an address to open its IP card, or a range
+  (/16, /24) to open its range card: whether the range itself is banned, which
+  attacked services are still open for it, and the bans inside it.
   Settings changes are listed under Settings → Settings history.
 - **Suggestions where decisions are made** — the ban window suggests a partial
   ban when attacks hit only one or two services; the remove window shows when

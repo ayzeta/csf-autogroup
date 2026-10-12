@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.13.10 — 2026-10-12
+
+- **Review rows are re-checked against today's data:** an old warning stays
+  only while its range still meets the rule (enough singles across at least
+  two blocks) and the attacked services are not already closed by another
+  layer; the attacked service of a PERMBLOCK single is read from the lfd log,
+  otherwise the row says "service unknown".
+- **New: range card.** Clicking a range (/16, /24 or an announced range)
+  anywhere in the panel opened the IP card of its first address, which then
+  talked about that one IP. It now opens the range itself: is the range
+  banned (fully, partially, not), each attacked service closed or open for
+  the whole range, what to look at, the bans inside it (single bans with
+  reasons), its review entry, owner and the ban button.
+- **Tests:** the state table now also checks that review rows are re-checked
+  (singles below the rule, singles gone, attacks already closed, still valid)
+  and that clicking a range opens the range card.
+- Long layer badges in the IP and range cards wrap on narrow screens instead of
+  running out of the card.
+
 ## 1.13.9 — 2026-10-12
 
 - **Glossary window:** the two columns now run edge to edge with equal margins

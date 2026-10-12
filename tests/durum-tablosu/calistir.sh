@@ -86,6 +86,23 @@ mcheck "yalnız 'her şey' sağlayıcısı varken kullanıcının port listesine
 R="$W/roots/prov"
 mcheck "ortak port listesi çakışmasında CSF ayarı değişmez" "grep -q '^CC_DENY_PORTS = \"CN\"' '$R/etc/csf/csf.conf' && grep -q '^CC_DENY_PORTS_TCP = \"22,25\"' '$R/etc/csf/csf.conf'"
 
+# Kontrol edilecekler eskiyen kaydı bugünkü veriyle yeniden sınar: olay kaydından önceki (yalnız sayaçta tarihli) şüpheli ağ
+# uyarısı, ölçütü bugün tutmuyorsa ya da saldırılan servisi başka bir katman kapatıyorsa listede kalmaz
+rvhas() { run --status --json 2>/dev/null | grep -o '"review":\[.*\],"ignored"' | grep -q "\"cidr\":\"$1\""; }
+mk rvstale;   printf 'WARN16_151.80 %s\n' "$(date -d '-3 days' +%F)" >> "$C"; single 151.80.7.1 sshd; single 151.80.8.1 sshd
+mcheck "eski uyarı: tekilleri eşiğin altına inmişse Kontrol edilecekler'de kalmaz" "! rvhas 151.80.0.0/16"
+mk rvgone;    printf 'WARN16_151.80 %s\n' "$(date -d '-3 days' +%F)" >> "$C"
+mcheck "eski uyarı: dayandığı tekil banlar kalmamışsa listede kalmaz" "! rvhas 151.80.0.0/16"
+mk rvcover;   printf 'WARN16_151.80 %s\n' "$(date -d '-3 days' +%F)" >> "$C"; printf '%s\n' 'CC_DENY = "FR"' >> "$R/etc/csf/csf.conf"
+for x in 7.1 7.2 8.1 8.2 9.1; do single 151.80.$x sshd; done
+for p in 7 8 9; do printf '151.80.%s|16276|FR|OVH - OVH SAS, FR|%s|151.80.0.0/16\n' "$p" "$NOW" >> "$R/var/lib/csf_autogroup/owners"; done   # sahibi bilinen IP'ler (sunucudaki gibi)
+mcheck "eski uyarı: saldırılan servisi ülke/sağlayıcı/kiralık liste kapatıyorsa listede kalmaz" "! rvhas 151.80.0.0/16"
+mk rvkeep;    printf 'WARN16_151.80 %s\n' "$(date -d '-3 days' +%F)" >> "$C"; for x in 7.1 7.2 8.1 8.2 9.1; do single 151.80.$x sshd; done
+mcheck "eski uyarı: ölçütü bugün de tutuyorsa IP listesi ve servisiyle kalır" "run --status --json 2>/dev/null | grep -q '\"cidr\":\"151.80.0.0/16\",\"day\":\"[0-9-]*\",\"hist\":true[^]]*\"n\":5[^]]*\"svc\":\"ssh\"'"
+# ekran: yazısı aralık olan öğe IP kartı değil aralık kartı açar (tıklanan şey ile açılan şey aynı)
+AGJS="$REPO/whm/assets/ag.js"                 # yol tek tırnak içerebilir ("Drive'ım"): değişkenle verilir
+mcheck "aralığa tıklamak aralık kartını açar" "grep -qF 'if (RANGE_RE.test(rtx)) openRange(rtx); else openDrawer' \"\$AGJS\""
+
 node "$(wp "$H/render.js")" "$(wp "$REPO/whm/assets/ag.js")" "$(wp "$W/out")" "$@"; RC=$?
 printf '\nMotor kuralları\n%s' "$ML"
 [ "$MF" -gt 0 ] && { echo "$MF motor kuralı ihlali"; exit 1; }

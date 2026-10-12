@@ -164,6 +164,8 @@
 
 /* ── Pills ──────────────────────────────────────────────────────── */
 .ag-pill { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; border-radius: 20px; font-size: 11.5px; font-weight: 600; white-space: nowrap; border: 1px solid transparent; line-height: 1; }
+/* IP ve aralık kartındaki uzun katman rozetleri dar ekranda alta kayar, kartın dışına taşmaz */
+.ag-drawer .ag-fact-v .ag-pill { white-space: normal; height: auto; min-height: 22px; max-width: 100%; line-height: 1.35; padding-top: 3px; padding-bottom: 3px; border-radius: 12px; }
 .ag-pill-ok   { background: var(--ag-ok-soft);   color: var(--ag-ok);   border-color: var(--ag-ok-line); }
 .ag-pill-warn { background: var(--ag-warn-soft); color: var(--ag-warn); border-color: var(--ag-warn-line); }
 .ag-pill-bad  { background: var(--ag-bad-soft);  color: var(--ag-bad);  border-color: var(--ag-bad-line); }
@@ -186,6 +188,8 @@
 .ag-ip.ag-ip-h { background: #fafafb; padding-top: 6px; padding-bottom: 6px; font-size: 11px; font-weight: 650; color: var(--ag-text-3); text-transform: uppercase; letter-spacing: .04em; }
 .ag-im-t thead th { text-align: left; font-size: 11px; font-weight: 650; color: var(--ag-text-3); text-transform: uppercase; letter-spacing: .04em; padding: 0 10px 6px 0; white-space: nowrap; }
 .ag-im-t thead th:last-child { text-align: right; padding-right: 0; }
+.ag-im-t th.ag-th-r, .ag-im-t td.ag-rg-n { text-align: right; font-variant-numeric: tabular-nums; }
+.ag-rg-sv td:first-child { width: 45%; }
 /* yoksayılanlar: aralık · bitiş · yoksayan · düğme */
 .ag-thead.ag-tr-i, .ag-tr.ag-tr-i { grid-template-columns: 176px minmax(0, 1fr) minmax(0, 1fr) 150px; }
 .ag-thead.ag-tr-i .ag-th { cursor: default; }

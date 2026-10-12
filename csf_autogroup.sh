@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.13.9"   # sürüm — başlangıç log satırında görünür
+VERSION="1.13.10"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -2128,25 +2128,36 @@ do_status() {
             hj=""
             if [[ "$ty" == warn16* ]]; then
                 hl="${H16[${c%.0.0/16}]}"
-                # geniş bir katman (sağlayıcı / kiralık liste / ülke) bu tekillerin saldırdığı servisleri artık kapatıyorsa bakılacak bir şey yok
-                if [ -n "$hl" ] && cover_any; then
-                    # üçüncü alan (p/t) ASN değil: kapsama işlevlerine "ip|sebep|" verilir (ASN sahip önbelleğinden); boru değil
-                    # yönlendirme, yoksa PN_SRC/PN_SVC alt kabukta kalır
-                    hl="${hl//|p$'\n'/|$'\n'}"; hl="${hl//|t$'\n'/|$'\n'}"
-                    prov_cover < <(printf '%s' "$hl") && continue
-                    if prov_near < <(printf '%s' "$hl"); then jstr "$PN_SRC"; hj+=",\"pnear\":$REPLY,\"pnsvc\":\"$PN_SVC\""; fi
-                fi
-                hn=0; hp=0; ht=0; hs=""; hw=""
-                while IFS='|' read -r hx hl hq; do
+                # bugünkü ölçüt: eşik kadar tekil (kalıcı + geçici, her IP bir kez) ve en az 2 farklı blok; tutmuyorsa (tekiller
+                # blok banıyla temizlenmiş, süresi dolmuş, kaldırılmış) bakılacak bir şey yok
+                hn=0; hp=0; ht=0; hs=""; local -a hpb=()
+                while IFS='|' read -r hx hk hq; do
                     [ -n "$hx" ] || continue
                     hn=$((hn + 1)); [ "$hq" = p ] && hp=$((hp + 1)) || ht=$((ht + 1))
                     [[ " $hs " == *" ${hx%.*} "* ]] || hs+=" ${hx%.*}"
-                    [ "$hn" -le 40 ] || continue
+                    [[ "$hk" == *PERMBLOCK* ]] && hpb+=("$hx")
+                done <<< "$hl"
+                hc=($hs)
+                [ "$hn" -ge "$([ "$ty" = warn16t ] && echo "$THRESHOLD_TEMP_16" || echo "$THRESHOLD_16")" ] && [ "${#hc[@]}" -ge 2 ] || continue
+                [ "${#hpb[@]}" -gt 0 ] && perm_cls_load "${hpb[@]}"       # PERMBLOCK servisleri tek taramada
+                # geniş bir katman (sağlayıcı / kiralık liste / ülke) bu tekillerin saldırdığı servisleri artık kapatıyorsa bakılacak bir şey yok
+                if cover_any; then
+                    # üçüncü alan (p/t) ASN değil: kapsama işlevlerine "ip|sebep|" verilir (ASN sahip önbelleğinden); boru değil
+                    # yönlendirme, yoksa PN_SRC/PN_SVC alt kabukta kalır
+                    hk="${hl//|p$'\n'/|$'\n'}"; hk="${hk//|t$'\n'/|$'\n'}"
+                    prov_cover < <(printf '%s' "$hk") && continue
+                    if prov_near < <(printf '%s' "$hk"); then jstr "$PN_SRC"; hj+=",\"pnear\":$REPLY,\"pnsvc\":\"$PN_SVC\""; fi
+                fi
+                hw=""; local hi=0 hv
+                while IFS='|' read -r hx hl hq; do
+                    [ -n "$hx" ] || continue
+                    hi=$((hi + 1)); [ "$hi" -le 40 ] || break
+                    hv=$(awk -v r="$hl" "$AWK_CLS"' BEGIN { print cls(r) }')
+                    if [ "$hv" = repeat ]; then perm_cls "$hx"; hv="${REPLY:-repeat}"; fi
                     short_reason "$hl" "$hx"; jstr "$REPLY"; hk="$REPLY"; hq="${hx%.*}"
                     jstr "${OWN_L[$hq]}"
-                    hw+="${hw:+,}{\"ip\":\"$hx\",\"host\":\"\",\"why\":$hk,\"owner\":$REPLY,\"asn\":\"${OWN_A[$hq]}\",\"cc\":\"${OWN_C[$hq]}\",\"pfx\":\"${OWN_P[$hq]}\"}"
+                    hw+="${hw:+,}{\"ip\":\"$hx\",\"host\":\"\",\"why\":$hk,\"svc\":\"$hv\",\"owner\":$REPLY,\"asn\":\"${OWN_A[$hq]}\",\"cc\":\"${OWN_C[$hq]}\",\"pfx\":\"${OWN_P[$hq]}\"}"
                 done < <(printf '%s' "${H16[${c%.0.0/16}]}" | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n)
-                hc=($hs)
                 hj+=",\"n\":$hn,\"perm\":$hp,\"temp\":$ht,\"subnets\":${#hc[@]},\"total\":$hn,\"ips\":[$hw]"
             fi
             day_epoch "$u"
@@ -2607,8 +2618,9 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
     # ülke/ASN banı (CC_DENY) aralığı zaten tamamen kapatıyorsa yeni banın etkisi olmaz. Blok kesin tek önekte
     # (duyurulan önekler /24'ten küçük olmaz); ağ (/16) ise yalnız duyurulan önek bütün ağı içeriyorsa kapalı sayılır.
     # LOOKUP kapalıysa sorulmaz, bilinmez.
-    local ccd; ccd=" $(conf_val CC_DENY | LC_ALL=C tr '[:lower:],' '[:upper:] ') "
-    if [ -z "$IN_COVER" ] && [ "$ccd" != "  " ]; then
+    local ccd ccpd IN_CCP=""; ccd=" $(conf_val CC_DENY | LC_ALL=C tr '[:lower:],' '[:upper:] ') "
+    ccpd=" $(conf_val CC_DENY_PORTS | LC_ALL=C tr '[:lower:],' '[:upper:] ') "
+    if [ -z "$IN_COVER" ] && { [ "$ccd" != "  " ] || [ "$ccpd" != "  " ]; }; then
         local qa qb ccn="" asn="" ap=""
         if [ -n "$pfx24" ]; then
             [ -z "$OWN_CC$OWN_ASN" ] && owner_lookup "$pfx24.1"
@@ -2622,7 +2634,10 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
             fi
         fi
         if [ -n "$ccn" ] && [[ "$ccd" == *" $ccn "* ]]; then IN_COVER="CC_DENY $ccn"
-        elif [ -n "$asn" ] && [[ "$ccd" == *" AS$asn "* ]]; then IN_COVER="CC_DENY AS$asn"; fi
+        elif [ -n "$asn" ] && [[ "$ccd" == *" AS$asn "* ]]; then IN_COVER="CC_DENY AS$asn"
+        # port listesiyle ban (CC_DENY_PORTS): aralığın tamamı yalnız o portlarda kapalı (aralık kartı gösterir)
+        elif [ -n "$asn" ] && [[ "$ccpd" == *" AS$asn "* ]]; then IN_CCP="AS$asn"
+        elif [ -n "$ccn" ] && [[ "$ccpd" == *" $ccn "* ]]; then IN_CCP="$ccn"; fi
     fi
     # beyaz liste: ban eylemindeki kontrolün aynısı (/24'te bloktaki IP'lerle, /16'da aralık çakışması)
     WL_HIT=""; WL_RETRY=0
@@ -2647,6 +2662,19 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
         ssh_ports; o+=",\"ssh\":\"$REPLY\""
         ftp_passive; o+=",\"ftp_pasv\":\"$REPLY\""
         inside_attacks "$c"; o+=",\"attacks\":$REPLY"
+        o+=",\"ccport\":\"$IN_CCP\",\"ccp_tcp\":\"$(conf_val CC_DENY_PORTS_TCP | tr -d ' ')\",\"ccp_udp\":\"$(conf_val CC_DENY_PORTS_UDP | tr -d ' ')\""
+        # aralık kartı: tekiller (ip, sebep, servis), en çok 40; PERMBLOCK'un servisi lfd günlüğünden
+        local sj="" sx sn=0 sv sk; local -a spb=()
+        for sx in "${IN_SGL[@]}" "${IN_SGLD[@]}"; do [[ "${SINGLE_NOTE[$sx]}" == *PERMBLOCK* ]] && spb+=("$sx"); done
+        [ "${#spb[@]}" -gt 0 ] && perm_cls_load "${spb[@]}"
+        for sx in "${IN_SGL[@]}" "${IN_SGLD[@]}"; do
+            sn=$((sn + 1)); [ "$sn" -le 40 ] || break
+            sv=$(awk -v r="${SINGLE_NOTE[$sx]}" "$AWK_CLS"' BEGIN { print cls(r) }')
+            if [ "$sv" = repeat ]; then perm_cls "$sx"; sv="${REPLY:-repeat}"; fi
+            short_reason "${SINGLE_NOTE[$sx]}" "$sx"; jstr "$REPLY"; sk="$REPLY"
+            sj+="${sj:+,}{\"ip\":\"$sx\",\"why\":$sk,\"svc\":\"$sv\",\"dnd\":$(is_dnd "${SINGLE_NOTE[$sx]}" && echo true || echo false)}"
+        done
+        o+=",\"sgl\":[$sj]"
         local ownf=false opn="" rcn=0
         if [ "$IN_COVER" = "$c" ] && [[ "$(deny_line "$c")" == *"csf_autogroup:"* ]]; then
             ownf=true
