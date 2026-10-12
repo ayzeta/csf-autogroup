@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.13.8"   # sürüm — başlangıç log satırında görünür
+VERSION="1.13.9"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -2102,8 +2102,15 @@ do_status() {
     prof review_events
     # Olay kaydı başlamadan önceki uyarılar ve atlamalar sayaçta tarihiyle duruyor (IP ayrıntısı yok)
     if [ -r "$SAYAC_FILE" ]; then
-        local rsince k u
+        local rsince k u hx hl hn hp ht hj hw hq hs hk hc
+        local -A H16=()
         rsince=$(date -d "$REVIEW_DAYS days ago" +%Y-%m-%d)
+        # eski uyarının IP ayrıntısı olayda yok: CSF'te şu an duran tekil banlar /16'ya göre bir kez gruplanır ("ip|not|k" satırları;
+        # k = p kalıcı, t geçici)
+        for hx in "${!SINGLE_NOTE[@]}"; do H16[${hx%.*.*}]+="$hx|${SINGLE_NOTE[$hx]}|p"$'\n'; done
+        if [ -r "$CSF_VAR/csf.tempban" ]; then
+            while IFS='|' read -r hx hl; do [ -n "${SINGLE_NOTE[$hx]+x}" ] || H16[${hx%.*.*}]+="$hx|$hl|t"$'\n'; done < <(awk -F'|' '$2 ~ /^[0-9.]+$/ { gsub(/\|/, " ", $6); print $2 "|" $6 }' "$CSF_VAR/csf.tempban")
+        fi
         while read -r k u; do
             [[ "$u" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || continue
             [[ "$u" < "$rsince" ]] && continue
@@ -2118,8 +2125,32 @@ do_status() {
             ign_until "$c" && continue
             cidr_range "$c" && perm_covers "$R_LO" "$R_HI" && continue
             [ -n "${PB_P[$c]+x}" ] && continue        # olay kaydından önceki uyarı; aralığa sonradan kısmi ban konmuş
+            hj=""
+            if [[ "$ty" == warn16* ]]; then
+                hl="${H16[${c%.0.0/16}]}"
+                # geniş bir katman (sağlayıcı / kiralık liste / ülke) bu tekillerin saldırdığı servisleri artık kapatıyorsa bakılacak bir şey yok
+                if [ -n "$hl" ] && cover_any; then
+                    # üçüncü alan (p/t) ASN değil: kapsama işlevlerine "ip|sebep|" verilir (ASN sahip önbelleğinden); boru değil
+                    # yönlendirme, yoksa PN_SRC/PN_SVC alt kabukta kalır
+                    hl="${hl//|p$'\n'/|$'\n'}"; hl="${hl//|t$'\n'/|$'\n'}"
+                    prov_cover < <(printf '%s' "$hl") && continue
+                    if prov_near < <(printf '%s' "$hl"); then jstr "$PN_SRC"; hj+=",\"pnear\":$REPLY,\"pnsvc\":\"$PN_SVC\""; fi
+                fi
+                hn=0; hp=0; ht=0; hs=""; hw=""
+                while IFS='|' read -r hx hl hq; do
+                    [ -n "$hx" ] || continue
+                    hn=$((hn + 1)); [ "$hq" = p ] && hp=$((hp + 1)) || ht=$((ht + 1))
+                    [[ " $hs " == *" ${hx%.*} "* ]] || hs+=" ${hx%.*}"
+                    [ "$hn" -le 40 ] || continue
+                    short_reason "$hl" "$hx"; jstr "$REPLY"; hk="$REPLY"; hq="${hx%.*}"
+                    jstr "${OWN_L[$hq]}"
+                    hw+="${hw:+,}{\"ip\":\"$hx\",\"host\":\"\",\"why\":$hk,\"owner\":$REPLY,\"asn\":\"${OWN_A[$hq]}\",\"cc\":\"${OWN_C[$hq]}\",\"pfx\":\"${OWN_P[$hq]}\"}"
+                done < <(printf '%s' "${H16[${c%.0.0/16}]}" | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n)
+                hc=($hs)
+                hj+=",\"n\":$hn,\"perm\":$hp,\"temp\":$ht,\"subnets\":${#hc[@]},\"total\":$hn,\"ips\":[$hw]"
+            fi
             day_epoch "$u"
-            review+=("{\"t\":$REPLY,\"type\":\"$ty\",\"cidr\":\"$c\",\"day\":\"$u\",\"hist\":true${W16D[$c]:+,\"rep\":${W16D[$c]}}}")
+            review+=("{\"t\":$REPLY,\"type\":\"$ty\",\"cidr\":\"$c\",\"day\":\"$u\",\"hist\":true${W16D[$c]:+,\"rep\":${W16D[$c]}}$hj}")
             rtext+=("$(printf '%-18s %s · %s' "$c" "$ty" "$(date -d "$u" '+%d.%m')")")
         done < <(sort -k2,2r "$SAYAC_FILE")        # blok başına en yeni tarih
     fi

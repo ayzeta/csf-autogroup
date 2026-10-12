@@ -105,7 +105,10 @@ settings, with no prompts. `config.env` is left untouched.
   ban, violet made permanent, teal temp ban, blue partial ban, amber suspicious
   network, gray whitelist skip.
 - **To review** — suspicious networks and whitelist-skipped blocks from the last 7
-  days, with every IP's hostname, owner and ban reason. A network flagged on 3 or
+  days, as a table: why it was flagged (how many IPs attacked which services),
+  owner, when, and the narrowest ban that would do; clicking the IP count lists
+  every IP's hostname, owner and ban reason. A range whose attacks a provider ban
+  or rented-server list already closes is left out. A network flagged on 3 or
   more separate days is marked *repeating* and moves to the top.
 - **Active block bans** — a sortable, paged table with each block's owner,
   searchable by CIDR, AS number or organisation. Filters show their counts.

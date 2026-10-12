@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.13.9 — 2026-10-12
+
+- **Glossary window:** the two columns now run edge to edge with equal margins
+  on both sides (the body was indented under the title), and the window is
+  wider so the explanations take fewer lines.
+- **Allowed-service tiles:** the Google and OpenAI descriptions fit on one line
+  again (the sub-list chips below already name each list).
+- **Review list is a table** with column headers like Active block bans:
+  network · state · why (how many IPs, which services) · owner · flagged
+  (relative time, full date on hover) · suggested ban · menu. Longer notes
+  (blocks, permanent/temporary, the narrower range to ban, "covered by … but
+  SSH is open") sit under the row. Clicking the IP count opens the IPs.
+- **Fix — old suspicious-range warnings said nothing.** Warnings recorded before
+  the event log (date only) showed no IP count, services or owner, and were not
+  checked against provider bans and rented-server lists. They are now rebuilt
+  from the single bans in CSF: IP list with reasons, counts, owner; a range
+  whose attacks an active list or provider ban already closes drops out; one
+  whose singles are gone says so.
+- **IP card:** the result line now starts with the glossary terms — "fully
+  banned", "partially banned" (what is closed, what stays open) or "not banned".
+- **Column headers** also on the IP list under a row, the Ignored card (now a
+  table with an explanation), and the Measure impact tables.
+- The IP list showed "do not delete" in English in the Turkish panel; it reads
+  "silinmez" with an explanation.
+
 ## 1.13.8 — 2026-10-12
 
 - **Fix — the Imunify360 protection lost its place.** Imunify360 puts its own
