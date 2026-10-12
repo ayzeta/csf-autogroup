@@ -387,18 +387,21 @@ the sites. Full bans (single IPs, blocks, "everything") are not affected: CSF
 applies them in both directions and Imunify360 only accepts a connection's
 first packet.
 
-The plugin closes this with one chain at the top of `INPUT` (`AG_GUARD`,
-`tools/ban-guard.sh`): for redirected connections only, it applies CSF's
-allow list first and then the port bans, matched on the port the connection
-was originally sent to. Other traffic and this server's own outgoing
-connections are not touched. A `csfpost.sh` line puts it back when CSF
-restarts, and each run checks that it is still first. The rented-server
-lists use the same method (see below).
+The plugin closes this with one chain in the `mangle` table's `PREROUTING`
+(`AG_GUARD`, `tools/ban-guard.sh`). That table runs before any redirect, so
+the connection still carries the port it was sent to, and Imunify360 has no
+rules there to race with (it puts its `INPUT` chain back on top within a
+minute, so a rule in `INPUT` loses its place). For new incoming connections
+only, it applies CSF's allow list first and then the port bans. Other traffic
+and this server's own outgoing connections are not touched. A `csfpost.sh`
+line puts it back when CSF restarts, and each run checks that it is still
+first. The rented-server lists use the same place (see below).
 
 `bash tools/ban-leak.sh [HOURS]` (read only) checks the web logs of the last
 24 hours, or the hours given, for requests that reached the sites while a ban
 was in force, layer by layer. Allowed addresses are left out. It also lists the
-rules that rewrite or accept traffic before CSF. The report is also saved to
+rules that rewrite or accept traffic before CSF, and the banned addresses that
+sit inside an allow list (those bans have no effect). The report is also saved to
 `/root/ban-leak-DATE.txt`.
 
 ## Without cPanel
@@ -519,6 +522,17 @@ day); a list that fails to download, or returns far fewer
 addresses than before, keeps its previous version; ranges wider than /16 are
 refused. Yandex and Facebook don't publish address lists.
 
+Google and OpenAI publish several lists, one per kind of visitor; each shows as
+a chip on its tile and can be switched off on its own. Google: crawlers
+(Googlebot), special crawlers (AdsBot and the like), user-triggered fetchers
+(site verification, feed readers) and Google's own fetchers. OpenAI: GPTBot
+(training crawler), OAI-SearchBot (search) and ChatGPT-User (pages a user asks
+for). **Exclusions** (`SVC_EXCEPT`) keep single addresses or ranges out of the
+allowed lists even when a list contains them; the rest of the list stays
+allowed. Use it when one address of a service keeps attacking: a ban on an
+allowed address has no effect, because CSF applies allows first. The IP card,
+the review list and History offer this in one step for such an address.
+
 The card shows when the lists were last downloaded and where each one comes
 from; a built-in source's address can be changed there if the provider moves
 it. A source that can't be downloaded for the warning period (default 3 days)
@@ -533,11 +547,11 @@ rent out to anyone (virtual servers); the Providers tab can block those on chose
 (default web): Google Cloud, AWS (EC2), Azure, Oracle Cloud, DigitalOcean,
 Linode and Vultr. Unlike a provider ban, the providers' own services stay reachable — the
 Google Cloud list has no Googlebot or Gmail. The lists go into an ipset with
-one rule at the very top of the `INPUT` chain, ahead of CSF and of Imunify360:
-Imunify360 redirects greylisted addresses to its own WebShield ports and
-accepts them before CSF's rules, so a rule further down never saw that
-traffic. The rule matches the port the connection was originally sent to, so
-the redirect does not hide it. Addresses in `csf.allow` (and the files it
+one rule in the `mangle` table's `PREROUTING`, ahead of CSF and of
+Imunify360: Imunify360 redirects greylisted addresses to its own WebShield
+ports and accepts them before CSF's rules, so a rule in `INPUT` never saw that
+traffic. `PREROUTING` runs before the redirect, so the rule sees the port the
+connection was sent to. Addresses in `csf.allow` (and the files it
 includes) and the allowed services are exempt inside the set, as are this
 server's own IPs; only new incoming connections are dropped. Each run checks
 that the rule is still first and moves it back if another tool put its own

@@ -243,31 +243,33 @@ if [ "${GERCEK:-0}" = 1 ]; then
     DENY="$D" CSF_DIR=/etc/csf bash "$REPO/tools/block-hits.sh" --remove >/dev/null 2>&1
 fi
 
-# ── 3h) Kiralık liste kuralının yeri (yalnız gerçek CSF): INPUT'un başında, Imunify360'tan önce; yönlendirmeden önceki port ──
-# Imunify360 gri listeyi nat'ta WebShield portuna çevirip CSF'ten önce kabul ediyordu; kural LOCALINPUT'un sonundayken bu
-# trafiği hiç görmüyordu (sunucuda ölçüldü 2026-10-10). Burada Imunify'ın zinciri taklit edilir (IMU_T, INPUT'un başına).
+# ── 3h) Kiralık liste kuralının yeri (yalnız gerçek CSF): mangle PREROUTING, nat'tan önce ──
+# Imunify360 gri listeyi nat'ta WebShield portuna çevirip CSF'ten önce kabul ediyor ve kendi zincirini INPUT'un başına
+# yeniden koyuyor; kural INPUT'tayken ikinci sıraya düşüyordu (sunucuda ölçüldü 2026-10-11). mangle PREROUTING'te bu yarış yok.
 if [ "${GERCEK:-0}" = 1 ]; then
     mk; layer liste-web; run >/dev/null 2>&1
-    top() {   # kuralın önünde yalnız eklentinin kendi zinciri (ban koruması) olabilir
-        local s n; s=$(iptables -S INPUT | grep -- '^-A'); n=$(printf '%s\n' "$s" | grep -n -- '-j AG_CLOUD$' | cut -d: -f1)
-        [ -n "$n" ] && ! printf '%s\n' "$s" | head -n $(( n - 1 )) | grep -vq -- '-j AG_GUARD$' && echo G || echo "-:$(printf '%s\n' "$s" | head -n 2 | tr '\n' ' ')"; }
-    check "kiralık liste · kural INPUT'un başında" G "$(top)"
-    check "kiralık liste · CSF'in LOCALINPUT zincirinde kural yok" - "$(iptables -C LOCALINPUT ! -i lo -j AG_CLOUD 2>/dev/null && echo G || echo -)"
-    check "kiralık liste · yönlendirmeden önceki porta bakar (tcp 80, tcp 443, udp 443)" G "$([ "$(iptables -S AG_CLOUD | grep -c ctorigdstport)" = 3 ] && echo G || echo "-:$(iptables -S AG_CLOUD | grep -c ctorigdstport)")"
-    iptables -N IMU_T 2>/dev/null; iptables -I INPUT 1 -j IMU_T
+    mtop() {  # $1 zinciri mangle PREROUTING'te; önünde yalnız eklentinin kendi zincirleri olabilir
+        local s n; s=$(iptables -t mangle -S PREROUTING | grep -- '^-A'); n=$(printf '%s\n' "$s" | grep -n -- "-j $1\$" | cut -d: -f1)
+        [ -n "$n" ] && ! printf '%s\n' "$s" | head -n $(( n - 1 )) | grep -vqE -- '-j (AG_GUARD|AG_CLOUD)$' && echo G || echo "-:$(printf '%s\n' "$s" | head -n 2 | tr '\n' ' ')"; }
+    check "kiralık liste · kural mangle PREROUTING'te (nat'tan önce)" G "$(mtop AG_CLOUD)"
+    check "kiralık liste · filter INPUT ve LOCALINPUT'ta kural yok" - "$({ iptables -C INPUT ! -i lo -j AG_CLOUD || iptables -C LOCALINPUT ! -i lo -j AG_CLOUD; } 2>/dev/null && echo G || echo -)"
+    check "kiralık liste · tcp 80, tcp 443, udp 443 kuralları" G "$([ "$(iptables -t mangle -S AG_CLOUD | grep -c -- '--dport')" = 3 ] && echo G || echo "-:$(iptables -t mangle -S AG_CLOUD | grep -c -- '--dport')")"
+    iptables -t mangle -N IMU_M 2>/dev/null; iptables -t mangle -I PREROUTING 1 -j IMU_M
     run >/dev/null 2>&1
-    check "kiralık liste · başka zincir öne geçince tur kuralı yeniden başa alır" G "$(top)"
+    check "kiralık liste · mangle'da başka zincir öne geçince tur kuralı yeniden başa alır" G "$(mtop AG_CLOUD)"
+    iptables -t mangle -D PREROUTING -j IMU_M 2>/dev/null; iptables -t mangle -X IMU_M 2>/dev/null
     printf '151.80.5.5 # test müşterisi\n' >> "$A"; run >/dev/null 2>&1
     check "kiralık liste · csf.allow'daki adres kümede muaf" - "$(ipset test ag_cloud 151.80.5.5 >/dev/null 2>&1 && echo G || echo -)"
     check "kiralık liste · aynı aralıkta izinsiz adres kümede" G "$(ipset test ag_cloud 151.80.6.6 >/dev/null 2>&1 && echo G || echo -)"
     csf -r >/dev/null 2>&1
-    check "kiralık liste · csf -r sonrası csfpost.sh kuralı yine başa kurar" G "$(top)"
-    iptables -D INPUT -j IMU_T 2>/dev/null; iptables -F IMU_T 2>/dev/null; iptables -X IMU_T 2>/dev/null; cloud_off
+    check "kiralık liste · csf -r sonrası csfpost.sh kuralı yine kurar" G "$(mtop AG_CLOUD)"
+    cloud_off
 fi
 
 # ── 3i) Ban koruması (yalnız gerçek CSF): Imunify360'ın yönlendirdiği bağlantıda porta bağlı banlar ──
-# Ayrı bir ağ alanında dış istemci (10.99.0.2); Imunify taklidi istemcinin 80'ini 52224'e çevirip CSF'ten önce kabul eder.
-# Web kısmi banı korumasız sızar (ilk denetim), tur korumayı kurunca kesilir; SSH kısmi banı ve izin listesi web'i açık bırakır.
+# Ayrı bir ağ alanında dış istemci (10.99.0.2); Imunify taklidi istemcinin 80'ini 52224'e çevirir, CSF'ten önce kabul eder ve
+# kendi zincirini her seferinde INPUT'un başına yeniden koyar (sunucudaki gibi). Web kısmi banı korumasız sızar, tur korumayı
+# kurunca kesilir; SSH kısmi banı ve izin listesi web'i açık bırakır; kiralık listedeki istemci de kesilir.
 if [ "${GERCEK:-0}" = 1 ] && command -v ip >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
     NC=10.99.0.2; NS=10.99.0.1
     nsup() { ip netns del agcli 2>/dev/null; ip link del agv0 2>/dev/null; ip netns add agcli; ip link add agv0 type veth peer name agv1
@@ -279,24 +281,34 @@ if [ "${GERCEK:-0}" = 1 ] && command -v ip >/dev/null 2>&1 && command -v python3
             iptables -t nat -C PREROUTING -j IMU_T 2>/dev/null || iptables -t nat -I PREROUTING 1 -j IMU_T
             iptables -N IMU_T 2>/dev/null; iptables -F IMU_T; iptables -A IMU_T -m conntrack ! --ctstate NEW -j RETURN
             iptables -A IMU_T -p tcp -m set --match-set agimu src -m multiport --dports 52223,52224 -j ACCEPT
-            iptables -C INPUT -j IMU_T 2>/dev/null || iptables -I INPUT 1 -j IMU_T; }
+            while iptables -D INPUT -j IMU_T 2>/dev/null; do :; done; iptables -I INPUT 1 -j IMU_T; }    # her seferinde en başa (Imunify gibi)
     web() { [ "$(ip netns exec agcli curl -s -m 4 -o /dev/null -w '%{http_code}' http://$NS/ 2>/dev/null)" = 200 ] && echo G || echo -; }
     gstate() { STATE="$R/var/lib/csf_autogroup/guard.sum" CSF_DIR=/etc/csf bash "$REPO/tools/ban-guard.sh" "$@" >/dev/null 2>&1; }
     nsup
     mk; printf 'tcp|in|d=80,443|s=%s # csf_autogroup: test kısmi ban [svc=web] - %s\n' $NC "$DT" >> "$D"; csf -r >/dev/null 2>&1; NEEDR=0; imu
     check "ban koruması · koruma yokken web kısmi banı Imunify yönlendirmesiyle sızar" G "$(web)"
-    run >/dev/null 2>&1
-    check "ban koruması · tur korumayı kurar: web kısmi banı kesilir" - "$(web)"
-    check "ban koruması · koruma INPUT'un başında" G "$(iptables -S INPUT | grep -- '^-A' | head -n 1 | grep -q AG_GUARD && echo G || echo -)"
+    run >/dev/null 2>&1; imu
+    check "ban koruması · tur korumayı kurar: Imunify en baştayken bile web kısmi banı kesilir" - "$(web)"
+    check "ban koruması · koruma mangle PREROUTING'te" G "$(mtop AG_GUARD)"
     csf -r >/dev/null 2>&1; imu
-    check "ban koruması · csf -r sonrası csfpost kurar, Imunify öndeyken tur başa alır" - "$(run >/dev/null 2>&1; web)"
-    mk; printf 'tcp|in|d=22|s=%s # csf_autogroup: test kısmi ban [svc=ssh] - %s\n' $NC "$DT" >> "$D"; csf -r >/dev/null 2>&1; NEEDR=0; imu; run >/dev/null 2>&1
+    check "ban koruması · csf -r sonrası csfpost kurar, Imunify en baştayken kesilir" - "$(web)"
+    mk; printf 'tcp|in|d=22|s=%s # csf_autogroup: test kısmi ban [svc=ssh] - %s\n' $NC "$DT" >> "$D"; csf -r >/dev/null 2>&1; NEEDR=0; run >/dev/null 2>&1; imu
     check "ban koruması · yalnız SSH kısmi banı: web açık" G "$(web)"
-    mk; printf 'tcp|in|d=80,443|s=%s # test - %s\n' $NC "$DT" >> "$D"; printf '%s # test müşterisi\n' $NC >> "$A"; csf -r >/dev/null 2>&1; NEEDR=0; imu; run >/dev/null 2>&1
+    mk; printf 'tcp|in|d=80,443|s=%s # test - %s\n' $NC "$DT" >> "$D"; printf '%s # test müşterisi\n' $NC >> "$A"; csf -r >/dev/null 2>&1; NEEDR=0; run >/dev/null 2>&1; imu
     check "ban koruması · csf.allow + web kısmi banı: izin önce gelir" G "$(web)"
+    # kiralık liste: istemci listede, Imunify yönlendiriyor ve en başta
+    mk; echo "$NC/32" > "$LST"
+    printf '%s\n' CLOUD_BAN=1 CLOUD_SOURCES= CLOUD_TCP=80,443 CLOUD_UDP=443 "CLOUD_EXTRA=\"test|file://$LST\"" >> "$R/app/config.env"
+    csf -r >/dev/null 2>&1; NEEDR=0; run >/dev/null 2>&1; imu
+    check "kiralık liste · Imunify yönlendirip en başta dururken listedeki istemci kesilir" - "$(web)"
+    # istemci 80'de dinler (TCP_OUT 80'e izin verir; cevabın kaynak portu da 80, kural yalnız hedef porta bakmalı)
+    c=$(ip netns exec agcli bash -c "cd /tmp && (nohup python3 -m http.server 80 >/dev/null 2>&1 &) ; sleep 1"; curl -s -m 4 -o /dev/null -w '%{http_code}' http://$NC/ 2>/dev/null)
+    ip netns exec agcli pkill -f 'http.server 80' 2>/dev/null
+    check "kiralık liste · sunucunun listedeki adrese kendi bağlantısı kopmaz" G "$([ "$c" = 200 ] && echo G || echo -)"
+    cloud_off
     echo ENABLED=0 >> "$R/app/config.env"; run >/dev/null 2>&1
-    check "ban koruması · duraklatınca kural ve csfpost satırı kalkar" - "$(iptables -L AG_GUARD -n >/dev/null 2>&1 || grep -qF '# csf_autogroup guard' /etc/csf/csfpost.sh && echo G || echo -)"
-    gstate --remove; iptables -D INPUT -j IMU_T 2>/dev/null; iptables -F IMU_T 2>/dev/null; iptables -X IMU_T 2>/dev/null
+    check "ban koruması · duraklatınca kural ve csfpost satırı kalkar" - "$({ iptables -t mangle -L AG_GUARD -n || iptables -L AG_GUARD -n; } >/dev/null 2>&1 || grep -qF '# csf_autogroup guard' /etc/csf/csfpost.sh && echo G || echo -)"
+    gstate --remove; while iptables -D INPUT -j IMU_T 2>/dev/null; do :; done; iptables -F IMU_T 2>/dev/null; iptables -X IMU_T 2>/dev/null
     iptables -t nat -D PREROUTING -j IMU_T 2>/dev/null; iptables -t nat -F IMU_T 2>/dev/null; iptables -t nat -X IMU_T 2>/dev/null; ipset destroy agimu 2>/dev/null
     pkill -f "http.server" 2>/dev/null; ip netns del agcli 2>/dev/null; ip link del agv0 2>/dev/null
 fi

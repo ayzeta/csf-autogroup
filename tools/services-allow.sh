@@ -45,6 +45,22 @@ ipv4_list() {     # [EN GENİŞ ÖNEK, varsayılan 16]
     grep -oE '(^|[^0-9.])[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?' | grep -oE '[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?' |
         awk -F'[./]' -v mn="$mn" '{ ok = 1; for (i = 1; i <= 4; i++) if ($i > 255) ok = 0; if (NF == 5 && ($5 < mn || $5 > 32)) ok = 0; if (ok) print }' | sort -u
 }
+# EXCEPT: izinli servis listelerinde olsa da izinli sayılmayacak adresler (boşluk/virgül; IP ya da CIDR). Kapsayan aralık
+# o adresler dışarıda kalacak şekilde en az parçaya bölünür; böylece o adresin csf.deny'deki banı çalışır.
+except_filter() {
+    [ -n "${EXCEPT// /}" ] || { cat; return; }
+    awk -v ex="${EXCEPT//,/ }" '
+        function v4(x,  p) { split(x, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
+        function ip(v) { return int(v / 16777216) "." int(v / 65536) % 256 "." int(v / 256) % 256 "." v % 256 }
+        function st(lo, hi,  i, o) { o = 0; for (i = 1; i <= n; i++) { if (EL[i] <= lo && EH[i] >= hi) return 2; if (EL[i] <= hi && EH[i] >= lo) o = 1 }; return o }
+        function part(lo, b,  hi, k) { hi = lo + 2 ^ (32 - b) - 1; k = st(lo, hi)
+            if (k == 0) { print ip(lo) (b == 32 ? "" : "/" b); return }
+            if (k == 2 || b >= 32) return
+            part(lo, b + 1); part(lo + 2 ^ (31 - b), b + 1) }
+        BEGIN { m = split(ex, E, /[ 	]+/); for (i = 1; i <= m; i++) { if (E[i] !~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\/[0-9]+)?$/) continue
+                    split(E[i], q, "/"); b = (q[2] == "" ? 32 : q[2] + 0); n++; EL[n] = v4(q[1]); EH[n] = EL[n] + 2 ^ (32 - b) - 1 } }
+        { split($1, q, "/"); b = (q[2] == "" ? 32 : q[2] + 0); lo = v4(q[1]); lo = lo - lo % (2 ^ (32 - b)); part(lo, b) }'
+}
 
 if [ "${1:-}" = "--remove" ]; then
     ch=0
@@ -96,7 +112,7 @@ for s in "${SOURCES[@]}"; do
     ff=$(cat "$CACHE/$name.fail" 2>/dev/null); [[ "$ff" =~ ^[0-9]+$ ]] || ff=0
     st+="$name|$n|$ot|$err|$ff"$'\n'
     printf '%-20s %5s adres\n' "$name" "$n"
-    [ "$n" -gt 0 ] && body+="# $name ($src)"$'\n'"$(printf '%s\n' "$new" | sed "s|\$| # csf_autogroup: service $name|")"$'\n'
+    [ "$n" -gt 0 ] && body+="# $name ($src)"$'\n'"$(printf '%s\n' "$new" | except_filter | sed "s|\$| # csf_autogroup: service $name|")"$'\n'
     total=$(( total + n ))
 done
 

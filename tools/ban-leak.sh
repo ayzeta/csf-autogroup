@@ -52,6 +52,7 @@ awk -v now="$NOW" '
           print c "|" t "|9999999999|" k "|"; next }
       if (c ~ /\|s=/ && c ~ /(^|\|)in(\||$)/ || c ~ /^(tcp|udp)\|in\|/) {          # gelişmiş satır: tcp|in|d=80,443|s=CIDR
           s = c; sub(/.*s=/, "", s); sub(/\|.*/, "", s); d = ""; if (match(c, /d=[0-9,_:]+/)) { d = substr(c, RSTART + 2, RLENGTH - 2) }
+          split(s, sq, "/"); if (sq[2] != "" && sq[2] + 0 < 8) next      # /8 den geniş kaynak: herkese port kuralı, ban değil
           if (s ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\/[0-9]+)?$/ && c ~ /^tcp/) print s "|" t "|9999999999|kısmi ban (portlar)|" d } }' "$CSF_DIR/csf.deny" 2>/dev/null > "$W/bans"
 # 2b) geçici banlar lfd günlüğünden: "*Blocked in csf* for N secs"; erken kaldırma ("temporary block removed") bitişi öne çeker
 for f in "$LFD_LOG.1" "$LFD_LOG"; do [ -r "$f" ] && cat "$f"; done | awk -v now="$NOW" '
@@ -132,7 +133,7 @@ awk -v since="$SINCE" -v skey="$SKEY" -v bf="$W/bans" -v sf="$W/sets" -v df="$W/
       nm = split(HT[ip], hh, " ")
       for (i = 1; i <= nm; i++) { h = hh[i]; if (h == "") continue
           if (h ~ /^s:/) { k = substr(h, 3); if (!inport(port, KP[k])) continue; lay = KK[k]; st = 0; det = "şu an kümede" }
-          else { k = h + 0; if (BS[k] == -1) { UNK++; UNKI[ip] = 1; continue }; if (ts < BS[k] + 5 || ts >= BE[k]) continue; if (!inport(port, BP[k])) continue; lay = BK[k]; st = BS[k]; det = BC[k] }
+          else { k = h + 0; if (!inport(port, BP[k])) continue; if (BS[k] == -1) { UNK++; UNKI[ip] = 1; continue }; if (ts < BS[k] + 5 || ts >= BE[k]) continue; lay = BK[k]; st = BS[k]; det = BC[k] }
           LN[lay]++; LI[lay, ip]++; if (!((lay, ip) in LSEEN)) { LSEEN[lay, ip] = 1; LU[lay]++ }
           if (!(lay in LF) || ts < LF[lay]) LF[lay] = ts; if (ts > LL[lay]) LL[lay] = ts
           if (!((lay, ip) in EX)) EX[lay, ip] = strftime("%d.%m %H:%M:%S", ts) " " site " " f[1] " " substr(rq, 1, 60) (st ? " · ban " strftime("%d.%m %H:%M", st) : "") " · " det
@@ -152,7 +153,18 @@ awk -v since="$SINCE" -v skey="$SKEY" -v bf="$W/bans" -v sf="$W/sets" -v df="$W/
                 printf "    %-15s %5d istek%s · %s\n", b, bv, (b in GRAY ? " · Imunify gri listesinde" : ""), EX[lay, b]; delete T[b]; c++ }
             for (ip in T) delete T[ip]; print "" } }'
 
-# 5) atlatma yolları: CSF'ten (LOCALINPUT) önce adres çeviren ya da kabul eden kurallar
+# 5) etkisiz banlar: csf.deny'deki tek IP'lerden izin listesinde olanlar (CSF izni bandan önce uygular, ban işlemez)
+echo; echo "Banlı ama izin listesinde (bu banlar etkisiz):"
+{ while IFS= read -r f; do [ -r "$f" ] && sed "s|^|$f\t|" "$f"; done < <(printf '%s\n' "$CSF_DIR/csf_autogroup.services.allow" "$CSF_DIR/csf.allow"; awk '/^[[:space:]]*Include[[:space:]]/ { print $2 }' "$CSF_DIR/csf.allow" 2>/dev/null)
+  echo "#--"; grep -oE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+ ' "$CSF_DIR/csf.deny" 2>/dev/null; } | awk -F'\t' '
+    function v4(x,  p) { split(x, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
+    !S { if ($0 == "#--") { S = 1; next }; l = $2; sub(/#.*/, "", l); split(l, w, /[ \t]+/); a = w[1]; if (a !~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\/[0-9]+)?$/) next
+         split(a, q, "/"); b = (q[2] == "" ? 32 : q[2] + 0); if (b < 8) next; n++; L[n] = v4(q[1]); H[n] = L[n] + 2 ^ (32 - b) - 1
+         nm = $2; if (match(nm, /service [a-z0-9-]+/)) nm = substr(nm, RSTART + 8, RLENGTH - 8); else { nm = $1; sub(/.*\//, "", nm) }; N[n] = nm " (" a ")"; next }
+    { ip = $1; v = v4(ip); for (i = 1; i <= n; i++) if (v >= L[i] && v <= H[i]) { c++; if (c <= 20) printf "  %-15s %s\n", ip, N[i]; break } }
+    END { printf "  toplam: %d\n", c + 0 }'
+
+# 6) atlatma yolları: CSF'ten (LOCALINPUT) önce adres çeviren ya da kabul eden kurallar
 echo; adim "bitti"
 echo "CSF'ten önce çalışan çeviri/kabul kuralları (CSF banlarını atlatabilir):"
 iptables -t nat -S PREROUTING 2>/dev/null | grep -E 'DNAT|REDIRECT|-j [A-Za-z_]+' | grep -v '^-P' | sed 's/^/  nat  /'

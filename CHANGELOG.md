@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.13.8 — 2026-10-12
+
+- **Fix — the Imunify360 protection lost its place.** Imunify360 puts its own
+  `INPUT` chain back on top within about a minute, so the 1.13.7 rules in
+  `INPUT` (ban protection and rented-server lists) ended up behind it again.
+  Both now live in the `mangle` table's `PREROUTING`: it runs before the
+  redirect, so the original port is seen, and Imunify360 has no rules there.
+  Only new incoming connections are checked; this server's own outgoing
+  connections are not touched. Nothing is left in `INPUT` after the update.
+- **Allowed-service sub-lists:** Google (4 lists) and OpenAI (GPTBot,
+  OAI-SearchBot, ChatGPT-User) show each list as a chip on their tile; each can
+  be switched off on its own (`SVC_SKIP`).
+- **New: exclusions from allowed services** (`SVC_EXCEPT`): addresses or ranges
+  that stay out of the allowed lists even when a list contains them; the
+  covering range is split so the rest stays allowed. A ban on an allowed
+  address has no effect (CSF applies allows first); the IP card, the review
+  list and History offer "Exclude from allowed services" for such an address.
+- **IP card redesigned:** the answer first (banned or not, and whether the ban
+  actually works), then firewall layers, blocks, allow lists and the owner in
+  their own sections. An allowed address no longer says "you can ban it by
+  hand" while also saying bans have no effect.
+- **Measure impact also shows past bans:** how many of the provider's addresses
+  are banned in CSF, how many of those bans work, how many sit in a
+  rented-server list and how many are on allowed-service addresses (no
+  effect), with the services attacked and the bans one by one. When the last
+  24 hours had no traffic but there were bans, the verdict says so.
+- **"Service unknown" fills in over time:** the attacked service of a
+  permanent repeat ban is read from the first temp ban in `lfd.log` and its
+  rotated copies (also `.gz`) and kept in a cache, so it no longer disappears
+  when the log rotates.
+- **Glossary** is a proper button at the start of the header actions; with a
+  window open the page scrolls once (no frame inside a frame).
+- **`tools/ban-leak.sh`:** port rules for everyone (`s=0.0.0.0/0`) are no
+  longer counted as bans; new section *banned but allowed* lists bans that sit
+  inside an allow list, with the list.
+
 ## 1.13.7 — 2026-10-10
 
 - **Fix — with Imunify360, port-based bans could be bypassed.** Imunify360

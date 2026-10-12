@@ -28,6 +28,11 @@ SVC=$(cat_of SVC_CATALOG); CLD=$(cat_of CLOUD_CATALOG)
     sed -n 's/^ *\([a-z]*\)) *REPLY="\(https:[^"]*\)".*/\1|\2/p' "$ENG" | awk -F'|' -v c=" $CLD " 'index(c, " " $1 " ") { print "CLOUD_URLS\t" $0 }'
     printf 'SVC_EXTRA\t%s\n' 'odeme|https://ornek.com/ips.txt?a=1&b=2 ofis|203.0.113.10 ag|203.0.113.0/24'
     printf 'CLOUD_EXTRA\t%s\n' 'hetzner|https://ornek.com/liste.txt ovh-2|https://ornek.com/a.json?x=1'
+    # alt liste kapatma: hazır kaynakların bütün alt liste adları (tek tek ve hepsi birden), boş değer
+    SUB=$(grep -oE '[a-z0-9-]+\|(https://[A-Za-z0-9.-]+\.[A-Za-z]{2,}|\$[A-Z]+/)' "$ENG" | sed 's/|.*//' | awk -v svc=" $SVC " '{ b = $0; sub(/-.*/, "", b) } index(svc, " " b " ") && $0 ~ /-/' | sort -u)
+    for x in $SUB; do printf 'SVC_SKIP\t%s\n' "$x"; done
+    printf 'SVC_SKIP\t%s\n' "$(echo $SUB | tr ' ' ',')" ''
+    printf 'SVC_EXCEPT\t%s\n' '74.7.241.35' '74.7.241.35 74.7.243.0/24' '203.0.113.0/8 198.51.100.7/32' ''
     printf 'ASN_LIST\t%s\n' 'AS396982,AS14061,AS8075'
     printf 'ASN_ALL\t%s\n' 'AS16276'
     for k in ASN_TCP CLOUD_TCP; do printf '%s\t%s\n' "$k" '80,443' "$k" '22,80,443,465,587' "$k" '30000:35000,8080' "$k" ''; done
