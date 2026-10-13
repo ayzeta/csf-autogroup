@@ -67,6 +67,15 @@ async function layoutChecks(page, label, width) {
         const tops = await page.$$eval('.ag-head-actions .ag-btn', L => L.map(b => Math.round(b.getBoundingClientRect().top)));
         check('390: başlık düğmeleri aynı satırda', tops.length >= 3 && Math.max(...tops) - Math.min(...tops) <= 2, tops.join(','));
       }
+      if (width === 1280 && tab === 'history') {
+        // zaman sütunu bütün satırlarda aynı sağ kenarda (menüsüz satırlar 42 px sağa kayıyordu); her satırda menü hücresi var
+        const r = await page.evaluate(() => { const rows = Array.from(document.querySelectorAll('#ag-events .ag-ev')); if (!rows.length) return null;
+          const R = rows.map(x => { const t = x.querySelector('.ag-ev-time'); return t ? Math.round(t.getBoundingClientRect().right) : -1; }).filter(v => v > 0);
+          // tarih metninin sağ kenarı: aç/kapa işaretinin yeri her satırda ayrılmış olmalı (yoksa rakamlar kayar)
+          const T = rows.map(x => { const t = x.querySelector('.ag-ev-time'); if (!t || !t.firstChild || t.firstChild.nodeType !== 3) return -1; const rg = document.createRange(); rg.selectNodeContents(t.firstChild); return Math.round(rg.getBoundingClientRect().right); }).filter(v => v > 0);
+          return { n: rows.length, spread: Math.max(...R) - Math.min(...R), textSpread: T.length ? Math.max(...T) - Math.min(...T) : 0, noMenu: rows.filter(x => !x.querySelector('.ag-ev-m')).length }; });
+        check('1280: Geçmiş satırlarında zaman sütunu ve tarih metni aynı hizada, her satırda menü hücresi', r === null || (r.spread <= 1 && r.textSpread <= 1 && r.noMenu === 0), r ? JSON.stringify(r) : 'olay yok, atlandı');
+      }
       if (width === 390 && tab === 'history') {
         // Geçmiş satırı: zaman ayrıntı metninin içinde (başlıktaki gizli), ⋯ üst satırın sağında, satır en çok 100 px
         const r = await page.evaluate(() => { const e = document.querySelector('.ag-ev'); if (!e) return null;

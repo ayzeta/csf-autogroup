@@ -1106,7 +1106,8 @@
         '<span class="ag-pill ' + evCls(e) + '"' + evTitle(e.type) + '>' + esc(t('ev_' + e.type)) + '</span>' +
         '<span class="ag-ev-time" title="' + esc(new Date(e.t * 1000).toLocaleString(loc())) + '">' + stamp(e.t) + '<span class="ag-chev">' + (open ? '−' : '+') + '</span></span></div>' +
         '<div class="ag-ev-d"><span class="ag-mono">' + esc(cs.slice(0, 3).join(', ')) + '</span>' + (cs.length > 3 ? ' +' + num(cs.length - 3) : '') + ' · ' + evDetail(e) +
-        '<span class="ag-ev-tm2" title="' + esc(new Date(e.t * 1000).toLocaleString(loc())) + '">' + stamp(e.t) + '<span class="ag-chev">' + (open ? '−' : '+') + '</span></span></div></div></div>' +
+        '<span class="ag-ev-tm2" title="' + esc(new Date(e.t * 1000).toLocaleString(loc())) + '">' + stamp(e.t) + '<span class="ag-chev">' + (open ? '−' : '+') + '</span></span></div></div>' +
+        '<div class="ag-ev-m"><span class="ag-ev-m0"></span></div></div>' +
         (open ? '<div class="ag-grp-l">' + g.map(function (x) { return x.cidr ? '<span class="ag-cidr" data-ip="' + esc(ipOf(x)) + '">' + esc(x.cidr) + '</span>' : ''; }).join('') + '</div>' : '') + '</div>';
     }
     var rows = comp.map(function (g, i) { return g.length > 1 ? grpRow(g) : evRow(g[0], i); }).join('');
@@ -1120,7 +1121,8 @@
       var ic = evIcon(e);
       // zaman ve aç/kapa, başlık satırının sağında (rozetin yanında): ayrı sütun telefonda satırı bir satır uzatıyordu
       // telefonda (ag-ev-tm2) ayrıntının sonunda metin olarak: başlıkta sığmayınca tek başına satıra düşüyordu
-      var tmi = stamp(e.t) + (has ? '<span class="ag-chev">' + (open ? '−' : '+') + '</span>' : ''), tmt = ' title="' + esc(new Date(e.t * 1000).toLocaleString(loc())) + '"';
+      // aç/kapa işaretinin yeri her satırda ayrılır (IP listesi yoksa boş): tarih rakamları satırdan satıra kaymasın
+      var tmi = stamp(e.t) + '<span class="ag-chev">' + (has ? (open ? '−' : '+') : '') + '</span>', tmt = ' title="' + esc(new Date(e.t * 1000).toLocaleString(loc())) + '"';
       var tm = '<span class="ag-ev-time"' + tmt + '>' + tmi + '</span>', tm2 = '<span class="ag-ev-tm2"' + tmt + '>' + tmi + '</span>';
       return '<div class="ag-item"><div class="ag-ev' + (has ? ' clickable" data-act="toggle" aria-expanded="' + !!open + '" data-key="' + esc(key) : '') + '">' +
         '<div class="ag-ev-ic ' + ic[1] + '">' + IC[ic[0]] + '</div>' +
@@ -1129,7 +1131,7 @@
         (e.cidr ? '<span class="ag-cidr" data-ip="' + esc(e.ips && e.ips[0] && e.ips[0].ip ? e.ips[0].ip
           : /\//.test(e.cidr) && !/\/32$/.test(e.cidr) ? String(e.cidr).replace(/\/\d+$/, '').replace(/\.0$/, '.1') : String(e.cidr).replace(/\/32$/, '')) + '">' + esc(e.cidr) + '</span>' : '') + '<span class="ag-pill ' + evCls(e) + '"' + evTitle(e.type) + '>' + esc(t('ev_' + e.type)) + '</span>' + tm + '</div>' +
         '<div class="ag-ev-d">' + evDetail(e, note ? ' <span class="ag-pill ag-pill-n ag-pill-xs ag-ev-st" title="' + esc(t('st_tip')) + '">' + esc(note) + '</span>' : '') + tm2 + '</div></div>' +
-        (mitems ? '<div class="ag-ev-m">' + menu('hm:' + key, mitems) + '</div>' : '') + '</div>' +
+        '<div class="ag-ev-m">' + (mitems ? menu('hm:' + key, mitems) : '<span class="ag-ev-m0"></span>') + '</div></div>' +   // menüsüz satırda yer tutucu: zaman sütunu kaymasın
         (open ? ipTable(e.ips, e.total) : '') + '</div>';
     }
     var more = list.length > shown.length || (EVL && EVMORE) ? '<div class="ag-card-f"><button class="ag-btn ag-btn-sm ag-btn-ghost" data-act="evmore"' +
@@ -3376,7 +3378,7 @@
     if (st.cov) return st.cov.self ? t('st_ban') : t('st_cov', st.cov.cidr);
     if (st.r) return t('st_review');
     if (st.p) return t('st_watch');
-    if (st.ig) return st.ig.until >= '9999' ? t('st_ign_f') : t('st_ign', st.ig.until);
+    if (st.ig) return st.ig.until >= '9999' ? t('st_ign_f') : t('st_ign', dayStr(st.ig.until));   // panelin tarih biçimiyle (ham 2027-01-03 görünüyordu)
     if (BAN_TYPES.indexOf(e.type) >= 0) return t('st_unbanned');
     if (/^warn16|^skip_wl$/.test(e.type)) return t('st_left');
     return '';

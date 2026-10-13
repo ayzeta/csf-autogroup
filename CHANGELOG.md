@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.14.5 — 2026-10-14
+
+- **History rows line up:** rows without a ⋯ menu (provider-ban changes,
+  removed temp bans, grouped rows) drew their time further right than the
+  rest, and the expand mark (+) that only rows with an IP list carry pushed
+  the date digits of those rows left. Every row now keeps the menu column
+  and the mark's slot, empty where there is nothing to show. The browser
+  test checks that the time column and the date digits each have one right
+  edge.
+- **Fix:** the "ignored (until …)" state note on History rows showed the raw
+  date (2027-01-03); it uses the panel's date format now.
+
 ## 1.14.4 — 2026-10-14
 
 - **Settings sections open the same way:** every section starts with its

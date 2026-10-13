@@ -1192,3 +1192,4 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-sec-lead { margin: 0 0 -6px; font-size: 13px; color: var(--ag-text-2); line-height: 1.5; }   /* ayar bölümünün açıklaması, kartların üstünde */
 /* telefonda öncelik: 30 günlük grafik Kontrol edilecekler ve listelerin altına (geniş ekranda yeri değişmez) */
 @media (max-width: 760px) { .ag-wrap { display: flex; flex-direction: column; } .ag-wrap > .ag-activity { order: 5; } .ag-wrap > .ag-foot { order: 9; } }
+.ag-ev-m0 { display: inline-block; width: 30px; height: 30px; }   /* menüsüz Geçmiş satırında ⋯ düğmesinin yeri boş kalır, sütun kaymaz */
