@@ -115,7 +115,13 @@ settings, with no prompts. `config.env` is left untouched.
   `IGNORE_ALLOW = "0"`) but the ban does not work (*Ban not working*); with
   `IGNORE_ALLOW = "1"`, or in `csf.ignore` / `csf.rignore`, lfd does not ban it
   at all (*Ignored*; CSF refuses to ban an ignored address on its own, but a ban
-  on its block cuts it). Several
+  on its block cuts it). Each row names the allow or ignore entry behind it,
+  with the comment you wrote on that line (`1.2.3.4 # office`); an ignore that
+  lfd took from `CC_IGNORE`, `RELAYHOSTS` or a reverse-DNS match in
+  `csf.rignore` is traced the way lfd traces it. Failed logins coming from the
+  server's own address (lfd never bans those) show as *Server's own IP*, with
+  the mail accounts that tried wrong passwords from inside the server when the
+  mail log shows them. Several
   attackers from one allow entry, block or network are grouped like normal bans.
   A partial ban whose open services keep being attacked shows as *Open service*.
 - **Active block bans** — a sortable, paged table with each block's owner,
@@ -160,7 +166,7 @@ settings, with no prompts. `config.env` is left untouched.
 - **Ban announced range** — when the range the IP's owner announces is between
   /17 and /23, the IP card offers to ban just that range instead of the /16;
   a suspicious network whose IPs mostly sit in one such range offers it too.
-- **Most blocked providers** (by ASN) — four tabs:
+- **Most blocked providers** (by ASN) — three tabs:
   - *Attacks* — ranked by block bans and single bans, with each provider's most
     common ban reason, the attacked services (web, mail, SSH…) with their
     counts, and when the last attack was. A provider with 5+ block bans gets a suggestion to add
@@ -169,10 +175,11 @@ settings, with no prompts. `config.env` is left untouched.
   - *Added by hand* — ranges in `csf.deny` added outside CSF Auto-Group.
   - *Imunify360* (only with Imunify360) — providers in Imunify360's **own** block
     list on this server, with the block reasons. Read-only.
-  - *Banned* — providers closed by a provider ban or fully covered by a
-    rented-server list; they are left out of the other rankings (and the
-    weekly summary's). A provider banned with the port list only comes back
-    to *Attacks* while attacks continue on services that list leaves open.
+- **Banned providers** — its own card below: providers closed by a provider
+  ban or fully covered by a rented-server list, with how they are closed and
+  whether CSF has loaded their ranges; they are left out of the rankings above
+  (and the weekly summary's). A provider banned with the port list only comes
+  back to *Attacks* while attacks continue on services that list leaves open.
 
   Each list shows the first 5 with the total in its header; *More* and
   *Show all* open the rest, *Collapse* closes them again.
@@ -634,6 +641,12 @@ CSF/lfd in a local test VM (WSL2 with CSF installed): bans go into the real
 the real tool (ipset, rule, `csfpost.sh`), provider and country bans go into the
 real `csf.conf`, owner lookups use real Team Cymru DNS. The VM's CSF files are
 backed up first and restored after every scenario.
+`bash tests/senaryo/kur-bulut.sh [cpanel-csf.rpm]` prepares a disposable
+Debian/Ubuntu container (root, NET_ADMIN) for the same real-CSF run: it
+installs cPanel's CSF from GitHub or from a given `cpanel-csf` package, stubs
+the cPanel-only Perl modules, writes a test `csf.conf` and starts lfd; then
+`GERCEK=1 bash tests/senaryo/calistir.sh` runs there. Never run it on a
+server: it rewrites `csf.conf` and the firewall.
 
 `bash tests/metin/calistir.sh` checks that every concept keeps one name in the
 panel, mails and log: old or duplicate names listed in the script fail it.

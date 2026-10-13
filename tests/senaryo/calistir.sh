@@ -316,7 +316,8 @@ if [ "${GERCEK:-0}" = 1 ] && command -v ip >/dev/null 2>&1 && command -v python3
             iptables -N IMU_T 2>/dev/null; iptables -F IMU_T; iptables -A IMU_T -m conntrack ! --ctstate NEW -j RETURN
             iptables -A IMU_T -p tcp -m set --match-set agimu src -m multiport --dports 52223,52224 -j ACCEPT
             while iptables -D INPUT -j IMU_T 2>/dev/null; do :; done; iptables -I INPUT 1 -j IMU_T; }    # her seferinde en başa (Imunify gibi)
-    web() { [ "$(ip netns exec agcli curl -s -m 4 -o /dev/null -w '%{http_code}' http://$NS/ 2>/dev/null)" = 200 ] && echo G || echo -; }
+    # --noproxy: geliştirme oturumunun vekil ayarı (http_proxy) ağ alanındaki istemciye geçmesin
+    web() { [ "$(ip netns exec agcli curl -s --noproxy '*' -m 4 -o /dev/null -w '%{http_code}' http://$NS/ 2>/dev/null)" = 200 ] && echo G || echo -; }
     gstate() { STATE="$R/var/lib/csf_autogroup/guard.sum" CSF_DIR=/etc/csf bash "$REPO/tools/ban-guard.sh" "$@" >/dev/null 2>&1; }
     nsup
     mk; printf 'tcp|in|d=80,443|s=%s # csf_autogroup: test kısmi ban [svc=web] - %s\n' $NC "$DT" >> "$D"; csf -r >/dev/null 2>&1; NEEDR=0; imu
@@ -349,11 +350,13 @@ if [ "${GERCEK:-0}" = 1 ] && command -v ip >/dev/null 2>&1 && command -v python3
     # işlemez (istemci siteye ulaşır) → "Ban işlemiyor"; IGNORE_ALLOW=1: lfd banlamaz, "ignored" yazar → "lfd yoksaydı"
     SLOG=$(awk -F'"' '/^SSHD_LOG/ { print $2 }' /etc/csf/csf.conf); SLOG=${SLOG:-/var/log/secure}; touch "$SLOG"
     sshfail() { local i; for i in $(seq 1 10); do printf '%s %s sshd[%s]: Failed password for root from %s port %s ssh2\n' "$(LC_ALL=C date '+%b %e %H:%M:%S')" "$(hostname -s)" "$((7000 + i))" "$1" "$((40000 + i))" >> "$SLOG"; done; }
+    # lfd yeniden başlatma: systemd varsa onunla, yoksa (kapsayıcı, tests/senaryo/kur-bulut.sh) doğrudan
+    lfdre() { if systemctl restart lfd >/dev/null 2>&1; then return; fi; pkill -f 'lfd - ' 2>/dev/null; sleep 1; /usr/sbin/lfd >/dev/null 2>&1; }
     rvhas() { run --status --json 2>/dev/null | grep -o '"review":\[.*\],"ignored"' | sed 's/^"review":\[//; s/,{"t":/\n{"t":/g' | grep -E "^\{\"t\":[0-9]+,\"type\":\"allow_ban\",\"cidr\":\"$1\"" | grep -q "$2"; }
     sed -i "/^$NC|/d" /var/lib/csf/csf.tempip 2>/dev/null     # önceki koşuların tekrar ban geçmişi: LF_PERMBLOCK eşiğinde lfd geçici değil kalıcı banlar
     for ia in 0 1; do
         mk; printf '%s # test müşterisi\n' $NC >> "$A"; sed -i "s/^IGNORE_ALLOW = .*/IGNORE_ALLOW = \"$ia\"/" "$CF"; echo "LFD_LOG=/var/log/lfd.log" >> "$R/app/config.env"
-        csf -r >/dev/null 2>&1; NEEDR=0; systemctl restart lfd; sleep 8; sshfail $NC; sleep 25; imu
+        csf -r >/dev/null 2>&1; NEEDR=0; lfdre; sleep 8; sshfail $NC; sleep 25; imu
         if [ "$ia" = 0 ]; then
             check "izinli saldırgan · IGNORE_ALLOW=0: lfd izinli IP'yi banlar (geçici liste)" G "$(grep -q "|$NC|" /var/lib/csf/csf.tempban && echo G || echo -)"
             check "izinli saldırgan · IGNORE_ALLOW=0: ban işlemez, istemci siteye ulaşır" G "$(web)"
@@ -366,13 +369,20 @@ if [ "${GERCEK:-0}" = 1 ] && command -v ip >/dev/null 2>&1 && command -v python3
         csf -tr $NC >/dev/null 2>&1
     done
     # csf.ignore: lfd banlamaz ama güvenlik duvarında izin değildir → elle ban işler
-    mk; printf '%s\n' $NC >> /etc/csf/csf.ignore; echo "LFD_LOG=/var/log/lfd.log" >> "$R/app/config.env"; csf -r >/dev/null 2>&1; NEEDR=0; systemctl restart lfd; sleep 8; sshfail $NC; sleep 25
+    mk; printf '%s\n' $NC >> /etc/csf/csf.ignore; echo "LFD_LOG=/var/log/lfd.log" >> "$R/app/config.env"; csf -r >/dev/null 2>&1; NEEDR=0; lfdre; sleep 8; sshfail $NC; sleep 25
     check "izinli saldırgan · csf.ignore: Kontrol edilecekler 'Yoksayılıyor' (tam izin değil)" G "$(rvhas $NC '"bk":"i".*"full":0' && echo G || echo -)"
     # ölçüldü: CSF yoksayılan IP'yi tek başına banlamaz ("deny failed: … is in the ignore file"); içine alan blok banı keser
     check "izinli saldırgan · csf.ignore'daki IP'yi CSF tek başına banlamayı reddeder" G "$(csf -d $NC test 2>&1 | grep -q 'in the ignore file' && echo G || echo -)"
     csf -d "${NC%.*}.0/24" test >/dev/null 2>&1; imu
     check "izinli saldırgan · csf.ignore'daki IP'yi içine alan blok banı onu keser" - "$(web)"
-    csf -dr "${NC%.*}.0/24" >/dev/null 2>&1; systemctl restart lfd
+    csf -dr "${NC%.*}.0/24" >/dev/null 2>&1; lfdre
+    # sunucunun kendi IP'si: lfd kendi adreslerini her zaman yoksayar (lfd.pl ignoreip, ilk denetim) → "Sunucunun kendi IP'si"
+    SIP=$(ip -4 -o addr show 2>/dev/null | awk '{print $4}' | sed 's#/.*##' | grep -v '^127\.' | head -n 1)
+    if [ -n "$SIP" ]; then
+        mk; echo "LFD_LOG=/var/log/lfd.log" >> "$R/app/config.env"; csf -r >/dev/null 2>&1; NEEDR=0; lfdre; sleep 8; sshfail "$SIP"; sleep 25
+        check "kendi IP'si · lfd sunucunun kendi adresinden gelen başarısız girişleri yoksayar (- ignored)" G "$(grep -q "from $SIP - ignored" /var/log/lfd.log && echo G || echo -)"
+        check "kendi IP'si · Kontrol edilecekler 'Sunucunun kendi IP'si' (full=2)" G "$(rvhas $SIP '"bk":"i".*"full":2' && echo G || echo -)"
+    fi
     # kiralık liste: istemci listede, Imunify yönlendiriyor ve en başta
     mk; echo "$NC/32" > "$LST"
     printf '%s\n' CLOUD_BAN=1 CLOUD_SOURCES= CLOUD_TCP=80,443 CLOUD_UDP=443 "CLOUD_EXTRA=\"test|file://$LST\"" >> "$R/app/config.env"
@@ -388,7 +398,7 @@ if [ "${GERCEK:-0}" = 1 ] && command -v ip >/dev/null 2>&1 && command -v python3
     check "kiralık liste · CSF'in geçici izni (csf -ta) olan istemci geçer" G "$(web)"
     csf -tar $NC >/dev/null 2>&1
     # istemci 80'de dinler (TCP_OUT 80'e izin verir; cevabın kaynak portu da 80, kural yalnız hedef porta bakmalı)
-    c=$(ip netns exec agcli bash -c "cd /tmp && (nohup python3 -m http.server 80 >/dev/null 2>&1 &) ; sleep 1"; curl -s -m 4 -o /dev/null -w '%{http_code}' http://$NC/ 2>/dev/null)
+    c=$(ip netns exec agcli bash -c "cd /tmp && (nohup python3 -m http.server 80 >/dev/null 2>&1 &) ; sleep 1"; curl -s --noproxy '*' -m 4 -o /dev/null -w '%{http_code}' http://$NC/ 2>/dev/null)
     ip netns exec agcli pkill -f 'http.server 80' 2>/dev/null
     check "kiralık liste · sunucunun listedeki adrese kendi bağlantısı kopmaz" G "$([ "$c" = 200 ] && echo G || echo -)"
     # banlı blok sayacı mangle'da kiralık listeden ÖNCE sayar: listede düşen deneme de "son deneme" tarihini yeniler

@@ -123,6 +123,34 @@ mkl aaold; printf '151.80.7.9 # müşteri\n' >> "$A"; lfdb $(( 9 * 86400 )) 151.
 mcheck "7 günden eski kayıt → listede yok" "[ -z \"\$(rvrow 151.80.7.9)\" ]"
 mkl aarot; printf '151.80.7.9 # müşteri\n' >> "$A"; lfdb 172800 151.80.7.9; mv "$R/lfd.log" "$R/lfd.log.1"; gzip -f "$R/lfd.log.1"; : > "$R/lfd.log"
 mcheck "döndürülmüş, sıkıştırılmış günlük (lfd.log.1.gz) sayılır" "rvrow 151.80.7.9 | grep -q '\"type\":\"allow_ban\"'"
+# Sunucunun kendi IP'si (taklit ip: 203.0.113.10): lfd kendi adreslerini her zaman yoksayar → full=2; posta günlüğünden
+# (csf.conf SMTPAUTH_LOG, exim biçimi) hangi hesapla denendiği, çoktan aza
+mkl aaself; for x in 1 2 3; do lfdl $(( 600 * x )) "Failed SMTP AUTH login from 203.0.113.10 - ignored"; done
+printf 'SMTPAUTH_LOG = "%s"\n' "$R/exim_mainlog" >> "$R/etc/csf/csf.conf"
+printf '%s\n' '2026-10-12 13:34:31 dovecot_login authenticator failed for H=(site-a.example) [203.0.113.10]:56816: 535 Incorrect authentication data (set_id=info@site-a.example)' \
+    '2026-10-12 14:48:59 dovecot_login authenticator failed for H=(site-b.example) [203.0.113.10]:36256: 535 Incorrect authentication data (set_id=info@site-b.example)' \
+    '2026-10-13 05:07:23 dovecot_login authenticator failed for H=(site-a.example) [203.0.113.10]:38634: 535 Incorrect authentication data (set_id=info@site-a.example)' \
+    '2026-10-13 06:00:00 dovecot_login authenticator failed for H=(x) [203.0.113.99]:1: 535 Incorrect authentication data (set_id=baska@site.example)' > "$R/exim_mainlog"
+mcheck "sunucunun kendi IP'si yoksayıldı → 'Sunucunun kendi IP'si' (full=2), kaynak 'sunucu IP'si'" "rvrow 203.0.113.10 | grep -q '\"wl\":\"sunucu IP.si: 203.0.113.10\".*\"bk\":\"i\",\"cnt\":3,\"full\":2'"
+mcheck "kendi IP'si: posta günlüğündeki hesaplar çoktan aza, yalnız bu IP'ninkiler" "rvrow 203.0.113.10 | grep -q '\"acct\":\[{\"u\":\"info@site-a.example\",\"n\":2},{\"u\":\"info@site-b.example\",\"n\":1}\],\"acctf\":\"exim_mainlog\"'"
+mkl aaselfa; printf '203.0.113.10 # kendi\n' >> "$A"; lfdl 600 "Failed SMTP AUTH login from 203.0.113.10 - ignored"
+mcheck "kendi IP'si csf.allow'da da olsa önce 'sunucu IP'si' sayılır" "rvrow 203.0.113.10 | grep -q '\"wl\":\"sunucu IP.si: 203.0.113.10\".*\"full\":2'"
+# "*SSH login*" başarılı giriş bildirimi (izinli IP'den), saldırı değil: listeye girmez
+mkl aassh; printf '151.80.7.9 # ofis\n' >> "$A"; lfdl 600 "*SSH login* from 151.80.7.9 into the root account using password authentication - ignored"
+mcheck "'*SSH login*' bildirimi (başarılı giriş) izinli saldırgan sayılmaz" "[ -z \"\$(rvrow 151.80.7.9)\" ]"
+# csf.allow satırındaki yorum kaynağın yanında
+mkl aacm; printf '151.80.7.9 # ofis\n' >> "$A"; lfdb 3600 151.80.7.9
+mcheck "csf.allow yorumu satırda (wlc) ve IP listesinde (al)" "rvrow 151.80.7.9 | grep -q '\"wl\":\"csf.allow: 151.80.7.9\",\"wlc\":\"ofis\".*\"al\":\"csf.allow: 151.80.7.9 (ofis)\"'"
+# gelişmiş satırda bütün portlar (1:65535) = tam izin
+mkl aawide; printf 'tcp|in|d=1:65535|s=151.80.7.9 # ofis\n' >> "$A"; lfdb 3600 151.80.7.9
+mcheck "tcp|in|d=1:65535 satırı tam izin: 'Ban işlemiyor'" "rvrow 151.80.7.9 | grep -q '\"bk\":\"b\".*\"full\":1'"
+# Hiçbir listede olmayan yoksayma: kaynak lfd'nin sırasıyla aranır — CC_IGNORE (sahip önbellekten), csf.rignore (lfd'nin dnscache'i)
+mkl aacc; printf 'CC_IGNORE = "FR"\n' >> "$R/etc/csf/csf.conf"; printf '151.80.7|16276|FR|OVH - OVH SAS, FR|%s|151.80.0.0/16\n' "$NOW" >> "$R/var/lib/csf_autogroup/owners"; lfdi 600 151.80.7.9
+mcheck "yoksayma kaynağı CC_IGNORE (ülke, sahip önbellekten) satırda" "rvrow 151.80.7.9 | grep -q '\"wl\":\"CC_IGNORE: FR\".*\"full\":0'"
+mkl aarig; printf 'googlebot.com\n' > "$R/etc/csf/csf.rignore"; printf '151.80.7.9|151.80.7.9|crawl-151-80-7-9.googlebot.com\n' > "$R/var/lib/csf/csf.dnscache"; lfdi 600 151.80.7.9
+mcheck "yoksayma kaynağı csf.rignore (lfd'nin ters DNS önbelleğinden, sorgusuz)" "rvrow 151.80.7.9 | grep -q '\"wl\":\"csf.rignore: googlebot.com (151.80.7.9 = crawl-151-80-7-9.googlebot.com)\"'"
+mkl aanone; lfdi 600 151.80.7.9
+mcheck "hiçbir kaynakta yoksa kaynak boş (panel nerelere bakıldığını yazar)" "rvrow 151.80.7.9 | grep -q '\"wl\":\"\",\"aa\":1'"
 mk paopen; quiet --action ban24 151.80.7 --mode svc --svc web
 for x in 1 2 3; do printf '%s\n' "151.80.7.$x # lfd: (sshd) Failed SSH login from 151.80.7.$x (FR/France/-): 5 in the last 3600 secs - $(LC_ALL=C date -d '+1 min' '+%a %b %d %H:%M:%S %Y')" >> "$D"; done
 mcheck "kısmi web banından sonra SSH'ye blok eşiği kadar saldırı → 'Kısmi yetmiyor'" "rvrow 151.80.7.0/24 | grep -q '\"type\":\"part_open\".*\"ssh\":3'"

@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.13.12 — 2026-10-13
+
+- **Needs review: the server's own IP.** lfd never bans the server's own
+  addresses (its `ignoreip` check; measured on CSF 16.33), so failed logins
+  coming from the server itself were listed as *Ignored* with an unknown source
+  and a ban hint. They now have their own state, *Server's own IP*: no ban
+  button, and when the mail log (`SMTPAUTH_LOG`, exim format) shows which
+  accounts tried wrong passwords from inside the server, the row lists them
+  with counts, so the site or script behind them can be found.
+- **Needs review: no more "unknown" ignore source.** For an ignored address
+  that is in none of the allow or ignore files, the plugin now looks where lfd
+  looks, in lfd's order: `CC_IGNORE` (country or ASN, from the owner cache),
+  `RELAYHOSTS`, and `csf.rignore` through lfd's own reverse-DNS cache
+  (`csf.dnscache`) or one lookup. The row names the source; when nothing
+  matches it says which lists were checked.
+- **Needs review: your `csf.allow` comments.** The comment on an allow line
+  (`1.2.3.4 # office`) is shown next to the source in the review list, the IP
+  list and the IP card, so you can tell why an address is allowed.
+- **Fix: a successful SSH login is not an attack.** lfd's `*SSH login*` alert
+  for an allowed address ends in "- ignored" too; it was counted as an ignored
+  attacker.
+- **Fix: an allow line that opens every port** (`tcp|in|d=1:65535`) counts as
+  a full allow (*Ban not working*), not as a single-port one.
+- **Banned providers have their own card.** The *Banned* tab of *Most blocked
+  providers* was a state list among rankings and did not fit on one line; it is
+  now the *Banned providers* card below it, on the Overview and the Providers
+  tab.
+- **Real-CSF tests in a disposable container.** `tests/senaryo/kur-bulut.sh`
+  installs cPanel's CSF (from GitHub or a given `cpanel-csf` RPM / archive) with
+  the cPanel-only Perl modules stubbed and starts lfd, so
+  `GERCEK=1 bash tests/senaryo/calistir.sh` runs there; the scenario test
+  restarts lfd without systemd and keeps the session's proxy out of the test
+  client. New status-table cases for every item above.
+
 ## 1.13.11 — 2026-10-13
 
 - **New: sites behind a CDN.** When a site's domain or its www name points to

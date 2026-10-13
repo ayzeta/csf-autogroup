@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.13.11"   # sürüm — başlangıç log satırında görünür
+VERSION="1.13.12"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1561,7 +1561,7 @@ owner_line() {   # "IP IP ..." → REPLY = ilk IP'nin /24'ü için "   Sahibi: .
 # ── CSF whitelists ──────────────────────────────────────────────────────────
 # lfd'nin "banlama" dediği her şey + güvenlik duvarının izin verdiği her şey.
 # Bir /24 bunlardan biriyle çakışıyorsa banlanmaz, maille bildirilir.
-WL_LOADED=0; WL_LO=(); WL_HI=(); WL_TXT=(); RIGNORE=(); CC_LIST=""; CC_WARNED=0
+WL_LOADED=0; WL_LO=(); WL_HI=(); WL_TXT=(); WL_CM=(); RIGNORE=(); CC_LIST=""; CC_WARNED=0
 # ── ModSecurity kural mesajı ────────────────────────────────────────────────
 # lfd sebebi yalnız "mod_security (id:1302) triggered" diyor. Mesaj cPanel'in eşleşme kaydında
 # (WHM → ModSecurity Araçları → Uyuşanlar Listesi ile aynı kaynak; Imunify kuralları dahil).
@@ -1635,9 +1635,9 @@ conf_val() {
     if [ "$CONF_OK" = 1 ]; then printf '%s\n' "${CONFV[$1]}"; return; fi
     grep -E "^[[:space:]]*$1[[:space:]]*=" "$CSF_CONF" | tail -1 | cut -d= -f2- | tr -d ' "\r'
 }
-wl_add() {       # CIDR LABEL
+wl_add() {       # CIDR LABEL [YORUM] — yorum: dosyadaki satırın # sonrası (kullanıcının kendi notu), panelde kaynağın yanında
     cidr_range "$1" || return
-    WL_LO+=("$R_LO"); WL_HI+=("$R_HI"); WL_TXT+=("$2")
+    WL_LO+=("$R_LO"); WL_HI+=("$R_HI"); WL_TXT+=("$2"); WL_CM+=("${3:-}")
 }
 wl_load() {      # FILE LABEL [DEPTH] — IP, CIDR, gelişmiş satır (tcp|in|d=22|s=IP), Include
     local file="$1" label="$2" depth="${3:-0}" line tok rest mt ip
@@ -1649,6 +1649,13 @@ wl_load() {      # FILE LABEL [DEPTH] — IP, CIDR, gelişmiş satır (tcp|in|d=
         # izindir — önce "csf_autogroup" geçen her satır atlanıyor, Googlebot vb. beyaz liste sayılmıyordu.
         [[ "$line" == *"csf_autogroup: exception"* ]] && continue
         local svn=""; [[ "$line" =~ csf_autogroup:\ service\ ([A-Za-z0-9_-]+) ]] && svn=" (${BASH_REMATCH[1]})"
+        # satır yorumu (kullanıcının "# ofis" gibi notu) kaynağın yanında gösterilir; eklentinin ve CSF'in kendi işaretleri değil
+        local cm=""
+        if [[ "$line" == *"#"* ]]; then
+            cm="${line#*#}"; cm="${cm#"${cm%%[![:space:]]*}"}"; cm="${cm%"${cm##*[![:space:]]}"}"
+            case "$cm" in *csf_autogroup:*|"do not delete"*|"") cm="" ;; esac
+            cm="${cm:0:80}"
+        fi
         line="${line%%#*}"; line="${line#"${line%%[![:space:]]*}"}"
         [ -z "$line" ] && continue
         if [[ "$line" =~ ^Include[[:space:]]+([^[:space:]]+) ]]; then
@@ -1661,18 +1668,18 @@ wl_load() {      # FILE LABEL [DEPTH] — IP, CIDR, gelişmiş satır (tcp|in|d=
         if [[ "$tok" == *"|"* ]]; then
             adv_parse "$tok" || continue
             adv_wide "$ADV_CIDR" && continue
-            wl_add "$ADV_CIDR" "$label ($ADV_PROTO $ADV_DIR ${ADV_PORTS:-*}): $ADV_CIDR"
+            wl_add "$ADV_CIDR" "$label ($ADV_PROTO $ADV_DIR ${ADV_PORTS:-*}): $ADV_CIDR" "$cm"
             continue
         fi
         while [[ "$rest" =~ ([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(/[0-9]{1,2})?) ]]; do
             ip="${BASH_REMATCH[1]}"          # wl_add içindeki regex BASH_REMATCH'i ezer
             rest="${rest#*"$ip"}"
-            wl_add "$ip" "$label$svn: $ip"; mt=1
+            wl_add "$ip" "$label$svn: $ip" "$cm"; mt=1
         done
         # csf.allow'da hostname olabilir → çöz
         if [ "$mt" = 0 ] && [[ "$label" == csf.allow* ]] && [[ "$tok" =~ ^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$ ]] && [[ "$tok" =~ [A-Za-z] ]]; then
             resolve_a "$tok"
-            for ip in $REPLY; do wl_add "$ip" "$label: $tok ($ip)"; done
+            for ip in $REPLY; do wl_add "$ip" "$label: $tok ($ip)" "$cm"; done
         fi
     done < "$file"
 }
@@ -1733,12 +1740,12 @@ load_whitelist() {
     CC_LIST=$( { conf_val CC_IGNORE | sed 's/^/CC_IGNORE=/'; conf_val CC_ALLOW | sed 's/^/CC_ALLOW=/'; } | grep -v '=$' | LC_ALL=C tr '[:lower:]' '[:upper:]')
     logr "$(m "$M_WL_LOADED" "${#WL_LO[@]}" "${#RIGNORE[@]}")"
 }
-wl_overlap() {   # LO HI → WL_HIT = çakışan beyaz liste kaydı
+wl_overlap() {   # LO HI → WL_HIT = çakışan beyaz liste kaydı (WL_HIT_CM = satırdaki yorum)
     local i
-    WL_HIT=""
+    WL_HIT=""; WL_HIT_CM=""
     [ "$WL_LOADED" = 1 ] || load_whitelist
     for i in "${!WL_LO[@]}"; do
-        (( WL_LO[i] <= $2 && WL_HI[i] >= $1 )) && { WL_HIT="${WL_TXT[i]}"; return 0; }
+        (( WL_LO[i] <= $2 && WL_HI[i] >= $1 )) && { WL_HIT="${WL_TXT[i]}"; WL_HIT_CM="${WL_CM[i]}"; return 0; }
     done
     return 1
 }
@@ -2209,7 +2216,7 @@ do_status() {
     allow_atk_load $(( now - REVIEW_DAYS * 86400 ))
     cls_map < <(for aai in "${!AA_IP[@]}"; do printf 'aa%s|%s\n' "$aai" "${AA_R[aai]}"; done)
     local -A AAG=() AAU=() RS24=() RS16=() RSI=()
-    local aai aaw aac aaj aap aaq aal aat aan aak
+    local aai aaw aac aaj aap aaq aal aalc="" aat aan aak aax
     local -a aaa
     # bir saldırgan tek satırda: önceki uyarı satırlarının (olay kaydındaki Atlandı / Şüpheli ağ) IP listesinde olan izinli
     # saldırgan yeni gruplara girmez
@@ -2233,8 +2240,9 @@ do_status() {
             jstr "${OWN_L[${x%.*}]}"; js+="${js:+,}{\"ip\":\"$x\",\"host\":\"\",\"why\":$w,\"svc\":\"$v\",\"owner\":$REPLY,\"asn\":\"${OWN_A[${x%.*}]}\",\"cc\":\"${OWN_C[${x%.*}]}\",\"pfx\":\"${OWN_P[${x%.*}]}\"}"
         done
         set -f; local -a ba=($bl); set +f; nb=${#ba[@]}
+        local cmj=""; [ -n "${aalc:-}" ] && { jstr "$aalc"; cmj=",\"wlc\":$REPLY"; }   # izin satırındaki yorum
         jstr "$3"
-        review+=("{\"t\":$t,\"type\":\"$1\",\"cidr\":\"$2\",\"wl\":$REPLY,\"aa\":$aa,\"n\":$n,\"subnets\":$nb,\"total\":$n,\"ips\":[$js]$6}")
+        review+=("{\"t\":$t,\"type\":\"$1\",\"cidr\":\"$2\",\"wl\":$REPLY$cmj,\"aa\":$aa,\"n\":$n,\"subnets\":$nb,\"total\":$n,\"ips\":[$js]$6}")
         rtext+=("$(printf '%-18s %s · %s izinli' "$2" "$1" "$aa")")
     }
     # a) izin kaydına göre
@@ -2243,7 +2251,8 @@ do_status() {
         read -r -a aaa <<< "${AAG[$aaw]}"; [ "${#aaa[@]}" -ge 2 ] || continue
         aac="${WL_TXT[aaw]##*: }"; [[ "$aac" =~ $CIDR4_RE ]] || continue
         [ -n "${seen[$aac]}" ] && continue; ign_until "$aac" && continue; seen[$aac]=1
-        rv_add allow_grp "$aac" "${WL_TXT[aaw]}" "${aaa[*]}" "" ""
+        aalc="${WL_CM[aaw]}"
+        rv_add allow_grp "$aac" "${WL_TXT[aaw]}" "${aaa[*]}" "" ""; aalc=""
         for aai in "${aaa[@]}"; do AAU[$aai]=1; done
     done
     # b) /24: izinli + izinsiz tekiller blok eşiğinde (blok banı izin yüzünden zaten atlanır → "Atlandı")
@@ -2254,8 +2263,8 @@ do_status() {
         [ $(( ${#aaa[@]} + aaq )) -ge "$THRESHOLD_24" ] || continue
         aac="$aap.0/24"; [ -n "${seen[$aac]}" ] && continue; ign_until "$aac" && continue
         cidr_range "$aac" && perm_covers "$R_LO" "$R_HI" && continue
-        seen[$aac]=1; aal="${WL_TXT[${AA_W[${aaa[0]}]}]}"; [ "${AA_W[${aaa[0]}]}" -ge 0 ] || aal=""
-        rv_add skip_wl "$aac" "$aal" "${aaa[*]}" "${RS24[$aap]}" ""
+        seen[$aac]=1; aal="${WL_TXT[${AA_W[${aaa[0]}]}]}"; aalc="${WL_CM[${AA_W[${aaa[0]}]}]}"; [ "${AA_W[${aaa[0]}]}" -ge 0 ] || { aal=""; aalc=""; }
+        rv_add skip_wl "$aac" "$aal" "${aaa[*]}" "${RS24[$aap]}" ""; aalc=""
         for aai in "${aaa[@]}"; do AAU[$aai]=1; done
     done
     # c) /16: şüpheli ağ ölçütü (eşik kadar saldırgan, en az 2 blok)
@@ -2274,8 +2283,12 @@ do_status() {
     for aai in "${!AA_IP[@]}"; do
         [ -n "${AAU[$aai]}" ] && continue
         aac="${AA_IP[aai]}"; [ -n "${seen[$aac]}" ] && continue; ign_until "$aac" && continue; seen[$aac]=1
-        aal=""; [ "${AA_W[aai]}" -ge 0 ] && aal="${WL_TXT[${AA_W[aai]}]}"
-        rv_add allow_ban "$aac" "$aal" "$aai" "" ",\"bk\":\"${AA_K[aai]}\",\"cnt\":${AA_N[aai]},\"full\":${AA_F[aai]:-0}"
+        aal="${AA_S[aai]}"; aalc=""; [ "${AA_W[aai]}" -ge 0 ] && { aal="${WL_TXT[${AA_W[aai]}]}"; aalc="${WL_CM[${AA_W[aai]}]}"; }
+        aax=""
+        if [ "${AA_F[aai]:-0}" = 2 ] && aa_acct "$aac" && [ -n "$REPLY" ]; then   # kendi IP'si: posta günlüğünde hangi hesapla denendiği
+            aax=",\"acct\":$REPLY"; jstr "$ACCT_F"; aax+=",\"acctf\":$REPLY"
+        fi
+        rv_add allow_ban "$aac" "$aal" "$aai" "" ",\"bk\":\"${AA_K[aai]}\",\"cnt\":${AA_N[aai]},\"full\":${AA_F[aai]:-0}$aax"; aalc=""
     done
     # Kısmi banı yetmeyen aralık: kısmi ban konduktan sonra kapalı olmayan servislere gelen saldırılar blok (/24) ya da ağ
     # (/16 ve daha geniş) eşiğine ulaştı — tekiller tek tek banlanıyor ama aralık o servislere açık
@@ -2895,7 +2908,7 @@ do_lookup() {
             fi
         done < "$CSF_VAR/csf.tempban"
     fi
-    wl_overlap "$n" "$n" && wl="$WL_HIT"
+    wl_overlap "$n" "$n" && { wl="$WL_HIT"; [ -n "$WL_HIT_CM" ] && wl="$wl ($WL_HIT_CM)"; }   # satır yorumu: "csf.allow: IP (ofis)"
     if [ -n "$host" ] && [ "${#RIGNORE[@]}" -gt 0 ]; then
         rig_match "$(printf '%s' "$host" | LC_ALL=C tr '[:upper:]' '[:lower:]')" "$ip" && rig="$REPLY"   # motorun beyaz liste kuralıyla aynı
     fi
@@ -4231,7 +4244,8 @@ cls_map() {      # stdin "anahtar|sebep" → CLSM[anahtar] = servis (tek awk; IP
     while IFS='|' read -r k c; do [ -n "$k" ] && CLSM[$k]="$c"; done < <(LC_ALL=C awk -F'|' "$AWK_CLS"' { k = $1; r = substr($0, length($1) + 2); print k "|" cls(r) }')
 }
 aa_days() {      # DOSYA… → stdout "ip|k|gün|sayı|son|sebep" (k: b = banlandı ama izinli olabilir, i = yoksayıldı)
-    { for f in "$@"; do zcat -f "$f" 2>/dev/null; done; } | LC_ALL=C grep -E '\*Blocked in csf\*| - ignored[[:space:]]*$' |
+    # "*SSH login*" başarılı giriş bildirimidir (LF_SSH_EMAIL_ALERT; izinli IP için "- ignored" ile biter), saldırı değil
+    { for f in "$@"; do zcat -f "$f" 2>/dev/null; done; } | LC_ALL=C grep -E '\*Blocked in csf\*| - ignored[[:space:]]*$' | LC_ALL=C grep -vF '*SSH login*' |
     LC_ALL=C awk -v now="$(date +%s)" -v Y="$(date +%Y)" '
         { m = (index("JanFebMarAprMayJunJulAugSepOctNovDec", $1) + 2) / 3; split($3, c, ":")
           ts = mktime(Y " " m " " $2 " " c[1] " " c[2] " " c[3]); if (ts > now + 86400) ts = mktime((Y - 1) " " m " " $2 " " c[1] " " c[2] " " c[3])
@@ -4251,8 +4265,11 @@ allow_atk_load() {  # SINCE_EPOCH → AA_* (IP başına: k, olay sayısı, son z
     # ölçüldü 2026-10-13): "csf.allow → imunify360.txt" etiketiyle tam izin sayılır. INPUT_imunify360 beyaz liste için CSF'ten
     # önce kabul etmez (yalnız gri/splash/captcha/uzak vekil kümelerini WebShield portlarına); "Imunify:" etiketli kayıtlar
     # (imunify360-agent önbelleği) yalnız etiket için.
-    local since="$1" dir base f sig day0 cache rot=() cur
-    AA_IP=(); AA_K=(); AA_N=(); AA_T=(); AA_R=(); AA_W=(); AA_F=()
+    # Sunucunun kendi IP'si: lfd kendi adreslerini her zaman yoksayar (lfd.pl ignoreip, ilk denetim; ölçüldü 16.33) → full=2.
+    # Gelişmiş satırda port 1:65535 ya da * bütün portları açar: tam izin. Hiçbir listede olmayan "ignored" kaydının
+    # kaynağı lfd'nin sırasıyla aranır (aa_src_resolve): CC_IGNORE, relay listeleri, csf.rignore.
+    local since="$1" dir base f sig day0 cache rot=() cur i
+    AA_IP=(); AA_K=(); AA_N=(); AA_T=(); AA_R=(); AA_W=(); AA_F=(); AA_S=()
     [ -n "$LFD_LOG" ] || return 0
     [ "$WL_LOADED" = 1 ] || load_whitelist
     dir=$(dirname "$LFD_LOG"); base=$(basename "$LFD_LOG"); day0=$(date -d "@$since" +%Y%m%d)
@@ -4267,8 +4284,9 @@ allow_atk_load() {  # SINCE_EPOCH → AA_* (IP başına: k, olay sayısı, son z
     done < <({
         for f in "${!WL_LO[@]}"; do
             local ff=0
-            case "${WL_TXT[f]}" in csf.allow*|GLOBAL_ALLOW*|csf.tempallow*|DYNDNS*|GLOBAL_DYNDNS*) ff=1 ;; "$M_WL_SELF: "*) continue ;; esac
-            [[ "${WL_TXT[f]}" =~ \((tcp|udp)\ (in|out)\  ]] && ff=0
+            case "${WL_TXT[f]}" in csf.allow*|GLOBAL_ALLOW*|csf.tempallow*|DYNDNS*|GLOBAL_DYNDNS*) ff=1 ;; "$M_WL_SELF: "*) ff=2 ;; esac
+            local pre='\((tcp|udp) (in|out) ([^)]*)\)'
+            [[ "${WL_TXT[f]}" =~ $pre ]] && [ "${BASH_REMATCH[3]}" != "1:65535" ] && [ "${BASH_REMATCH[3]}" != "*" ] && ff=0
             printf 'W %s %s %s %s\n' "${WL_LO[f]}" "${WL_HI[f]}" "$f" "$ff"
         done
         echo "#--"
@@ -4279,16 +4297,69 @@ allow_atk_load() {  # SINCE_EPOCH → AA_* (IP başına: k, olay sayısı, son z
         !S { n++; L[n] = $2 + 0; H[n] = $3 + 0; I[n] = $4; F[n] = $5; next }
         { K = $1 "|" $2; N[K] += $4; if ($5 >= T[K]) { T[K] = $5; R[K] = $6 } }
         END { for (K in N) { split(K, f, "|"); v = v4(f[1]); hit = -1; full = 0
-                for (i = 1; i <= n; i++) if (v >= L[i] && v <= H[i]) { if (F[i]) { hit = I[i]; full = 1; break } else if (hit < 0) hit = I[i] }
-                if (f[2] == "b" && !full) continue    # banlandı ve izinli değil: ban işliyor
+                for (i = 1; i <= n; i++) if (v >= L[i] && v <= H[i]) {
+                    if (F[i] == 2) { hit = I[i]; full = 2; break }                    # sunucunun kendi adresi her kaydin onunde
+                    else if (F[i] == 1 && full < 1) { hit = I[i]; full = 1 }
+                    else if (hit < 0) hit = I[i] }
+                if (f[2] == "b" && full < 1) continue    # banlandı ve izinli değil: ban işliyor
                 print f[1] "|" f[2] "|" N[K] "|" T[K] "|" hit "|" full "|" R[K] } }' | sort -t'|' -k4,4nr | awk -F'|' '!($1 in S) { S[$1] = 1; print }')
+    for i in "${!AA_IP[@]}"; do      # listelerde olmayan yoksayma: kaynağı lfd'nin sırasıyla bul
+        AA_S[i]=""
+        [ "${AA_K[i]}" = i ] && [ "${AA_W[i]}" -lt 0 ] && { aa_src_resolve "${AA_IP[i]}"; AA_S[i]="$REPLY"; }
+    done
+}
+AA_SRC_Q=0
+aa_src_resolve() {  # IP → REPLY = lfd'nin yoksayma kaynağı: lfd.pl ignoreip'in sırasıyla (kendi IP'leri ve csf.ignore /
+    # GLOBAL_IGNORE beyaz listeden gelir) CC_IGNORE (ülke / ASN), relay listeleri (RELAYHOSTS, DYNDNS_IGNORE ile dyndns),
+    # csf.rignore (ters DNS: önce lfd'nin kendi önbelleği csf.dnscache, yoksa sorgu). Bulunamazsa boş. En çok 10 DNS sorgusu/tur.
+    local ip="$1" q="${1%.*}" v vals host fwd line
+    REPLY=""
+    if [ -n "$CC_LIST" ]; then
+        if [ -z "${OWN_A[$q]+x}" ] && [ "$LOOK_INIT" = 1 ] && [ "$AA_SRC_Q" -lt 10 ]; then AA_SRC_Q=$((AA_SRC_Q + 1)); owner_lookup "$ip"; fi
+        vals=$(grep '^CC_IGNORE=' <<< "$CC_LIST" | cut -d= -f2-)
+        for v in ${vals//,/ }; do
+            if { [ -n "${OWN_A[$q]}" ] && [ "$v" = "AS${OWN_A[$q]}" ]; } || { [ -n "${OWN_C[$q]}" ] && [ "$v" = "${OWN_C[$q]}" ]; }; then REPLY="CC_IGNORE: $v"; return 0; fi
+        done
+    fi
+    [ "$(conf_val RELAYHOSTS)" = 1 ] && grep -qxF "$ip" /etc/relayhosts 2>/dev/null && { REPLY="RELAYHOSTS: /etc/relayhosts"; return 0; }
+    if [ "${#RIGNORE[@]}" -gt 0 ]; then
+        line=$(LC_ALL=C grep -m1 "^${ip//./\\.}|" "$CSF_VAR/csf.dnscache" 2>/dev/null)
+        if [ -n "$line" ]; then                   # ip|ileri çözümlenen ip|ad — lfd ileri doğrulamayı kendi yapmış
+            host="${line##*|}"; fwd="${line#*|}"; fwd="${fwd%%|*}"
+            host=$(printf '%s' "$host" | LC_ALL=C tr '[:upper:]' '[:lower:]')
+            [ -n "$host" ] && [ "$fwd" = "$ip" ] && rig_pat "$host" && { REPLY="csf.rignore: $REPLY ($ip = $host)"; return 0; }
+        elif [ "$LOOK_INIT" = 1 ] && [ "$AA_SRC_Q" -lt 10 ]; then
+            AA_SRC_Q=$((AA_SRC_Q + 1)); ptr_lookup "$ip"; host=$(printf '%s' "$REPLY" | LC_ALL=C tr '[:upper:]' '[:lower:]')
+            [ -n "$host" ] && rig_match "$host" "$ip" && { REPLY="csf.rignore: $REPLY ($ip = $host)"; return 0; }
+        fi
+    fi
+    REPLY=""; return 1
+}
+rig_pat() {      # HOST(küçük harf) → 0: bir csf.rignore kaydıyla eşleşiyor (REPLY = kayıt); ileri doğrulama yapılmaz
+    local d re
+    for d in "${RIGNORE[@]}"; do
+        d=$(printf '%s' "$d" | LC_ALL=C tr '[:upper:]' '[:lower:]'); re="${d}\$"
+        if [ "$1" = "$d" ] || { [[ "$d" == *.* ]] && [[ "$1" =~ $re ]]; }; then REPLY="$d"; return 0; fi
+    done
+    REPLY=""; return 1
+}
+aa_acct() {      # IP → REPLY = posta günlüğünde (csf.conf SMTPAUTH_LOG, exim) bu IP'den yanlış şifreyle giriş denenen hesaplar,
+    # JSON [{"u":hesap,"n":kaç}] (en çok 10, çoktan aza); ACCT_F = dosya adı. Satır biçimi (exim, ölçüldü 2026-10-13):
+    # "… authenticator failed for (ad) [IP]:port: 535 Incorrect authentication data (set_id=hesap)". Yalnız bugünkü dosya.
+    local f
+    REPLY=""; ACCT_F=""
+    f=$(conf_val SMTPAUTH_LOG); [ -n "$f" ] && [ -r "$f" ] || return 1
+    ACCT_F="${f##*/}"
+    REPLY=$(LC_ALL=C grep -F "[$1]" "$f" 2>/dev/null | LC_ALL=C grep -F 'authenticator failed for' | LC_ALL=C grep -o 'set_id=[^)]*' | cut -d= -f2- |
+        sort | uniq -c | sort -rn | head -n 10 | awk '{ u = $2; gsub(/\\/, "\\\\", u); gsub(/"/, "\\\"", u); printf "%s{\"u\":\"%s\",\"n\":%d}", (n++ ? "," : ""), u, $1 }')
+    [ -n "$REPLY" ] && REPLY="[$REPLY]"
 }
 aa_ipj() {       # İNDİS … → REPLY = IP listesi JSON'u (izinli saldırganlar: sebep, servis, izin kaydı, kaç kez)
-    local i o="" v w q
+    local i o="" v w q x
     for i in "$@"; do
         v="${CLSM[aa$i]:-other}"
         jstr "${AA_R[i]}"; w="$REPLY"; q="${AA_IP[i]%.*}"
-        if [ "${AA_W[i]}" -ge 0 ] 2>/dev/null; then jstr "${WL_TXT[${AA_W[i]}]}"; else REPLY='""'; fi; local al="$REPLY"
+        if [ "${AA_W[i]}" -ge 0 ] 2>/dev/null; then x="${AA_W[i]}"; jstr "${WL_TXT[$x]}${WL_CM[$x]:+ (${WL_CM[$x]})}"; else jstr "${AA_S[i]}"; fi; local al="$REPLY"
         jstr "${OWN_L[$q]}"
         o+="${o:+,}{\"ip\":\"${AA_IP[i]}\",\"host\":\"\",\"why\":$w,\"svc\":\"$v\",\"al\":$al,\"bk\":\"${AA_K[i]}\",\"cnt\":${AA_N[i]},\"full\":${AA_F[i]:-0},\"t\":${AA_T[i]},\"owner\":$REPLY,\"asn\":\"${OWN_A[$q]}\",\"cc\":\"${OWN_C[$q]}\",\"pfx\":\"${OWN_P[$q]}\"}"
     done
