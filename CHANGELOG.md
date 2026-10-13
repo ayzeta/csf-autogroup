@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.14.4 — 2026-10-14
+
+- **Settings sections open the same way:** every section starts with its
+  one-line explanation, then the cards. Two sections had the line and four
+  did not, so the content jumped while switching sections. The browser test
+  checks that the first card sits at the same height in every section.
+- **Notifications cards by kind:** Channels (which are on) → Email (address,
+  test mail) → Slack (what goes there, test) → Weekly summary. Email and
+  Slack are both channels and were split by the summary card; the test-mail
+  button sat away from the address.
+- **Overview:** the Ignored card moved above Most blocked providers in the
+  right column; it is part of the review list, not of the provider summary.
+
 ## 1.14.3 — 2026-10-14
 
 - **Settings in order of weight.** The section list opened with

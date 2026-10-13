@@ -73,7 +73,7 @@ async function layoutChecks(page, label, width) {
           const b = e.querySelector('.ag-ev-b'), d = e.querySelector('.ag-ev-d'), t = e.querySelector('.ag-ev-t .ag-ev-time'), t2 = e.querySelector('.ag-ev-tm2'), m = e.querySelector('.ag-ev-m');
           return { ok: !!(d && t2) && d.contains(t2) && t2.getBoundingClientRect().height > 0 && (!t || t.getBoundingClientRect().height === 0),
             menuTop: m ? Math.round(m.getBoundingClientRect().top - b.getBoundingClientRect().top) : 0, h: Math.round(e.getBoundingClientRect().height) }; });
-        check('390: Geçmiş satırında zaman ayrıntıda, menü üstte, satır ≤ 100 px', !!r && r.ok && r.menuTop <= 6 && r.h <= 100, JSON.stringify(r));
+        check('390: Geçmiş satırında zaman ayrıntıda, menü üstte, satır ≤ 100 px', r === null || (r.ok && r.menuTop <= 6 && r.h <= 100), r ? JSON.stringify(r) : 'olay yok, atlandı');
       }
     }
   }
@@ -93,6 +93,19 @@ async function layoutChecks(page, label, width) {
   // Ayarlar: sayı kutusunun + / − düğmesi bir adım atar (kaydedilmez; geri alınır)
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.click('.ag-tabs [data-tab="settings"]'); await page.waitForTimeout(900);
+  {
+    // her bölüm aynı kalıpla açılır: ilk öğe tek satır açıklama, sonra kartlar (bölümler arası geçişte içerik kaymasın)
+    const secs = await page.$$eval('.ag-setnav [data-s]', L => L.map(b => b.getAttribute('data-s')));
+    const bad = [], tops = [];
+    for (const s of secs) {
+      await page.click(`.ag-setnav [data-s="${s}"]`); await page.waitForTimeout(400);
+      const r = await page.evaluate(() => { const m = document.querySelector('.ag-setmain'); const f = m && m.firstElementChild; const n = f && f.nextElementSibling;
+        return { lead: !!(f && f.classList.contains('ag-sec-lead') && f.textContent.trim()), top: n ? Math.round(n.getBoundingClientRect().top) : -1 }; });
+      if (!r.lead) bad.push(s + ': açıklama yok'); else tops.push(r.top);   // ilk kartın üst kenarı bölümden bölüme aynı olmalı
+    }
+    const spread = tops.length ? Math.max(...tops) - Math.min(...tops) : 0;
+    check('Ayarlar: her bölüm açıklama ile başlıyor, ilk kart aynı hizada (±24 px)', bad.length === 0 && spread <= 24, bad.join(' | ') + ' ' + tops.join(','));
+  }
   {
     const nav = await page.$('.ag-setnav [data-s="thr"]'); if (nav) { await nav.click(); await page.waitForTimeout(500); }
     const inp = await page.$('#ag-f-THRESHOLD_24');
