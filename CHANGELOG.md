@@ -1,11 +1,40 @@
 # Changelog
 
+## 1.13.13 — 2026-10-13
+
+- **Fix: the IP card failed with "abKind is not defined"** for an address in
+  the review list (1.13.12: the helper that names the review state was
+  defined inside the review list's code, out of the IP card's reach). The
+  card and the Needs review rows now share one top-level helper.
+- **Fix: Ignore was missing for some review rows.** The rows for allowed or
+  ignored attackers, allowed ranges and open services had only "IP card" in
+  their menu, although the card's text says every row can be ignored. They
+  now have Ignore like the other rows, and the engine accepts a single IP or
+  any /8–/31 range as the ignore target (it took only /16 and /24).
+- **IP card for the server's own address** says so in the verdict ("lfd
+  always ignores its own addresses; the plugin never bans a range that
+  contains its own IP") and shows no ban buttons; it used to read like an
+  allow-list entry with ban buttons that the engine would refuse.
+- **The *Server's IP* badge fits the state column** (it was cut off as
+  "Sunucunun ker…"); the glossary entry is "Server's IP (its own address)".
+- **Fix: option rows in Settings ran past the card on a phone** (390 px, e.g.
+  Notification channels); they wrap now.
+- **New: browser test of the panel** (`tests/arayuz/`): the real pages in
+  PHP's built-in server driven by a headless Chromium — every tab at desktop
+  and phone width (no overflow, no clipped badge), the glossary, the IP card
+  and menu of every review row, and the Ignore / Stop ignoring flow end to
+  end, so a scoping slip like the IP card error above is caught before a
+  release. The real-CSF container setup now gives lfd a temporary SSH ban
+  (`LF_SSHD_PERM = "3600"`: a value of 0 is not "temporary" in CSF) and, where
+  the container's DNS answers no Team Cymru query, a `dig` wrapper that
+  answers for the test network.
+
 ## 1.13.12 — 2026-10-13
 
 - **Needs review: the server's own IP.** lfd never bans the server's own
   addresses (its `ignoreip` check; measured on CSF 16.33), so failed logins
   coming from the server itself were listed as *Ignored* with an unknown source
-  and a ban hint. They now have their own state, *Server's own IP*: no ban
+  and a ban hint. They now have their own state, *Server's IP*: no ban
   button, and when the mail logs (`SMTPAUTH_LOG`, `POP3D_LOG`, `IMAPD_LOG`;
   exim and dovecot formats) show which accounts tried wrong passwords from
   inside the server, the row lists them with attempt counts, so the site or

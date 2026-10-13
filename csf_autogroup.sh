@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.13.12"   # sürüm — başlangıç log satırında görünür
+VERSION="1.13.13"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -2920,6 +2920,7 @@ do_lookup() {
 
     if [ "$JSON" = 1 ]; then
         local o="{\"ok\":true,\"ip\":\"$ip\"" k v
+        if self_overlap "$n" "$n"; then o+=",\"self\":true"; else o+=",\"self\":false"; fi   # sunucunun kendi adresi: ban konamaz
         for k in host asname pfx cc reg alloc deny temp wl rig pend ign; do
             v="${!k}"; jstr "$v"; o+=",\"$k\":$REPLY"
         done
@@ -4126,7 +4127,9 @@ do_action() {    # NAME TARGET [DAYS]
             expire_blocks "$AG_BY"
             if [ "$EXP_N" -gt 0 ]; then act_out 0 "$(m "$M_A_EXPIRED" "$EXP_N")"; else act_out 0 "$M_A_EXPNONE"; fi ;;
         ignore|unignore)
-            [[ "$t" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/(16|24)$ ]] && cidr_range "$t" \
+            # hedef, Kontrol edilecekler satırının aralığı: /16, /24, duyurulan ya da izin aralığı (/8–/31) ya da tek IP
+            # (izinli / yoksayılan saldırgan satırı). Dosyada satırın yazdığı biçimde durur, ign_until aynı metinle eşler.
+            [[ "$t" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(/([89]|[12][0-9]|3[01]))?$ ]] && cidr_range "$t" \
                 || { act_out 2 "$(m "$M_BAD_TARGET" "$t")"; return; }
             local keep=""
             [ -r "$IGNORE_FILE" ] && keep=$(awk -v c="$t" '$1 != c' "$IGNORE_FILE")

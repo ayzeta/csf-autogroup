@@ -16,3 +16,6 @@ CLAUDE.md
 
 # Sunucudan alınan CSF kopyası (sunucunun csf.conf dosyasını içerir) — depoya girmez
 csf-kopya.tgz
+
+# Arayüz testinin ekran görüntüleri (GORUNTU=1)
+tests/arayuz/cikti/

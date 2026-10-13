@@ -1150,3 +1150,6 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-td-own .ag-org { min-width: 56px; flex: 0 1 auto; white-space: nowrap; }
 .ag-td-own .ag-ctag { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ag-fill .ag-days { width: 140px; }   /* CSF liste sınırları: doluluk çubuğu */
+
+/* Dar ekranda seçenek sıraları (ör. Ayarlar → Bildirim kanalları) kartın sağından taşmasın: satır kırılır */
+@media (max-width: 760px) { .ag-chips { display: flex; flex-wrap: wrap; max-width: 100%; } }

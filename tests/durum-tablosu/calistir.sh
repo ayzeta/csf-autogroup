@@ -159,6 +159,14 @@ mkl aarig; printf 'googlebot.com\n' > "$R/etc/csf/csf.rignore"; printf '151.80.7
 mcheck "yoksayma kaynağı csf.rignore (lfd'nin ters DNS önbelleğinden, sorgusuz)" "rvrow 151.80.7.9 | grep -q '\"wl\":\"csf.rignore: googlebot.com (151.80.7.9 = crawl-151-80-7-9.googlebot.com)\"'"
 mkl aanone; lfdi 600 151.80.7.9
 mcheck "hiçbir kaynakta yoksa kaynak boş (panel nerelere bakıldığını yazar)" "rvrow 151.80.7.9 | grep -q '\"wl\":\"\",\"aa\":1'"
+# Yoksay: izinli saldırgan satırının hedefi tek IP, izinli aralık satırınınki izin aralığı (/25); /16 ve /24 dışı da kabul edilir
+mkl aaign; printf '151.80.7.9 # müşteri\n' >> "$A"; lfdb 3600 151.80.7.9; quiet --action ignore 151.80.7.9 10
+mcheck "tek IP yoksayılınca Kontrol edilecekler'den düşer, Yoksayılanlar'da görünür" "[ -z \"\$(rvrow 151.80.7.9)\" ] && run --status --json 2>/dev/null | grep -q '\"ignored\":\[{\"cidr\":\"151.80.7.9\"'"
+quiet --action unignore 151.80.7.9
+mcheck "yoksayma kaldırılınca satır geri gelir" "rvrow 151.80.7.9 | grep -q '\"type\":\"allow_ban\"'"
+mkl aaigngrp; printf '151.80.7.0/25 # müşteri ağı\n' >> "$A"; lfdb 3600 151.80.7.9; lfdb 3000 151.80.7.20; quiet --action ignore 151.80.7.0/25 10
+mcheck "izin aralığı (/25) yoksayılınca 'İzinli aralık' satırı düşer" "[ -z \"\$(rvrow 151.80.7.0/25)\" ]"
+mcheck "/7 gibi aralık yoksayma hedefi olarak reddedilir" "run --action ignore 128.0.0.0/7 10 2>&1 | grep -q 'Geçersiz hedef'"
 mk paopen; quiet --action ban24 151.80.7 --mode svc --svc web
 for x in 1 2 3; do printf '%s\n' "151.80.7.$x # lfd: (sshd) Failed SSH login from 151.80.7.$x (FR/France/-): 5 in the last 3600 secs - $(LC_ALL=C date -d '+1 min' '+%a %b %d %H:%M:%S %Y')" >> "$D"; done
 mcheck "kısmi web banından sonra SSH'ye blok eşiği kadar saldırı → 'Kısmi yetmiyor'" "rvrow 151.80.7.0/24 | grep -q '\"type\":\"part_open\".*\"ssh\":3'"

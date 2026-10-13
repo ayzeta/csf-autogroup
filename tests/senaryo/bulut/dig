@@ -1,0 +1,8 @@
+#!/bin/bash
+# dig sarmalayıcısı (yalnız test kapsayıcısı; tests/senaryo/kur-bulut.sh kurar): kapsayıcının DNS'i yalnız izinli alan
+# adlarını çözer, Team Cymru sahip sorgularına NXDOMAIN döner. Senaryo testinin ağı (151.80.0.0/16 = AS16276 FR) ve
+# sunucunun kendi IP'si için cevapları tests/durum-tablosu/bin/dig taklidi verir; başka her sorgu gerçek dig'e gider.
+case "$*" in
+    *cymru.com*|*in-addr.arpa*) exec bash "$(dirname "$(readlink -f "$0")")/dig-taklit" "$@" ;;
+esac
+exec /usr/bin/dig "$@"

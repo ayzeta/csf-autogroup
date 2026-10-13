@@ -100,14 +100,26 @@ setc IPV6 0
 setc LF_DIRWATCH 0; setc LF_INTEGRITY 0                                                 # kapsayıcıda yavaş ve gereksiz
 # Senaryo testi lfd'nin SSH banını geçici listede bekler. LF_SSHD_PERM=1 (paket varsayılanı) ile lfd kalıcı ban için
 # "csf -d" çağırır; CSF izin listesindeki IP'yi reddeder ("deny failed: … is in the allow file", 16.33'te ölçüldü) ve
-# "izinli saldırgan" senaryoları ban göremez. Geçici ban lfd'nin kendi kuralıyla konur.
-setc LF_SSHD_PERM 0
+# "izinli saldırgan" senaryoları ban göremez. Değer saniye: 3600 = bir saatlik geçici ban ("csf -td", izin denetimi yok).
+setc LF_SSHD_PERM 3600
 # İnternete vekil üzerinden çıkan oturum: CSF'in indirmeleri (ülke/ASN verisi, sağlayıcı aralıkları) de vekilden geçsin
 [ -n "${HTTPS_PROXY:-${https_proxy:-}}" ] && setc URLPROXY "${HTTPS_PROXY:-${https_proxy:-}}"
 for b in IPTABLES:iptables IP6TABLES:ip6tables IPSET:ipset IP:ip MODPROBE:modprobe SENDMAIL:sendmail HOST:host; do
     p=$(command -v "${b#*:}" 2>/dev/null) && setc "${b%%:*}" "$p"
 done
 rm -f /etc/cron.d/csf_testing
+
+echo "== DNS (sahip sorguları)"
+# Senaryo testi sahipleri gerçek Team Cymru DNS'inden sorar. Kapsayıcının DNS'i yalnız izinli alan adlarını çözüyorsa
+# (Cymru'ya NXDOMAIN; ölçülür) test ağı için taklit cevap veren sarmalayıcı kurulur; başka sorgular gerçek dig'e gider.
+command -v dig >/dev/null 2>&1 || apt-get install -y -q bind9-dnsutils >>/tmp/kur-bulut-apt.log 2>&1
+if [ -z "$(timeout 8 /usr/bin/dig +short TXT 9.7.80.151.origin.asn.cymru.com 2>/dev/null)" ]; then
+    install -m 0755 "$H/bulut/dig" /usr/local/sbin/dig
+    install -m 0755 "$H/../durum-tablosu/bin/dig" /usr/local/sbin/dig-taklit
+    echo "   Cymru sorgusu cevapsız: /usr/local/sbin/dig sarmalayıcısı kuruldu (test ağı için taklit cevap)"
+else
+    rm -f /usr/local/sbin/dig /usr/local/sbin/dig-taklit; echo "   gerçek DNS çalışıyor"
+fi
 
 echo "== csf -r ve lfd"
 csf -r >/tmp/kur-bulut-csf.log 2>&1 || { tail -5 /tmp/kur-bulut-csf.log; die "csf -r başarısız"; }

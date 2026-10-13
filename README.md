@@ -119,7 +119,7 @@ settings, with no prompts. `config.env` is left untouched.
   with the comment you wrote on that line (`1.2.3.4 # office`); an ignore that
   lfd took from `CC_IGNORE`, `RELAYHOSTS` or a reverse-DNS match in
   `csf.rignore` is traced the way lfd traces it. Failed logins coming from the
-  server's own address (lfd never bans those) show as *Server's own IP*, with
+  server's own address (lfd never bans those) show as *Server's IP*, with
   the mail accounts that tried wrong passwords from inside the server when the
   mail log shows them. Several
   attackers from one allow entry, block or network are grouped like normal bans.
@@ -650,6 +650,16 @@ server: it rewrites `csf.conf` and the firewall.
 
 `bash tests/metin/calistir.sh` checks that every concept keeps one name in the
 panel, mails and log: old or duplicate names listed in the script fail it.
+
+`bash tests/arayuz/calistir.sh` opens the WHM pages themselves (index.php,
+api.php, the real engine and the real CSF files, without WHM) in PHP's
+built-in server and drives them with a headless Chromium (Playwright): every
+tab at 1280 and 390 px with no horizontal overflow, no clipped badge and no
+element past the right edge; the glossary; the IP card and the menu of every
+Needs review row; and the Ignore → Ignored list → Stop ignoring flow end to
+end. `GORUNTU=1` keeps screenshots in `tests/arayuz/cikti/`. Root, php, node
+and the playwright module are needed; run it on the test VM or container, not
+on a server.
 
 ## License
 
