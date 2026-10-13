@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.13.19"   # sürüm — başlangıç log satırında görünür
+VERSION="1.13.20"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -3908,7 +3908,8 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
           # geçirir) / etkin kiralık listede (CSF zaten keser) / açık (ban bunları keser)
           cl = ""; if (w == "") { if (!(ip in CW)) CW[ip] = cld(ip); cl = CW[ip] }
           if (site in CDN) { dtot++; DIP[ip] = 1; DC[code]++; DS[site]++; if (code ~ /^2/) dok++ }
-          else if (w != "") { AC[code]++; AS[w]++ }
+          else if (w != "") { AC[code]++; AS[w]++
+              if (code !~ /^[23]/) { ak = code " · " site " · " rqs; AQ[ak]++; AWN[ak] = w; if (!(ak in AI)) AI[ak] = ip } }   # izinli servisin reddedilen istek örnekleri
           else if (cl != "") { ctot++; CIP[ip] = 1; CC[code]++; CS[cl]++; if (k > clast) clast = k; if (code ~ /^2/) { cok++; COK[ip]++ }
               CR[ip]++; if (!(ip in CSM)) CSM[ip] = cl " · " site " · " rqs
               ck = code " · " site " · " rqs; CQ[ck]++; if (!(ck in CI)) CI[ck] = ip }
@@ -3925,8 +3926,8 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
             return "[" o "]" }
         function obj(A,  o, i) { o = ""; for (i in A) o = o (o == "" ? "" : ",") js(i) ":" A[i]; return "{" o "}" }
         END { nip = 0; for (i in IPS) nip++; naip = 0; for (i in AIP) naip++; ncip = 0; for (i in CIP) ncip++; noip = 0; for (i in OIPS) noip++
-              printf "{\"ok\":true,\"total\":%d,\"ips\":%d,\"ok2xx\":%d,\"areq\":%d,\"aips\":%d,\"codes\":%s,\"ocodes\":%s,\"acodes\":%s,\"asvc\":%s,\"posts\":%s,\"bots\":%s,\"sites\":%s,\"fails\":%s,",
-                  tot, nip, ok, atot, naip, obj(C), obj(OC), obj(AC), obj(AS), top(P, 15, PA, PN, PI), top(B, 15, BA, BN), top(S, 10), top(FQ, 12, FX, FN, FI)
+              printf "{\"ok\":true,\"total\":%d,\"ips\":%d,\"ok2xx\":%d,\"areq\":%d,\"aips\":%d,\"codes\":%s,\"ocodes\":%s,\"acodes\":%s,\"asvc\":%s,\"posts\":%s,\"bots\":%s,\"sites\":%s,\"fails\":%s,\"afails\":%s,",
+                  tot, nip, ok, atot, naip, obj(C), obj(OC), obj(AC), obj(AS), top(P, 15, PA, PN, PI), top(B, 15, BA, BN), top(S, 10), top(FQ, 12, FX, FN, FI), top(AQ, 8, AX, AWN, AI)
               printf "\"cloud\":{\"web\":%s,\"lists\":%s,\"req\":%d,\"ips\":%d,\"ok\":%d,\"codes\":%s,\"src\":%s,\"last\":\"%s\",\"ex\":%s},",
                   (cweb == 1 ? "true" : "false"), js(cact), ctot, ncip, cok, obj(CC), obj(CS), clast, topip(CR, 10, COK, CSM)
               ndip = 0; for (i in DIP) ndip++; dsv = ""; for (i in DS) dsv = dsv (dsv == "" ? "" : ",") js(i) ":[" DS[i] "," js(CDN[i]) "]"

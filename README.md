@@ -529,6 +529,9 @@ restoring `config.env` is enough.
   site, request and an example IP) and non-browser clients, by site. Requests
   are split into sites behind a CDN (a ban does not affect them), allowed
   services, addresses an active rented-server list already closes, and the rest.
+  For allowed services the responses they got are listed with the most
+  frequent refused requests (which page gave Googlebot a 403, for instance);
+  those come from the site or ModSecurity, not from a ban.
 - After saving, the setting is written to CSF right away and lfd is restarted
   (lfd fills the address sets); the screen shows how many ranges are loaded.
   Turning it off removes only what the plugin added.

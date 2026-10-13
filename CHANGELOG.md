@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.13.20 — 2026-10-14
+
+- **Impact window: examples of refused requests from allowed services.**
+  "Responses allowed services got" showed counts only (say, 27 refused with
+  403); now it lists the most frequent refused requests under the counts:
+  code · site · request ×N, the service and an example IP. A 403 given to
+  Googlebot is the site or ModSecurity refusing the page, not a ban; the
+  list shows which page. On a phone the example lines wrap instead of being
+  cut (the open-address examples too).
+- **Ignored card:** one line per row again (range · end date · who · ⋯),
+  lined up with the column headings; the two-line row did not match its
+  headings and sat on the card's bottom edge. In a narrow column the ⋯ button
+  was drawn under the text.
+- **Rank numbers only where there is a ranking:** Banned providers listed
+  its rows as 1, 2, 3 like Most blocked providers; it is a list, not a
+  ranking, so the numbers are gone.
+- Browser test: consistency rules on every tab at both widths — a table's
+  headings match its row cells, rank numbers appear only in the ranking card,
+  no row cell overlaps another, the last row does not touch the card's edge.
+
 ## 1.13.19 — 2026-10-14
 
 - **Records merged into Running:** the review period and the log file settings

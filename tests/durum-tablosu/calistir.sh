@@ -221,6 +221,15 @@ printf '151.80.7.9 - - [%s] "GET /a HTTP/1.1" 200 10 "-" "Mozilla/5.0"\n151.80.8
 printf '#t|%s\ncdnsite.test|www.cdnsite.test|203.0.113.80|QUIC.cloud\n' "$NOW" > "$R/var/lib/csf_autogroup/cdn_sites"
 mcheck "Etkisini ölç: CDN arkasındaki sitenin 2 isteği kendi kovasında, açık kovada yalnız doğrudan sitenin isteği" "run --asn-impact AS16276 --json 2>/dev/null | grep -q '\"cdn\":{\"req\":2,\"ips\":2,.*\"cdnsite.test\":\[2,\"QUIC.cloud\"\].*\"open\":{\"req\":1,'"
 
+# Etkisini ölç: izinli servisin (Googlebot) 2xx/3xx dışı cevap aldığı istekler örnek olarak listelenir (kod · site · istek, sayı, servis, örnek IP)
+mk impaf; mkdir -p "$R/var/lib/csf/Geo" "$R/domlogs"
+printf '66.249.64.0\t66.249.95.255\t15169\tUS\tGOOGLE\n' > "$R/var/lib/csf/Geo/ip2asn-combined.tsv"
+echo "DOMLOGS=$R/domlogs" >> "$R/app/config.env"
+printf '66.249.64.0/19 # csf_autogroup: service googlebot\n' > "$R/etc/csf/csf_autogroup.services.allow"
+TL=$(LC_ALL=C date -d '-1 hour' '+%d/%b/%Y:%H:%M:%S +0000')
+printf '66.249.66.1 - - [%s] "GET /gizli HTTP/1.1" 403 10 "-" "Googlebot/2.1"\n66.249.66.1 - - [%s] "GET /gizli HTTP/1.1" 403 10 "-" "Googlebot/2.1"\n66.249.66.2 - - [%s] "GET / HTTP/1.1" 200 10 "-" "Googlebot/2.1"\n' "$TL" "$TL" "$TL" > "$R/domlogs/site.test"
+mcheck "Etkisini ölç: izinli servisin 403 aldığı istek örnekte (kod · site · istek ×2, servis, örnek IP); başarılı istek listede değil" "run --asn-impact AS15169 --json 2>/dev/null | grep -q '\"afails\":\[\[\"403 · site.test · GET /gizli\",2,0,\"googlebot\",\"66.249.66.1\"\]\]'"
+
 # ekran: yazısı aralık olan öğe IP kartı değil aralık kartı açar (tıklanan şey ile açılan şey aynı)
 AGJS="$REPO/whm/assets/ag.js"                 # yol tek tırnak içerebilir ("Drive'ım"): değişkenle verilir
 mcheck "aralığa tıklamak aralık kartını açar" "grep -qF 'if (RANGE_RE.test(rtx)) openRange(rtx); else openDrawer' \"\$AGJS\""
