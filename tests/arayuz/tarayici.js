@@ -44,11 +44,12 @@ async function layoutChecks(page, label, width) {
         check('390: başlık düğmeleri aynı satırda', tops.length >= 3 && Math.max(...tops) - Math.min(...tops) <= 2, tops.join(','));
       }
       if (width === 390 && tab === 'history') {
-        // Geçmiş satırı: zaman ayrıntının altında, ⋯ üst satırın sağında
+        // Geçmiş satırı: zaman ayrıntı metninin içinde (başlıktaki gizli), ⋯ üst satırın sağında, satır en çok 100 px
         const r = await page.evaluate(() => { const e = document.querySelector('.ag-ev'); if (!e) return null;
-          const b = e.querySelector('.ag-ev-b'), t = e.querySelector('.ag-ev-time'), m = e.querySelector('.ag-ev-m');
-          return { ok: b && t && t.getBoundingClientRect().top >= b.getBoundingClientRect().bottom - 1, menuTop: m ? Math.round(m.getBoundingClientRect().top - b.getBoundingClientRect().top) : 0 }; });
-        check('390: Geçmiş satırında zaman ayrıntının altında, menü üstte', !!r && r.ok && r.menuTop <= 6, JSON.stringify(r));
+          const b = e.querySelector('.ag-ev-b'), d = e.querySelector('.ag-ev-d'), t = e.querySelector('.ag-ev-t .ag-ev-time'), t2 = e.querySelector('.ag-ev-tm2'), m = e.querySelector('.ag-ev-m');
+          return { ok: !!(d && t2) && d.contains(t2) && t2.getBoundingClientRect().height > 0 && (!t || t.getBoundingClientRect().height === 0),
+            menuTop: m ? Math.round(m.getBoundingClientRect().top - b.getBoundingClientRect().top) : 0, h: Math.round(e.getBoundingClientRect().height) }; });
+        check('390: Geçmiş satırında zaman ayrıntıda, menü üstte, satır ≤ 100 px', !!r && r.ok && r.menuTop <= 6 && r.h <= 100, JSON.stringify(r));
       }
     }
   }

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.13.17 — 2026-10-14
+
+- **History rows on a phone, tighter:** 1.13.16 moved the time to its own
+  line under the details, which made every row five lines. The time (with
+  the expand mark) now ends the details text, and the owner joins that text
+  instead of taking a line: a typical row is two or three lines. On a wide
+  screen the time stays at the right of the first line.
+
 ## 1.13.16 — 2026-10-14
 
 Phone layout, from screenshots of the panel inside WHM:

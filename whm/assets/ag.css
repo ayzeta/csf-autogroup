@@ -243,7 +243,8 @@
 .ag-ev.clickable:hover { background: var(--ag-row-hover); }
 /* liste kartlarında da zebra: son işlemler, kontrol edilecekler */
 .ag-card-b > .ag-item:nth-child(even) > .ag-ev, .ag-card-b > .ag-item:nth-child(even) > .ag-row { background: var(--ag-zebra); }
-.ag-ev-time { flex: none; font-size: 12px; color: var(--ag-text-3); font-variant-numeric: tabular-nums; padding-top: 3px; display: flex; gap: 10px; align-items: center; white-space: nowrap; }
+.ag-ev-tm2 { display: none; }   /* telefonda zamanın yeri (ayrıntının sonu); masaüstünde başlık satırının sağı */
+.ag-ev-time { flex: none; margin-left: auto; font-size: 12px; color: var(--ag-text-3); font-variant-numeric: tabular-nums; display: flex; gap: 10px; align-items: center; white-space: nowrap; }
 .ag-ev-ic { width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex: none; }
 .ag-ev-ic svg { width: 15px; height: 15px; }
 .ag-ev-ic.acc { background: var(--ag-accent-soft); color: var(--ag-accent); } .ag-ev-ic.warn { background: var(--ag-warn-soft); color: var(--ag-warn); }
@@ -893,14 +894,19 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
 }
 @container agwrap (max-width: 1000px) { .ag-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
-/* Geçmiş satırı telefonda: 1) adres · rozet ····· ⋯  2) ayrıntı  3) zaman · aç/kapa
-   (zaman, aç/kapa ve ⋯ üst satırın sağında sıkışıyor, adres yalnız kalıyordu); süzgeç çipleri küçülür, iki sıraya sığar */
+/* Geçmiş satırı telefonda: adres · rozet ····· zaman · aç/kapa | ⋯ (rozet sığmazsa zamanla birlikte ikinci satıra iner),
+   altında ayrıntı ve sahip aynı paragrafta; süzgeç çipleri küçülür, iki sıraya sığar */
 @media (max-width: 600px) {
-  .ag-ev { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; grid-template-areas: "ic b m" "ic time time"; column-gap: 10px; row-gap: 4px; align-items: start; }
+  .ag-ev { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; grid-template-areas: "ic b m"; column-gap: 10px; align-items: start; }
   .ag-ev-ic { grid-area: ic; }
   .ag-ev-b { grid-area: b; min-width: 0; }
   .ag-ev-m { grid-area: m; }
-  .ag-ev-time { grid-area: time; padding-top: 0; justify-content: space-between; }
+  .ag-ev-o { display: inline; margin: 0; }
+  .ag-ev-o::before { content: " · "; }
+  .ag-ev-t .ag-ev-time { display: none; }
+  .ag-ev-tm2 { display: inline; white-space: nowrap; color: var(--ag-text-3); font-variant-numeric: tabular-nums; }
+  .ag-ev-tm2::before { content: " · "; }
+  .ag-ev-tm2 .ag-chev { margin-left: 6px; }
   .ag-card-h .ag-tools .ag-chip { height: 24px; padding: 0 8px; font-size: 12px; }
 }
 

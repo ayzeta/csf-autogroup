@@ -1100,9 +1100,10 @@
       var e = g[0], key = 'eg:' + e.t + ':' + e.type, open = UI.open[key], ic = evIcon(e), cs = g.map(function (x) { return x.cidr || ''; }).filter(Boolean);
       return '<div class="ag-item"><div class="ag-ev clickable" data-act="toggle" aria-expanded="' + !!open + '" data-key="' + esc(key) + '">' +
         '<div class="ag-ev-ic ' + ic[1] + '">' + IC[ic[0]] + '</div><div class="ag-ev-b"><div class="ag-ev-t"><span class="ag-ev-n">' + esc(t('ev_grp_n', num(g.length))) + '</span>' +
-        '<span class="ag-pill ' + evCls(e) + '"' + evTitle(e.type) + '>' + esc(t('ev_' + e.type)) + '</span></div>' +
-        '<div class="ag-ev-d"><span class="ag-mono">' + esc(cs.slice(0, 3).join(', ')) + '</span>' + (cs.length > 3 ? ' +' + num(cs.length - 3) : '') + ' · ' + evDetail(e) + '</div></div>' +
-        '<div class="ag-ev-time" title="' + esc(new Date(e.t * 1000).toLocaleString(loc())) + '">' + stamp(e.t) + '<span class="ag-chev">' + (open ? '−' : '+') + '</span></div></div>' +
+        '<span class="ag-pill ' + evCls(e) + '"' + evTitle(e.type) + '>' + esc(t('ev_' + e.type)) + '</span>' +
+        '<span class="ag-ev-time" title="' + esc(new Date(e.t * 1000).toLocaleString(loc())) + '">' + stamp(e.t) + '<span class="ag-chev">' + (open ? '−' : '+') + '</span></span></div>' +
+        '<div class="ag-ev-d"><span class="ag-mono">' + esc(cs.slice(0, 3).join(', ')) + '</span>' + (cs.length > 3 ? ' +' + num(cs.length - 3) : '') + ' · ' + evDetail(e) +
+        '<span class="ag-ev-tm2" title="' + esc(new Date(e.t * 1000).toLocaleString(loc())) + '">' + stamp(e.t) + '<span class="ag-chev">' + (open ? '−' : '+') + '</span></span></div></div></div>' +
         (open ? '<div class="ag-grp-l">' + g.map(function (x) { return x.cidr ? '<span class="ag-cidr" data-ip="' + esc(ipOf(x)) + '">' + esc(x.cidr) + '</span>' : ''; }).join('') + '</div>' : '') + '</div>';
     }
     var rows = comp.map(function (g, i) { return g.length > 1 ? grpRow(g) : evRow(g[0], i); }).join('');
@@ -1114,14 +1115,17 @@
       if (st && !seenC[e.cidr]) { seenC[e.cidr] = 1; note = stateNote(e, st); }
       var mitems = st ? itemMenu(e.cidr, e, st) : null;
       var ic = evIcon(e);
+      // zaman ve aç/kapa, başlık satırının sağında (rozetin yanında): ayrı sütun telefonda satırı bir satır uzatıyordu
+      // telefonda (ag-ev-tm2) ayrıntının sonunda metin olarak: başlıkta sığmayınca tek başına satıra düşüyordu
+      var tmi = stamp(e.t) + (has ? '<span class="ag-chev">' + (open ? '−' : '+') + '</span>' : ''), tmt = ' title="' + esc(new Date(e.t * 1000).toLocaleString(loc())) + '"';
+      var tm = '<span class="ag-ev-time"' + tmt + '>' + tmi + '</span>', tm2 = '<span class="ag-ev-tm2"' + tmt + '>' + tmi + '</span>';
       return '<div class="ag-item"><div class="ag-ev' + (has ? ' clickable" data-act="toggle" aria-expanded="' + !!open + '" data-key="' + esc(key) : '') + '">' +
         '<div class="ag-ev-ic ' + ic[1] + '">' + IC[ic[0]] + '</div>' +
         '<div class="ag-ev-b"><div class="ag-ev-t">' + newDot(NEW_TYPES.indexOf(e.type) >= 0 ? e.t : 0) +
         // adres de IP kartını açsın (diğer tablolar gibi): tek IP kendisi, blok/ağ için ilk kayıtlı IP ya da ağın .1'i
         (e.cidr ? '<span class="ag-cidr" data-ip="' + esc(e.ips && e.ips[0] && e.ips[0].ip ? e.ips[0].ip
-          : /\//.test(e.cidr) && !/\/32$/.test(e.cidr) ? String(e.cidr).replace(/\/\d+$/, '').replace(/\.0$/, '.1') : String(e.cidr).replace(/\/32$/, '')) + '">' + esc(e.cidr) + '</span>' : '') + '<span class="ag-pill ' + evCls(e) + '"' + evTitle(e.type) + '>' + esc(t('ev_' + e.type)) + '</span></div>' +
-        '<div class="ag-ev-d">' + evDetail(e, note ? ' <span class="ag-pill ag-pill-n ag-pill-xs ag-ev-st" title="' + esc(t('st_tip')) + '">' + esc(note) + '</span>' : '') + '</div></div>' +
-        '<div class="ag-ev-time" title="' + esc(new Date(e.t * 1000).toLocaleString(loc())) + '">' + stamp(e.t) + (has ? '<span class="ag-chev">' + (open ? '−' : '+') + '</span>' : '') + '</div>' +
+          : /\//.test(e.cidr) && !/\/32$/.test(e.cidr) ? String(e.cidr).replace(/\/\d+$/, '').replace(/\.0$/, '.1') : String(e.cidr).replace(/\/32$/, '')) + '">' + esc(e.cidr) + '</span>' : '') + '<span class="ag-pill ' + evCls(e) + '"' + evTitle(e.type) + '>' + esc(t('ev_' + e.type)) + '</span>' + tm + '</div>' +
+        '<div class="ag-ev-d">' + evDetail(e, note ? ' <span class="ag-pill ag-pill-n ag-pill-xs ag-ev-st" title="' + esc(t('st_tip')) + '">' + esc(note) + '</span>' : '') + tm2 + '</div></div>' +
         (mitems ? '<div class="ag-ev-m">' + menu('hm:' + key, mitems) + '</div>' : '') + '</div>' +
         (open ? ipTable(e.ips, e.total) : '') + '</div>';
     }
