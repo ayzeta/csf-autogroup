@@ -4343,16 +4343,29 @@ rig_pat() {      # HOST(küçük harf) → 0: bir csf.rignore kaydıyla eşleşi
     done
     REPLY=""; return 1
 }
-aa_acct() {      # IP → REPLY = posta günlüğünde (csf.conf SMTPAUTH_LOG, exim) bu IP'den yanlış şifreyle giriş denenen hesaplar,
-    # JSON [{"u":hesap,"n":kaç}] (en çok 10, çoktan aza); ACCT_F = dosya adı. Satır biçimi (exim, ölçüldü 2026-10-13):
-    # "… authenticator failed for (ad) [IP]:port: 535 Incorrect authentication data (set_id=hesap)". Yalnız bugünkü dosya.
-    local f
+aa_acct() {      # IP → REPLY = posta günlüklerinde bu IP'den yanlış şifreyle giriş denenen hesaplar, JSON [{"u":hesap,"n":deneme}]
+    # (en çok 10, çoktan aza); ACCT_F = okunan dosya adları. Dosyalar csf.conf'tan: SMTPAUTH_LOG (exim), POP3D_LOG ve IMAPD_LOG
+    # (dovecot). Satır biçimleri (sunucuda ölçüldü 2026-10-13):
+    #   exim:    "… authenticator failed for (ad) [IP]:port: 535 Incorrect authentication data (set_id=hesap)"   → 1 deneme
+    #   dovecot: "… (auth failed, N attempts in S secs) (auth_failed): user=<hesap>, method=PLAIN, rip=IP, lip=…" → N deneme
+    # Yalnız bugünkü dosyalar.
+    local f files="" rows
     REPLY=""; ACCT_F=""
-    f=$(conf_val SMTPAUTH_LOG); [ -n "$f" ] && [ -r "$f" ] || return 1
-    ACCT_F="${f##*/}"
-    REPLY=$(LC_ALL=C grep -F "[$1]" "$f" 2>/dev/null | LC_ALL=C grep -F 'authenticator failed for' | LC_ALL=C grep -o 'set_id=[^)]*' | cut -d= -f2- |
-        sort | uniq -c | sort -rn | head -n 10 | awk '{ u = $2; gsub(/\\/, "\\\\", u); gsub(/"/, "\\\"", u); printf "%s{\"u\":\"%s\",\"n\":%d}", (n++ ? "," : ""), u, $1 }')
-    [ -n "$REPLY" ] && REPLY="[$REPLY]"
+    for f in $(conf_val SMTPAUTH_LOG) $(conf_val POP3D_LOG) $(conf_val IMAPD_LOG); do
+        [ -n "$f" ] && [ -r "$f" ] && [[ " $files " != *" $f "* ]] && files+=" $f"
+    done
+    [ -n "$files" ] || return 1
+    rows=$(for f in $files; do
+        LC_ALL=C grep -F "[$1]" "$f" 2>/dev/null | LC_ALL=C grep -F 'authenticator failed for' | LC_ALL=C grep -o 'set_id=[^)]*' | cut -d= -f2- | awk -v s="${f##*/}" '{ print $0 "|1|" s }'
+        LC_ALL=C grep -F "rip=$1," "$f" 2>/dev/null | LC_ALL=C grep -F 'auth failed' |
+            awk -v s="${f##*/}" 'match($0, /user=<[^>]*>/) { u = substr($0, RSTART + 6, RLENGTH - 7); n = 1
+                if (match($0, /auth failed, [0-9]+ attempts/)) n = substr($0, RSTART + 13, RLENGTH - 22) + 0
+                print u "|" n "|" s }'
+    done)
+    [ -n "$rows" ] || return 1
+    ACCT_F=$(printf '%s\n' "$rows" | cut -d'|' -f3 | sort -u | paste -sd, - | sed 's/,/, /g')
+    REPLY="[$(printf '%s\n' "$rows" | awk -F'|' '{ N[$1] += $2 } END { for (u in N) print N[u] "\t" u }' | sort -rn | head -n 10 |
+        awk -F'\t' '{ u = $2; gsub(/\\/, "\\\\", u); gsub(/"/, "\\\"", u); printf "%s{\"u\":\"%s\",\"n\":%d}", (n++ ? "," : ""), u, $1 }')]"
 }
 aa_ipj() {       # İNDİS … → REPLY = IP listesi JSON'u (izinli saldırganlar: sebep, servis, izin kaydı, kaç kez)
     local i o="" v w q x

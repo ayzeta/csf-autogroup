@@ -133,6 +133,14 @@ printf '%s\n' '2026-10-12 13:34:31 dovecot_login authenticator failed for H=(sit
     '2026-10-13 06:00:00 dovecot_login authenticator failed for H=(x) [203.0.113.99]:1: 535 Incorrect authentication data (set_id=baska@site.example)' > "$R/exim_mainlog"
 mcheck "sunucunun kendi IP'si yoksayıldı → 'Sunucunun kendi IP'si' (full=2), kaynak 'sunucu IP'si'" "rvrow 203.0.113.10 | grep -q '\"wl\":\"sunucu IP.si: 203.0.113.10\".*\"bk\":\"i\",\"cnt\":3,\"full\":2'"
 mcheck "kendi IP'si: posta günlüğündeki hesaplar çoktan aza, yalnız bu IP'ninkiler" "rvrow 203.0.113.10 | grep -q '\"acct\":\[{\"u\":\"info@site-a.example\",\"n\":2},{\"u\":\"info@site-b.example\",\"n\":1}\],\"acctf\":\"exim_mainlog\"'"
+# dovecot (POP3D_LOG / IMAPD_LOG, aynı dosya bir kez okunur): user=<hesap> … rip=IP; "N attempts" deneme sayısı; exim ile birleşir
+mkl aaselfd; lfdl 600 "Failed IMAP login from 203.0.113.10 - ignored"
+printf 'SMTPAUTH_LOG = "%s"\nPOP3D_LOG = "%s"\nIMAPD_LOG = "%s"\n' "$R/exim_mainlog" "$R/maillog" "$R/maillog" >> "$R/etc/csf/csf.conf"
+printf '%s\n' '2026-10-13 05:07:23 dovecot_login authenticator failed for H=(site-a.example) [203.0.113.10]:38634: 535 Incorrect authentication data (set_id=info@site-a.example)' > "$R/exim_mainlog"
+printf '%s\n' 'Oct 11 04:28:26 lin dovecot[570645]: imap-login: Login aborted: Connection closed (auth failed, 3 attempts in 21 secs) (auth_failed): user=<info@site-c.example>, method=PLAIN, rip=203.0.113.10, lip=203.0.113.10, TLS, session=<a>' \
+    'Oct 11 04:28:46 lin dovecot[570645]: pop3-login: Login aborted: Connection closed (auth failed, 1 attempts in 2 secs) (auth_failed): user=<info@site-a.example>, method=PLAIN, rip=203.0.113.10, lip=203.0.113.10, TLS, session=<b>' \
+    'Oct 11 04:29:00 lin dovecot[570645]: imap-login: Login aborted: Connection closed (auth failed, 3 attempts in 18 secs) (auth_failed): user=<info>, method=PLAIN, rip=203.0.113.100, lip=203.0.113.10, TLS, session=<c>' > "$R/maillog"
+mcheck "kendi IP'si: dovecot günlüğündeki hesaplar deneme sayısıyla exim'inkilerle birleşir (3 + 1 + 1), kaynak dosyalar" "rvrow 203.0.113.10 | grep -q '\"acct\":\[{\"u\":\"info@site-c.example\",\"n\":3},{\"u\":\"info@site-a.example\",\"n\":2}\],\"acctf\":\"exim_mainlog, maillog\"'"
 mkl aaselfa; printf '203.0.113.10 # kendi\n' >> "$A"; lfdl 600 "Failed SMTP AUTH login from 203.0.113.10 - ignored"
 mcheck "kendi IP'si csf.allow'da da olsa önce 'sunucu IP'si' sayılır" "rvrow 203.0.113.10 | grep -q '\"wl\":\"sunucu IP.si: 203.0.113.10\".*\"full\":2'"
 # "*SSH login*" başarılı giriş bildirimi (izinli IP'den), saldırı değil: listeye girmez

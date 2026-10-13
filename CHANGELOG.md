@@ -6,9 +6,10 @@
   addresses (its `ignoreip` check; measured on CSF 16.33), so failed logins
   coming from the server itself were listed as *Ignored* with an unknown source
   and a ban hint. They now have their own state, *Server's own IP*: no ban
-  button, and when the mail log (`SMTPAUTH_LOG`, exim format) shows which
-  accounts tried wrong passwords from inside the server, the row lists them
-  with counts, so the site or script behind them can be found.
+  button, and when the mail logs (`SMTPAUTH_LOG`, `POP3D_LOG`, `IMAPD_LOG`;
+  exim and dovecot formats) show which accounts tried wrong passwords from
+  inside the server, the row lists them with attempt counts, so the site or
+  script behind them can be found.
 - **Needs review: no more "unknown" ignore source.** For an ignored address
   that is in none of the allow or ignore files, the plugin now looks where lfd
   looks, in lfd's order: `CC_IGNORE` (country or ASN, from the owner cache),
