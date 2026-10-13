@@ -34,5 +34,7 @@ done
 tr_end=$(grep -n "^    en: {" "$JS" | head -n 1 | cut -d: -f1)
 hits=$(head -n "${tr_end:-1}" "$JS" | grep -oE "[a-z_0-9]+: '([^'\\\\]|\\\\.)*'" | grep -i "do not delete" | grep -vi "silinmez")
 if [ -n "$hits" ]; then bad=$((bad + 1)); echo "  ✗ «do not delete» Türkçe metinde «silinmez» açıklaması olmadan:"; printf '%s\n' "$hits" | cut -c1-140 | sed 's/^/      /'; fi
+wp() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi; }
+node "$(wp "$H/sozluk.js")" "$(wp "$JS")" || bad=$((bad + 1))     # her durum rozeti Terimler'de açıklanmış mı
 if [ "$bad" -eq 0 ]; then echo "Terim tutarlılığı: eski ad kalmadı"; exit 0; fi
-echo "Terim tutarlılığı: $bad eski ad hâlâ kullanılıyor"; exit 1
+echo "Terim tutarlılığı: $bad sorun"; exit 1

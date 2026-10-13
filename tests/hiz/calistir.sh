@@ -57,6 +57,15 @@ for s in gcp aws azure digitalocean; do
 done
 printf 'gcp azure aws digitalocean\n' > "$A/cloud/active"; date +%s > "$A/cloud/.refreshed"
 printf '61.1.7 %s\n' "$(date +%F)" > "$C"
+# Kontrol edilecekler'in yeniden sınama ve gruplama yükü: sayaçta duran 20 eski şüpheli ağ uyarısı (her biri 6 tekil, 3 blok) ve
+# izinli bir müşteri ağından 200 "yoksayıldı" satırı (lfd günlüğü)
+D2=$(LC_ALL=C date -d '-2 days' '+%a %b %d %H:%M:%S %Y')
+for n in $(seq 1 20); do
+  for b in 1 2 3; do for h in 1 2; do printf '70.%d.%d.%d # lfd: (sshd) Failed SSH login from 70.%d.%d.%d (US/United States/-): 10 in the last 3600 secs - %s\n' $n $b $h $n $b $h "$D2" >> "$D"; done; done
+  printf 'WARN16_70.%d %s\n' $n "$(date -d '-3 days' +%F)" >> "$C"
+done
+printf '80.1.0.0/16 # müşteri ağı\n' >> "$R/etc/csf/csf.allow"
+for k in $(seq 1 200); do printf '%s lin lfd[1]: Failed SSH login from 80.1.%d.%d - ignored\n' "$(LC_ALL=C date -d "-$k min" '+%b %e %H:%M:%S')" $(( k % 50 )) $(( k % 7 + 1 )) >> "$R/var/log/lfd.log"; done
 
 st() { env SIM_ROOT="$R" PATH="$B/bin:/usr/bin:/bin" AG_BY=root "$@"; }
 st bash "$R/app/csf_autogroup.sh" --status --json > /dev/null 2>&1      # ilk açılışın önbellekleri (olay geçmişi vb.)
@@ -64,7 +73,7 @@ s=$(date +%s%N)
 st env AG_PROF=1 bash "$R/app/csf_autogroup.sh" --status --json > "$B/out.json" 2> "$B/prof"
 e=$(date +%s%N); ms=$(( (e - s) / 1000000 ))
 grep -q '"ok":true' "$B/out.json" || { echo "Hız: durum çıktısı bozuk"; head -c 300 "$B/out.json"; exit 1; }
-echo "Hız: durum çıktısı $(( ms / 1000 )),$(( ms % 1000 / 100 )) sn (1.580 ban, 450.000 lfd satırı, 6.000 Imunify kaydı)"
+echo "Hız: durum çıktısı $(( ms / 1000 )),$(( ms % 1000 / 100 )) sn (1.700 ban, 450.000 lfd satırı, 6.000 Imunify kaydı, 20 eski uyarı, 200 izinli saldırgan satırı)"
 awk '$2 > 150 { sub(/^PROF /, "  "); print }' "$B/prof"
 if [ -n "${SINIR:-}" ] && [ "$ms" -gt $(( SINIR * 1000 )) ]; then echo "  ✗ sınır $SINIR sn aşıldı"; exit 1; fi
 exit 0

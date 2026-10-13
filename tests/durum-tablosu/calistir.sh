@@ -99,9 +99,77 @@ for p in 7 8 9; do printf '151.80.%s|16276|FR|OVH - OVH SAS, FR|%s|151.80.0.0/16
 mcheck "eski uyarı: saldırılan servisi ülke/sağlayıcı/kiralık liste kapatıyorsa listede kalmaz" "! rvhas 151.80.0.0/16"
 mk rvkeep;    printf 'WARN16_151.80 %s\n' "$(date -d '-3 days' +%F)" >> "$C"; for x in 7.1 7.2 8.1 8.2 9.1; do single 151.80.$x sshd; done
 mcheck "eski uyarı: ölçütü bugün de tutuyorsa IP listesi ve servisiyle kalır" "run --status --json 2>/dev/null | grep -q '\"cidr\":\"151.80.0.0/16\",\"day\":\"[0-9-]*\",\"hist\":true[^]]*\"n\":5[^]]*\"svc\":\"ssh\"'"
+# İzinli ama saldıran (lfd günlüğü; biçimler gerçek lfd 16.33'te ölçüldü): her saldırgan en geniş tutan grupta bir kez
+lfdl() { printf '%s lin lfd[1001]: %s\n' "$(LC_ALL=C date -d "@$(( NOW - $1 ))" '+%b %e %H:%M:%S')" "$2" >> "$R/lfd.log"; }
+lfdb() { lfdl "$1" "(sshd) Failed SSH login from $2 (FR/France/-): 5 in the last 3600 secs - *Blocked in csf* for 43200 secs [LF_SSHD]"; }
+lfdi() { lfdl "$1" "Failed SSH login from $2 - ignored"; }
+rvrow() { run --status --json 2>/dev/null | grep -o '"review":\[.*\],"ignored"' | sed 's/^"review":\[//; s/,{"t":/\n{"t":/g' | grep -E "^\{\"t\":[0-9]+,\"type\":\"[a-z_0-9]+\",\"cidr\":\"$1\"" | head -n 1; }   # satır başına bir kayıt
+mkl() { mk "$1"; echo "LFD_LOG=$R/lfd.log" >> "$R/app/config.env"; : > "$R/lfd.log"; }
+mkl aab;  printf '151.80.7.9 # müşteri\n' >> "$A"; lfdb 3600 151.80.7.9
+mcheck "izinli IP lfd'de banlandı → 'Ban işlemiyor' (tam izin)" "rvrow 151.80.7.9 | grep -q '\"type\":\"allow_ban\".*\"bk\":\"b\".*\"full\":1'"
+mkl aai;  printf '151.80.7.9 # müşteri\n' >> "$A"; for x in 1 2 3; do lfdi $(( 600 * x )) 151.80.7.9; done
+mcheck "IGNORE_ALLOW açıkken izinli IP yoksayıldı → 'lfd yoksaydı', 3 kez, tam izin" "rvrow 151.80.7.9 | grep -q '\"bk\":\"i\",\"cnt\":3,\"full\":1'"
+mkl aay;  printf '151.80.7.9\n' >> "$R/etc/csf/csf.ignore"; lfdi 600 151.80.7.9
+mcheck "csf.ignore IP'si yoksayıldı → 'Yoksayılıyor' (tam izin değil: elle ban işler)" "rvrow 151.80.7.9 | grep -q '\"bk\":\"i\",\"cnt\":1,\"full\":0'"
+mkl aano; lfdb 3600 151.80.7.9
+mcheck "izinsiz IP banlandı → ban işliyor, listede yok" "[ -z \"\$(rvrow 151.80.7.9)\" ]"
+mkl aaport; printf 'tcp|in|d=22|s=151.80.7.9 # müşteri yalnız SSH\n' >> "$A"; lfdb 3600 151.80.7.9
+mcheck "tek portluk izin: ban öteki portlarda işler → listede yok" "[ -z \"\$(rvrow 151.80.7.9)\" ]"
+mkl aagrp; printf '151.80.7.0/25 # müşteri ağı\n' >> "$A"; lfdb 3600 151.80.7.9; lfdb 3000 151.80.7.20
+mcheck "izin aralığından 2 IP → tek 'İzinli aralık' satırı (IP'ler altında)" "rvrow 151.80.7.0/25 | grep -q '\"type\":\"allow_grp\".*\"aa\":2' && [ -z \"\$(rvrow 151.80.7.9)\" ]"
+mkl aamix; printf '151.80.7.9\n151.80.7.10\n' >> "$A"; lfdb 3600 151.80.7.9; lfdb 3000 151.80.7.10; single 151.80.7.30 sshd
+mcheck "/24'te 2 izinli + 1 izinsiz tekil (blok eşiği) → 'Atlandı', 2'si izinli" "rvrow 151.80.7.0/24 | grep -q '\"type\":\"skip_wl\".*\"aa\":2'"
+mkl aaold; printf '151.80.7.9 # müşteri\n' >> "$A"; lfdb $(( 9 * 86400 )) 151.80.7.9
+mcheck "7 günden eski kayıt → listede yok" "[ -z \"\$(rvrow 151.80.7.9)\" ]"
+mkl aarot; printf '151.80.7.9 # müşteri\n' >> "$A"; lfdb 172800 151.80.7.9; mv "$R/lfd.log" "$R/lfd.log.1"; gzip -f "$R/lfd.log.1"; : > "$R/lfd.log"
+mcheck "döndürülmüş, sıkıştırılmış günlük (lfd.log.1.gz) sayılır" "rvrow 151.80.7.9 | grep -q '\"type\":\"allow_ban\"'"
+mk paopen; quiet --action ban24 151.80.7 --mode svc --svc web
+for x in 1 2 3; do printf '%s\n' "151.80.7.$x # lfd: (sshd) Failed SSH login from 151.80.7.$x (FR/France/-): 5 in the last 3600 secs - $(LC_ALL=C date -d '+1 min' '+%a %b %d %H:%M:%S %Y')" >> "$D"; done
+mcheck "kısmi web banından sonra SSH'ye blok eşiği kadar saldırı → 'Kısmi yetmiyor'" "rvrow 151.80.7.0/24 | grep -q '\"type\":\"part_open\".*\"ssh\":3'"
+# Otomatik /24: tekiller csf -dr ile değil dosyadan silinir (csf -dr lfd'nin tekrar ban geçmişini de siler)
+R="$W/roots/b24auto"
+mcheck "otomatik /24 banı tekilleri dosyadan siler, csf -dr çağırmaz" "grep -q '^151.80.7.0/24 ' '$R/etc/csf/csf.deny' && ! grep -qE '^151\.80\.7\.[1-6] ' '$R/etc/csf/csf.deny' && ! grep -q 'csf -dr' '$R/csf_calls.log'"
+# Tam aralık banı izlenen bloğun sayaç satırını saklar; ban kalkınca süresi dolmadıysa geri gelir. --keep ile izleme hiç kesilmez.
+W10=$(date -d '-10 days' +%F); W400=$(date -d '-400 days' +%F)
+mk rwatch;  printf '151.80.7 %s\n151.80.9 %s\n' "$W10" "$W400" >> "$C"; quiet --action ban16 151.80
+mcheck "tam /16 banı izleme satırını sayaçtan alır, geri yükleme dosyasına yazar" "! grep -q '^151.80.7 ' '$C' && grep -q '^cnt|151.80.7 $W10' '$R/var/lib/csf_autogroup/restore/151.80.0.0_16'"
+quiet --action unban 151.80.0.0/16
+mcheck "ban kalkınca (geri yükleme seçilmese de) süresi dolmamış izleme geri gelir, dolmuş gelmez" "grep -q '^151.80.7 $W10\$' '$C' && ! grep -q '^151.80.9 ' '$C'"
+mk rwatchk; printf '151.80.7 %s\n' "$W10" >> "$C"; quiet --action ban16 151.80 --keep
+mcheck "kapsananlar tutulursa (--keep) izleme de sürer" "grep -q '^151.80.7 $W10\$' '$C'"
+mk rwatcho; printf '151.80.7 %s\n' "$W10" >> "$C"; quiet --action ban16 151.80; sed -i '/^151\.80\.0\.0\/16 /d' "$D"; quiet
+mcheck "ban CSF ekranından kaldırılınca (artık temizliği) izleme geri gelir" "grep -q '^151.80.7 $W10\$' '$C'"
+
+# CSF'in liste sınırı (DENY_IP_LIMIT) eklentinin işaretsiz /24'ünü silerse: izlemeye alınır, bildirilir; eklentinin kendi
+# kaldırması sayılmaz; izlenen blok yeniden eşiğe gelince silinmez işaretli kalıcı ban
+a24() { printf '%s\n' "$1 # Auto-grouped /24: 3 kalıcı tekil nedeniyle kalıcı banlandı - $DT" >> "$D"; }
+mk lgone; a24 151.80.7.0/24; a24 151.80.8.0/24; quiet; sed -i '/^151\.80\.7\.0\/24 /d' "$D"; sleep 1; quiet
+mcheck "CSF'in sildiği otomatik /24 izlemeye alınır ve olay yazılır" "grep -q '^151.80.7 ' '$C' && grep -q '\"type\":\"limit_gone\",\"cidr\":\"151.80.7.0/24\"' '$R/var/lib/csf_autogroup/events.jsonl' && ! grep -q '\"cidr\":\"151.80.8.0/24\".*limit_gone\|limit_gone.*\"cidr\":\"151.80.8.0/24\"' '$R/var/lib/csf_autogroup/events.jsonl'"
+quiet
+mcheck "aynı kayıp bir sonraki turda yeniden bildirilmez" "[ \$(grep -c '\"type\":\"limit_gone\"' '$R/var/lib/csf_autogroup/events.jsonl') = 1 ]"
+mk lgself; a24 151.80.7.0/24; quiet; sleep 1; quiet --action unban 151.80.7.0/24; quiet
+mcheck "eklentinin kendi kaldırması 'CSF sildi' sayılmaz" "! grep -q '\"type\":\"limit_gone\"' '$R/var/lib/csf_autogroup/events.jsonl'"
+mk lgback; printf '151.80.7 %s\n' "$(date -d '-3 days' +%F)" >> "$C"; for x in 1 2 3; do single 151.80.7.$x sshd; done; quiet
+mcheck "izlenen blok kalıcı tekillerle yeniden eşiğe gelince silinmez işaretli banlanır, izleme biter" "grep -q '^151.80.7.0/24 .*do not delete' '$D' && ! grep -q '^151.80.7 ' '$C'"
+
+# Etkisini ölç: CDN arkasındaki sitenin istekleri kendi kovasında (güvenlik duvarı ziyaretçiyi görmez), öteki kovalara girmez
+mk impcdn; mkdir -p "$R/var/lib/csf/Geo" "$R/domlogs"
+printf '151.80.0.0\t151.80.255.255\t16276\tFR\tOVH\n' > "$R/var/lib/csf/Geo/ip2asn-combined.tsv"
+echo "DOMLOGS=$R/domlogs" >> "$R/app/config.env"
+TL=$(LC_ALL=C date -d '-1 hour' '+%d/%b/%Y:%H:%M:%S +0000')
+printf '151.80.7.9 - - [%s] "GET / HTTP/1.1" 200 10 "-" "Mozilla/5.0"\n' "$TL" > "$R/domlogs/dogrudan.test"
+printf '151.80.7.9 - - [%s] "GET /a HTTP/1.1" 200 10 "-" "Mozilla/5.0"\n151.80.8.4 - - [%s] "GET /b HTTP/1.1" 404 10 "-" "curl"\n' "$TL" "$TL" > "$R/domlogs/cdnsite.test-ssl_log"
+printf '#t|%s\ncdnsite.test|www.cdnsite.test|203.0.113.80|QUIC.cloud\n' "$NOW" > "$R/var/lib/csf_autogroup/cdn_sites"
+mcheck "Etkisini ölç: CDN arkasındaki sitenin 2 isteği kendi kovasında, açık kovada yalnız doğrudan sitenin isteği" "run --asn-impact AS16276 --json 2>/dev/null | grep -q '\"cdn\":{\"req\":2,\"ips\":2,.*\"cdnsite.test\":\[2,\"QUIC.cloud\"\].*\"open\":{\"req\":1,'"
+
 # ekran: yazısı aralık olan öğe IP kartı değil aralık kartı açar (tıklanan şey ile açılan şey aynı)
 AGJS="$REPO/whm/assets/ag.js"                 # yol tek tırnak içerebilir ("Drive'ım"): değişkenle verilir
 mcheck "aralığa tıklamak aralık kartını açar" "grep -qF 'if (RANGE_RE.test(rtx)) openRange(rtx); else openDrawer' \"\$AGJS\""
+# aralık kartı /16–/24 dışındaki önekleri de tarar (CSF'teki /26 ya da /12 banına tıklanınca kart o aralığı anlatır)
+mk insany; single 151.80.7.9 sshd; single 151.80.7.100 sshd; printf '%s\n' "151.80.7.0/26 # Manually denied - $DT" >> "$D"
+mcheck "aralık kartı · /26: kendi banı kapsar, içindeki 1 tekil sayılır" "run --inside 151.80.7.0/26 --json 2>/dev/null | grep -q '\"cover\":\"151.80.7.0/26\".*\"singles\":1,'"
+mcheck "aralık kartı · /12 geçerli cevap (içinde tekil yok)" "run --inside 151.0.0.0/12 --json 2>/dev/null | grep -q '\"singles\":0,'"
+mcheck "aralık kartı · hizasız aralık reddedilir" "run --inside 151.80.7.5/26 --json 2>/dev/null | grep -q 'bad_input'"
 
 node "$(wp "$H/render.js")" "$(wp "$REPO/whm/assets/ag.js")" "$(wp "$W/out")" "$@"; RC=$?
 printf '\nMotor kuralları\n%s' "$ML"

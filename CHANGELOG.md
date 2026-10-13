@@ -1,5 +1,173 @@
 # Changelog
 
+## 1.13.11 — 2026-10-13
+
+- **New: sites behind a CDN.** When a site's domain or its www name points to
+  a CDN (QUIC.cloud, Cloudflare, Sucuri, CloudFront, Fastly, Akamai) or another
+  address instead of this server, its visitors reach the firewall through the
+  CDN and a CSF ban can not cut them. `tools/cdn-sites.sh` finds these sites
+  once a day by DNS (and the CDN by its response headers). Measure impact shows
+  their requests in their own bucket ("a ban does not affect them", with where
+  to block them: the CDN's panel), and `tools/ban-leak.sh` no longer counts them
+  as leaks but lists them separately. Measured with real DNS and HTTP replies.
+- Measure impact: the "bans on this provider" list used the monospace font of
+  the request lists; it reads as normal text.
+- **Glossary covers every state the panel shows,** in sections (bans,
+  providers and lists, allows and ignores, review list, tools): the new review
+  states, the allow list vs ignore difference and CSF's `IGNORE_ALLOW`
+  setting, announced range, full/partial, came back, manual, old, provider
+  (ASN), CSF and lfd. The badges' tooltips say the same and name the CSF
+  setting behind them. The text test now fails if a state badge has no
+  glossary entry.
+- **New: allowed but attacking.** lfd can not stop an address that is allowed
+  or ignored. Measured with real lfd (CSF 16.33):
+  - With `IGNORE_ALLOW = "0"` (CSF's default) lfd still bans an address that is
+    in `csf.allow` (also a range), but the ban does not work and the alert says
+    "block may not work".
+  - With `IGNORE_ALLOW = "1"`, and for `csf.ignore` / `csf.rignore`, lfd does not
+    ban and writes "… - ignored" for every attempt.
+
+  The review list now reads these lines from the lfd logs of the last 7 days,
+  rotated and compressed ones included, so a temp ban that already expired is
+  still seen. Each attacker shows once, in the widest group that applies:
+  - several addresses inside one allow entry: one "Allowed range" row;
+  - a block where allowed and banned attackers together reach the block
+    threshold: the usual "Skipped" row;
+  - a network that meets the suspicious-range rule: the usual "Suspicious" row;
+  - otherwise one row per address: "Ban not working" (full allow) or "Ignored"
+    (`csf.ignore`/`csf.rignore`: CSF also refuses to ban the address on its
+    own, but a ban on the block containing it cuts it — measured).
+
+  A row from an allowed service offers "Exclude from allowed services"; for
+  your own `csf.allow` / `csf.ignore` entries it says which file to edit. The IP
+  card and the range card show the same information.
+- **New: open service.** When attacks on the services a partial ban
+  leaves open reach the block (or network) threshold after the ban went in,
+  the range shows in the review list as "Open service" with "Change ban".
+- The review list and the IP card name an allow entry the same short way
+  ("allowed service openai-gptbot (…)"); the full path is in the tooltip.
+- `tools/ban-leak.sh` counts rented-server list requests only from the moment
+  the rule is in place (written by `tools/cloud-ban.sh`); requests from before
+  are the old state, not a leak.
+- The service of lfd's "ignored" lines (they carry no "(sshd)" prefix) is
+  recognised (SSH, POP3/IMAP, SMTP AUTH, FTP).
+- **Fix — false "Runs are not on schedule" for a few seconds.** Returning to a
+  panel tab left open in the background redrew it with the old data first, and
+  the last run time compared to the current clock looked hours late until the
+  refresh arrived. The overdue check now waits for fresh data.
+- **Faster status:** `csf.conf` is read once per call instead of on every
+  lookup, the SSH port (`sshd -T`) is looked up once, and rented-server list
+  membership is checked for all addresses in one pass instead of re-reading
+  every list per address.
+- **IP card says each thing once.** For an allowed address the allow list was
+  repeated four times (result, under the ban buttons, block state, whitelist)
+  and the card did not fit the screen. The result names the list briefly
+  ("allowed service openai-gptbot (…)"), the full path stays under Whitelist,
+  the block state is one sentence. A "not blocked" badge no longer repeats the
+  "not banned" result.
+- **Range card knows the range's own ban:** kind, date, kept, how many singles
+  it was put on and the attacks behind it (from the event log), so a banned
+  block no longer reads "no bans in this range"; its old watch record is not
+  listed as a watched block.
+- **Tests:** the state table covers the allowed-but-attacking cases (ban not
+  working, ignored with `IGNORE_ALLOW`, `csf.ignore`, not allowed, single-port
+  allow, allow-range group, mixed block, older than 7 days, rotated `.gz` log,
+  open service); the real-CSF scenarios send failed SSH logins from an allowed
+  client to real lfd with `IGNORE_ALLOW` 0 and 1 and with `csf.ignore`; the
+  speed test includes 20 old warnings and 200 allowed-attacker lines.
+- **Tests:** real-CSF scenario for "exclude from allowed services": an allowed,
+  banned IP gets through; after the exclusion is saved and applied its ban
+  works, the rest of the list stays allowed, and removing the exclusion
+  restores it.
+- **Fix — automatic block ban no longer erases lfd's repeat history.** The
+  singles inside a new /24 were removed with `csf -dr`, which also deletes the
+  address from lfd's temp-ban history (`csf.tempip`, measured): an attacker that
+  came back was counted as new by lfd. They are now removed from `csf.deny`
+  directly; the /24 already covers them.
+- **Fix — a full range ban no longer ends watching for good.** Banning a range
+  removed the watch records of the blocks inside it and lifting the ban did not
+  bring them back, so a block that attacked again was not seen as "came back".
+  The records are kept with the ban's restore copy and return when the ban is
+  lifted (or removed from the CSF screen) while the watch period is still
+  running. With "keep covered entries" watching is not interrupted.
+- **New: block bans dropped by CSF's list limit are noticed.** When the
+  permanent list reaches `DENY_IP_LIMIT`, CSF deletes the oldest lines not
+  marked "do not delete" on every new ban — the plugin's block bans included,
+  while the singles inside them are already gone (read from CSF's source,
+  tested with real CSF). Each run now compares the plugin's block bans with the
+  previous run: a block that left `csf.deny` without the plugin (and is not
+  covered by a wider ban) is watched and reported by email and in History
+  ("Removed by CSF limit, watched"), with the advice to raise `DENY_IP_LIMIT`.
+  A watched block that reaches the threshold again — through temp bans or
+  permanent singles — gets a permanent ban marked "do not delete".
+- **Fix — provider ban was not seen when deciding a /24.** The run checked a
+  block's singles against the provider ban before it had read the provider ban
+  list, and before it knew the new attackers' owners; a block whose attacks the
+  provider ban already closes was banned anyway and then listed as "no longer
+  needed". Measured with real CSF.
+- **Fix — rented-server list and ban guard used their own idea of "allowed".**
+  Both run before CSF's allow list, so they exempt what CSF lets in. A
+  single-port allow line (e.g. SSH only for a customer, or the plugin's own
+  exception lines) exempted the address on every port, and `GLOBAL_ALLOW`,
+  DynDNS and temp allows (`csf -ta`) were not exempted at all. One shared list
+  (`tools/allow-list.sh`, used by both and by the leak check) now follows CSF:
+  a full allow passes everywhere, a single-port allow only on its port. Tested
+  per line type and with packets on real CSF.
+- **Fix — `csfpost.sh` location.** CSF runs `/usr/local/csf/bin/csfpost.sh` when
+  it exists and then ignores `/etc/csf/csfpost.sh` (read from CSF's source).
+  The tools now write to the file CSF runs and clean the other one, so the
+  rented-server rule, the ban guard and the block counter come back after
+  `csf -r` on such servers too.
+- **Fix — "still being attacked" counter of banned blocks.** The counting rule
+  moved to the very top of mangle PREROUTING: attempts dropped by the
+  rented-server list or the ban guard (which drop before CSF) are counted too,
+  so a block attacked recently is not removed as old. CSF clears the counters on
+  every reload; the plugin now reads them before each of its own reloads.
+- The service of a single lfd made permanent (PERMBLOCK) is found the same way
+  in the run and on the status screen (all rotated lfd logs, cached).
+- The daily tasks are marked done only after they ran: a run cut short does
+  them on the next run. The provider-data refresh gives lfd 12 hours to download
+  before putting the old file back.
+- Lifting a ban keeps the restore copy if the allow file could not be written;
+  a temp ban counts as placed only if CSF really lists it.
+- `tools/ban-leak.sh` reads every rotated lfd log (any naming, compressed or
+  not) for temp bans.
+- The status band says "CSF not found" when CSF is missing, instead of "rules
+  not loaded".
+- **Range card for any range.** Clicking a /26 or a /12 in a table opened the
+  IP card of its first address; it now opens the range card for exactly that
+  range (bans are offered for /16–/24 only). A /32 opens the IP card.
+- **Review list:** the summary under "To review" counts each kind (suspicious /
+  skipped / allowed attacker / open service); long lists show 20 rows with
+  "show more" (ignored list: 10).
+- **Clearer texts:** the save dialog and the settings history name every
+  setting and show values in words ("Off → On", "5 min"), list settings as
+  added / removed; error notices are sentences instead of codes; texts point
+  to the real Settings section names; numbers that depend on a setting (review
+  days, block threshold, suspicious-network threshold, warning days for list
+  downloads) follow the setting; IPv6 input explains that only IPv4 is
+  handled; "Remove" for an ignore reads "Stop ignoring".
+- **Safer actions:** "Remove all" for bans no longer needed asks for typed
+  confirmation when kept, manual or partial bans are among them and reports
+  how many were removed; "Resume" says that CSF and lfd restart; leaving
+  unsaved settings asks in the panel's own dialog.
+- **Fresh data:** after a ban the reopened IP / range card shows the new ban;
+  the "data from … ago" bar counts on during an outage; "Next run" is empty
+  while paused; Measure impact shows when it was measured; a failed event log
+  read is reported in History.
+- **Phone:** the active bans table can be sorted from a "Sort" menu (the column
+  headers are hidden on narrow screens); the save bar no longer covers the last
+  fields; tapping a badge shows its explanation.
+- Settings hide the Imunify refresh when Imunify is not installed and lock the
+  schedule when there is no crontab; "Excluded from allowed services" is
+  checked before saving.
+- **Tests:** a test for the shared allow list (every CSF line type), state
+  table rules for the /24 removal, watch records across ban / unban / keep /
+  removal in CSF, and the range card; real-CSF scenarios for the provider ban
+  in /24 decisions, lfd's history after a /24, single-port and temp allows on
+  the rented-server list and the ban guard, the `csfpost.sh` location and the
+  block counter in mangle.
+
 ## 1.13.10 — 2026-10-12
 
 - **Review rows are re-checked against today's data:** an old warning stays

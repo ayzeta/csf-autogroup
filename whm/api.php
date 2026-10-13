@@ -77,8 +77,8 @@ switch ($a) {
     case 'inside':                                  // elle /16 ya da /24 banının onay penceresi: içindekiler
         $bits = (string) ($_POST['bits'] ?? '');
         $target = trim((string) ($_POST['target'] ?? ''));
-        // duyurulan aralık (/17–/23): hedef tam CIDR'dir
-        $pfx = preg_match('/^(1[7-9]|2[0-3])$/', $bits) && preg_match('/^([0-9]{1,3}\.){3}[0-9]{1,3}\/' . $bits . '$/', $target);
+        // duyurulan aralık (/17–/23) ve aralık kartının gösterdiği öteki önekler (/8–/32): hedef tam CIDR'dir
+        $pfx = preg_match('/^([89]|1[0-57-9]|2[0-35-9]|3[0-2])$/', $bits) && preg_match('/^([0-9]{1,3}\.){3}[0-9]{1,3}\/' . $bits . '$/', $target);
         if (!$pfx && !($bits === '16' && ag_valid(AG_RE_16, $target)) && !($bits === '24' && ag_valid(AG_RE_24, $target))) {
             ag_json(['ok' => false, 'error' => 'bad_input']);
         }

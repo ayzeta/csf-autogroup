@@ -21,10 +21,16 @@
 set -u
 CACHE="${CACHE:-/var/lib/csf_autogroup/cloud}"
 CSF_DIR="${CSF_DIR:-/etc/csf}"
+CSF_VAR="${CSF_VAR:-/var/lib/csf}"
 LOG_FILE="${LOG_FILE:-/var/log/csf_autogroup.log}"
 SET=ag_cloud CHAIN=AG_CLOUD MARK="# csf_autogroup cloud"
-POST="$CSF_DIR/csfpost.sh"
+# CSF yalnız birini çalıştırır: /usr/local/csf/bin/csfpost.sh varsa onu, yoksa /etc/csf/csfpost.sh (csf.pl, CSF 16.33'te
+# ölçüldü). Satır CSF'in çalıştıracağı dosyaya yazılır; öteki dosyada kalmış eski satır temizlenir.
+POST="$CSF_DIR/csfpost.sh"; POST2=""
+if [ "$CSF_DIR" = /etc/csf ] && [ -e /usr/local/csf/bin/csfpost.sh ]; then POST=/usr/local/csf/bin/csfpost.sh; POST2="$CSF_DIR/csfpost.sh"; fi
+post_strip() { [ -f "$1" ] && grep -qF "$MARK" "$1" || return 0; grep -vF "$MARK" "$1" > "$1.ag.tmp" && cat "$1.ag.tmp" > "$1"; rm -f "$1.ag.tmp"; }
 SELF_PATH="$(cd "$(dirname "$0")" 2>/dev/null && pwd)/$(basename "$0")"
+. "$(dirname "$SELF_PATH")/allow-list.sh" || exit 1
 UA="Mozilla/5.0 (compatible; csf-autogroup cloud-ban)"
 # Microsoft'un indirme sayfası kısa UA'ya 403 döner: tam tarayıcı kimliği ve başlıklar gerekir
 BUA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
@@ -60,6 +66,7 @@ fetch() {        # AD ADRES → ham liste
 }
 hook_add() {     # csfpost.sh'a tek satır: CSF yeniden başlayınca kural geri gelsin (Imunify satırı en sonda kalır)
     local line="[ -r \"$SELF_PATH\" ] && CACHE=\"$CACHE\" LOG_FILE=\"$LOG_FILE\" bash \"$SELF_PATH\" --apply $MARK"
+    [ -n "$POST2" ] && post_strip "$POST2"
     if [ -f "$POST" ] && grep -qF "$MARK" "$POST"; then
         grep -qF "$line" "$POST" && return 0
         grep -vF "$MARK" "$POST" > "$POST.ag.tmp" && cat "$POST.ag.tmp" > "$POST"; rm -f "$POST.ag.tmp"
@@ -72,6 +79,7 @@ hook_add() {     # csfpost.sh'a tek satır: CSF yeniden başlayınca kural geri 
     log "csfpost.sh'a satır eklendi"
 }
 hook_del() {
+    [ -n "$POST2" ] && post_strip "$POST2"
     [ -f "$POST" ] && grep -qF "$MARK" "$POST" || return 0
     cp -p "$POST" "$POST.autogroup.bak" 2>/dev/null
     grep -vF "$MARK" "$POST" > "$POST.ag.tmp" && cat "$POST.ag.tmp" > "$POST"; rm -f "$POST.ag.tmp"
@@ -97,33 +105,23 @@ order_ok() {     # 0: atlama mangle PREROUTING'te tek, önünde yalnız eklentin
     s=$(M -S PREROUTING 2>/dev/null | grep -- '^-A PREROUTING ')
     n=$(printf '%s\n' "$s" | grep -n -- "-j $CHAIN\$" | cut -d: -f1)
     [ -n "$n" ] && [ "$(printf '%s\n' "$n" | grep -c .)" -eq 1 ] || return 1
-    if [ "$n" -gt 1 ] && printf '%s\n' "$s" | head -n $(( n - 1 )) | grep -vqE -- '-j (AG_GUARD|AG_CLOUD)$'; then return 1; fi
+    if [ "$n" -gt 1 ] && printf '%s\n' "$s" | head -n $(( n - 1 )) | grep -vqE -- '-j (AG_GUARD|AG_CLOUD)$|--match-set ag_hits src$'; then return 1; fi
     ! iptables -C INPUT ! -i lo -j "$CHAIN" 2>/dev/null && ! iptables -C LOCALINPUT ! -i lo -j "$CHAIN" 2>/dev/null
 }
 order_fix() {
     M -L "$CHAIN" -n >/dev/null 2>&1 || return 1
-    order_ok && return 0
+    # rule.since: kuralın doğru yerde (etkin) olduğu andan beri; tools/ban-leak.sh bundan önceki istekleri sızıntı saymaz
+    # (yeri bozulmuşken gelenler eski durumdur). Dosya yoksa ilk denetimde "şimdi" yazılır.
+    order_ok && { [ -s "$CACHE/rule.since" ] || date +%s > "$CACHE/rule.since"; return 0; }
     jump_del; iptables -F "$CHAIN" 2>/dev/null; iptables -X "$CHAIN" 2>/dev/null
-    M -I PREROUTING 1 ! -i lo -j "$CHAIN" || { log "mangle PREROUTING zincirine kural eklenemedi"; return 1; }
+    M -I PREROUTING "$(hits_pos)" ! -i lo -j "$CHAIN" || { log "mangle PREROUTING zincirine kural eklenemedi"; return 1; }
+    date +%s > "$CACHE/rule.since"
     log "kural mangle PREROUTING zincirinin başına alındı"
 }
-# İzin listesi: kural CSF'in izin listesinden ÖNCE çalıştığı için csf.allow'daki adresler (Include edilen dosyalarla
-# birlikte) ve izinli servisler kümede muaf tutulur. Gelişmiş satırlardan (tcp|in|d=…|s=…) s= alınır; /8'den geniş
-# aralık izin değil port kuralıdır, alınmaz.
-allow_files() {
-    printf '%s\n' "$CSF_DIR/csf_autogroup.services.allow"
-    [ -r "$CSF_DIR/csf.allow" ] || return 0
-    printf '%s\n' "$CSF_DIR/csf.allow"
-    awk '/^[[:space:]]*Include[[:space:]]/ { print $2 }' "$CSF_DIR/csf.allow"
-}
-allow_list() {
-    local f
-    while IFS= read -r f; do [ -r "$f" ] && cat "$f"; done < <(allow_files) | sed 's/#.*//' | awk '
-        { a = ""; if ($1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\/[0-9]+)?$/) a = $1
-          else if (match($0, /(^|\|)s=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\/[0-9]+)?/)) { a = substr($0, RSTART, RLENGTH); sub(/.*s=/, "", a) }
-          if (a == "") next; n = split(a, p, "/"); if (n == 2 && p[2] + 0 < 8) next; print a }' | sort -u
-}
-allow_sum() { while IFS= read -r f; do [ -r "$f" ] && cat "$f"; done < <(allow_files) | cksum | cut -d' ' -f1; }
+# İzin listesi (allow-list.sh, ban korumasıyla ortak): kural CSF'in izin listesinden ÖNCE çalıştığı için CSF'in içeri
+# aldığı adresler burada da geçer. Bütün portlara izinli adres kümede muaf (nomatch); tek portluk izin yalnız o portta
+# geçer (zincirde kümeden önce RETURN) — müşteriye SSH için açılan satır, listedeki adresin web'ine yol açmasın.
+allow_sum() { ag_allow_sum; }
 apply() {        # son listelerle ipset'i doldur, zinciri kur (değişmiş olsa da boşluk olmadan: ipset swap)
     local names tcp="" udp="" list n s
     command -v ipset >/dev/null 2>&1 && command -v iptables >/dev/null 2>&1 || { log "ipset ya da iptables yok"; return 1; }
@@ -135,7 +133,7 @@ apply() {        # son listelerle ipset'i doldur, zinciri kur (değişmiş olsa 
     # izinli adresler (csf.allow + Include, izinli servisler; Googlebot'un bir kısmı Google Cloud aralıklarında): kural
     # CSF'in izin listesinden önce çalıştığı için kümede muaf. İzinli bir aralığın tamamen içinde kalan liste aralığı
     # hiç eklenmez; izinli adres daha darsa nomatch olarak eklenir (hash:net'te en dar eşleşme geçerli)
-    local allow; allow=$(allow_list)
+    local ents allow; ents=$(ag_allow_entries); allow=$(printf '%s\n' "$ents" | awk '$1 == "F" { print $2 }')
     if [ -n "$allow" ]; then
         # izinli aralıklar başlangıca göre sıralı ve birleşik; her liste aralığı için ikili arama
         local alr; alr=$(printf '%s\n' "$allow" | awk -F'[./]' '{ b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%.0f %.0f\n", lo, lo + 2 ^ (32 - b) - 1 }' | sort -n -k1,1)
@@ -151,12 +149,20 @@ apply() {        # son listelerle ipset'i doldur, zinciri kur (değişmiş olsa 
     ipset create "$SET" hash:net family inet hashsize 4096 maxelem 262144 -exist || return 1
     ipset create "${SET}_t" hash:net family inet hashsize 4096 maxelem 262144 -exist || return 1
     ipset flush "${SET}_t"
-    { printf '%s\n' "$list" | awk -v s="${SET}_t" '{ print "add " s " " $1 " -exist" }'
+    { printf '%s\n' "$list" | awk -v s="${SET}_t" 'NF { print "add " s " " $1 " -exist" }'
       for s in $(cat "$CACHE/self" 2>/dev/null); do [[ "$s" =~ ^[0-9.]+$ ]] && echo "add ${SET}_t $s/32 nomatch -exist"; done
       for s in $allow; do [[ "$s" == */* ]] || s="$s/32"; echo "add ${SET}_t $s nomatch -exist"; done
     } | ipset restore -exist || { log "ipset doldurulamadı"; return 1; }
     ipset swap "${SET}_t" "$SET" && ipset destroy "${SET}_t"
     M -N "$CHAIN" 2>/dev/null; M -F "$CHAIN" || return 1
+    # tek portluk izinler: yalnız kapatılan portlarla kesişenler (öteki portlarda zaten bu zincir yok)
+    local pr pa pp
+    while read -r _ pr pa pp; do
+        [ -n "$pa" ] || continue
+        if [ "$pp" = all ]; then M -A "$CHAIN" -p "$pr" -s "$pa" -j RETURN || return 1; continue; fi
+        case "$pr" in tcp) ag_port_hit "$pp" "$tcp" || continue ;; udp) ag_port_hit "$pp" "$udp" || continue ;; esac
+        M -A "$CHAIN" -p "$pr" -s "$pa" --dport "$pp" -j RETURN || return 1
+    done < <(printf '%s\n' "$ents" | grep '^P ')
     # her port (ya da a:b aralığı) için ayrı kural; mangle PREROUTING'te hedef port henüz asıl port (nat sonra gelir)
     for s in ${tcp//,/ }; do M -A "$CHAIN" -p tcp --dport "$s" -m conntrack --ctstate NEW -m set --match-set "$SET" src -j DROP || return 1; done
     for s in ${udp//,/ }; do M -A "$CHAIN" -p udp --dport "$s" -m conntrack --ctstate NEW -m set --match-set "$SET" src -j DROP || return 1; done

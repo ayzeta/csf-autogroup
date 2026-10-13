@@ -191,6 +191,19 @@ check "blok banı · liste web'i kapatıyor, web saldırısı → banlanmaz" - "
 check "blok banı · liste web'i kapatıyor, SSH saldırısı → banlanır" G "$(b24 liste-web ssh)"
 check "blok banı · /16 kısmi web banı var, web saldırısı → banlanmaz" - "$(b24 kismi-once web)"
 check "blok banı · /16 kısmi web banı var, SSH saldırısı → banlanır" G "$(b24 kismi-once ssh)"
+check "blok banı · sağlayıcı banı web'i kapatıyor, web saldırısı → banlanmaz" - "$(b24 asn-web web)"
+check "blok banı · sağlayıcı banı web'i kapatıyor, SSH saldırısı → banlanır" G "$(b24 asn-web ssh)"
+check "blok banı · sağlayıcı tümden banlı, SSH saldırısı → banlanmaz" - "$(b24 asn-hepsi ssh)"
+# /24 banlanınca içteki tekiller dosyadan silinir; lfd'nin tekrar ban geçmişi (csf.tempip) korunur (csf -dr onu da silerdi)
+if [ "${GERCEK:-0}" = 1 ]; then
+    mk; TIP=/var/lib/csf/csf.tempip; sed -i '/^151\.80\.7\./d' "$TIP" 2>/dev/null
+    for x in 1 2 3; do single 151.80.7.$x ssh "$OLD"; printf '151.80.7.%s|1|%s\n' "$x" "$(date +%s)" >> "$TIP"; done
+    run >/dev/null 2>&1
+    r=$(grep -q '^151.80.7.0/24 ' "$D" && echo G || echo -)
+    r+=$(grep -cE '^151\.80\.7\.[123] ' "$D")$(grep -cE '^151\.80\.7\.[123]\|' "$TIP")
+    sed -i '/^151\.80\.7\./d' "$TIP"
+    check "blok banı · tekiller dosyadan silinir, lfd geçmişi kalır (G=ban, 0 tekil satır, 3 geçmiş)" G03 "$r"
+fi
 
 # ── 3d) Sağlayıcı sıralaması: port listesiyle banlı sağlayıcı yalnız açık servislere saldırı sürüyorsa görünür ──
 rank() {   # → "-" sıralamada yok, "G" var, "G:pb" var ve port listesiyle banlı işaretli
@@ -232,15 +245,35 @@ check "eski blok temizliği · do not delete blok kalır" G "$(grep -q '^151.80.
 check "eski blok temizliği · sıradan eski blok kalkar" - "$(grep -q '^151.80.8.0/24 ' "$D" && echo G || echo -)"
 check "eski blok temizliği · son 30 günde denenen blok kalır" G "$(grep -q '^151.80.9.0/24 ' "$D" && echo G || echo -)"
 
+# ── 3j) CSF'in liste sınırı (yalnız gerçek CSF): DENY_IP_LIMIT dolunca CSF en eski işaretsiz satırı siler (csf.pl) ──
+if [ "${GERCEK:-0}" = 1 ]; then
+    mk; setconf DENY_IP_LIMIT 3
+    printf '%s\n' "151.80.7.0/24 # Auto-grouped /24: 3 kalıcı tekil nedeniyle kalıcı banlandı - $OLD" >> "$D"
+    single 198.51.100.11 ssh; NEEDR=1; run >/dev/null 2>&1                 # tur: eklentinin blok listesi kaydedilir
+    csf -d 198.51.100.12 test >/dev/null 2>&1; csf -d 198.51.100.13 test >/dev/null 2>&1
+    check "liste sınırı · CSF dolunca en eski işaretsiz satırı (eklentinin /24'ü) siler" - "$(grep -q '^151.80.7.0/24 ' "$D" && echo G || echo -)"
+    sleep 1; run >/dev/null 2>&1
+    check "liste sınırı · tur silinen bloğu izlemeye alır ve bildirir" G "$(grep -q '^151.80.7 ' "$C" && grep -q '"type":"limit_gone","cidr":"151.80.7.0/24"' "$R/var/lib/csf_autogroup/events.jsonl" && echo G || echo -)"
+fi
+
 # ── 3g) Banlı blok sayacı (yalnız gerçek CSF): eylemsiz sayan kural + sayaçlı küme; csf -r sonrası csfpost.sh ile geri gelir ──
 if [ "${GERCEK:-0}" = 1 ]; then
     mk; printf '%s\n' "198.51.100.0/24 # Auto-grouped /24: 3 kalıcı tekil nedeniyle kalıcı banlandı - $DT" >> "$D"; NEEDR=1; run >/dev/null 2>&1
-    hs() { echo "$(ipset list -n 2>/dev/null | grep -cx ag_hits)/$(iptables -S LOCALINPUT 2>/dev/null | grep -c 'match-set ag_hits')/$(ipset list ag_hits 2>/dev/null | grep -c '^198.51.100.0/24 ')"; }
+    hs() { echo "$(ipset list -n 2>/dev/null | grep -cx ag_hits)/$(iptables -t mangle -S PREROUTING 2>/dev/null | grep -c 'match-set ag_hits')/$(ipset list ag_hits 2>/dev/null | grep -c '^198.51.100.0/24 ')"; }
     check "sayaç · turdan sonra küme, kural ve banlı blok yerinde" G "$([ "$(hs)" = 1/1/1 ] && echo G || echo "-:$(hs)")"
-    check "sayaç · kural LOCALINPUT'un başında (CSF'in banlarından önce)" G "$(iptables -S LOCALINPUT | sed -n 2p | grep -q ag_hits && echo G || echo -)"
+    check "sayaç · kural mangle PREROUTING'in en başında (kiralık liste ve ban korumasından önce)" G "$(iptables -t mangle -S PREROUTING | grep -- '^-A' | head -n 1 | grep -q ag_hits && echo G || echo -)"
     csf -r >/dev/null 2>&1
     check "sayaç · csf -r sonrası csfpost.sh ile geri geldi" G "$([ "$(hs)" = 1/1/1 ] && echo G || echo "-:$(hs)")"
     DENY="$D" CSF_DIR=/etc/csf bash "$REPO/tools/block-hits.sh" --remove >/dev/null 2>&1
+    # CSF /usr/local/csf/bin/csfpost.sh varsa yalnız onu çalıştırır (csf.pl): satır oraya yazılmalı, /etc/csf'tekinden silinmeli
+    UP=/usr/local/csf/bin/csfpost.sh; mkdir -p "${UP%/*}"
+    mk; printf '#!/bin/bash\n' > "$UP"; chmod 700 "$UP"
+    printf '%s\n' '[ -r /x ] && bash /x --apply # csf_autogroup hits' >> /etc/csf/csfpost.sh      # eski sürümden kalmış satır
+    printf '%s\n' "198.51.100.0/24 # Auto-grouped /24: 3 kalıcı tekil nedeniyle kalıcı banlandı - $DT" >> "$D"; NEEDR=1; run >/dev/null 2>&1
+    check "csfpost · /usr/local/csf/bin/csfpost.sh varken satır oraya yazılır, /etc/csf'teki eski satır silinir" G "$(grep -qF '# csf_autogroup hits' "$UP" && ! grep -qF '# csf_autogroup hits' /etc/csf/csfpost.sh && echo G || echo -)"
+    csf -r >/dev/null 2>&1
+    check "csfpost · csf -r sonrası sayaç kuralı CSF'in çalıştırdığı dosyadan geri gelir" G "$([ "$(hs)" = 1/1/1 ] && echo G || echo "-:$(hs)")"
+    DENY="$D" CSF_DIR=/etc/csf bash "$REPO/tools/block-hits.sh" --remove >/dev/null 2>&1; rm -f "$UP"
 fi
 
 # ── 3h) Kiralık liste kuralının yeri (yalnız gerçek CSF): mangle PREROUTING, nat'tan önce ──
@@ -250,10 +283,11 @@ if [ "${GERCEK:-0}" = 1 ]; then
     mk; layer liste-web; run >/dev/null 2>&1
     mtop() {  # $1 zinciri mangle PREROUTING'te; önünde yalnız eklentinin kendi zincirleri olabilir
         local s n; s=$(iptables -t mangle -S PREROUTING | grep -- '^-A'); n=$(printf '%s\n' "$s" | grep -n -- "-j $1\$" | cut -d: -f1)
-        [ -n "$n" ] && ! printf '%s\n' "$s" | head -n $(( n - 1 )) | grep -vqE -- '-j (AG_GUARD|AG_CLOUD)$' && echo G || echo "-:$(printf '%s\n' "$s" | head -n 2 | tr '\n' ' ')"; }
+        [ -n "$n" ] && ! printf '%s\n' "$s" | head -n $(( n - 1 )) | grep -vqE -- '-j (AG_GUARD|AG_CLOUD)$|--match-set ag_hits src$' && echo G || echo "-:$(printf '%s\n' "$s" | head -n 2 | tr '\n' ' ')"; }
     check "kiralık liste · kural mangle PREROUTING'te (nat'tan önce)" G "$(mtop AG_CLOUD)"
     check "kiralık liste · filter INPUT ve LOCALINPUT'ta kural yok" - "$({ iptables -C INPUT ! -i lo -j AG_CLOUD || iptables -C LOCALINPUT ! -i lo -j AG_CLOUD; } 2>/dev/null && echo G || echo -)"
-    check "kiralık liste · tcp 80, tcp 443, udp 443 kuralları" G "$([ "$(iptables -t mangle -S AG_CLOUD | grep -c -- '--dport')" = 3 ] && echo G || echo "-:$(iptables -t mangle -S AG_CLOUD | grep -c -- '--dport')")"
+    # DROP kuralları (önlerinde cPanel'in kendi tek portluk izinleri — ör. Sectigo 80/443 — için RETURN kuralları olabilir)
+    check "kiralık liste · tcp 80, tcp 443, udp 443 kuralları" G "$([ "$(iptables -t mangle -S AG_CLOUD | grep -- '--dport' | grep -c DROP)" = 3 ] && echo G || echo "-:$(iptables -t mangle -S AG_CLOUD | grep -- '--dport' | grep -c DROP)")"
     iptables -t mangle -N IMU_M 2>/dev/null; iptables -t mangle -I PREROUTING 1 -j IMU_M
     run >/dev/null 2>&1
     check "kiralık liste · mangle'da başka zincir öne geçince tur kuralı yeniden başa alır" G "$(mtop AG_CLOUD)"
@@ -296,15 +330,73 @@ if [ "${GERCEK:-0}" = 1 ] && command -v ip >/dev/null 2>&1 && command -v python3
     check "ban koruması · yalnız SSH kısmi banı: web açık" G "$(web)"
     mk; printf 'tcp|in|d=80,443|s=%s # test - %s\n' $NC "$DT" >> "$D"; printf '%s # test müşterisi\n' $NC >> "$A"; csf -r >/dev/null 2>&1; NEEDR=0; run >/dev/null 2>&1; imu
     check "ban koruması · csf.allow + web kısmi banı: izin önce gelir" G "$(web)"
+    mk; printf 'tcp|in|d=80,443|s=%s # test - %s\n' $NC "$DT" >> "$D"; printf 'tcp|in|d=22|s=%s # müşteri yalnız SSH\n' $NC >> "$A"; csf -r >/dev/null 2>&1; NEEDR=0; run >/dev/null 2>&1; imu
+    check "ban koruması · yalnız SSH izni + web kısmi banı: web kesilir (tek portluk izin tam muafiyet değil)" - "$(web)"
+    # izinli servislerden hariç tutma (SVC_EXCEPT): izinli servis listesindeki banlı IP geçer; panelin yaptığı gibi hariç
+    # tutulup uygulanınca banı işler, listenin geri kalanı izinli kalır
+    mk; printf '%s\n' SVC_ALLOW=1 SVC_SOURCES= 'SVC_EXTRA="test|10.99.0.0/24"' >> "$R/app/config.env"; run --prov-apply >/dev/null 2>&1
+    printf '%s # lfd: (mod_security) mod_security (id:2008) triggered by %s (XX/-/-): 1 in the last 3600 secs - %s\n' $NC $NC "$DT" >> "$D"
+    csf -r >/dev/null 2>&1; NEEDR=0
+    check "hariç tutma · izinli servis listesindeki banlı IP geçer (izin önce gelir)" G "$(web)"
+    run --config set "SVC_EXCEPT=$NC" >/dev/null 2>&1; run --prov-apply >/dev/null 2>&1
+    SVA=/etc/csf/csf_autogroup.services.allow
+    check "hariç tutma · uygulanınca IP listeden çıkar, banı işler" - "$(web)"
+    check "hariç tutma · listenin geri kalanı izinli kalır (aralık bölünür)" G "$(grep -q '^10\.99\.0\.128/25 ' $SVA && grep -q '^10\.99\.0\.3 ' $SVA && ! grep -qE '^10\.99\.0\.(2|0/24) ' $SVA && echo G || echo -)"
+    run --config set SVC_EXCEPT= >/dev/null 2>&1; run --prov-apply >/dev/null 2>&1
+    check "hariç tutma · listeden silinince eski hâline döner (IP yine geçer)" G "$(web)"
+    rm -f "$SVA"
+    # izinli ama saldıran (gerçek lfd): istemci csf.allow'da, SSH'ye 10 başarısız giriş. IGNORE_ALLOW=0: lfd banlar ama ban
+    # işlemez (istemci siteye ulaşır) → "Ban işlemiyor"; IGNORE_ALLOW=1: lfd banlamaz, "ignored" yazar → "lfd yoksaydı"
+    SLOG=$(awk -F'"' '/^SSHD_LOG/ { print $2 }' /etc/csf/csf.conf); SLOG=${SLOG:-/var/log/secure}; touch "$SLOG"
+    sshfail() { local i; for i in $(seq 1 10); do printf '%s %s sshd[%s]: Failed password for root from %s port %s ssh2\n' "$(LC_ALL=C date '+%b %e %H:%M:%S')" "$(hostname -s)" "$((7000 + i))" "$1" "$((40000 + i))" >> "$SLOG"; done; }
+    rvhas() { run --status --json 2>/dev/null | grep -o '"review":\[.*\],"ignored"' | sed 's/^"review":\[//; s/,{"t":/\n{"t":/g' | grep -E "^\{\"t\":[0-9]+,\"type\":\"allow_ban\",\"cidr\":\"$1\"" | grep -q "$2"; }
+    sed -i "/^$NC|/d" /var/lib/csf/csf.tempip 2>/dev/null     # önceki koşuların tekrar ban geçmişi: LF_PERMBLOCK eşiğinde lfd geçici değil kalıcı banlar
+    for ia in 0 1; do
+        mk; printf '%s # test müşterisi\n' $NC >> "$A"; sed -i "s/^IGNORE_ALLOW = .*/IGNORE_ALLOW = \"$ia\"/" "$CF"; echo "LFD_LOG=/var/log/lfd.log" >> "$R/app/config.env"
+        csf -r >/dev/null 2>&1; NEEDR=0; systemctl restart lfd; sleep 8; sshfail $NC; sleep 25; imu
+        if [ "$ia" = 0 ]; then
+            check "izinli saldırgan · IGNORE_ALLOW=0: lfd izinli IP'yi banlar (geçici liste)" G "$(grep -q "|$NC|" /var/lib/csf/csf.tempban && echo G || echo -)"
+            check "izinli saldırgan · IGNORE_ALLOW=0: ban işlemez, istemci siteye ulaşır" G "$(web)"
+            check "izinli saldırgan · IGNORE_ALLOW=0: Kontrol edilecekler 'Ban işlemiyor'" G "$(rvhas $NC '"bk":"b".*"full":1' && echo G || echo -)"
+        else
+            check "izinli saldırgan · IGNORE_ALLOW=1: lfd banlamaz" - "$(grep -q "|$NC|" /var/lib/csf/csf.tempban && echo G || echo -)"
+            # sayı: gerçek lfd günlüğü son 7 günü tutar, önceki test çalıştırmalarının satırları da sayılır → en az 10
+            check "izinli saldırgan · IGNORE_ALLOW=1: Kontrol edilecekler 'lfd yoksaydı' (en az 10 kez, tam izin)" G "$(rvhas $NC '"bk":"i","cnt":[1-9][0-9][0-9]*,"full":1' && echo G || echo -)"
+        fi
+        csf -tr $NC >/dev/null 2>&1
+    done
+    # csf.ignore: lfd banlamaz ama güvenlik duvarında izin değildir → elle ban işler
+    mk; printf '%s\n' $NC >> /etc/csf/csf.ignore; echo "LFD_LOG=/var/log/lfd.log" >> "$R/app/config.env"; csf -r >/dev/null 2>&1; NEEDR=0; systemctl restart lfd; sleep 8; sshfail $NC; sleep 25
+    check "izinli saldırgan · csf.ignore: Kontrol edilecekler 'Yoksayılıyor' (tam izin değil)" G "$(rvhas $NC '"bk":"i".*"full":0' && echo G || echo -)"
+    # ölçüldü: CSF yoksayılan IP'yi tek başına banlamaz ("deny failed: … is in the ignore file"); içine alan blok banı keser
+    check "izinli saldırgan · csf.ignore'daki IP'yi CSF tek başına banlamayı reddeder" G "$(csf -d $NC test 2>&1 | grep -q 'in the ignore file' && echo G || echo -)"
+    csf -d "${NC%.*}.0/24" test >/dev/null 2>&1; imu
+    check "izinli saldırgan · csf.ignore'daki IP'yi içine alan blok banı onu keser" - "$(web)"
+    csf -dr "${NC%.*}.0/24" >/dev/null 2>&1; systemctl restart lfd
     # kiralık liste: istemci listede, Imunify yönlendiriyor ve en başta
     mk; echo "$NC/32" > "$LST"
     printf '%s\n' CLOUD_BAN=1 CLOUD_SOURCES= CLOUD_TCP=80,443 CLOUD_UDP=443 "CLOUD_EXTRA=\"test|file://$LST\"" >> "$R/app/config.env"
     csf -r >/dev/null 2>&1; NEEDR=0; run >/dev/null 2>&1; imu
     check "kiralık liste · Imunify yönlendirip en başta dururken listedeki istemci kesilir" - "$(web)"
+    # izin listesi CSF'in tanımıyla (tools/allow-list.sh): tek portluk izin yalnız kendi portunda geçer, tam izin her portta
+    printf 'tcp|in|d=22|s=%s # müşteri yalnız SSH\n' $NC >> "$A"; csf -r >/dev/null 2>&1; run >/dev/null 2>&1; imu
+    check "kiralık liste · yalnız SSH izni olan listedeki istemci web'den yine kesilir" - "$(web)"
+    printf 'tcp|in|d=80|s=%s # müşteri web\n' $NC >> "$A"; csf -r >/dev/null 2>&1; run >/dev/null 2>&1; imu
+    check "kiralık liste · web portuna izinli istemci geçer" G "$(web)"
+    sed -i "/s=$NC # müşteri/d" "$A"; csf -r >/dev/null 2>&1; run >/dev/null 2>&1; imu
+    csf -ta $NC 3600 test >/dev/null 2>&1; run >/dev/null 2>&1; imu
+    check "kiralık liste · CSF'in geçici izni (csf -ta) olan istemci geçer" G "$(web)"
+    csf -tar $NC >/dev/null 2>&1
     # istemci 80'de dinler (TCP_OUT 80'e izin verir; cevabın kaynak portu da 80, kural yalnız hedef porta bakmalı)
     c=$(ip netns exec agcli bash -c "cd /tmp && (nohup python3 -m http.server 80 >/dev/null 2>&1 &) ; sleep 1"; curl -s -m 4 -o /dev/null -w '%{http_code}' http://$NC/ 2>/dev/null)
     ip netns exec agcli pkill -f 'http.server 80' 2>/dev/null
     check "kiralık liste · sunucunun listedeki adrese kendi bağlantısı kopmaz" G "$([ "$c" = 200 ] && echo G || echo -)"
+    # banlı blok sayacı mangle'da kiralık listeden ÖNCE sayar: listede düşen deneme de "son deneme" tarihini yeniler
+    printf '10.99.0.0/24 # test blok banı - %s\n' "$DT" >> "$D"; csf -r >/dev/null 2>&1; run >/dev/null 2>&1; imu; web >/dev/null
+    check "sayaç · kiralık listede (mangle) düşen deneme de banlı bloğun sayacına yazılır" G "$(DENY="$D" bash "$REPO/tools/block-hits.sh" --read 2>/dev/null | grep -q '^10\.99\.0\.0/24 ' && echo G || echo -)"
+    run >/dev/null 2>&1
+    check "sayaç · tur deneme tarihini dosyaya yazar" G "$(grep -q '^10\.99\.0\.0/24 [0-9]' "$R/var/lib/csf_autogroup/block_hits" && echo G || echo -)"
+    sed -i '/^10\.99\.0\.0\/24 /d' "$D"; csf -r >/dev/null 2>&1; DENY="$D" CSF_DIR=/etc/csf bash "$REPO/tools/block-hits.sh" --remove >/dev/null 2>&1
     cloud_off
     echo ENABLED=0 >> "$R/app/config.env"; run >/dev/null 2>&1
     check "ban koruması · duraklatınca kural ve csfpost satırı kalkar" - "$({ iptables -t mangle -L AG_GUARD -n || iptables -L AG_GUARD -n; } >/dev/null 2>&1 || grep -qF '# csf_autogroup guard' /etc/csf/csfpost.sh && echo G || echo -)"

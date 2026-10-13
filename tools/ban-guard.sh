@@ -25,33 +25,27 @@ CSF_VAR="${CSF_VAR:-/var/lib/csf}"
 LOG_FILE="${LOG_FILE:-/var/log/csf_autogroup.log}"
 STATE="${STATE:-/var/lib/csf_autogroup/guard.sum}"
 CHAIN=AG_GUARD MARK="# csf_autogroup guard" OWN="AG_GUARD|AG_CLOUD" ASET=ag_allow
-POST="$CSF_DIR/csfpost.sh"
+# CSF yalnız birini çalıştırır: /usr/local/csf/bin/csfpost.sh varsa onu, yoksa /etc/csf/csfpost.sh (csf.pl, CSF 16.33'te
+# ölçüldü). Satır CSF'in çalıştıracağı dosyaya yazılır; öteki dosyada kalmış eski satır temizlenir.
+POST="$CSF_DIR/csfpost.sh"; POST2=""
+if [ "$CSF_DIR" = /etc/csf ] && [ -e /usr/local/csf/bin/csfpost.sh ]; then POST=/usr/local/csf/bin/csfpost.sh; POST2="$CSF_DIR/csfpost.sh"; fi
+post_strip() { [ -f "$1" ] && grep -qF "$MARK" "$1" || return 0; grep -vF "$MARK" "$1" > "$1.ag.tmp" && cat "$1.ag.tmp" > "$1"; rm -f "$1.ag.tmp"; }
 SELF_PATH="$(cd "$(dirname "$0")" 2>/dev/null && pwd)/$(basename "$0")"
 
 log() { printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "ban-guard: $1" >> "$LOG_FILE" 2>/dev/null; }
 conf() { sed -n "s/^$1 *= *\"\(.*\)\".*/\1/p" "$CSF_DIR/csf.conf" 2>/dev/null | head -n 1 | tr -d ' '; }
 M() { iptables -t mangle "$@"; }
 have() { M -L "$1" -n >/dev/null 2>&1; }
-# izin listesi kaynakları: csf.allow ve Include ettikleri, izinli servisler, CSF'in geçici izinleri
-allow_files() {
-    printf '%s\n' "$CSF_DIR/csf_autogroup.services.allow" "$CSF_VAR/csf.tempallow"
-    [ -r "$CSF_DIR/csf.allow" ] || return 0
-    printf '%s\n' "$CSF_DIR/csf.allow"
-    awk '/^[[:space:]]*Include[[:space:]]/ { print $2 }' "$CSF_DIR/csf.allow"
-}
-allow_list() {   # IP/CIDR'ler; gelişmiş satırlardan s=, tempallow'da 2. alan; /8'den geniş aralık izin değil port kuralıdır
-    local f
-    while IFS= read -r f; do [ -r "$f" ] && cat "$f"; done < <(allow_files) | sed 's/#.*//' | awk -F'[ \t]+' '
-        { a = ""; l = $0; if ($1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\/[0-9]+)?$/) a = $1
-          else if (match(l, /(^|\|)s=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\/[0-9]+)?/)) { a = substr(l, RSTART, RLENGTH); sub(/.*s=/, "", a) }
-          else if (match(l, /^[0-9]+\|[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\|/)) { split(l, x, "|"); a = x[2] }
-          if (a == "") next; n = split(a, p, "/"); if (n == 2 && p[2] + 0 < 8) next; print a }' | sort -u
-}
-# kuralların kaynağı: csf.deny'deki gelişmiş TCP satırları, CC_DENY_PORTS ayarları, izin listeleri (değişince yeniden kurulur)
+# izin listesi: allow-list.sh (kiralık listeyle ortak). Bütün portlara izinli adres kümede (RETURN); tek portluk izin
+# yalnız kendi portunda geçer — SSH için açılmış müşteri satırı, aynı aralığın web kısmi banını delmesin.
+. "$(dirname "$SELF_PATH")/allow-list.sh" || exit 1
+# kuralların kaynağı: csf.deny'deki gelişmiş TCP satırları, CC_DENY_PORTS ayarları ve CSF'in o an yüklediği cc_ kümeleri
+# (küme sonradan yüklenince kural kurulsun), izin listeleri — değişince yeniden kurulur
 src_sum() {
-    local f
+    local c
     { grep -E '^tcp\|in\|' "$CSF_DIR/csf.deny" 2>/dev/null; conf CC_DENY_PORTS; conf CC_DENY_PORTS_TCP
-      while IFS= read -r f; do [ -r "$f" ] && cat "$f"; done < <(allow_files); } | cksum | cut -d' ' -f1
+      for c in $(conf CC_DENY_PORTS | tr ',' ' '); do ipset list -n "cc_${c,,}" >/dev/null 2>&1 && echo "set:$c"; done
+      ag_allow_sum; } | cksum | cut -d' ' -f1
 }
 
 jump_del() {     # bütün atlamalar: mangle PREROUTING (şimdiki) ve eski sürümün filter INPUT'u
@@ -71,12 +65,12 @@ order_ok() {     # 0: atlama mangle PREROUTING'te tek; önünde yalnız eklentin
     n=$(printf '%s\n' "$s" | grep -n -- "-j $CHAIN\$" | cut -d: -f1)
     [ -n "$n" ] && [ "$(printf '%s\n' "$n" | grep -c .)" -eq 1 ] || return 1
     [ "$n" -eq 1 ] && return 0
-    ! printf '%s\n' "$s" | head -n $(( n - 1 )) | grep -vqE -- "-j ($OWN)\$"
+    ! printf '%s\n' "$s" | head -n $(( n - 1 )) | grep -vqE -- "-j ($OWN)\$|--match-set ag_hits src\$"   # banlı blok sayacı en başta durur
 }
 order_fix() {
     have "$CHAIN" || return 1
     order_ok && return 0
-    jump_del; M -I PREROUTING 1 ! -i lo -j "$CHAIN" || { log "mangle PREROUTING zincirine kural eklenemedi"; return 1; }
+    jump_del; M -I PREROUTING "$(hits_pos)" ! -i lo -j "$CHAIN" || { log "mangle PREROUTING zincirine kural eklenemedi"; return 1; }
     log "kural mangle PREROUTING zincirinin başına alındı"
 }
 apply() {
@@ -88,11 +82,17 @@ apply() {
     ipset create "$ASET" hash:net family inet hashsize 4096 maxelem 262144 -exist || return 1
     ipset create "${ASET}_t" hash:net family inet hashsize 4096 maxelem 262144 -exist || return 1
     ipset flush "${ASET}_t"
-    allow_list | awk -v s="${ASET}_t" '{ print "add " s " " $1 " -exist" }' | ipset restore -exist || { log "izin kümesi doldurulamadı"; return 1; }
+    local ents; ents=$(ag_allow_entries)
+    printf '%s\n' "$ents" | awk -v s="${ASET}_t" '$1 == "F" { print "add " s " " $2 " -exist" }' | ipset restore -exist || { log "izin kümesi doldurulamadı"; return 1; }
     ipset swap "${ASET}_t" "$ASET" && ipset destroy "${ASET}_t"
     M -N "$CHAIN" 2>/dev/null; M -F "$CHAIN" || return 1
     M -A "$CHAIN" -m conntrack ! --ctstate NEW -j RETURN
     M -A "$CHAIN" -m set --match-set "$ASET" src -j RETURN
+    local pr pa pp
+    while read -r _ pr pa pp; do
+        [ -n "$pa" ] || continue
+        if [ "$pp" = all ]; then M -A "$CHAIN" -p "$pr" -s "$pa" -j RETURN; else M -A "$CHAIN" -p "$pr" -s "$pa" --dport "$pp" -j RETURN; fi
+    done < <(printf '%s\n' "$ents" | grep '^P ')
     # kısmi banlar (csf.deny: tcp|in|d=PORTLAR|s=ARALIK); /8'den geniş kaynak port kuralıdır, alınmaz
     local l s d p n=0 c cc ports
     while IFS= read -r l; do
@@ -116,6 +116,7 @@ apply() {
 }
 hook_add() {     # csfpost.sh'a tek satır (kiralık liste satırıyla aynı yöntem: Imunify satırının önüne)
     local line="[ -r \"$SELF_PATH\" ] && STATE=\"$STATE\" LOG_FILE=\"$LOG_FILE\" bash \"$SELF_PATH\" --apply $MARK"
+    [ -n "$POST2" ] && post_strip "$POST2"
     if [ -f "$POST" ] && grep -qF "$MARK" "$POST"; then
         grep -qF "$line" "$POST" && return 0
         grep -vF "$MARK" "$POST" > "$POST.ag.tmp" && cat "$POST.ag.tmp" > "$POST"; rm -f "$POST.ag.tmp"
@@ -128,6 +129,7 @@ hook_add() {     # csfpost.sh'a tek satır (kiralık liste satırıyla aynı yö
     log "csfpost.sh'a satır eklendi"
 }
 hook_del() {
+    [ -n "$POST2" ] && post_strip "$POST2"
     [ -f "$POST" ] && grep -qF "$MARK" "$POST" || return 0
     grep -vF "$MARK" "$POST" > "$POST.ag.tmp" && cat "$POST.ag.tmp" > "$POST"; rm -f "$POST.ag.tmp"
     log "csfpost.sh'tan satır kaldırıldı"

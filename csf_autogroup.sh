@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.13.10"   # sürüm — başlangıç log satırında görünür
+VERSION="1.13.11"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -68,6 +68,7 @@ DENY_FILE="${DENY_FILE:-/etc/csf/csf.deny}"
 CSF_CONF="${CSF_CONF:-/etc/csf/csf.conf}"
 CSF_BIN="${CSF_BIN:-/sbin/csf}"
 CSF_DIR="${CSF_DIR:-$(dirname "$CSF_CONF")}"     # csf.allow / csf.ignore / csf.rignore
+CSF_POST="$CSF_DIR/csfpost.sh"; [ "$CSF_DIR" = /etc/csf ] && [ -e /usr/local/csf/bin/csfpost.sh ] && CSF_POST=/usr/local/csf/bin/csfpost.sh   # CSF bunu çalıştırır (araçlarla aynı seçim)
 CSF_VAR="${CSF_VAR:-/var/lib/csf}"               # csf.tempban / csf.tempallow / csf.g*
 LOG_FILE="${LOG_FILE:-/var/log/csf_autogroup.log}"
 LFD_LOG="${LFD_LOG:-/var/log/lfd.log}"           # lfd'nin günlüğü: PERMBLOCK alan IP'nin önceki geçici ban sebebi buradan
@@ -100,6 +101,7 @@ RUNS_MAX="${RUNS_MAX:-1000}"
 IGNORE_FILE="${IGNORE_FILE:-$(dirname "$SAYAC_FILE")/ignored}"       # "yoksay" denen /16 ve /24'ler
 REVIEW_DAYS="${REVIEW_DAYS:-7}"                                        # "kontrol edilecekler" kaç gün geriye bakar
 PLUGIN_DIR="${PLUGIN_DIR:-/usr/local/cpanel/whostmgr/docroot/cgi/csf_autogroup}"   # eklenti kurulu mu?
+CDN_FILE="${CDN_FILE:-$(dirname "$SAYAC_FILE")/cdn_sites}"          # CDN arkasındaki siteler (tools/cdn-sites.sh, günde bir)
 OWNERS_FILE="${OWNERS_FILE:-$(dirname "$SAYAC_FILE")/owners}"      # /24 → ASN önbelleği (30 gün)
 OWNER_TTL_DAYS="${OWNER_TTL_DAYS:-30}"
 BACKFILL_MAX="${BACKFILL_MAX:-50}"      # her turda en fazla bu kadar /24'ün sahibi sorgulanır
@@ -291,6 +293,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_H_CSF_OFF="CSF devre dışı (csf.disable)"
   M_H_CSF_TEST="CSF test modunda (TESTING = 1)"
   M_H_CSF_RULES="CSF kuralları yüklü değil"
+  M_H_CSF_MISSING="CSF bulunamadı (kaldırılmış ya da kurulu değil): banlar uygulanmıyor"
   M_H_BODY="Güvenlik duvarında sorun var; CSF Auto-Group bu durumda işini yapamaz. Günde bir kez bildirilir:"
   M_H_LOG="SORUN: %s"
   M_PANEL_GEN="Panel: %s → Eklentiler → CSF Auto-Group"
@@ -350,6 +353,9 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_ASN_REFRESH="CSF'in ASN verisi %s günlüktü; yenilensin diye lfd yeniden başlatıldı (ASN banı: %s)"
   M_ASN_REFRESH_FAIL="CSF'in ASN verisi eski (%s gün) ama lfd yeniden başlatılamadı; ASN banı eski adreslerle çalışıyor"
   M_ORPHANS="Banı CSF ekranından kaldırılmış %s eski kayıt temizlendi (kurtarma kopyası / izin satırı)"
+  M_LIM_GONE="Blok banı eklenti dışında kaldırıldı (CSF liste sınırı ya da elle), izlemeye alındı: %s"
+  M_LIM_SUBJ="CSF %s blok banını sildi — liste sınırı"
+  M_LIM_BODY="Aşağıdaki blok banları eklenti dışında csf.deny'den kaldırıldı: büyük olasılıkla kalıcı liste sınırına ulaştığı için CSF sildi (DENY_IP_LIMIT = %s; CSF o zaman \"do not delete\" işareti olmayan en eski satırları siler) ya da elle kaldırıldı. İçlerindeki tekil banlar daha önce silinmişti. Bloklar izlemeye alındı: yeniden saldırırlarsa \"do not delete\" işaretli kalıcı ban konur. Liste sık doluyorsa CSF ayarlarında DENY_IP_LIMIT'i artırın."
   M_A_TIME="Elle işlem süresi (%s): %s sn"
   M_PART_NOTE="   Not: bu ağda kısmi ban var (%s · %s); yalnız seçilen servisler kapalı, diğer portlardan gelenler sürebilir"
   M_PART_AFTER="   Yalnız kısmi bandan (%s) sonra gelen banlar sayıldı."
@@ -527,6 +533,7 @@ else
   M_H_CSF_OFF="CSF is disabled (csf.disable)"
   M_H_CSF_TEST="CSF is in testing mode (TESTING = 1)"
   M_H_CSF_RULES="CSF rules are not loaded"
+  M_H_CSF_MISSING="CSF not found (removed or not installed): no bans are applied"
   M_H_BODY="There is a problem with the firewall; CSF Auto-Group can't do its job like this. Reported once a day:"
   M_H_LOG="PROBLEM: %s"
   M_PANEL_GEN="Panel: %s → Plugins → CSF Auto-Group"
@@ -586,6 +593,9 @@ else
   M_ASN_REFRESH="CSF's ASN data was %s days old; lfd restarted to refresh it (ASN ban: %s)"
   M_ASN_REFRESH_FAIL="CSF's ASN data is old (%s days) but lfd couldn't be restarted; the ASN ban uses old addresses"
   M_ORPHANS="Cleaned up %s leftover entries of bans removed outside the plugin (restore copies / allow lines)"
+  M_LIM_GONE="Block ban removed outside the plugin (CSF list limit or by hand), now watched: %s"
+  M_LIM_SUBJ="CSF removed %s block ban(s) — list limit"
+  M_LIM_BODY="These block bans were removed from csf.deny without the plugin: most likely CSF dropped them because the permanent list reached its limit (DENY_IP_LIMIT = %s; CSF then deletes the oldest lines not marked \"do not delete\"), or they were removed by hand. The single bans inside them were already gone. The blocks are now watched: if they attack again they get a permanent ban marked \"do not delete\". If the list fills up often, raise DENY_IP_LIMIT in the CSF settings."
   M_A_TIME="Manual action time (%s): %s s"
   M_PART_NOTE="   Note: this network has a partial ban (%s · %s); only the selected services are blocked, traffic to other ports can continue"
   M_PART_AFTER="   Only bans added after the partial ban (%s) were counted."
@@ -943,13 +953,15 @@ temp_added() {   # CIDR → csf -td gerçekten tuttu mu? Sayaç kaydı buna bağ
     [[ "$CSF_OUT" =~ (not\ a\ valid|failed|servers\ addresses) ]] && return 1
     [ -r "$CSF_VAR/csf.tempban" ] && grep -qF "|$1|" "$CSF_VAR/csf.tempban" && return 0
     [[ "$CSF_OUT" == *blocked* ]] && return 0      # "... blocked on port" / "already temporarily blocked"
-    [ ! -r "$CSF_VAR/csf.tempban" ]
+    # dosya okunamıyorsa CSF'in kendi listesine sorulur (önce "tuttu" sayılıyordu: izleme kaydı yanlış yazılabilirdi)
+    [ ! -r "$CSF_VAR/csf.tempban" ] && "$CSF_BIN" -t 2>/dev/null 9>&- | grep -qF " $1 "
 }
 csf_run() {      # csf'i çalıştır, çıktıyı log'a yaz, CSF_OUT'ta sakla (csf hata durumunda da 0 döner)
     if [ "$DRY" = 1 ]; then
         case "$1" in -d|-dr|-td|-tr) echo "      [dry-run] csf $*"; CSF_OUT=""; return 0 ;; esac
     fi
     local c0; c0=$(date +%s%N)
+    [ "$1" = -r ] && hits_capture       # yükleme banlı blok sayaçlarını siler: önce okunur
     CSF_OUT=$("$CSF_BIN" "$@" 2>&1 9>&-)
     CSF_TN[$1]=$(( ${CSF_TN[$1]:-0} + 1 )); CSF_TMS[$1]=$(( ${CSF_TMS[$1]:-0} + ($(date +%s%N) - c0) / 1000000 ))
     log_flush                       # csf çıktısı dosyaya doğrudan yazılıyor: önce bağlam satırları
@@ -1251,20 +1263,27 @@ hits_load() {    # → HIT[CIDR] = en son deneme (epoch)
     [ -r "$HITS_FILE" ] || return 0
     while read -r c e; do [[ "$e" =~ ^[0-9]+$ ]] && HIT[$c]="$e"; done < "$HITS_FILE"
 }
-hits_update() {  # sayaçları oku → paket gelen bloğa bugünün tarihi; sonra küme/kural/csfpost satırı güncellenir (sayaçlar sıfırlanır)
+hits_capture() { # sayaçları oku → paket gelen bloğa bugünün tarihi (küme kurulmaz). CSF her yüklemede kümeyi siler (ölçüldü):
+    # eklentinin kendi csf -r'lerinden önce de çağrılır, aradaki denemeler kaybolmasın
     local tool="$SELF_DIR/tools/block-hits.sh" now c p tmp
-    [ -r "$tool" ] && command -v ipset >/dev/null 2>&1 || return 0
+    [ "$DRY" = 1 ] && return 0
+    [ -r "$tool" ] && command -v ipset >/dev/null 2>&1 && ipset list -n ag_hits >/dev/null 2>&1 || return 0
     now=$(date +%s); hits_load
     while read -r c p; do [ -n "$c" ] && HIT[$c]="$now"; done < <(DENY="$DENY_FILE" LOG_FILE="$LOG_FILE" bash "$tool" --read 2>/dev/null)
     tmp="$HITS_FILE.tmp.$$"
     for c in "${!HIT[@]}"; do (( now - HIT[$c] < 400 * 86400 )) && echo "$c ${HIT[$c]}"; done | sort > "$tmp" && mv -f "$tmp" "$HITS_FILE"
-    DENY="$DENY_FILE" CSF_DIR="$CSF_DIR" LOG_FILE="$LOG_FILE" timeout 60 bash "$tool" --sync >/dev/null 2>&1 9>&-
+}
+hits_update() {  # sayaçları oku; sonra küme/kural/csfpost satırı güncellenir (sayaçlar sıfırlanır)
+    local tool="$SELF_DIR/tools/block-hits.sh"
+    [ -r "$tool" ] && command -v ipset >/dev/null 2>&1 || return 0
+    hits_capture
+    DENY="$DENY_FILE" CSF_DIR="$CSF_DIR" CSF_VAR="$CSF_VAR" LOG_FILE="$LOG_FILE" timeout 60 bash "$tool" --sync >/dev/null 2>&1 9>&-
 }
 hits_remove() {  # duraklatma: sayan kural, küme ve csfpost satırı kaldırılır (kayıtlı tarihler kalır)
     local tool="$SELF_DIR/tools/block-hits.sh"
     [ -r "$tool" ] && command -v ipset >/dev/null 2>&1 || return 0
-    ipset list -n ag_hits >/dev/null 2>&1 || grep -qF "# csf_autogroup hits" "$CSF_DIR/csfpost.sh" 2>/dev/null || return 0
-    DENY="$DENY_FILE" CSF_DIR="$CSF_DIR" LOG_FILE="$LOG_FILE" timeout 60 bash "$tool" --remove >/dev/null 2>&1 9>&-
+    ipset list -n ag_hits >/dev/null 2>&1 || grep -qF "# csf_autogroup hits" "$CSF_POST" 2>/dev/null || return 0
+    DENY="$DENY_FILE" CSF_DIR="$CSF_DIR" CSF_VAR="$CSF_VAR" LOG_FILE="$LOG_FILE" timeout 60 bash "$tool" --remove >/dev/null 2>&1 9>&-
 }
 # Ban koruması (tools/ban-guard.sh): Imunify360'ın yönlendirdiği (DNAT) bağlantılarda CSF'in banları INPUT'un başında
 # uygulanır; yoksa gri / splash listesindeki banlı adres CSF'i atlayıp sitelere ulaşabiliyordu. Her turda denetlenir.
@@ -1272,15 +1291,15 @@ guard_update() {
     local tool="$SELF_DIR/tools/ban-guard.sh" rc
     [ -r "$tool" ] && command -v iptables >/dev/null 2>&1 || return 0
     iptables -L LOCALINPUT -n >/dev/null 2>&1 || return 0                        # CSF yüklü değil
-    STATE="$(dirname "$SAYAC_FILE")/guard.sum" CSF_DIR="$CSF_DIR" LOG_FILE="$LOG_FILE" timeout 30 bash "$tool" --check >/dev/null 2>&1 9>&-; rc=$?
+    STATE="$(dirname "$SAYAC_FILE")/guard.sum" CSF_DIR="$CSF_DIR" CSF_VAR="$CSF_VAR" LOG_FILE="$LOG_FILE" timeout 30 bash "$tool" --check >/dev/null 2>&1 9>&-; rc=$?
     [ "$rc" = 0 ] && return 0
-    STATE="$(dirname "$SAYAC_FILE")/guard.sum" CSF_DIR="$CSF_DIR" LOG_FILE="$LOG_FILE" timeout 60 bash "$tool" --sync >/dev/null 2>&1 9>&-
+    STATE="$(dirname "$SAYAC_FILE")/guard.sum" CSF_DIR="$CSF_DIR" CSF_VAR="$CSF_VAR" LOG_FILE="$LOG_FILE" timeout 60 bash "$tool" --sync >/dev/null 2>&1 9>&-
 }
 guard_remove() { # duraklatma: kural ve csfpost satırı kaldırılır
     local tool="$SELF_DIR/tools/ban-guard.sh"
     [ -r "$tool" ] || return 0
-    iptables -t mangle -L AG_GUARD -n >/dev/null 2>&1 || iptables -L AG_GUARD -n >/dev/null 2>&1 || grep -qF "# csf_autogroup guard" "$CSF_DIR/csfpost.sh" 2>/dev/null || return 0
-    STATE="$(dirname "$SAYAC_FILE")/guard.sum" CSF_DIR="$CSF_DIR" LOG_FILE="$LOG_FILE" timeout 60 bash "$tool" --remove >/dev/null 2>&1 9>&-
+    iptables -t mangle -L AG_GUARD -n >/dev/null 2>&1 || iptables -L AG_GUARD -n >/dev/null 2>&1 || grep -qF "# csf_autogroup guard" "$CSF_POST" 2>/dev/null || return 0
+    STATE="$(dirname "$SAYAC_FILE")/guard.sum" CSF_DIR="$CSF_DIR" CSF_VAR="$CSF_VAR" LOG_FILE="$LOG_FILE" timeout 60 bash "$tool" --remove >/dev/null 2>&1 9>&-
 }
 expire_blocks() { # KİM → BLOCK_EXPIRE_DAYS'ten eski blok banlarını kaldır (yalnız otomatik eklenenler) → EXP_N, EXP_BODY
     local line tok ds ep age now re_d='- ([A-Z][a-z]{2} [A-Z][a-z]{2} +[0-9]{1,2} [0-9:]{8} [0-9]{4})[[:space:]]*$' list=()
@@ -1310,13 +1329,14 @@ expire_blocks() { # KİM → BLOCK_EXPIRE_DAYS'ten eski blok banlarını kaldır
     done
 }
 # Güvenlik duvarının durumu. systemd'nin "csf" servisine bakılmaz: kurallar yüklüyken bile "failed"
-# görünebiliyor (sunucuda görüldü). → H_CSF: ok|off|testing|norules|unknown, H_LFD: ok|down,
+# görünebiliyor (sunucuda görüldü). → H_CSF: ok|missing|off|testing|norules|unknown, H_LFD: ok|down,
 # H_LFDAGE: lfd kaç saniyedir çalışıyor (-1 bilinmiyor). lfd yeni başlamışken ülke/ASN kümeleri boştur, dolması sürer;
 # panel o arada "boş" yerine "yükleniyor" der.
 health_check() {
     local pid="" ipt
     H_CSF=ok; H_LFD=down; H_LFDAGE=-1
-    if [ -f "${CSF_CONF%/*}/csf.disable" ]; then H_CSF=off
+    if [ ! -x "$CSF_BIN" ] && ! command -v csf >/dev/null 2>&1; then H_CSF=missing     # CSF kaldırılmış / hiç kurulmamış
+    elif [ -f "${CSF_CONF%/*}/csf.disable" ]; then H_CSF=off
     elif [ "$(conf_val TESTING)" = 1 ]; then H_CSF=testing
     else
         ipt=$(command -v iptables 2>/dev/null)
@@ -1600,7 +1620,21 @@ modsec_msg() {   # KURAL_NO → REPLY = mesaj (yoksa boş)
     fi
     REPLY="${MS_MSG[$id]}"
 }
-conf_val() { grep -E "^[[:space:]]*$1[[:space:]]*=" "$CSF_CONF" | tail -1 | cut -d= -f2- | tr -d ' "\r'; }
+declare -A CONFV=(); CONF_OK=0
+conf_load() {    # csf.conf → CONFV (aynı kural: son satır geçerli, değerden boşluk, tırnak ve CR atılır); dosya yoksa eski yol
+    local line v
+    CONFV=(); CONF_OK=0
+    [ -r "$CSF_CONF" ] || return 0
+    while IFS= read -r line || [ -n "$line" ]; do
+        [[ "$line" =~ ^[[:space:]]*([A-Za-z0-9_]+)[[:space:]]*=(.*)$ ]] || continue
+        v="${BASH_REMATCH[2]}"; v="${v//[[:space:]\"]/}"; v="${v//$'\r'/}"; CONFV[${BASH_REMATCH[1]}]="$v"
+    done < "$CSF_CONF"
+    CONF_OK=1
+}
+conf_val() {
+    if [ "$CONF_OK" = 1 ]; then printf '%s\n' "${CONFV[$1]}"; return; fi
+    grep -E "^[[:space:]]*$1[[:space:]]*=" "$CSF_CONF" | tail -1 | cut -d= -f2- | tr -d ' "\r'
+}
 wl_add() {       # CIDR LABEL
     cidr_range "$1" || return
     WL_LO+=("$R_LO"); WL_HI+=("$R_HI"); WL_TXT+=("$2")
@@ -2015,7 +2049,7 @@ do_status() {
         if [ "$kind" = manual ]; then
             restore_file "$tok"
             if [ -s "$REPLY" ]; then
-                grn=$(grep -vc -e '^#' -e '^$' "$REPLY")                # #t| satırı kayıt değil
+                grn=$(grep -vc -e '^#' -e '^$' -e '^cnt|' "$REPLY")                # #t| satırı kayıt değil
                 grip=$(grep -oE '^[0-9][0-9./]+' "$REPLY" | head -n 6 | paste -sd, -)   # pencerede gösterilecek ilk adresler
             fi
         fi
@@ -2023,6 +2057,7 @@ do_status() {
         [ "$added" -gt 0 ] && ghist+="$added $kind $tok"$'\n'
         [ "$JSON" = 1 ] || gtext+=("$(printf '%-18s %-9s %s' "$tok" "$kind" "$([ "$dnd" = true ] && echo 'do not delete')")")
     done
+    local -A PSINCE=()
     for c in "${!PB_P[@]}"; do
         local pa=0 pp
         pp=$(uniq_ports "${PB_P[$c]}")
@@ -2032,7 +2067,7 @@ do_status() {
             attack_json "$R_LO" "$R_HI" "$pa" "${PB_S[$c]}" < <(
                 for x in "${!SINGLE_NOTE[@]}"; do printf '%s|%s\n' "$x" "${SINGLE_NOTE[$x]}"; done
                 [ -r "$CSF_VAR/csf.tempban" ] && awk -F'|' '$2 !~ /\// { print $2 "|" $6 "|e:" $1 }' "$CSF_VAR/csf.tempban")
-            psince="$REPLY"
+            psince="$REPLY"; PSINCE[$c]="$REPLY"
         fi
         REPLY=""; cidr_range "$c" && under_of "$R_LO" "$R_HI" "$c"
         groups+=("{\"cidr\":\"$c\",\"since\":$psince,\"kind\":\"partial\",\"dnd\":false,\"n\":0,\"added\":${pa:-0},\"ttl\":0,\"svc\":\"${PB_S[$c]}\",\"extra\":\"${PB_X[$c]}\",\"ports\":\"$pp\"${REPLY:+,\"under\":\"$REPLY\"}${PCOV[$c]:+,\"pcov\":\"${PCOV[$c]}\"}}")
@@ -2138,7 +2173,7 @@ do_status() {
                     [[ "$hk" == *PERMBLOCK* ]] && hpb+=("$hx")
                 done <<< "$hl"
                 hc=($hs)
-                [ "$hn" -ge "$([ "$ty" = warn16t ] && echo "$THRESHOLD_TEMP_16" || echo "$THRESHOLD_16")" ] && [ "${#hc[@]}" -ge 2 ] || continue
+                [ "$hn" -ge "$THRESHOLD_16" ] && [ "${#hc[@]}" -ge 2 ] || continue
                 [ "${#hpb[@]}" -gt 0 ] && perm_cls_load "${hpb[@]}"       # PERMBLOCK servisleri tek taramada
                 # geniş bir katman (sağlayıcı / kiralık liste / ülke) bu tekillerin saldırdığı servisleri artık kapatıyorsa bakılacak bir şey yok
                 if cover_any; then
@@ -2149,10 +2184,11 @@ do_status() {
                     if prov_near < <(printf '%s' "$hk"); then jstr "$PN_SRC"; hj+=",\"pnear\":$REPLY,\"pnsvc\":\"$PN_SVC\""; fi
                 fi
                 hw=""; local hi=0 hv
+                cls_map < <(printf '%s' "${H16[${c%.0.0/16}]}" | cut -d'|' -f1,2)
                 while IFS='|' read -r hx hl hq; do
                     [ -n "$hx" ] || continue
                     hi=$((hi + 1)); [ "$hi" -le 40 ] || break
-                    hv=$(awk -v r="$hl" "$AWK_CLS"' BEGIN { print cls(r) }')
+                    hv="${CLSM[$hx]:-other}"
                     if [ "$hv" = repeat ]; then perm_cls "$hx"; hv="${REPLY:-repeat}"; fi
                     short_reason "$hl" "$hx"; jstr "$REPLY"; hk="$REPLY"; hq="${hx%.*}"
                     jstr "${OWN_L[$hq]}"
@@ -2167,6 +2203,92 @@ do_status() {
     fi
 
     prof review_sayac
+    # İzinli ama saldıran IP'ler: her saldırgan en geniş tutan grupta bir kez görünür — izin kaydı (aralıksa ve içinden en az 2 IP
+    # saldırıyorsa: karar o kayıt hakkında), /24 (izinli + izinsiz tekil, blok eşiği: "Atlandı" satırı), /16 (şüpheli ağ ölçütü),
+    # kalanlar tek IP. /24 ve /16 satırları normal uyarılarla aynı tür (aynı öneri ve düğmeler), içinde "aa" = izinli saldırgan sayısı.
+    allow_atk_load $(( now - REVIEW_DAYS * 86400 ))
+    cls_map < <(for aai in "${!AA_IP[@]}"; do printf 'aa%s|%s\n' "$aai" "${AA_R[aai]}"; done)
+    local -A AAG=() AAU=() RS24=() RS16=() RSI=()
+    local aai aaw aac aaj aap aaq aal aat aan aak
+    local -a aaa
+    # bir saldırgan tek satırda: önceki uyarı satırlarının (olay kaydındaki Atlandı / Şüpheli ağ) IP listesinde olan izinli
+    # saldırgan yeni gruplara girmez
+    local -A RVIP=()
+    for aaj in "${review[@]}"; do while read -r aaq; do RVIP[$aaq]=1; done < <(grep -oE '"ip":"[0-9.]+"' <<< "$aaj" | cut -d'"' -f4); done
+    for aai in "${!AA_IP[@]}"; do [ -n "${RVIP[${AA_IP[aai]}]}" ] && AAU[$aai]=1; done
+    # izinsiz tekiller (kalıcı + geçici) /24 ve /16'ya göre: karışık grupların sayımı için
+    for aai in "${!SINGLE_NOTE[@]}"; do RSI[$aai]="${SINGLE_NOTE[$aai]}"; done
+    if [ -r "$CSF_VAR/csf.tempban" ]; then
+        while IFS='|' read -r aai aaw; do [ -n "${RSI[$aai]+x}" ] || RSI[$aai]="$aaw"; done < <(awk -F'|' '$2 ~ /^[0-9.]+$/ { gsub(/\|/, " ", $6); print $2 "|" $6 }' "$CSF_VAR/csf.tempban")
+    fi
+    for aai in "${!AA_IP[@]}"; do unset "RSI[${AA_IP[aai]}]"; done
+    for aai in "${!RSI[@]}"; do RS24[${aai%.*}]+=" $aai"; RS16[${aai%.*.*}]+=" $aai"; done
+    cls_map < <(for aai in "${!RSI[@]}"; do printf 'rs%s|%s\n' "$aai" "${RSI[$aai]//|/ }"; done)
+    rv_add() {   # TÜR CIDR WL_ETİKETİ "izinli indisleri" "izinsiz IP'ler" EK_JSON
+        local js="" x n=0 nb=0 t=0 aa=0 bl=" "
+        for x in $4; do n=$((n + 1)); aa=$((aa + 1)); [ "${AA_T[x]}" -gt "$t" ] && t=${AA_T[x]}; [[ "$bl" == *" ${AA_IP[x]%.*} "* ]] || bl+="${AA_IP[x]%.*} "; done
+        aa_ipj $4; js="$REPLY"
+        for x in $5; do n=$((n + 1)); [[ "$bl" == *" ${x%.*} "* ]] || bl+="${x%.*} "
+            short_reason "${RSI[$x]}" "$x"; jstr "$REPLY"; local w="$REPLY"; local v="${CLSM[rs$x]:-other}"
+            jstr "${OWN_L[${x%.*}]}"; js+="${js:+,}{\"ip\":\"$x\",\"host\":\"\",\"why\":$w,\"svc\":\"$v\",\"owner\":$REPLY,\"asn\":\"${OWN_A[${x%.*}]}\",\"cc\":\"${OWN_C[${x%.*}]}\",\"pfx\":\"${OWN_P[${x%.*}]}\"}"
+        done
+        set -f; local -a ba=($bl); set +f; nb=${#ba[@]}
+        jstr "$3"
+        review+=("{\"t\":$t,\"type\":\"$1\",\"cidr\":\"$2\",\"wl\":$REPLY,\"aa\":$aa,\"n\":$n,\"subnets\":$nb,\"total\":$n,\"ips\":[$js]$6}")
+        rtext+=("$(printf '%-18s %s · %s izinli' "$2" "$1" "$aa")")
+    }
+    # a) izin kaydına göre
+    for aai in "${!AA_IP[@]}"; do [ -n "${AAU[$aai]}" ] && continue; aaw=${AA_W[aai]}; [ "$aaw" -ge 0 ] && [ "${WL_HI[aaw]}" -gt "${WL_LO[aaw]}" ] && AAG[$aaw]+=" $aai"; done
+    for aaw in "${!AAG[@]}"; do
+        read -r -a aaa <<< "${AAG[$aaw]}"; [ "${#aaa[@]}" -ge 2 ] || continue
+        aac="${WL_TXT[aaw]##*: }"; [[ "$aac" =~ $CIDR4_RE ]] || continue
+        [ -n "${seen[$aac]}" ] && continue; ign_until "$aac" && continue; seen[$aac]=1
+        rv_add allow_grp "$aac" "${WL_TXT[aaw]}" "${aaa[*]}" "" ""
+        for aai in "${aaa[@]}"; do AAU[$aai]=1; done
+    done
+    # b) /24: izinli + izinsiz tekiller blok eşiğinde (blok banı izin yüzünden zaten atlanır → "Atlandı")
+    local -A A24=() A16=()
+    for aai in "${!AA_IP[@]}"; do [ -n "${AAU[$aai]}" ] || A24[${AA_IP[aai]%.*}]+=" $aai"; done
+    for aap in "${!A24[@]}"; do
+        read -r -a aaa <<< "${A24[$aap]}"; aaq=$(printf '%s\n' ${RS24[$aap]} | grep -c .)
+        [ $(( ${#aaa[@]} + aaq )) -ge "$THRESHOLD_24" ] || continue
+        aac="$aap.0/24"; [ -n "${seen[$aac]}" ] && continue; ign_until "$aac" && continue
+        cidr_range "$aac" && perm_covers "$R_LO" "$R_HI" && continue
+        seen[$aac]=1; aal="${WL_TXT[${AA_W[${aaa[0]}]}]}"; [ "${AA_W[${aaa[0]}]}" -ge 0 ] || aal=""
+        rv_add skip_wl "$aac" "$aal" "${aaa[*]}" "${RS24[$aap]}" ""
+        for aai in "${aaa[@]}"; do AAU[$aai]=1; done
+    done
+    # c) /16: şüpheli ağ ölçütü (eşik kadar saldırgan, en az 2 blok)
+    for aai in "${!AA_IP[@]}"; do [ -n "${AAU[$aai]}" ] || A16[${AA_IP[aai]%.*.*}]+=" $aai"; done
+    for aap in "${!A16[@]}"; do
+        read -r -a aaa <<< "${A16[$aap]}"; aaq=$(printf '%s\n' ${RS16[$aap]} | grep -c .)
+        [ $(( ${#aaa[@]} + aaq )) -ge "$THRESHOLD_16" ] || continue
+        [ "$(printf '%s\n' ${RS16[$aap]} $(for aai in "${aaa[@]}"; do echo "${AA_IP[aai]}"; done) | sed 's/\.[0-9]*$//' | sort -u | grep -c .)" -ge 2 ] || continue
+        aac="$aap.0.0/16"; [ -n "${seen[$aac]}" ] && continue; ign_until "$aac" && continue
+        cidr_range "$aac" && perm_covers "$R_LO" "$R_HI" && continue
+        seen[$aac]=1; aal=""; [ "${AA_W[${aaa[0]}]}" -ge 0 ] && aal="${WL_TXT[${AA_W[${aaa[0]}]}]}"
+        rv_add warn16 "$aac" "$aal" "${aaa[*]}" "${RS16[$aap]}" ",\"perm\":null"
+        for aai in "${aaa[@]}"; do AAU[$aai]=1; done
+    done
+    # d) kalanlar tek IP
+    for aai in "${!AA_IP[@]}"; do
+        [ -n "${AAU[$aai]}" ] && continue
+        aac="${AA_IP[aai]}"; [ -n "${seen[$aac]}" ] && continue; ign_until "$aac" && continue; seen[$aac]=1
+        aal=""; [ "${AA_W[aai]}" -ge 0 ] && aal="${WL_TXT[${AA_W[aai]}]}"
+        rv_add allow_ban "$aac" "$aal" "$aai" "" ",\"bk\":\"${AA_K[aai]}\",\"cnt\":${AA_N[aai]},\"full\":${AA_F[aai]:-0}"
+    done
+    # Kısmi banı yetmeyen aralık: kısmi ban konduktan sonra kapalı olmayan servislere gelen saldırılar blok (/24) ya da ağ
+    # (/16 ve daha geniş) eşiğine ulaştı — tekiller tek tek banlanıyor ama aralık o servislere açık
+    for aac in "${!PSINCE[@]}"; do
+        [ -n "${seen[$aac]}" ] && continue
+        aan=$(grep -oE ':[0-9]+' <<< "${PSINCE[$aac]}" | tr -d ':' | awk '{ s += $1 } END { print s + 0 }')
+        aat=$THRESHOLD_16; [ "${aac#*/}" -ge 24 ] && aat=$THRESHOLD_24
+        [ "$aan" -ge "$aat" ] || continue
+        ign_until "$aac" && continue; seen[$aac]=1
+        review+=("{\"t\":$now,\"type\":\"part_open\",\"cidr\":\"$aac\",\"svc\":\"${PB_S[$aac]}\",\"extra\":\"${PB_X[$aac]}\",\"since\":${PSINCE[$aac]},\"n\":$aan}")
+        rtext+=("$(printf '%-18s %s · %s' "$aac" "part_open" "$aan")")
+    done
+    prof review_allowban
     # Bir önceki pencerede (REVIEW_DAYS gün daha geride) kaç FARKLI blok/ağ işaretlenmişti: kartın haftalık
     # değişimi aynı ölçüyle (olay sayısı değil, farklı kayıt sayısı) karşılaştırılsın.
     rv_win() {   # A B → [A, B) aralığında işaretlenen farklı blok/ağ sayısı (olay kaydı + sayaçtaki eski kayıtlar)
@@ -2323,9 +2445,10 @@ do_status() {
         printf '"review_prev":%s,"review_win":{%s},' "$(num "$rprev")" "$rwin"
         printf '"enabled":%s,' "$([ "$ENABLED" = 0 ] && echo false || echo true)"
         printf '"health":{"csf":"%s","lfd":"%s","lfd_age":%s},"expire":{"days":%s,"auto":%s},"repeat_min":%s,' "$H_CSF" "$H_LFD" "${H_LFDAGE:--1}" "$(num "$BLOCK_EXPIRE_DAYS")" "$([ "$BLOCK_EXPIRE_AUTO" = 1 ] && echo true || echo false)" "$(num "$REPEAT16_MIN")"
-        printf '"config":{"t24":%s,"t24p":%s,"t16":%s,"tt24":%s,"tt16":%s,"retention":%s,"review_days":%s,"lookup":%s},' \
+        printf '"config":{"t24":%s,"t24p":%s,"t16":%s,"tt24":%s,"tt16":%s,"retention":%s,"review_days":%s,"lookup":%s,"svc_fail":%s,"cloud_fail":%s,"active_days":%s},' \
             "$(num "$THRESHOLD_24")" "$(num "$THRESHOLD_24_PERMANENT")" "$(num "$THRESHOLD_16")" "$(num "$THRESHOLD_TEMP_24")" \
-            "$(num "$THRESHOLD_TEMP_16")" "$(num "$SAYAC_RETENTION_DAYS")" "$(num "$REVIEW_DAYS")" "$([ "$LOOK_INIT" = 1 ] && echo true || echo false)"
+            "$(num "$THRESHOLD_TEMP_16")" "$(num "$SAYAC_RETENTION_DAYS")" "$(num "$REVIEW_DAYS")" "$([ "$LOOK_INIT" = 1 ] && echo true || echo false)" \
+            "$(num "$SVC_FAIL_DAYS")" "$(num "$CLOUD_FAIL_DAYS")" "$(num "$BLOCK_ACTIVE_DAYS")"
         printf '"usage":{"perm":[%s,%s],"temp":[%s,%s]},' "$(num "$pc")" "$limit" "$(num "$tc")" "$tlimit"
         printf '"last_run":%s,' "${last:-null}"
         jstr "$cronm"; printf '"cron_min":%s,"runs":%s,' "$REPLY" "$runsj"
@@ -2535,6 +2658,10 @@ AWK_CLS='function cls(r) {
     if (r ~ /permblock/) return "repeat"         # LFD: çok geçici ban almış IP kalıcıya alındı (servisi söylemez)
     if (r ~ /mod_?security|lf_modsec/) return "web"   # ModSecurity yalnız web trafiğinde çalışır; kural mesajı yanıltmasın
     if (r ~ /port ?scan|ps_limit|lf_distattack/) return "scan"
+    # lfd "yoksayıldı" satırı uygulama ön eki yazmaz ("Failed SSH login from IP - ignored"): metinden tanınır
+    if (r ~ /failed ssh login/) return "ssh"
+    if (r ~ /failed (pop3|imap) login|failed smtp auth/) return "sync"
+    if (r ~ /failed ftp login/) return "ftp"
     if (r ~ /sshd|lf_sshd/) return "ssh"
     if (r ~ /ftpd|lf_ftpd|lf_distftp/) return "ftp"
     if (r ~ /cpanel|cpaneld|whm|webmail|lf_cpanel|webmin|lf_webmin|directadmin/) return "cp"
@@ -2605,7 +2732,8 @@ inside_owner() { # taranan aralığın sahibi: önbellekte bilinen ilk /24 (sorg
 do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
     local c="$1" pfx24="" lst clo chi cbits="${1#*/}"
     if ! { [[ "$c" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.0\.0/16$ ]] || [[ "$c" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.0/24$ ]] ||
-           [[ "$c" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}/(1[7-9]|2[0-3])$ ]]; } || ! cidr_range "$c" || { ip2int "${c%/*}"; [ "$REPLY" != "$R_LO" ]; }; then
+           [[ "$c" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}/([89]|1[0-9]|2[0-9]|3[0-2])$ ]]; } || ! cidr_range "$c" || { ip2int "${c%/*}"; [ "$REPLY" != "$R_LO" ]; }; then
+        # /8–/32: aralık kartı her öneki gösterir (tıklanan aralık neyse kart o); ban penceresi yalnız /16–/24'ü kullanır
         if [ "$JSON" = 1 ]; then echo '{"ok":false,"error":"bad_input"}'; else m "$M_BAD_TARGET" "$c"; echo; fi
         return 2
     fi
@@ -2679,7 +2807,7 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
         if [ "$IN_COVER" = "$c" ] && [[ "$(deny_line "$c")" == *"csf_autogroup:"* ]]; then
             ownf=true
             opn=$(grep -F "csf_autogroup: exception for $c [" "$CSF_DIR/csf.allow" 2>/dev/null | head -n 1 | sed -n 's/.*\[svc=\([a-z,]*\)\(;ports=\([0-9,-]*\)\)\{0,1\}\].*/\1|\3/p')
-            restore_file "$c"; [ -s "$REPLY" ] && rcn=$(grep -vc -e '^#' -e '^$' "$REPLY")
+            restore_file "$c"; [ -s "$REPLY" ] && rcn=$(grep -vc -e '^#' -e '^$' -e '^cnt|' "$REPLY")
         fi
         o+=",\"own_full\":$ownf,\"open\":\"${opn%%|*}\",\"open_extra\":\"$([ -n "$opn" ] && echo "${opn#*|}")\",\"restore\":$rcn"
         o+=",\"singles\":${#IN_SGL[@]},\"singles_dnd\":${#IN_SGLD[@]},\"temps\":${#IN_TMP[@]}"
@@ -2843,11 +2971,13 @@ strip_dnd() {    # CIDR → satırdaki "do not delete" ifadesini kaldır (csf -d
 SSHD_CONFIG="${SSHD_CONFIG:-/etc/ssh/sshd_config}"
 RE_SV='\[svc=([a-z,]*)'; RE_PO=';ports=([0-9,-]+)'
 RE_DATE='- ([A-Z][a-z]{2} [A-Z][a-z]{2} +[0-9]{1,2} [0-9:]{8} [0-9]{4})[[:space:]]*$'
-ssh_ports() {    # sunucunun SSH port(lar)ı → REPLY ("22" ya da "33330")
+SSH_PORTS_MEMO=""
+ssh_ports() {    # sunucunun SSH port(lar)ı → REPLY ("22" ya da "33330"); süreç başına bir kez (sshd -T pahalı, kapsama denetimi IP başına sorar)
     local p
+    [ -n "$SSH_PORTS_MEMO" ] && { REPLY="$SSH_PORTS_MEMO"; return; }
     p=$(sshd -T 2>/dev/null | awk '$1 == "port" && $2 ~ /^[0-9]+$/ { print $2 }' | sort -un | paste -sd, -)
     [ -z "$p" ] && p=$(awk 'tolower($1) == "port" && $2 ~ /^[0-9]+$/ { print $2 }' "$SSHD_CONFIG" 2>/dev/null | sort -un | paste -sd, -)
-    REPLY="${p:-22}"
+    REPLY="${p:-22}"; SSH_PORTS_MEMO="$REPLY"
 }
 svc_ports() {    # SERVİS → REPLY = TCP portları (elle bandaki servis seçimi)
     case "$1" in
@@ -3013,11 +3143,18 @@ restore_save() { # CIDR SATIRLAR → kapsananların kopyası; ilk satırda banı
 }
 unban_full_core() { # CIDR → tam banı kaldır; RESTORE=1 ise kapsananları geri yükle; banın izin istisnaları da gider.
     # Hepsi tek kilitli yazım ve tek csf -r (satır başına csf -d / -dr yerine) → UB_RN (geri yüklenen), UB_ERR
-    local t="$1" rf since now delta rl body k ts nd dl="" al="" n=0 tokf subf
+    local t="$1" rf since now delta rl body k ts nd dl="" al="" cl="" n=0 tokf subf cut
     local -A PRC=()
+    cut=$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')
     UB_RN=0; UB_ERR=""
     restore_file "$t"; rf="$REPLY"
     local -A HAVE=()
+    # izlenen blokların sayaç satırları geri yükleme seçiminden bağımsız döner (ban değil, izleme): süresi dolmadıysa ve yoksa
+    [ -s "$rf" ] && while IFS= read -r rl; do
+        body="${rl#cnt|}"; read -r k ts _ <<< "$body"
+        [[ "$ts" < "$cut" ]] && continue
+        grep -qE "^${k//./\\.} " "$SAYAC_FILE" 2>/dev/null || cl+="$body"$'\n'
+    done < <(grep '^cnt|' "$rf")
     if [ "$RESTORE" = 1 ] && [ -s "$rf" ]; then
         while read -r k _; do [ -n "$k" ] && HAVE[$k]=1; done < "$DENY_FILE"
         now=$(date +%s)
@@ -3029,6 +3166,7 @@ unban_full_core() { # CIDR → tam banı kaldır; RESTORE=1 ise kapsananları ge
                 '#t|'*|'') continue ;;
                 'allow|'*) body="${rl#allow|}"
                            grep -qxF -- "$body" "$CSF_DIR/csf.allow" 2>/dev/null || al+="$body"$'\n' ;;
+                'cnt|'*)   continue ;;
                 *)  k="${rl%%[[:space:]]*}"
                     if [[ "$k" =~ $CIDR4_RE ]]; then
                         [ -n "${HAVE[$k]}" ] && continue
@@ -3053,8 +3191,13 @@ unban_full_core() { # CIDR → tam banı kaldır; RESTORE=1 ise kapsananları ge
     deny_has "$t" && { UB_ERR="$(m "$M_A_UNBANFAIL" "$t" "csf.deny")"; return 1; }
     if [ -n "$al" ] || grep -qF "csf_autogroup: exception for $t [" "$CSF_DIR/csf.allow" 2>/dev/null; then
         subf=$(mktemp); printf '%s\n' "csf_autogroup: exception for $t [" > "$subf"
-        file_rewrite "$CSF_DIR/csf.allow" /dev/null "$subf" "$al"; rm -f "$subf"
+        if ! file_rewrite "$CSF_DIR/csf.allow" /dev/null "$subf" "$al"; then
+            # ban kalktı ama izin satırları yazılamadı: kopya silinmez (geri yüklenecek izinler kaybolmasın), sonuç hata
+            rm -f "$subf"; csf_run -r; UB_ERR="$(m "$M_A_UNBANFAIL" "$t" "csf.allow")"; return 1
+        fi
+        rm -f "$subf"
     fi
+    [ -n "$cl" ] && printf '%s' "$cl" >> "$SAYAC_FILE"
     rm -f "$rf"                                   # yalnız yazımlar tuttuktan sonra
     UB_RN=$n
     csf_run -r
@@ -3102,6 +3245,12 @@ orphans_clean() { # banı CSF ekranından (eklenti dışından) kaldırılmış 
             for o in "$RESTORE_DIR"/*; do
                 [ "$o" != "$f" ] && [ -f "$o" ] && grep -q "^${c//./\\.} " "$o" 2>/dev/null && continue 2
             done
+            # ban gitti: izlenen blokların süresi dolmamış sayaç satırları geri döner (banlar kendiliğinden geri yüklenmez)
+            local cut rl k ts; cut=$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')
+            while IFS= read -r rl; do
+                rl="${rl#cnt|}"; read -r k ts _ <<< "$rl"
+                [[ "$ts" < "$cut" ]] || grep -qE "^${k//./\\.} " "$SAYAC_FILE" 2>/dev/null || echo "$rl" >> "$SAYAC_FILE"
+            done < <(grep '^cnt|' "$f")
             rm -f "$f"; n=$((n + 1))
         done
     fi
@@ -3115,6 +3264,38 @@ orphans_clean() { # banı CSF ekranından (eklenti dışından) kaldırılmış 
     rm -f "$sf"
     [ "$n" -gt 0 ] && log "$(m "$M_ORPHANS" "$n")"
     return 0
+}
+# CSF'in kalıcı liste sınırı (DENY_IP_LIMIT) dolunca CSF her yeni banda dosyanın başındaki en eski "do not delete"
+# olmayan satırları siler (csf.pl, CSF 16.33 kaynağından). Eklentinin işaretsiz /24'leri de gidebilir; içlerindeki tekiller
+# zaten silinmiştir. Her tur bir önceki turun listesiyle karşılaştırılır: eklentinin kendi işlemi olmadan kaybolan blok
+# izlemeye alınır (yeniden saldırırsa silinmez işaretli kalıcı ban) ve bildirilir.
+OWN_SNAP="$(dirname "$SAYAC_FILE")/own_blocks"
+own_blocks_now() { awk '$1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.0\/24$/ && index($0, "# Auto-grouped /24:") && tolower($0) !~ /do not delete/ { print $1 }' "$DENY_FILE" 2>/dev/null | sort -u; }
+own_blocks_save() { [ "$DRY" = 1 ] || { own_blocks_now > "$OWN_SNAP.tmp" && mv -f "$OWN_SNAP.tmp" "$OWN_SNAP"; }; }
+limit_watch() {
+    [ "$DRY" = 1 ] && return 0
+    [ -r "$OWN_SNAP" ] || return 0
+    local since now_l c p lim body="" gone=()
+    since=$(stat -c %Y "$OWN_SNAP" 2>/dev/null || echo 0)
+    now_l=$(own_blocks_now)
+    while read -r c; do
+        [ -n "$c" ] || continue
+        grep -qxF "$c" <<< "$now_l" && continue
+        deny_has "$c" && continue                         # satır duruyor (ör. silinmez işaretiyle yeniden yazılmış)
+        cidr_range "$c" && perm_covers "$R_LO" "$R_HI" && continue   # daha geniş bir ban kapsıyor (ör. elle /16 banı içini temizledi)
+        # eklentinin kendi işlemi (kaldırma, eski blok temizliği, kip değişikliği) olay kaydındadır: o sayılmaz
+        awk -v s="$since" -v k="\"cidr\":\"$c\"" 'index($0, k) && match($0, /"t":[0-9]+/) && substr($0, RSTART + 4, RLENGTH - 4) + 0 >= s - 5 { f = 1 } END { exit !f }' "$EVENTS_FILE" 2>/dev/null && continue
+        gone+=("$c")
+    done < "$OWN_SNAP"
+    [ ${#gone[@]} -gt 0 ] || return 0
+    lim=$(conf_val DENY_IP_LIMIT)
+    for c in "${gone[@]}"; do
+        p="${c%.0/24}"
+        grep -qE "^${p//./\\.} " "$SAYAC_FILE" 2>/dev/null || cnt_add "$p $TODAY"
+        log "$(m "$M_LIM_GONE" "$c")"; ev limit_gone "$c" "limit=$(num "$lim")"
+        body+="  $c$NL"
+    done
+    mail_add "$(m "$M_LIM_SUBJ" "${#gone[@]}")" "$(m "$M_LIM_BODY" "${lim:-?}")$NL$NL$body" bad
 }
 udp_has() {      # DOSYA ÖNEK SONEK PORT → "ÖNEK<portlar>SONEK" biçiminde, port listesinde PORT olan satır var mı
     awk -v pre="$2" -v suf="$3" -v p="$4" 'index($0, pre) == 1 { r = substr($0, length(pre) + 1); i = index(r, suf)
@@ -3247,7 +3428,7 @@ cloud_enforce() { # FORCE(1 = listeleri şimdi indir) → bulut listesi banını
             # (önce imza değişince her tur deneniyordu; sunucu dışarı çıkamıyorsa her tur 300 sn kilit tutuluyordu)
             local lfs=""; lf=""; [ -r "$CLOUD_DIR/.fail" ] && read -r lf lfs < "$CLOUD_DIR/.fail"
             if [ "${1:-0}" = 1 ] || ! [[ "$lf" =~ ^[0-9]+$ ]] || [ $(( $(date +%s) - lf )) -ge 3600 ] || { [ "$need" = 2 ] && [ "$lfs" != "$sig" ]; }; then
-                if SRC="$REPLY" CACHE="$CLOUD_DIR" CSF_DIR="$CSF_DIR" LOG_FILE="$LOG_FILE" timeout 300 bash "$tool" >/dev/null 2>&1 9>&-; then
+                if SRC="$REPLY" CACHE="$CLOUD_DIR" CSF_DIR="$CSF_DIR" CSF_VAR="$CSF_VAR" LOG_FILE="$LOG_FILE" timeout 300 bash "$tool" >/dev/null 2>&1 9>&-; then
                     printf '%s' "$sig" > "$sigf"; printf '%s' "$st" > "$CLOUD_DIR/.applied"; rm -f "$CLOUD_DIR/.fail"
                 else echo "$(date +%s) $sig" > "$CLOUD_DIR/.fail"; fi
                 return 0
@@ -3255,13 +3436,13 @@ cloud_enforce() { # FORCE(1 = listeleri şimdi indir) → bulut listesi banını
         fi
         # listeler hazır: kural yerinde ve Imunify360'ın zincirinden önce mi (araç sırayı kendisi düzeltir), csf.allow
         # değişti mi (muafiyetler), csfpost satırı yerinde mi, kaynak seçimi / portlar / sunucu IP'leri değişti mi
-        if ! CACHE="$CLOUD_DIR" CSF_DIR="$CSF_DIR" LOG_FILE="$LOG_FILE" timeout 30 bash "$tool" --check >/dev/null 2>&1 9>&- ||
-           ! grep -qF "# csf_autogroup cloud" "$CSF_DIR/csfpost.sh" 2>/dev/null ||
+        if ! CACHE="$CLOUD_DIR" CSF_DIR="$CSF_DIR" CSF_VAR="$CSF_VAR" LOG_FILE="$LOG_FILE" timeout 30 bash "$tool" --check >/dev/null 2>&1 9>&- ||
+           ! grep -qF "# csf_autogroup cloud" "$CSF_POST" 2>/dev/null ||
            [ "$(cat "$CLOUD_DIR/.applied" 2>/dev/null)" != "$st" ]; then
-            CACHE="$CLOUD_DIR" CSF_DIR="$CSF_DIR" LOG_FILE="$LOG_FILE" timeout 120 bash "$tool" --sync >/dev/null 2>&1 9>&- && printf '%s' "$st" > "$CLOUD_DIR/.applied"
+            CACHE="$CLOUD_DIR" CSF_DIR="$CSF_DIR" CSF_VAR="$CSF_VAR" LOG_FILE="$LOG_FILE" timeout 120 bash "$tool" --sync >/dev/null 2>&1 9>&- && printf '%s' "$st" > "$CLOUD_DIR/.applied"
         fi
-    elif [ -s "$CLOUD_DIR/active" ] || grep -qF "# csf_autogroup cloud" "$CSF_DIR/csfpost.sh" 2>/dev/null; then
-        CACHE="$CLOUD_DIR" CSF_DIR="$CSF_DIR" LOG_FILE="$LOG_FILE" timeout 120 bash "$tool" --remove >/dev/null 2>&1 9>&-
+    elif [ -s "$CLOUD_DIR/active" ] || grep -qF "# csf_autogroup cloud" "$CSF_POST" 2>/dev/null; then
+        CACHE="$CLOUD_DIR" CSF_DIR="$CSF_DIR" CSF_VAR="$CSF_VAR" LOG_FILE="$LOG_FILE" timeout 120 bash "$tool" --remove >/dev/null 2>&1 9>&-
         rm -f "$sigf" "$CLOUD_DIR/.applied"; log "$M_CLOUD_REMOVED"
     fi
     return 0
@@ -3331,10 +3512,36 @@ prov_cloudpct() { # ASNNN … → PCP[ASNNN] = "yüzde kaynak": CSF'in o sağlay
                   for (x in SRC) { v = inter(A, "C " x); if (v > bb) { bb = v; best = x } }
                   p = int(cov * 100 / tot); if (p > 100) p = 100; print q, p, best } }')
 }
+declare -A CLOUD_MEMO=() CLSR=()
+cloud_prefill() { # IP … → CLOUD_MEMO[ip] = kaynak adı ya da "-" (bütün etkin listeler tek awk geçişinde; IP başına dosya taraması yok)
+    local IFS=$' \t\n' x ip want=() files=()
+    [ "$CLOUD_ON" = 1 ] || return 0
+    for ip in "$@"; do [ -n "${CLOUD_MEMO[$ip]+x}" ] || want+=("$ip"); done
+    [ "${#want[@]}" -gt 0 ] || return 0
+    for x in $CLOUD_ACTIVE; do [ -r "$CLOUD_DIR/$x.txt" ] && files+=("$CLOUD_DIR/$x.txt"); done
+    # CSF'e yüklenmiş küme varsa (sunucu IP'leri ve izinli adresler nomatch) kümede olmayan IP listede sayılmaz
+    local set=0; command -v ipset >/dev/null 2>&1 && ipset list -n ag_cloud >/dev/null 2>&1 && set=1
+    while read -r ip x; do
+        if [ "$x" != "-" ] && [ "$set" = 1 ] && ! ipset test ag_cloud "$ip" >/dev/null 2>&1; then x="-"; fi
+        CLOUD_MEMO[$ip]="$x"
+    done < <(printf '%s\n' "${want[@]}" | awk -v nf="${#files[@]}" '
+        function v4(a,  p) { split(a, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
+        FILENAME == "-" { Q[++q] = $1; V[q] = v4($1); next }
+        { split($0, f, /[.\/]/); if (f[4] == "") next; lo = ((f[1] * 256 + f[2]) * 256 + f[3]) * 256 + f[4]; b = (f[5] == "" ? 32 : f[5] + 0); hi = lo + 2 ^ (32 - b) - 1
+          src = FILENAME; sub(/^.*\//, "", src); sub(/\.txt$/, "", src)
+          for (i = 1; i <= q; i++) if (!(i in H) && V[i] >= lo && V[i] <= hi) H[i] = src }
+        END { for (i = 1; i <= q; i++) print Q[i], ((i in H) ? H[i] : "-") }' - "${files[@]}")
+}
+cls_of() {       # SEBEP → REPLY = servis; rakamları atılmış sebep metnine göre akılda (IP ve tarih farkı türü değiştirmez)
+    local k="${1//[0-9]/}"
+    [ -n "${CLSR[$k]+x}" ] || CLSR[$k]=$(awk -v r="$1" "$AWK_CLS"' BEGIN { print cls(r) }')
+    REPLY="${CLSR[$k]}"
+}
 cloud_has() {    # IP → 0: etkin bir bulut listesinde (REPLY = kaynak adı)
     local IFS=$' \t\n' x ip="$1" v
     REPLY=""
     [ "$CLOUD_ON" = 1 ] || return 1
+    if [ -n "${CLOUD_MEMO[$ip]+x}" ]; then [ "${CLOUD_MEMO[$ip]}" = "-" ] && return 1; REPLY="${CLOUD_MEMO[$ip]}"; return 0; fi
     # CSF'e yüklenmiş küme varsa önce ona sorulur (hızlı; sunucu IP'leri nomatch); hangi listede olduğu dosyalardan
     if command -v ipset >/dev/null 2>&1 && ipset list -n ag_cloud >/dev/null 2>&1; then ipset test ag_cloud "$ip" >/dev/null 2>&1 || return 1; fi
     ip2int "$ip" || return 1; v="$REPLY"; REPLY=""
@@ -3387,6 +3594,7 @@ conf_set() {     # ANAHTAR DEĞER → csf.conf'ta satırı değiştir (yoksa ekl
     else
         printf '%s = "%s"\n' "$1" "$2" >> "$CSF_CONF"
     fi
+    conf_load                      # hafızadaki değerler yeni dosyayla aynı kalsın
 }
 list_minus() {   # "A,B,C" "B" → "A,C" (büyük/küçük harf duyarsız)
     local x o="" r=",${2^^},"
@@ -3552,7 +3760,7 @@ prov_json() {    # → REPLY = durum JSON'u: izinli servisler (kaynak başına s
     local cpot; cloud_pot; cpot="$REPLY"
     jstr "$CLOUD_EXTRA"; o+=",\"cloud\":{\"extra\":$REPLY,\"pot\":$cpot,\"on\":$([ "$CLOUD_BAN" = 1 ] && echo true || echo false),\"sources\":\"$CLOUD_SOURCES\",\"tcp\":\"$CLOUD_TCP\",\"udp\":\"$CLOUD_UDP\",\"urls\":\"$CLOUD_URLS\",\"src\":[$cs],\"cat\":{$ccat},\"n\":$cn}"
     jstr "${ASN_MSG:-}"                     # yukarıdaki döngüler REPLY'yi ezdi: sağlayıcı banı iletisi burada hazırlanır
-    o+=",\"asn\":{\"on\":$([ "$ASN_BAN" = 1 ] && echo true || echo false),\"list\":\"$ASN_LIST\",\"all\":\"$ASN_ALL\",\"mode\":\"$ASN_MODE\",\"tcp\":\"$ASN_TCP\",\"udp\":\"$ASN_UDP\",\"state\":\"${ASN_STATE:-}\",\"msg\":$REPLY,\"sets\":[$sets],\"geo_t\":$(num "$gt")}}"
+    o+=",\"asn\":{\"on\":$([ "$ASN_BAN" = 1 ] && echo true || echo false),\"list\":\"$ASN_LIST\",\"all\":\"$ASN_ALL\",\"mode\":\"$ASN_MODE\",\"tcp\":\"$ASN_TCP\",\"udp\":\"$ASN_UDP\",\"state\":\"${ASN_STATE:-}\",\"msg\":$REPLY,\"sets\":[$sets],\"geo_t\":$(num "$gt"),\"ipset\":$([ "$(conf_val LF_IPSET)" = 0 ] && echo false || echo true)}}"
     REPLY="$o"
 }
 asn_bans_json() { # RNG ALW CLF CWEB → stdout JSON: sağlayıcının aralıklarına düşen csf.deny banları ve şu anki kapsamları
@@ -3620,7 +3828,7 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
     find -L "$dir" -type f -mmin -1440 ! -name '*bytes_log*' ! -name '*.offset*' ! -name '*.gz' 2>/dev/null > "$lst"
     since=$(date -d '24 hours ago' +%Y%m%d%H%M%S)
     # dosyalar tek awk'a verilir (xargs çok dosyada gruplara bölüp yalnız son grubun sonucunu bırakıyordu)
-    awk -v rf="$rng" -v lf="$lst" -v since="$since" -v af="$alw" -v cf="$clf" -v cweb="$cweb" -v cact="${CLOUD_ACTIVE# }" -v ban="$ban" -v tbf="$CSF_VAR/csf.tempban" -v dnf="$DENY_FILE" -v imf="$IMUNIFY_FILE" -v now="$(date +%s)" '
+    awk -v rf="$rng" -v lf="$lst" -v since="$since" -v af="$alw" -v cf="$clf" -v cdf="$CDN_FILE" -v cweb="$cweb" -v cact="${CLOUD_ACTIVE# }" -v ban="$ban" -v tbf="$CSF_VAR/csf.tempban" -v dnf="$DENY_FILE" -v imf="$IMUNIFY_FILE" -v now="$(date +%s)" '
         BEGIN { while ((getline l < rf) > 0) { split(l, x, " "); m++; LO[m] = x[1] + 0; HI[m] = x[2] + 0 }
                 while ((getline l < cf) > 0) { split(l, x, " "); cn++; CL[cn] = x[1] + 0; h = x[2] + 0
                     if (cn == 1 || h > CP[cn - 1]) { CP[cn] = h; CN[cn] = x[3] } else { CP[cn] = CP[cn - 1]; CN[cn] = CN[cn - 1] } }
@@ -3630,6 +3838,7 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
                 while ((getline l < imf) > 0) { split(l, x, "|"); if (x[1] ~ /^[0-9.]+$/) IMB[x[1]] = 1 }
                 while ((getline l < af) > 0) { split(l, x, " "); an++; AL[an] = x[1] + 0; h = x[2] + 0
                     if (an == 1 || h > AP[an - 1]) { AP[an] = h; AN[an] = x[3] } else { AP[an] = AP[an - 1]; AN[an] = AN[an - 1] } }
+                while ((getline l < cdf) > 0) { split(l, x, "|"); if (x[1] != "#t" && x[1] != "") { CDN[x[1]] = (CDN[x[1]] == "" || CDN[x[1]] == "other") ? x[4] : CDN[x[1]] } }
                 while ((getline l < lf) > 0) if (l != "") ARGV[ARGC++] = l
                 split("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec", MN, " "); for (i = 1; i <= 12; i++) MI[MN[i]] = sprintf("%02d", i) }
         function tkey(s,  a) { # "[05/Oct/2026:04:00:00" → 20261005040000 (günlüğün yerel saati)
@@ -3666,14 +3875,17 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
         { ip = $1; if (!(ip in SEEN)) SEEN[ip] = inr(ip); if (!SEEN[ip]) next
           k = tkey($4); if (k != 0 && k < since) next
           tot++; IPS[ip] = 1
-          if (!(ip in AW)) AW[ip] = alw(ip); w = AW[ip]; if (w != "") { atot++; AIP[ip] = 1 }
+          site = FILENAME; sub(/.*\//, "", site); sub(/-ssl_log$/, "", site)
+          if (!(ip in AW)) AW[ip] = alw(ip); w = AW[ip]; if (w != "" && !(site in CDN)) { atot++; AIP[ip] = 1 }   # CDN sitesindeki istek kendi kovasında
           q = index($0, "\""); r = substr($0, q + 1); e = index(r, "\""); req = substr(r, 1, e - 1); rest = substr(r, e + 2)
           split(rest, f, " "); code = f[1]; C[code]++
           site = FILENAME; sub(/.*\//, "", site); sub(/-ssl_log$/, "", site)          # site: bu satırın dosyası (önceki satırınki değil)
           split(req, rq3, " "); rqs = substr(rq3[1], 1, 6) " " substr(rq3[2], 1, 70)
-          # üç grup: izinli servis (CSF bandan önce geçirir) / etkin kiralık listede (CSF zaten keser) / açık (ban bunları keser)
+          # dört grup: CDN arkasındaki site (güvenlik duvarı ziyaretçiyi görmez, ban etkilemez) / izinli servis (CSF bandan önce
+          # geçirir) / etkin kiralık listede (CSF zaten keser) / açık (ban bunları keser)
           cl = ""; if (w == "") { if (!(ip in CW)) CW[ip] = cld(ip); cl = CW[ip] }
-          if (w != "") { AC[code]++; AS[w]++ }
+          if (site in CDN) { dtot++; DIP[ip] = 1; DC[code]++; DS[site]++; if (code ~ /^2/) dok++ }
+          else if (w != "") { AC[code]++; AS[w]++ }
           else if (cl != "") { ctot++; CIP[ip] = 1; CC[code]++; CS[cl]++; if (k > clast) clast = k; if (code ~ /^2/) { cok++; COK[ip]++ }
               CR[ip]++; if (!(ip in CSM)) CSM[ip] = cl " · " site " · " rqs
               ck = code " · " site " · " rqs; CQ[ck]++; if (!(ck in CI)) CI[ck] = ip }
@@ -3694,6 +3906,8 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
                   tot, nip, ok, atot, naip, obj(C), obj(OC), obj(AC), obj(AS), top(P, 15, PA, PN, PI), top(B, 15, BA, BN), top(S, 10), top(FQ, 12, FX, FN, FI)
               printf "\"cloud\":{\"web\":%s,\"lists\":%s,\"req\":%d,\"ips\":%d,\"ok\":%d,\"codes\":%s,\"src\":%s,\"last\":\"%s\",\"ex\":%s},",
                   (cweb == 1 ? "true" : "false"), js(cact), ctot, ncip, cok, obj(CC), obj(CS), clast, topip(CR, 10, COK, CSM)
+              ndip = 0; for (i in DIP) ndip++; dsv = ""; for (i in DS) dsv = dsv (dsv == "" ? "" : ",") js(i) ":[" DS[i] "," js(CDN[i]) "]"
+              printf "\"cdn\":{\"req\":%d,\"ips\":%d,\"ok\":%d,\"codes\":%s,\"sites\":{%s}},", dtot, ndip, dok, obj(DC), dsv
               printf "\"open\":{\"req\":%d,\"ips\":%d,\"ok\":%d,\"codes\":%s,\"last\":\"%s\",\"top\":%s},\"ban\":%s}\n",
                   otot, noip, ook, obj(OC), olast, topip(OR, 10, OOK, OSM), js(ban) }' /dev/null | grep . | { IFS= read -r L; b=$(cat "$bjf" 2>/dev/null); [ -n "$b" ] && L="${L%\}},\"bans\":$b}"; printf '%s\n' "$L"; } || echo '{"ok":true,"total":0,"ips":0,"ok2xx":0,"codes":{},"posts":[],"bots":[],"sites":[]}'
     rm -f "$rng" "$lst" "$alw" "$clf" "$bjf"
@@ -3724,26 +3938,33 @@ daily_tasks() {  # günde bir kez, turun içinde (ayrı cron satırı gerekmez):
     #    eskiyse kenara alınır ve lfd yeniden başlatılır, lfd güncel veriyi indirip setleri yeniden doldurur
     local out="$CSF_DIR/csf_autogroup.services.allow" tool="$SELF_DIR/tools/services-allow.sh" geo="$CSF_VAR/Geo/ip2asn-combined.tsv" asn age
     grep -qF "DAILY_TASKS $TODAY" "$SAYAC_FILE" 2>/dev/null && return 0
-    cnt_add "DAILY_TASKS $TODAY"
+    # günün anahtarı işler BİTİNCE yazılır: tur yarıda kesilirse sonraki tur kalanını yapar (her işin kendi zaman damgası var)
     # listeler kendi yenileme aralıklarıyla (Sağlayıcılar → kartlardaki "Yenileme"); son deneme zamanı .refreshed'de
     local cref="$CLOUD_DIR/.refreshed" sref="$(dirname "$SAYAC_FILE")/services/.refreshed"
     if [ "$SVC_ALLOW" = 1 ] && refresh_due "$sref" "$SVC_REFRESH_DAYS"; then svc_enforce 1; mkdir -p "$(dirname "$sref")"; date +%s > "$sref"; fi
     if [ "$CLOUD_BAN" = 1 ] && refresh_due "$cref" "$CLOUD_REFRESH_DAYS"; then cloud_enforce 1; cloud_probe; date +%s > "$cref"; fi
+    # CDN arkasındaki siteler: istekleri güvenlik duvarına CDN'den gelir, ziyaretçinin IP'si görünmez (Etkisini ölç ve ban-leak ayırır)
+    [ -r "$SELF_DIR/tools/cdn-sites.sh" ] && OUT="$CDN_FILE" LOG_FILE="$LOG_FILE" timeout 600 bash "$SELF_DIR/tools/cdn-sites.sh" --if-older 1 >/dev/null 2>&1
     asn=$( { conf_val CC_DENY; echo ","; conf_val CC_DENY_PORTS; } | tr ',' '\n' | grep -iE '^AS[0-9]+$' | paste -sd, -)
-    # dün yenilemek için kenara alınan dosya yerine yenisi gelmediyse (lfd indiremedi) eskisi geri konur
-    if [ -n "$asn" ] && [ ! -e "$geo" ] && [ -e "$geo.old" ]; then
+    # yenilemek için kenara alınan dosyanın yerine 12 saatte yenisi gelmediyse (lfd indiremedi) eskisi geri konur
+    # (kenara alma anı .moved'da: aynı gün yarıda kalmış bir turdan sonra lfd'ye indirme fırsatı tanınır)
+    local mv0; mv0=$(cat "$geo.moved" 2>/dev/null); [[ "$mv0" =~ ^[0-9]+$ ]] || mv0=0
+    if [ -n "$asn" ] && [ ! -e "$geo" ] && [ -e "$geo.old" ] && [ $(( $(date +%s) - mv0 )) -ge 43200 ]; then
         mv -f "$geo.old" "$geo" && { systemctl restart lfd 2>/dev/null 9>&- || service lfd restart >/dev/null 2>&1 9>&-; }
         log "$(m "$M_ASN_REFRESH_FAIL" "?")"
     fi
+    [ -e "$geo" ] && rm -f "$geo.moved"
     if [ -n "$asn" ] && [ -n "$(find "$geo" -mtime +"$GEO_REFRESH_DAYS" 2>/dev/null)" ]; then
         age=$(( ( $(date +%s) - $(stat -c %Y "$geo") ) / 86400 ))
-        if mv -f "$geo" "$geo.old" && { systemctl restart lfd 2>/dev/null 9>&- || service lfd restart >/dev/null 2>&1 9>&-; }; then
+        if mv -f "$geo" "$geo.old" && date +%s > "$geo.moved" && { systemctl restart lfd 2>/dev/null 9>&- || service lfd restart >/dev/null 2>&1 9>&-; }; then
             log "$(m "$M_ASN_REFRESH" "$age" "$asn")"
         else
             [ -e "$geo" ] || mv -f "$geo.old" "$geo"           # lfd başlatılamadıysa eski veri yerine dönsün
+            rm -f "$geo.moved"
             log "$(m "$M_ASN_REFRESH_FAIL" "$age")"
         fi
     fi
+    cnt_add "DAILY_TASKS $TODAY"
     return 0
 }
 part_note() {    # LO HI → REPLY = "CIDR|svc" (aralıktaki ilk kısmi ban) ya da boş
@@ -3806,6 +4027,8 @@ do_action() {    # NAME TARGET [DAYS]
                     fi
                 done
                 for x in "${ownp[@]}"; do save+="$(grep -F "|s=$x # csf_autogroup:" "$DENY_FILE")"$'\n'; done
+                # izlenen blokların sayaç satırları: ban kalkınca izleme süresi dolmamışsa geri gelir ("tekrar geldi" kaybolmasın)
+                for x in "${IN_WATCH[@]}"; do save+="$(grep -E "^${x//./\\.} " "$SAYAC_FILE" | sed 's/^/cnt|/')"$'\n'; done
                 if [ -n "$save" ] && ! restore_save "$cidr" "${save%$'\n'}"; then
                     log "$(m "$M_A_NOSAVE" "$cidr" "$RESTORE_DIR")"; rem=(); inx=(); ownp=(); CLEAN=0
                 fi
@@ -3819,7 +4042,8 @@ do_action() {    # NAME TARGET [DAYS]
                 [ "$BMODE" = exc ] && file_drop_locked "$CSF_DIR/csf.allow" "csf_autogroup: exception for $cidr ["
                 rm -f "$rf"; act_out 1 "$(m "$M_A_BANFAIL" "$cidr" "${CSF_OUT%%$NL*}")"; return
             fi
-            for x in "${IN_WATCH[@]}"; do cnt_del_prefix "$x"; rw=$((rw + 1)); done   # banlı aralıkta izlemenin anlamı yok
+            # banlı aralıkta izlemenin anlamı yok; kapsananlar kaldırılıyorsa satırlar geri yükleme dosyasında, kalıyorsa izleme de kalır
+            [ "$CLEAN" = 1 ] && for x in "${IN_WATCH[@]}"; do cnt_del_prefix "$x"; rw=$((rw + 1)); done
             # kapsananlar ve içteki kendi kısmi banlarımız tek kilitli yazımda (her biri için ayrı csf -dr yerine)
             tokf=$(mktemp); subf=$(mktemp)
             [ ${#rem[@]} -gt 0 ] && printf '%s\n' "${rem[@]}" > "$tokf"
@@ -3934,6 +4158,8 @@ asn_name() {     # ASNNN → REPLY = sağlayıcının adı (CSF'in ASN verisinde
 }
 asn_setn() {     # ASNNN → REPLY = CSF'in yüklediği aralık sayısı (-1: ipset yok, bilinmiyor)
     REPLY=-1; command -v ipset >/dev/null 2>&1 || return 0
+    # LF_IPSET=0: CSF ülke/ASN aralıklarını küme yerine tek tek iptables kuralı olarak kurar; küme yok diye "boş" denmez
+    [ "$(conf_val LF_IPSET)" = 0 ] && return 0
     REPLY=$(ipset list -t "cc_${1,,}" 2>/dev/null | awk -F': *' '/^Number of entries/ { print $2; f = 1 } END { if (!f) print "x" }')
     [ "$REPLY" = x ] && REPLY=$(ipset list "cc_${1,,}" 2>/dev/null | grep -cE '^[0-9]')   # başlıkta sayı olmayan eski ipset
     [[ "$REPLY" =~ ^-?[0-9]+$ ]] || REPLY=-1
@@ -3979,7 +4205,12 @@ open_count() {   # NOT_DİZİSİ_ADI IP… → REPLY = servisi açık kalan (kap
         k=$(awk -v r="${NT[$ip]}" "$AWK_CLS"' BEGIN { print cls(r) }')
         if [ "$k" = repeat ]; then perm_cls "$ip"; [ -n "$REPLY" ] && k="$REPLY"; fi
         part_covers "$ip" "$k" && continue
-        cover_any && prov_cover <<< "$ip|${NT[$ip]}|" && continue
+        if cover_any; then
+            # sağlayıcı / ülke kapsaması sahibi bilmeli: yeni saldırganın sahibi karar anında sorulur (önbellekteyse sorgu yok;
+            # yoksa sahip ancak bandan sonra soruluyordu, sağlayıcı banı web'i kapatsa da /24 banlanıyordu — gerçek CSF'te ölçüldü)
+            [ -n "${OWN_L[${ip%.*}]+x}" ] || owner_lookup "$ip"
+            prov_cover <<< "$ip|${NT[$ip]}|" && continue
+        fi
         o=$((o + 1))
     done
     REPLY=$o
@@ -3989,6 +4220,80 @@ cover_any() {    # 0: geniş bir engel katmanı var (sağlayıcı banı, etkin k
 }
 declare -A PERM_CLS=()
 PERM_CACHE="$(dirname "$SAYAC_FILE")/perm_cls"     # "IP servis": bulunan servis burada kalır (lfd günlüğü dönse de)
+# ── İzinli ama saldıran IP'ler (lfd günlüğü) ───────────────────────────────────────────────────────────────────
+# Gerçek lfd ile ölçüldü (CSF 16.33): izinli/yoksayılan IP için lfd ya banlar ama ban işlemez ("… from IP … - *Blocked in
+# csf* …"; csf.allow ve Include'ları, aralık da olsa, IGNORE_ALLOW=0) ya da hiç banlamaz ve her denemeyi "… from IP - ignored"
+# diye yazar (IGNORE_ALLOW=1, csf.ignore IP/aralık, csf.rignore). Geçici ban 12 saatte düştüğü için kaynak ban kaydı değil
+# günlük: pencerede değişmiş bütün lfd.log* (döndürme biçiminden bağımsız). Döndürülmüş dosyaların gün özeti önbellekte.
+declare -A CLSM=()
+cls_map() {      # stdin "anahtar|sebep" → CLSM[anahtar] = servis (tek awk; IP başına süreç açılmaz)
+    local k c
+    while IFS='|' read -r k c; do [ -n "$k" ] && CLSM[$k]="$c"; done < <(LC_ALL=C awk -F'|' "$AWK_CLS"' { k = $1; r = substr($0, length($1) + 2); print k "|" cls(r) }')
+}
+aa_days() {      # DOSYA… → stdout "ip|k|gün|sayı|son|sebep" (k: b = banlandı ama izinli olabilir, i = yoksayıldı)
+    { for f in "$@"; do zcat -f "$f" 2>/dev/null; done; } | LC_ALL=C grep -E '\*Blocked in csf\*| - ignored[[:space:]]*$' |
+    LC_ALL=C awk -v now="$(date +%s)" -v Y="$(date +%Y)" '
+        { m = (index("JanFebMarAprMayJunJulAugSepOctNovDec", $1) + 2) / 3; split($3, c, ":")
+          ts = mktime(Y " " m " " $2 " " c[1] " " c[2] " " c[3]); if (ts > now + 86400) ts = mktime((Y - 1) " " m " " $2 " " c[1] " " c[2] " " c[3])
+          if (ts <= 0) next
+          g = $0; if (!sub(/^.*lfd\[[0-9]+\]: /, "", g)) next
+          if (!match(g, /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/)) next; ip = substr(g, RSTART, RLENGTH)
+          k = (g ~ / - ignored[ \t]*$/) ? "i" : "b"; d = strftime("%Y%m%d", ts)
+          r = g; sub(/ (from|by) [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+.*$/, "", r); gsub(/\|/, " ", r)
+          K = ip "|" k "|" d; N[K]++; if (ts >= T[K]) { T[K] = ts; R[K] = r } }
+        END { for (K in N) print K "|" N[K] "|" T[K] "|" R[K] }'
+}
+AA_IP=(); AA_K=(); AA_N=(); AA_T=(); AA_R=(); AA_W=(); AA_F=()
+allow_atk_load() {  # SINCE_EPOCH → AA_* (IP başına: k, olay sayısı, son zaman, son sebep, izin kaydı indisi, tam izin mi)
+    # Yalnız "ban işlemiyor"u gösteren kayıtlar: b → IP bütün portlara izin veren bir listede (csf.allow ve Include'ları, GLOBAL_ALLOW,
+    # geçici izin, dyndns; tek portluk izin satırı ve sunucunun kendi IP'si değil); i → her zaman (lfd hiç banlamadı).
+    # Imunify360'ın beyaz listesi CSF'e csf.allow Include'u ile girer (/var/imunify360/files/whitelist/v2/imunify360.txt; sunucuda
+    # ölçüldü 2026-10-13): "csf.allow → imunify360.txt" etiketiyle tam izin sayılır. INPUT_imunify360 beyaz liste için CSF'ten
+    # önce kabul etmez (yalnız gri/splash/captcha/uzak vekil kümelerini WebShield portlarına); "Imunify:" etiketli kayıtlar
+    # (imunify360-agent önbelleği) yalnız etiket için.
+    local since="$1" dir base f sig day0 cache rot=() cur
+    AA_IP=(); AA_K=(); AA_N=(); AA_T=(); AA_R=(); AA_W=(); AA_F=()
+    [ -n "$LFD_LOG" ] || return 0
+    [ "$WL_LOADED" = 1 ] || load_whitelist
+    dir=$(dirname "$LFD_LOG"); base=$(basename "$LFD_LOG"); day0=$(date -d "@$since" +%Y%m%d)
+    cache="$(dirname "$SAYAC_FILE")/allowatk.cache"
+    while IFS= read -r f; do [ "$f" = "$LFD_LOG" ] || rot+=("$f"); done < <(find "$dir" -maxdepth 1 -name "$base*" -newermt "@$since" -printf '%T@ %p\n' 2>/dev/null | sort -n | cut -d' ' -f2-)
+    sig=$(for f in "${rot[@]}"; do stat -c '%n %s %Y' "$f" 2>/dev/null; done | cksum | cut -d' ' -f1)
+    if [ "${#rot[@]}" -gt 0 ] && { [ ! -r "$cache" ] || [ "$(head -n 1 "$cache")" != "$sig" ]; }; then
+        { echo "$sig"; aa_days "${rot[@]}"; } > "$cache.tmp" 2>/dev/null && mv -f "$cache.tmp" "$cache"
+    fi
+    while IFS='|' read -r AAx AAk AAn AAt AAw AAf AAr; do
+        AA_IP+=("$AAx"); AA_K+=("$AAk"); AA_N+=("$AAn"); AA_T+=("$AAt"); AA_W+=("$AAw"); AA_F+=("$AAf"); AA_R+=("$AAr")
+    done < <({
+        for f in "${!WL_LO[@]}"; do
+            local ff=0
+            case "${WL_TXT[f]}" in csf.allow*|GLOBAL_ALLOW*|csf.tempallow*|DYNDNS*|GLOBAL_DYNDNS*) ff=1 ;; "$M_WL_SELF: "*) continue ;; esac
+            [[ "${WL_TXT[f]}" =~ \((tcp|udp)\ (in|out)\  ]] && ff=0
+            printf 'W %s %s %s %s\n' "${WL_LO[f]}" "${WL_HI[f]}" "$f" "$ff"
+        done
+        echo "#--"
+        { [ "${#rot[@]}" -gt 0 ] && tail -n +2 "$cache" 2>/dev/null; [ -r "$LFD_LOG" ] && aa_days "$LFD_LOG"; } | awk -F'|' -v d0="$day0" '$3 >= d0'
+    } | awk '
+        function v4(x,  p) { split(x, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
+        !S && $0 == "#--" { S = 1; FS = "|"; next }
+        !S { n++; L[n] = $2 + 0; H[n] = $3 + 0; I[n] = $4; F[n] = $5; next }
+        { K = $1 "|" $2; N[K] += $4; if ($5 >= T[K]) { T[K] = $5; R[K] = $6 } }
+        END { for (K in N) { split(K, f, "|"); v = v4(f[1]); hit = -1; full = 0
+                for (i = 1; i <= n; i++) if (v >= L[i] && v <= H[i]) { if (F[i]) { hit = I[i]; full = 1; break } else if (hit < 0) hit = I[i] }
+                if (f[2] == "b" && !full) continue    # banlandı ve izinli değil: ban işliyor
+                print f[1] "|" f[2] "|" N[K] "|" T[K] "|" hit "|" full "|" R[K] } }' | sort -t'|' -k4,4nr | awk -F'|' '!($1 in S) { S[$1] = 1; print }')
+}
+aa_ipj() {       # İNDİS … → REPLY = IP listesi JSON'u (izinli saldırganlar: sebep, servis, izin kaydı, kaç kez)
+    local i o="" v w q
+    for i in "$@"; do
+        v="${CLSM[aa$i]:-other}"
+        jstr "${AA_R[i]}"; w="$REPLY"; q="${AA_IP[i]%.*}"
+        if [ "${AA_W[i]}" -ge 0 ] 2>/dev/null; then jstr "${WL_TXT[${AA_W[i]}]}"; else REPLY='""'; fi; local al="$REPLY"
+        jstr "${OWN_L[$q]}"
+        o+="${o:+,}{\"ip\":\"${AA_IP[i]}\",\"host\":\"\",\"why\":$w,\"svc\":\"$v\",\"al\":$al,\"bk\":\"${AA_K[i]}\",\"cnt\":${AA_N[i]},\"full\":${AA_F[i]:-0},\"t\":${AA_T[i]},\"owner\":$REPLY,\"asn\":\"${OWN_A[$q]}\",\"cc\":\"${OWN_C[$q]}\",\"pfx\":\"${OWN_P[$q]}\"}"
+    done
+    REPLY="$o"
+}
 perm_cls_load() { # IP … → PERM_CLS'i önbellekten, yoksa lfd günlüklerinin TEK taramasıyla doldurur (perm_cls ile aynı kurallar)
     local f fs=() ip k pf want=() tmp
     [ $# -gt 0 ] || return 0
@@ -4022,35 +4327,17 @@ perm_cls_load() { # IP … → PERM_CLS'i önbellekten, yoksa lfd günlüklerini
         mv -f "$tmp" "$PERM_CACHE" 2>/dev/null || rm -f "$tmp"
 }
 perm_cls() {     # IP → REPLY = PERMBLOCK alan IP'nin lfd günlüğündeki son geçici ban sebebinin servisi ("" bulunamadı)
-    # lfd satırı: "lfd[n]: (mod_security) mod_security (id:2008) triggered by IP (IN/India/-): … *Blocked in csf* for 43200 secs"
-    # ya da "(sshd) Failed SSH login from IP (…)". PERMBLOCK satırının kendisi "IP (CC/…) has had more than…" der, eşleşmez.
-    local ip="$1" f l
-    [ -n "${PERM_CLS[$ip]+x}" ] && { REPLY="${PERM_CLS[$ip]}"; return 0; }
-    REPLY=""
-    for f in "$LFD_LOG" "$LFD_LOG.1"; do
-        [ -r "$f" ] || continue
-        l=$(grep -hF -e "by $ip (" -e "from $ip (" "$f" 2>/dev/null | grep -F 'Blocked in csf' | grep -vi permblock | awk 'END { print }')
-        [ -n "$l" ] && break
-    done
-    if [ -n "$l" ]; then
-        l="${l#*]: }"
-        REPLY=$(awk -v r="$l" "$AWK_CLS"' BEGIN { print cls(r) }')
-        case "$REPLY" in repeat|other) REPLY="" ;; esac
-    fi
-    # yedek: lfd günlüğündeki PERMBLOCK satırı tetikleyen kuralın etiketini taşır ("… *Blocked in csf* [LF_SSHD]";
-    # gerçek lfd ile ölçüldü 2026-10-09). Genel tetikleyicide ([LF_TRIGGER], ModSecurity) servis çıkmaz.
-    if [ -z "$REPLY" ]; then
-        for f in "$LFD_LOG" "$LFD_LOG.1"; do
-            [ -r "$f" ] || continue
-            l=$(grep -hF "(PERMBLOCK) $ip " "$f" 2>/dev/null | grep -oE '\[LF_[A-Z_]+\]' | awk 'END { print }')
-            [ -n "$l" ] && break
-        done
-        if [ -n "$l" ]; then
-            REPLY=$(awk -v r="$l" "$AWK_CLS"' BEGIN { print cls(r) }')
-            case "$REPLY" in repeat|other) REPLY="" ;; esac
-        fi
-    fi
-    PERM_CLS[$ip]="$REPLY"
+    # perm_cls_load ile aynı kaynak (önbellek + arşivler dahil bütün lfd günlükleri): tur ve durum ekranı aynı servisi bulur.
+    # Turda tekiller önceden topluca yüklenir (perm_cls_preload); burada yalnız yüklenmemiş IP için tek tarama.
+    local ip="$1"
+    [ -n "${PERM_CLS[$ip]+x}" ] || perm_cls_load "$ip"
+    REPLY="${PERM_CLS[$ip]}"
+}
+perm_cls_preload() { # tekillerin PERMBLOCK olanları → PERM_CLS (tek tarama)
+    local ip l=()
+    for ip in "${!SINGLE_NOTE[@]}"; do [[ "${SINGLE_NOTE[$ip]}" == *PERMBLOCK* ]] && l+=("$ip"); done
+    [ ${#l[@]} -gt 0 ] && perm_cls_load "${l[@]}"
+    return 0
 }
 prov_cover() {   # stdin "ip|sebep|asn" → 0: her IP CSF'te banlı bir sağlayıcıda ve ban saldırılan servisi kapatıyor
     # (her şey banında her servis; port listesi banında saldırının servisinin portları listede olmalı). Sahibi bilinmeyen IP: kapsanmıyor.
@@ -4060,10 +4347,12 @@ prov_cover() {   # stdin "ip|sebep|asn" → 0: her IP CSF'te banlı bir sağlay�
     # bunu zaten biliyordu; uyarı kararı bilmiyor, ülkesi banlı ağ Kontrol edilecekler'de kalıyordu)
     ccd=",$(conf_val CC_DENY | tr -d ' ' | tr '[:lower:]' '[:upper:]'),"; ccp=",$(conf_val CC_DENY_PORTS | tr -d ' ' | tr '[:lower:]' '[:upper:]'),"
     PC_ASN=""
-    while IFS='|' read -r ip r a; do
+    local -a pcl=(); mapfile -t pcl; cloud_prefill $(printf '%s\n' "${pcl[@]}" | cut -d'|' -f1)
+    for ip in "${pcl[@]}"; do
+        IFS='|' read -r ip r a <<< "$ip"
         [ -n "$ip" ] || continue
         [ -n "$a" ] || a="${OWN_A[${ip%.*}]}"
-        k=$(awk -v r="$r" "$AWK_CLS"' BEGIN { print cls(r) }')
+        cls_of "$r"; k="$REPLY"
         # LFD PERMBLOCK (repeat): lfd IP'yi belirli sürede belirli sayıda geçici banladıktan sonra kalıcıya almış (LF_PERMBLOCK).
         # Asıl saldırı önceki geçici banlarda: servis lfd günlüğünden. Bulunamazsa IP sayılmadan geçilir — zaten tek başına
         # kalıcı ve tam banlı (yalnız PERMBLOCK varsa n=0 → kapsanmıyor, uyarı kalır). Önce PERMBLOCK "servisi bilinmiyor"
@@ -4139,10 +4428,12 @@ prov_near() {    # stdin "ip|sebep|asn" → 0: her IP banlı bir sağlayıcıda 
     local IFS=$' \t\n' ip r a k n=0 tcp ct lab pl
     tcp=",$(conf_val CC_DENY_PORTS_TCP | tr -d ' '),"; ct=",${CLOUD_TCP// /},"
     PN_SRC=""; PN_SVC=""
-    while IFS='|' read -r ip r a; do
+    local -a pnl=(); mapfile -t pnl; cloud_prefill $(printf '%s\n' "${pnl[@]}" | cut -d'|' -f1)
+    for ip in "${pnl[@]}"; do
+        IFS='|' read -r ip r a <<< "$ip"
         [ -n "$ip" ] || continue
         [ -n "$a" ] || a="${OWN_A[${ip%.*}]}"
-        k=$(awk -v r="$r" "$AWK_CLS"' BEGIN { print cls(r) }')
+        cls_of "$r"; k="$REPLY"
         if [ "$k" = repeat ]; then perm_cls "$ip"; [ -n "$REPLY" ] && k="$REPLY"; fi     # PERMBLOCK: önceki geçici banın servisi
         if [ -n "$a" ] && [ -n "${ASB[$a]}" ]; then
             n=$((n + 1)); [ "${ASB[$a]}" = all ] && continue
@@ -4735,6 +5026,7 @@ do_config() {
 [ -f "$DENY_FILE" ] || { log "$(m "$M_ERR_NOFILE" "$DENY_FILE")"; exit 1; }
 [ -f "$CSF_CONF" ]  || { log "$(m "$M_ERR_NOFILE" "$CSF_CONF")"; exit 1; }
 mkdir -p "$(dirname "$SAYAC_FILE")"; touch "$SAYAC_FILE"
+conf_load        # csf.conf bir kez okunur (conf_val hafızadan; conf_set yazınca tazelenir)
 
 prov_resolve     # "auto" ayarlar: CSF'te elle kurulmuş sağlayıcı banı / izin listesi devralınır
 case "$MODE" in
@@ -4818,12 +5110,15 @@ fi
 # ── Read csf.deny: singles (grouping) + CIDRs (coverage) ────────────────────
 parse_deny "$DENY_FILE" 1
 [ "$DRY" = 1 ] || orphans_clean       # eklenti dışından kaldırılmış elle banların artıkları
+[ "$DRY" = 1 ] || limit_watch         # CSF sınır dolunca sildiyse: izlemeye al, bildir
 [ "$DRY" = 1 ] || proto_fix           # eski kısmi ban / istisnalara eksik UDP 443 (HTTP/3)
 [ "$DRY" = 1 ] || { svc_enforce 0; asn_enforce; cloud_enforce 0; cloud_on_calc; hits_update; guard_update; }   # izinli servisler, sağlayıcı banı, bulut listeleri: istenen durum CSF'te mi
 [ "$DRY" = 1 ] || daily_tasks         # günde bir: servis izin listeleri, CSF'in ASN verisi
 [ "$DRY" = 1 ] || { svc_health; cloud_health; }   # indirilemeyen izinli servis / bulut listesi: bildirim
 
 # ── /24 grouping (permanent): auto-ban + drop singles ───────────────────────
+asn_banned            # open_count sağlayıcı banının kapattığı servisleri bilsin (yoksa web'i kapalı tekiller açık sayılır)
+perm_cls_preload      # PERMBLOCK tekillerinin servisi: durum ekranıyla aynı kaynak (bütün lfd arşivi + önbellek), tek tarama
 added24=0; added24_body=""
 for prefix in $(printf '%s\n' "${!count24[@]}" | sort -V); do
     n="${count24[$prefix]}"
@@ -4836,7 +5131,10 @@ for prefix in $(printf '%s\n' "${!count24[@]}" | sort -V); do
     if wl_check "$prefix" "${ips24[$prefix]}"; then
         wl_skip "${prefix}.0/24" "$n" "$prefix" "${ips24[$prefix]}" perm; continue
     fi
-    if [ "$n" -ge "$THRESHOLD_24_PERMANENT" ]; then
+    # izlenen blok (geçici banı bitmiş ya da CSF'in liste sınırıyla silinmiş) yeniden geldi: silinmez işaretli kalıcı ban
+    dnd24=0; [ "$n" -ge "$THRESHOLD_24_PERMANENT" ] && dnd24=1
+    awk -v p="$prefix" -v d="$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')" '$1 == p && $2 >= d { f = 1 } END { exit !f }' "$SAYAC_FILE" 2>/dev/null && dnd24=1
+    if [ "$dnd24" = 1 ]; then
         comment=$(m "$M_C24_DND" "$n")
     else
         comment=$(m "$M_C24_PERM" "$n")
@@ -4846,7 +5144,7 @@ for prefix in $(printf '%s\n' "${!count24[@]}" | sort -V); do
     # Yoksa tekillere dokunma, yoksa saldırganlar açıkta kalır.
     if ! perm_added "${prefix}.0/24"; then log "$(m "$M_ADD24_FAIL" "$prefix")"; continue; fi
     DC_LO+=("$lo"); DC_HI+=($((lo + 255)))
-    if [ "$n" -ge "$THRESHOLD_24_PERMANENT" ]; then
+    if [ "$dnd24" = 1 ]; then
         log "$(m "$M_OK24_DND" "$prefix" "$n")"
         added24_body+="$(m "$M_B24_DND" "$prefix" "$n")$NL"
     else
@@ -4856,20 +5154,31 @@ for prefix in $(printf '%s\n' "${!count24[@]}" | sort -V); do
     added24=$((added24 + 1))
     owner_line "${ips24[$prefix]# }"; added24_body+="$REPLY"; owner_kv
     addj=""
+    # Tekiller csf -dr ile değil dosyadan silinir: csf -dr lfd'nin tekrar ban geçmişini (csf.tempip) de siler, saldırgan
+    # bir daha gelirse lfd onu yeniden "ilk kez" sayar (ölçüldü, CSF 16.33). /24 zaten kapsadığı için güvenlik duvarındaki
+    # eski tekil kurallar bir sonraki CSF yüklemesine kadar kalsa da sonuç aynı.
+    dels=$(mktemp)
+    for ip in ${ips24[$prefix]}; do
+        [[ "${SINGLE_NOTE[$ip]}" =~ [Dd][Oo][[:space:]]+[Nn][Oo][Tt][[:space:]]+[Dd][Ee][Ll][Ee][Tt][Ee] ]] || echo "$ip" >> "$dels"
+    done
+    if [ "$DRY" = 1 ]; then sed 's/^/      [dry-run] csf.deny: remove /' "$dels"
+    elif [ -s "$dels" ]; then file_rewrite "$DENY_FILE" "$dels" /dev/null ""   # yazılamazsa aşağıdaki denetim "silinemedi" der
+    fi
+    rm -f "$dels"
     for ip in $(printf '%s\n' ${ips24[$prefix]} | sort -V); do
         tag=""; res=removed
         if [[ "${SINGLE_NOTE[$ip]}" =~ [Dd][Oo][[:space:]]+[Nn][Oo][Tt][[:space:]]+[Dd][Ee][Ll][Ee][Tt][Ee] ]]; then
-            # csf -dr "do not delete" satırlarını silmez; /24 zaten kapsıyor, olduğu gibi kalsın.
+            # "do not delete" satırlarına dokunulmaz; /24 zaten kapsıyor, olduğu gibi kalsın.
             log "$(m "$M_KEPT_DND" "$ip")"; tag="  [$M_TAG_KEPT]"; res=kept
         else
-            csf_run -dr "$ip"
             if still_denied "$ip"; then log "$(m "$M_DELSINGLE_FAIL" "$ip")"; tag="  [$M_TAG_FAIL]"; res=fail
             else log "$(m "$M_DELSINGLE" "$ip")"; fi
         fi
         ip_line "$ip" "${SINGLE_NOTE[$ip]}" 0; added24_body+="$REPLY$tag$NL"
         addj+="${addj:+,}${IPJ%\}},\"res\":\"$res\"}"
     done
-    ev add24 "${prefix}.0/24" "n=$n" "dnd=$([ "$n" -ge "$THRESHOLD_24_PERMANENT" ] && echo true || echo false)" "${OKV[@]}" "ips=[$addj]"
+    ev add24 "${prefix}.0/24" "n=$n" "dnd=$([ "$dnd24" = 1 ] && echo true || echo false)" "${OKV[@]}" "ips=[$addj]"
+    [ "$dnd24" = 1 ] && cnt_del_prefix "$prefix"     # silinmez kalıcı ban kondu: izleme bitti
 done
 if [ "$added24" -gt 0 ]; then
     mail_add "$(m "$M_MAIL24_SUBJ" "$added24")" "$(m "$M_MAIL24_BODY")$NL$NL$added24_body"
@@ -5064,7 +5373,7 @@ fi
 health_check
 h_msgs=()
 [ "$H_LFD" = down ] && h_msgs+=("$M_H_LFD")
-case "$H_CSF" in off) h_msgs+=("$M_H_CSF_OFF") ;; testing) h_msgs+=("$M_H_CSF_TEST") ;; norules) h_msgs+=("$M_H_CSF_RULES") ;; esac
+case "$H_CSF" in missing) h_msgs+=("$M_H_CSF_MISSING") ;; off) h_msgs+=("$M_H_CSF_OFF") ;; testing) h_msgs+=("$M_H_CSF_TEST") ;; norules) h_msgs+=("$M_H_CSF_RULES") ;; esac
 if [ ${#h_msgs[@]} -gt 0 ]; then
     if ! grep -qF "HEALTH $TODAY" "$SAYAC_FILE"; then
         for hm in "${h_msgs[@]}"; do log "$(m "$M_H_LOG" "$hm")"; done          # günlüğe de günde bir kez
@@ -5128,6 +5437,7 @@ esac
 st=$(date +%s); backfill_imunify
 [ "$BF_N" -gt 0 ] && logr "$(m "$M_STEP_IMOWN" "$BF_N" "$(( $(date +%s) - st ))")"
 owners_save
+own_blocks_save                       # eklentinin işaretsiz otomatik blok banları: sonraki tur CSF sınırının sildiklerini bulur
 fi
 ev run "" "v=\"$VERSION\"" "dur=$(( $(date +%s) - RUN_T0 ))" "added=$added24" "warn16=$warn16" \
     "temp_added=$temp_added24" "promoted=$temp_perm_added24" "temp_warn16=$temp_warn16" "wl_skipped=$wl_skipped" \

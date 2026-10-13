@@ -110,6 +110,14 @@ settings, with no prompts. `config.env` is left untouched.
   every IP's hostname, owner and ban reason. A range whose attacks a provider ban
   or rented-server list already closes is left out. A network flagged on 3 or
   more separate days is marked *repeating* and moves to the top.
+  It also lists attackers lfd can not stop, read from the lfd logs of the last
+  7 days: an address in `csf.allow` is still banned by lfd (with CSF's default
+  `IGNORE_ALLOW = "0"`) but the ban does not work (*Ban not working*); with
+  `IGNORE_ALLOW = "1"`, or in `csf.ignore` / `csf.rignore`, lfd does not ban it
+  at all (*Ignored*; CSF refuses to ban an ignored address on its own, but a ban
+  on its block cuts it). Several
+  attackers from one allow entry, block or network are grouped like normal bans.
+  A partial ban whose open services keep being attacked shows as *Open service*.
 - **Active block bans** — a sortable, paged table with each block's owner,
   searchable by CIDR, AS number or organisation. Filters show their counts.
   Blocks that became permanent on a second attack are tagged *repeat
@@ -287,9 +295,12 @@ each section:
   Old-block removal keeps blocks marked "do not delete" and blocks still being
   tried: a banned block's traffic never reaches lfd, so the plugin counts it
   itself — an `ag_hits` ipset with a counter per banned range and one rule at
-  the top of `LOCALINPUT` that only counts (it neither blocks nor allows
-  anything); `csfpost.sh` puts it back after CSF reloads. Its last attempt
-  shows in the state tip.
+  the very top of the `mangle` table's `PREROUTING` that only counts (it
+  neither blocks nor allows anything). It sits ahead of the rented-server list
+  and the ban guard, so attempts they drop are counted too. CSF clears the
+  counters on every reload: the plugin reads them before its own reloads, and
+  `csfpost.sh` puts the rule back afterwards. Its last attempt shows in the
+  state tip.
 - **Records** — how long entries stay in *Needs review*, and the log file. The
   log is rotated by the system's logrotate (`/etc/logrotate.d/csf_autogroup`,
   written from these settings; default 1 MB, 5 compressed archives); where
@@ -316,7 +327,8 @@ block that comes back turns into a permanent one.
 | `/24` with **≥5** permanent singles | ban `/24` + `do not delete` |
 | `/16` with **≥5** singles across **≥2** `/24`s (permanent and temp counted together, each IP once) | flag as suspicious network by email, no auto-ban; reported again only when a new IP comes in (at most once a day). With a partial ban on the network, only bans after it count |
 | `/24` with **≥3** temp bans (first time) | temp-ban the `/24` for 12h, watch it |
-| same `/24` seen again | permanent ban + `do not delete` |
+| same `/24` seen again (temp bans or permanent singles while watched) | permanent ban + `do not delete` |
+| plugin's block ban left `csf.deny` without the plugin (CSF drops the oldest unmarked lines when `DENY_IP_LIMIT` is reached) | watch the `/24`, alert by email and in History |
 | deny list **≥80%** of its limit | alert: email once a day; Slack once when it starts and once when resolved |
 | CSF disabled / in testing mode / rules not loaded, or LFD not running | alert: email once a day; Slack once when it starts and once when resolved |
 | block ban older than the old-block limit (optional) | remove it |
@@ -397,7 +409,8 @@ The plugin closes this with one chain in the `mangle` table's `PREROUTING`
 the connection still carries the port it was sent to, and Imunify360 has no
 rules there to race with (it puts its `INPUT` chain back on top within a
 minute, so a rule in `INPUT` loses its place). For new incoming connections
-only, it applies CSF's allow list first and then the port bans. Other traffic
+only, it applies CSF's allow list first (the same list as the rented-server
+rule: a single-port allow passes only on its port) and then the port bans. Other traffic
 and this server's own outgoing connections are not touched. A `csfpost.sh`
 line puts it back when CSF restarts, and each run checks that it is still
 first. The rented-server lists use the same place (see below).
@@ -406,8 +419,17 @@ first. The rented-server lists use the same place (see below).
 24 hours, or the hours given, for requests that reached the sites while a ban
 was in force, layer by layer. Allowed addresses are left out. It also lists the
 rules that rewrite or accept traffic before CSF, and the banned addresses that
-sit inside an allow list (those bans have no effect). The report is also saved to
-`/root/ban-leak-DATE.txt`.
+sit inside an allow list (those bans have no effect). Requests to sites behind
+a CDN are listed separately, not as leaks: the firewall sees the CDN, not the
+visitor. The report is also saved to `/root/ban-leak-DATE.txt`.
+
+**Sites behind a CDN.** When a site's domain or its www name points to a CDN
+(QUIC.cloud, Cloudflare…) or another address instead of this server, its
+visitors reach the firewall through the CDN, so a CSF ban can not cut them; the
+place to block them is the CDN's panel. `tools/cdn-sites.sh` finds these sites
+once a day by DNS (the plugin runs it; `--show` lists them). The web logs don't
+say which name a request came to, so if one of a site's names goes through a
+CDN, that site's requests are treated as possibly behind it.
 
 ## Without cPanel
 
@@ -496,7 +518,9 @@ restoring `config.env` is enough.
 - **Measure impact** before saving: the last 24 hours of web logs, for that
   provider — response codes, successful requests, successful POSTs (payment
   notifications, webhooks), examples of failed requests (403, 404, 5xx…: code,
-  site, request and an example IP) and non-browser clients, by site.
+  site, request and an example IP) and non-browser clients, by site. Requests
+  are split into sites behind a CDN (a ban does not affect them), allowed
+  services, addresses an active rented-server list already closes, and the rest.
 - After saving, the setting is written to CSF right away and lfd is restarted
   (lfd fills the address sets); the screen shows how many ranges are loaded.
   Turning it off removes only what the plugin added.
@@ -556,12 +580,16 @@ one rule in the `mangle` table's `PREROUTING`, ahead of CSF and of
 Imunify360: Imunify360 redirects greylisted addresses to its own WebShield
 ports and accepts them before CSF's rules, so a rule in `INPUT` never saw that
 traffic. `PREROUTING` runs before the redirect, so the rule sees the port the
-connection was sent to. Addresses in `csf.allow` (and the files it
-includes) and the allowed services are exempt inside the set, as are this
-server's own IPs; only new incoming connections are dropped. Each run checks
-that the rule is still first and moves it back if another tool put its own
-chain in front. A line in `/etc/csf/csfpost.sh` puts the rule back when CSF
-restarts. Hostnames in `csf.dyndns` are not exempt. If a service you rely on runs in one of these clouds
+connection was sent to. What CSF lets in passes here too
+(`tools/allow-list.sh`, shared with the ban guard and the leak check):
+addresses fully allowed in `csf.allow` (and the files it includes),
+`GLOBAL_ALLOW`, DynDNS, temp allows and the allowed services pass on every
+port; a single-port allow line (e.g. `tcp|in|d=22|s=…`) passes only on its
+port. This server's own IPs are exempt; only new incoming connections are
+dropped. Each run checks that the rule is still first and moves it back if
+another tool put its own chain in front. A line in `csfpost.sh` puts the rule
+back when CSF restarts (in `/usr/local/csf/bin/csfpost.sh` when that file
+exists, since CSF then runs only that one). If a service you rely on runs in one of these clouds
 and calls your sites, allow its address. `tools/cloud-ban.sh` does the work;
 the plugin runs it.
 

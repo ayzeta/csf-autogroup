@@ -3,8 +3,10 @@
 #
 # Bir blok banlanınca güvenlik duvarı ondan gelen bağlantıları kapıda düşürür; lfd o denemeleri hiç görmez, CSF de
 # banlı adres başına sayaç tutmaz (LF_IPSET'te bütün banlar tek kümede, tek toplam sayaç). Bu araç csf.deny'deki
-# aralıkları blok başına sayaçlı bir ipset'e (ag_hits) koyar ve LOCALINPUT'un başına EYLEMSİZ bir kural ekler: kural
-# hiçbir bağlantıyı engellemez ya da geçirmez, yalnız sayar. Eklenti her turda sayaçları okuyup paket gelen bloğa
+# aralıkları blok başına sayaçlı bir ipset'e (ag_hits) koyar ve mangle PREROUTING'in en başına EYLEMSİZ bir kural ekler:
+# kural hiçbir bağlantıyı engellemez ya da geçirmez, yalnız sayar. En başta durur, çünkü kiralık liste (AG_CLOUD) ve ban
+# koruması (AG_GUARD) da mangle PREROUTING'te düşürür: sayaç onlardan sonra olsaydı oralarda düşen denemeler sayılmazdı
+# (önceki sürüm LOCALINPUT'taydı). Eklenti her turda sayaçları okuyup paket gelen bloğa
 # "son deneme" tarihi yazar; eski blok temizliği yakın zamanda denenen bloğu kaldırmaz.
 #
 # CSF her yeniden yüklemede (csf -r) kuralı da kümeyi de siler (gerçek CSF 16.33 ile ölçüldü, 2026-10-09);
@@ -18,15 +20,28 @@ DENY="${DENY:-/etc/csf/csf.deny}"
 CSF_DIR="${CSF_DIR:-/etc/csf}"
 LOG_FILE="${LOG_FILE:-/var/log/csf_autogroup.log}"
 SET=ag_hits MARK="# csf_autogroup hits"
-POST="$CSF_DIR/csfpost.sh"
+# CSF yalnız birini çalıştırır: /usr/local/csf/bin/csfpost.sh varsa onu, yoksa /etc/csf/csfpost.sh (csf.pl, CSF 16.33'te
+# ölçüldü). Satır CSF'in çalıştıracağı dosyaya yazılır; öteki dosyada kalmış eski satır temizlenir.
+POST="$CSF_DIR/csfpost.sh"; POST2=""
+if [ "$CSF_DIR" = /etc/csf ] && [ -e /usr/local/csf/bin/csfpost.sh ]; then POST=/usr/local/csf/bin/csfpost.sh; POST2="$CSF_DIR/csfpost.sh"; fi
+post_strip() { [ -f "$1" ] && grep -qF "$MARK" "$1" || return 0; grep -vF "$MARK" "$1" > "$1.ag.tmp" && cat "$1.ag.tmp" > "$1"; rm -f "$1.ag.tmp"; }
 SELF_PATH="$(cd "$(dirname "$0")" 2>/dev/null && pwd)/$(basename "$0")"
-RULE=(LOCALINPUT ! -i lo -m set --match-set "$SET" src)
+RULE=(PREROUTING ! -i lo -m set --match-set "$SET" src)
+M() { iptables -t mangle "$@"; }
+rule_first() {   # sayan kural mangle PREROUTING'te tek ve ilk sırada; eski sürümün LOCALINPUT kuralı kalkar
+    while iptables -D LOCALINPUT ! -i lo -m set --match-set "$SET" src 2>/dev/null; do :; done
+    [ "$(M -S PREROUTING 2>/dev/null | grep -- '^-A PREROUTING ' | head -n 1)" = "-A PREROUTING ! -i lo -m set --match-set $SET src" ] &&
+        [ "$(M -S PREROUTING 2>/dev/null | grep -c -- "--match-set $SET src")" = 1 ] && return 0
+    while M -D "${RULE[@]}" 2>/dev/null; do :; done
+    M -I PREROUTING 1 "${RULE[@]:1}"
+}
 
 log() { printf '[%s] block-hits: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG_FILE" 2>/dev/null; }
 have() { command -v ipset >/dev/null 2>&1 && command -v iptables >/dev/null 2>&1; }
 
 hook_add() {     # csfpost.sh'a tek satır (kiralık liste aracıyla aynı kalıp; Imunify'nin ipset_sync satırı en sonda kalır)
     local line="[ -r \"$SELF_PATH\" ] && DENY=\"$DENY\" LOG_FILE=\"$LOG_FILE\" bash \"$SELF_PATH\" --apply $MARK"
+    [ -n "$POST2" ] && post_strip "$POST2"
     if [ -f "$POST" ] && grep -qF "$MARK" "$POST"; then
         grep -qF "$line" "$POST" && return 0
         grep -vF "$MARK" "$POST" > "$POST.ag.tmp" && cat "$POST.ag.tmp" > "$POST"; rm -f "$POST.ag.tmp"
@@ -39,6 +54,7 @@ hook_add() {     # csfpost.sh'a tek satır (kiralık liste aracıyla aynı kalı
     log "csfpost.sh'a satır eklendi"
 }
 hook_del() {
+    [ -n "$POST2" ] && post_strip "$POST2"
     [ -f "$POST" ] && grep -qF "$MARK" "$POST" || return 0
     cp -p "$POST" "$POST.autogroup.bak" 2>/dev/null
     grep -vF "$MARK" "$POST" > "$POST.ag.tmp" && cat "$POST.ag.tmp" > "$POST"; rm -f "$POST.ag.tmp"
@@ -56,11 +72,12 @@ apply() {        # csf.deny'deki IPv4 aralıklarıyla (ana dosya, düz satır) k
     rm -f "$tmp"
     ipset create "$SET" hash:net counters -exist 2>/dev/null
     ipset swap "${SET}_t" "$SET" && ipset destroy "${SET}_t" 2>/dev/null
-    iptables -C "${RULE[@]}" 2>/dev/null || iptables -I "${RULE[0]}" 1 "${RULE[@]:1}"
+    rule_first
     log "uygulandı: $n aralık"
 }
 remove() {
-    while iptables -D "${RULE[@]}" 2>/dev/null; do :; done
+    while M -D "${RULE[@]}" 2>/dev/null; do :; done
+    while iptables -D LOCALINPUT ! -i lo -m set --match-set "$SET" src 2>/dev/null; do :; done
     ipset destroy "$SET" 2>/dev/null; ipset destroy "${SET}_t" 2>/dev/null
     hook_del; log "kaldırıldı"
 }
