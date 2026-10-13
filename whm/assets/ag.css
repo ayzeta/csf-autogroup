@@ -1190,3 +1190,5 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 @media (max-width: 760px) { .ag-fstack { align-items: flex-start; } }
 @media (max-width: 600px) { .ag-impact li span { white-space: normal; } }   /* telefonda örnek satırları kesilmesin, sarsın */
 .ag-sec-lead { margin: 0 0 -6px; font-size: 13px; color: var(--ag-text-2); line-height: 1.5; }   /* ayar bölümünün açıklaması, kartların üstünde */
+/* telefonda öncelik: 30 günlük grafik Kontrol edilecekler ve listelerin altına (geniş ekranda yeri değişmez) */
+@media (max-width: 760px) { .ag-wrap { display: flex; flex-direction: column; } .ag-wrap > .ag-activity { order: 5; } .ag-wrap > .ag-foot { order: 9; } }

@@ -268,11 +268,31 @@ Manual actions are logged as `MANUAL (user): …` and appear on the History tab.
 
 ### Settings
 
-The same settings as `config.env`, with validation, grouped into sections
-(notifications, ban rules, running, sources and refresh, old bans, records,
-server, settings history); related settings sit under small headings inside
-each section:
+The same settings as `config.env`, with validation, in sections ordered by
+weight (general, ban rules, notifications, sources and refresh, server,
+settings history); inside a section every group of settings is a card of
+its own:
 
+- **General** — running / paused, how often the cron run starts (every 5 / 10
+  / 15 / 30 minutes or hourly), and the language of the log, the mails and
+  the panel.
+- **Ban rules** — block ban (`/24`): permanent singles needed, the count that
+  makes it *kept* (`do not delete`) and the temp block ban; suspicious network
+  (`/16`, permanent and temp single bans counted together); the watch period
+  (a temp-banned block that comes back within it is banned for good); how
+  long entries stay in *Needs review*; and the old bans: old-block limit
+  (default 365 days), how recent an attempt keeps a block from being old
+  (default 30 days), and whether old block bans are removed automatically
+  (default off; manual bans are never touched). Old-block removal keeps
+  blocks marked "do not delete" and blocks still being tried: a banned
+  block's traffic never reaches lfd, so the plugin counts it itself — an
+  `ag_hits` ipset with a counter per banned range and one rule at the very
+  top of the `mangle` table's `PREROUTING` that only counts (it neither
+  blocks nor allows anything). It sits ahead of the rented-server list and
+  the ban guard, so attempts they drop are counted too. CSF clears the
+  counters on every reload: the plugin reads them before its own reloads, and
+  `csfpost.sh` puts the rule back afterwards. Its last attempt shows in the
+  state tip.
 - **Notifications** — channels: *all channels set in WHM* (default: email +
   Slack), *email only* or *Slack only*. Both addresses come from WHM: the
   contact email in Basic WebHost Manager Setup (or any other address you type)
@@ -281,46 +301,28 @@ each section:
   nothing arrives twice. Choose which events go to Slack (firewall problem,
   list filling up, run notices, weekly summary): urgent ones go right away,
   run notices are collected into at most one Slack message per hour. *Send test
-  email*, *Send a Slack test*, language, and the **weekly summary**: new block
+  email*, *Send a Slack test*, and the **weekly summary**: new block
   bans, providers CSF and Imunify360 block most, watched blocks about to
   expire, list usage, run health, and a note when a new version is available.
   Sent with the first run after 09:00 on the chosen day (default Monday).
 
 ![Notification settings](docs/settings.png)
 
-- **Ban rules** — block ban (`/24`): permanent singles needed, the count that
-  makes it *kept* (`do not delete`) and the temp block ban; suspicious network
-  (`/16`, permanent and temp single bans counted together); the watch period
-  (a temp-banned block that comes back within it is banned for good).
-- **Running** — pause / run, and how often the cron run starts (every 5 / 10 /
-  15 / 30 minutes or hourly).
 - **Sources and refresh** — owner/hostname lookups on or off, DNS timeout and
   how long a block's owner is kept before it is looked up again (default 30
   days); how often the rented-server and allowed-service lists are downloaded
   again and after how many failed days it is reported; how old CSF's ASN data
   may get; how often Imunify360's list is read (default 60 minutes). The
   Providers cards link here.
-- **Ban rules → Old bans** — old-block limit (default 365 days), how recent an attempt
-  keeps a block from being old (default 30 days), and whether old block bans
-  are removed automatically (default off; manual bans are never touched).
-  Old-block removal keeps blocks marked "do not delete" and blocks still being
-  tried: a banned block's traffic never reaches lfd, so the plugin counts it
-  itself — an `ag_hits` ipset with a counter per banned range and one rule at
-  the very top of the `mangle` table's `PREROUTING` that only counts (it
-  neither blocks nor allows anything). It sits ahead of the rented-server list
-  and the ban guard, so attempts they drop are counted too. CSF clears the
-  counters on every reload: the plugin reads them before its own reloads, and
-  `csfpost.sh` puts the rule back afterwards. Its last attempt shows in the
-  state tip.
-- **Running → records** — how long entries stay in *Needs review*, and the log file. The
-  log is rotated by the system's logrotate (`/etc/logrotate.d/csf_autogroup`,
-  written from these settings; default 1 MB, 5 compressed archives); where
-  logrotate is missing, a log line limit is used instead. A run where nothing
-  happened leaves a single line in the log.
-
-A **Server requirements** card lists the tools CSF Auto-Group uses (CSF, cron,
-mail, dig/host, logrotate, flock, timeout, git, Imunify360, ModSecurity hit log,
-sqlite3) and what happens when one of them is missing.
+- **Server** — version and update, CSF's list limits (read-only, with how full
+  each list is), a **Server requirements** card listing the tools CSF
+  Auto-Group uses (CSF, cron, mail, dig/host, logrotate, flock, timeout, git,
+  Imunify360, ModSecurity hit log, sqlite3) and what happens when one is
+  missing, and the log file: rotated by the system's logrotate
+  (`/etc/logrotate.d/csf_autogroup`, written from these settings; default
+  1 MB, 5 compressed archives); where logrotate is missing, a log line limit
+  is used instead. A run where nothing happened leaves a single line in the
+  log.
 
 *Try before saving* runs a dry run with the unsaved thresholds. Saving writes
 `config.env` (previous file kept as `config.env.bak`), updates the crontab and
@@ -490,7 +492,7 @@ tab. Key options:
 ## Uninstall
 
 First turn off **Provider ban**, **Rented servers** and **Allowed services** in
-the Providers tab and pause the plugin (Settings → Running): that removes what
+the Providers tab and pause the plugin (Settings → General): that removes what
 the plugin added to CSF, including the block counter (`ag_hits`) and the ban
 guard (`AG_GUARD`). Without the panel, `bash tools/block-hits.sh --remove` and
 `bash tools/ban-guard.sh --remove` remove them.

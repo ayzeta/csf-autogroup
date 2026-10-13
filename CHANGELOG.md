@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.14.3 — 2026-10-14
+
+- **Settings in order of weight.** The section list opened with
+  Notifications while the switch that pauses the plugin and the run interval
+  sat further down under Running. The first section is now **General**
+  (running / paused, run frequency, language); then Ban rules (which also
+  took the review-list period: it is an outcome of the rules), Notifications,
+  Sources and refresh, Server (which took the log file: a server matter),
+  Settings history. Running and Records are gone as sections.
+- **Overview on a phone:** the 30-day chart came before Needs review, so the
+  rows that need a decision started a screen down. On a phone the chart now
+  comes after the lists; on a wide screen nothing moves.
+
 ## 1.14.2 — 2026-10-14
 
 - **History keeps the review list's findings.** Rows for violations from
