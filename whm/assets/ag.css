@@ -599,9 +599,6 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
   .ag-head { gap: 12px; }
   .ag-mark { width: 38px; height: 38px; }
   .ag-title h1 { font-size: 17px; }
-  .ag-head-actions { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
-  .ag-head-actions .ag-btn { justify-content: center; }
-  .ag-head-actions [data-act="runlog"] { grid-column: 1 / -1; }
   .ag-band { padding: 14px 16px; gap: 12px 14px; }
   .ag-band-g { display: none; }
   .ag-kpis { gap: 10px; }
@@ -869,14 +866,16 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
 .ag-c.lft .ag-tip { left: calc(100% + 6px); right: auto; }
 .ag-c.mid .ag-tip { left: 50%; right: auto; transform: translateX(-50%); }
 
-/* ── Dar ekran başlığı: başlık solda, iki düğme sağda alt alta ── */
+/* ── Dar ekran başlığı: başlık solda; düğmeler başlığın altında tek sıra, tam genişlik (sağda alt alta üç düğme
+   başlığı yükseltiyordu); dördüncü düğme (Tur günlüğü) sığmazsa alt sıraya geçer ── */
 @media (max-width: 760px) {
   .ag-head { flex-wrap: wrap; align-items: center; }
   .ag-title { flex: 1; min-width: 0; }
   .ag-title h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ag-title .ag-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
-  .ag-head-actions { display: flex; flex-direction: column; align-items: stretch; gap: 6px; width: auto; margin-left: auto; }
-  .ag-head-actions .ag-btn { height: 30px; padding: 0 12px; font-size: 12.5px; justify-content: flex-start; }
+  .ag-head-actions { display: flex; flex-direction: row; flex-wrap: wrap; gap: 6px; width: 100%; margin-left: 0; }
+  .ag-head-actions .ag-btn { flex: 1 1 30%; min-width: 0; height: 32px; padding: 0 8px; font-size: 12.5px; justify-content: center; white-space: nowrap; }
+  .ag-head-actions .ag-head-help { margin-right: 0; }
 }
 
 /* özet kartlarının sağı: halka ya da küçük döküm (kartlar dengeli dursun) */
@@ -894,10 +893,15 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
 }
 @container agwrap (max-width: 1000px) { .ag-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
-/* Geçmiş satırı telefonda: "Ayrıntı" düğmesi alt satıra, metin sıkışmasın */
+/* Geçmiş satırı telefonda: 1) adres · rozet ····· ⋯  2) ayrıntı  3) zaman · aç/kapa
+   (zaman, aç/kapa ve ⋯ üst satırın sağında sıkışıyor, adres yalnız kalıyordu); süzgeç çipleri küçülür, iki sıraya sığar */
 @media (max-width: 600px) {
-  .ag-ev { flex-wrap: wrap; }
-  .ag-ev-b { flex: 1 1 0; min-width: 0; }
+  .ag-ev { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; grid-template-areas: "ic b m" "ic time time"; column-gap: 10px; row-gap: 4px; align-items: start; }
+  .ag-ev-ic { grid-area: ic; }
+  .ag-ev-b { grid-area: b; min-width: 0; }
+  .ag-ev-m { grid-area: m; }
+  .ag-ev-time { grid-area: time; padding-top: 0; justify-content: space-between; }
+  .ag-card-h .ag-tools .ag-chip { height: 24px; padding: 0 8px; font-size: 12px; }
 }
 
 .ag-mob { display: none; }

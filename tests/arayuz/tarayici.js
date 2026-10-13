@@ -38,6 +38,18 @@ async function layoutChecks(page, label, width) {
       if (b) { await b.click(); await page.waitForTimeout(900); }
       await layoutChecks(page, tab, width);
       await shot(`${tab}-${width}`);
+      if (width === 390 && tab === 'overview') {
+        // başlık düğmeleri telefonda tek sırada (sağda alt alta dizilince başlık iki kat yükseliyordu)
+        const tops = await page.$$eval('.ag-head-actions .ag-btn', L => L.map(b => Math.round(b.getBoundingClientRect().top)));
+        check('390: başlık düğmeleri aynı satırda', tops.length >= 3 && Math.max(...tops) - Math.min(...tops) <= 2, tops.join(','));
+      }
+      if (width === 390 && tab === 'history') {
+        // Geçmiş satırı: zaman ayrıntının altında, ⋯ üst satırın sağında
+        const r = await page.evaluate(() => { const e = document.querySelector('.ag-ev'); if (!e) return null;
+          const b = e.querySelector('.ag-ev-b'), t = e.querySelector('.ag-ev-time'), m = e.querySelector('.ag-ev-m');
+          return { ok: b && t && t.getBoundingClientRect().top >= b.getBoundingClientRect().bottom - 1, menuTop: m ? Math.round(m.getBoundingClientRect().top - b.getBoundingClientRect().top) : 0 }; });
+        check('390: Geçmiş satırında zaman ayrıntının altında, menü üstte', !!r && r.ok && r.menuTop <= 6, JSON.stringify(r));
+      }
     }
   }
   await page.setViewportSize({ width: 1280, height: 900 });

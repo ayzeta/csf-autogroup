@@ -1646,7 +1646,7 @@
       var md = '<div class="ag-chips">' + [['ports', 'pv_row_ports'], ['all', 'pv_row_all']].map(function (o) {
         return '<button type="button" class="ag-chip' + ((o[0] === 'all') === isAll ? ' on' : '') + '" data-act="asnmode" data-k="' + esc(a) + '" data-v="' + o[0] + '" title="' + esc(t(o[1] + '_h')) + '">' + esc(t(o[1])) + '</button>';
       }).join('') + '</div>';
-      return '<div class="ag-prow"><div class="ag-prow-nm">' + asnB(a, names[a]) + '<span class="ag-org" title="' + esc(names[a] || '') + '">' + esc(shortName(names[a])) + '</span></div>' +
+      return '<div class="ag-prow" id="ag-prow-' + esc(a) + '"><div class="ag-prow-nm">' + asnB(a, names[a]) + '<span class="ag-org" title="' + esc(names[a] || '') + '">' + esc(shortName(names[a])) + '</span></div>' +
         '<div class="ag-prow-st">' + st + '</div>' + md +
         '<button class="ag-btn ag-btn-sm" data-act="asnimpact" data-v="' + esc(a) + '"' + (im === 'wait' ? ' disabled' : '') + '>' + (im && im !== 'wait' ? IC.x + esc(t('pv_imp_hide')) : IC.search + esc(t('pv_imp'))) + '</button>' +
         '<button class="ag-iconbtn" data-act="asnrm" data-v="' + esc(a) + '" title="' + esc(t('pv_rm')) + '" aria-label="' + esc(t('pv_rm')) + '">' + IC.x + '</button>' +
@@ -1759,7 +1759,9 @@
       var r = n.getBoundingClientRect();
       if (r.top <= 0 + 2 && r.bottom > 0 && r.height < window.innerHeight / 3 && r.width > window.innerWidth / 2) top = Math.max(top, r.bottom);
     });
-    window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.pageYOffset - top - 12), behavior: 'smooth' });
+    // scroll-margin-top: öğe hangi kapsayıcıda kayarsa kaysın (pencere ya da WHM'nin içerik alanı) başlığın altında kalır
+    el.style.scrollMarginTop = (top + 12) + 'px';
+    el.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
   function provLayers() {
     var P = (S && S.prov) || {}, PA = P.asn || {}, PC = P.cloud || {}, PS = P.svc || {}, now = nowSec();
@@ -2579,7 +2581,8 @@
       var a = el.getAttribute('data-v'), lp = String(cv('ASN_LIST') || '').split(',').filter(Boolean);
       if (lp.indexOf(a) < 0 && String(cv('ASN_ALL') || '').split(',').indexOf(a) < 0) lp.push(a);
       DRAFT.ASN_LIST = lp.join(','); DRAFT.ASN_BAN = '1'; UI.asnRaw = null; UI.impact = UI.impact || {}; impWait(a);
-      scrollToEl(document.getElementById('ag-prov-card'));
+      // o sağlayıcının satırına (altında ölçüm penceresi) kaydırır; kartın üstüne kaydırınca pencere ekran dışında kalıyordu
+      scrollToEl(document.getElementById('ag-prow-' + a) || document.getElementById('ag-prov-card'));
       api('asn_impact', { asn: a }).then(function (r) { if (r) r._at = nowSec(); UI.impact[a] = r; render(); });
     },
     asnaddin: function () {      // kutuya yazılan AS numarasını ekle ve etkisini ölç (sağdaki "Banla…" ile aynı)

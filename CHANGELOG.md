@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.13.16 — 2026-10-14
+
+Phone layout, from screenshots of the panel inside WHM:
+
+- **Header:** the three buttons (Glossary, Dry run, Run now) stacked on the
+  right and made the header twice as tall as the title; they now sit in one
+  full-width row under the title (a fourth button, Run log, wraps below).
+- **History rows:** the time, the expand mark and the ⋯ menu crowded the
+  right of the first line while the badge dropped alone to the next; now the
+  first line is the address and its badge with ⋯ at the right, the details
+  follow, and the time with the expand mark closes the row. The filter chips
+  are smaller so they fit in two rows.
+- **Providers → "Ban…":** the page scrolled to the top of the provider-ban
+  card, which left the measurement window off screen; it now scrolls to that
+  provider's row, with the window right under it, and keeps WHM's sticky
+  header clear in whichever container the page scrolls.
+
 ## 1.13.15 — 2026-10-13
 
 - **Ignore from the IP card.** The card's Needs review line offers Ignore for
