@@ -124,7 +124,7 @@ settings, with no prompts. `config.env` is left untouched.
   mail log shows them. Several
   attackers from one allow entry, block or network are grouped like normal bans.
   A partial ban whose open services keep being attacked shows as *Open service*.
-- **Active block bans** — a sortable, paged table with each block's owner,
+- **Active range bans** — a sortable, paged table with each block's owner,
   searchable by CIDR, AS number or organisation. Filters show their counts.
   Blocks that became permanent on a second attack are tagged *repeat
   offender*; temp block bans show their time left. **⋯ → IPs** lists the IPs
@@ -161,7 +161,7 @@ settings, with no prompts. `config.env` is left untouched.
   links to bgp.he.net and AbuseIPDB, and buttons to ban its `/24` or `/16`.
   Recently viewed IPs stay one click away.
 - **Inside a wider ban** — a block inside a banned `/16` (or any wider range) is
-  tagged *inside /16* in Active block bans and Watched, and listed under
+  tagged *inside /16* in Active range bans and Watched, and listed under
   *Bans no longer needed* in the Providers tab.
 - **Ban announced range** — when the range the IP's owner announces is between
   /17 and /23, the IP card offers to ban just that range instead of the /16;
@@ -219,7 +219,7 @@ can't be banned at all.
   `8080, 30000-35000`). Everything else stays open, and connections from this
   server to the range are not affected. Web includes UDP 443 (HTTP/3) and DNS
   includes UDP 53. It is one `csf.deny` line (split per 15
-  ports), shown as *partial* in Active block bans; it doesn't cover the range, so
+  ports), shown as *partial* in Active range bans; it doesn't cover the range, so
   nothing inside is removed and watching continues.
 - **Everything except** — a full ban, but the services you pick stay open,
   including outgoing mail and outgoing web (this server calling APIs, backups or
@@ -247,7 +247,7 @@ full one.
 
 | Button | Does |
 |--------|------|
-| Ban network (/16) | permanent `/16` ban, added as `do not delete`: from To review, **⋯** in Active block bans and Watched, and the IP card |
+| Ban network (/16) | permanent `/16` ban, added as `do not delete`: from To review, **⋯** in Active range bans and Watched, and the IP card |
 | Ban block (/24) | permanent `/24` ban from the IP card |
 | Change ban | change what a CSF Auto-Group ban blocks (everything / selected services / everything except) |
 | Ban anyway | ban a whitelist-skipped `/24` (overrides the whitelist) |
@@ -255,7 +255,7 @@ full one.
 | Stop watching | forget a watched `/24` (next attack counts as the first) |
 | Remove | lift a block ban (`do not delete` blocks too; `csf.deny` is backed up first) |
 | Remove old ones | on the *Old* filter: remove every block ban older than the old-block limit |
-| Ignore | hide an item from review for 7/30/90 days (stops `/16` warning emails too) |
+| Ignore | hide an item from review for 7/30/90 days or indefinitely (stops `/16` warning emails too); undo under *Ignored* or from the IP card |
 | IPs | a block's IPs and ban reasons, as recorded in the event log |
 | Dry run | show what a run would do; changes nothing, sends nothing |
 | Run now | run immediately instead of waiting for cron |

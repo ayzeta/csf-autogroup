@@ -77,12 +77,26 @@ async function layoutChecks(page, label, width) {
     const gone = await page.$(`.ag-item[data-row="${c}"] .ag-tr-r`) === null;
     const listed = await page.evaluate(c => Array.from(document.querySelectorAll('[data-act="unignore"]')).some(b => b.getAttribute('data-c') === c), c);
     check(`Yoksay: ${c} listeden düştü ve Yoksayılanlar'da`, gone && listed, `düştü=${gone} listede=${listed}`);
+    // "Yoksaymayı kaldır" düğmesi gerçekten görünür mü (dar sütunda kartın dışına taşıp gizlenmiş olmasın)
+    const vis = await page.evaluate(c => { const b = Array.from(document.querySelectorAll('[data-act="unignore"]')).filter(b => b.getAttribute('data-c') === c)[0]; if (!b) return 'yok';
+      const r = b.getBoundingClientRect(), card = b.closest('.ag-card').getBoundingClientRect(); return r.width > 0 && r.right <= card.right + 1 && r.left >= card.left - 1 ? 'ok' : `düğme ${Math.round(r.left)}–${Math.round(r.right)}, kart ${Math.round(card.left)}–${Math.round(card.right)}`; }, c);
+    check('Yoksaymayı kaldır düğmesi kartın içinde görünür', vis === 'ok', vis);
     if (listed) {
       await page.click(`[data-act="unignore"][data-c="${c}"]`); await page.waitForTimeout(600);
       const ok = await page.$('.ag-modal [data-m="ok"]'); if (ok) await ok.click();
       await page.waitForTimeout(6000);
       check(`Yoksaymayı kaldır: ${c} geri geldi`, await page.$(`.ag-item[data-row="${c}"] .ag-tr-r`) !== null);
     }
+  }
+  // Deneme turu: gerçek motor kuru çalışır; pencere özetle açılmalı (ham çıktı açılır bölümde)
+  const dryBtn = await page.$('[data-act="dry"]');
+  if (dryBtn) {
+    await dryBtn.click();
+    await page.waitForFunction(() => document.querySelector('.ag-modal .ag-dry'), null, { timeout: 90000 }).catch(function () {});
+    const dry = await page.evaluate(() => { const d = document.querySelector('.ag-modal .ag-dry'); return d ? { sum: d.querySelectorAll('.ag-dry-s').length, raw: !!d.querySelector('.ag-dry-raw pre') } : null; });
+    check('Deneme turu penceresi özetle açılıyor (ham çıktı ayrı)', !!dry && dry.sum > 0 && dry.raw, JSON.stringify(dry));
+    await shot('deneme-turu');
+    await page.keyboard.press('Escape'); await page.waitForTimeout(400);
   }
   check('JS hatası yok', errs.length === 0, errs.slice(0, 3).join(' | '));
   await browser.close();

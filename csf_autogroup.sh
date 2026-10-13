@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.13.13"   # sürüm — başlangıç log satırında görünür
+VERSION="1.13.14"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -261,7 +261,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_MAILT16_BODY="Aşağıdaki ağlarda (/16) çok sayıda geçici ban birikti. Ağ banlanmadı;\nelle bakmanız önerilir:"
   M_MAILT16_SUBJ="%s şüpheli ağ (geçici banlar)"
   M_WL_LOADED="Beyaz liste yüklendi: %s aralık, %s rignore alan adı"
-  M_WL_SELF="sunucu IP'si"
+  M_WL_SELF="sunucu IP'si"; M_FOREVER="süresiz"
   M_A_SELF="%s sunucunun kendi IP'sini (%s) içeriyor; banlanamaz"
   M_WL_SKIP="ATLANDI %s: beyaz listeyle çakışıyor (%s)"
   M_WL_SKIPD="ATLANDI %s: beyaz listede (%s), bugün zaten bildirildi"
@@ -366,14 +366,14 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_FIX_UDP="%s: kısmi ban/istisnaya eksik UDP 443 satırı eklendi (HTTP/3)"
   M_A_UNBANFAIL="%s kaldırılamadı: %s"
   M_A_NOTFOUND="%s ne csf.deny'de ne geçici listede birebir bulunamadı"
-  M_A_IGNORED="%s %s tarihine kadar yoksayılacak"
+  M_A_IGNORED="%s %s tarihine kadar yoksayılacak"; M_A_IGNORED_F="%s siz kaldırana kadar yoksayılacak"
   M_A_UNIGNORED="%s artık yoksayılmıyor"
   M_A_NOTIGN="%s yoksayılanlar listesinde değil"
   M_S_TITLE="CSF Auto-Group %s — durum"
   M_S_LAST="Son çalışma"; M_S_NEVER="henüz yok"; M_S_RUNNING="şu an çalışıyor"
   M_S_USAGE="Doluluk"; M_S_PERM="kalıcı"; M_S_TEMP="geçici"
   M_S_REVIEW="Kontrol edilecekler (%s gün)"; M_S_PENDING="İzlenenler"
-  M_S_GROUPS="Aktif blok banları"; M_S_IGNORED="Yoksayılanlar"; M_S_RECENT="Son işlemler"
+  M_S_GROUPS="Aktif aralık banları"; M_S_IGNORED="Yoksayılanlar"; M_S_RECENT="Son işlemler"
   M_S_NONE="yok"; M_S_DAYSLEFT="%s gün kaldı"; M_S_TTL="geçici ban %s kaldı"
   M_L_HOST="Hostname"; M_L_FWD="ileri yönde doğrulandı"; M_L_NOFWD="ileri yönde doğrulanamadı"
   M_L_OWNER="Sahibi"; M_L_PREFIX="Duyurulan blok"; M_L_REG="Kayıt"; M_L_DENY="csf.deny"
@@ -501,7 +501,7 @@ else
   M_MAILT16_BODY="Many temp bans have piled up in the following networks (/16). The network was not banned;\nmanual review recommended:"
   M_MAILT16_SUBJ="%s suspicious network(s) (temp bans)"
   M_WL_LOADED="Whitelist loaded: %s ranges, %s rignore domains"
-  M_WL_SELF="server IP"
+  M_WL_SELF="server IP"; M_FOREVER="indefinitely"
   M_A_SELF="%s contains this server's own IP (%s); it can't be banned"
   M_WL_SKIP="SKIPPED %s: overlaps a whitelist entry (%s)"
   M_WL_SKIPD="SKIPPED %s: whitelisted (%s), already reported today"
@@ -606,14 +606,14 @@ else
   M_FIX_UDP="%s: added the missing UDP 443 line to the partial ban/exception (HTTP/3)"
   M_A_UNBANFAIL="%s could not be removed: %s"
   M_A_NOTFOUND="%s is not in csf.deny or the temp list (exact match)"
-  M_A_IGNORED="%s will be ignored until %s"
+  M_A_IGNORED="%s will be ignored until %s"; M_A_IGNORED_F="%s will be ignored until you stop it"
   M_A_UNIGNORED="%s is no longer ignored"
   M_A_NOTIGN="%s is not on the ignore list"
   M_S_TITLE="CSF Auto-Group %s — status"
   M_S_LAST="Last run"; M_S_NEVER="none yet"; M_S_RUNNING="running now"
   M_S_USAGE="Usage"; M_S_PERM="permanent"; M_S_TEMP="temp"
   M_S_REVIEW="Needs review (%s days)"; M_S_PENDING="Watched"
-  M_S_GROUPS="Active block bans"; M_S_IGNORED="Ignored"; M_S_RECENT="Recent actions"
+  M_S_GROUPS="Active range bans"; M_S_IGNORED="Ignored"; M_S_RECENT="Recent actions"
   M_S_NONE="none"; M_S_DAYSLEFT="%s days left"; M_S_TTL="temp ban %s left"
   M_L_HOST="Hostname"; M_L_FWD="forward-confirmed"; M_L_NOFWD="not forward-confirmed"
   M_L_OWNER="Owner"; M_L_PREFIX="Announced prefix"; M_L_REG="Registry"; M_L_DENY="csf.deny"
@@ -1886,13 +1886,17 @@ lock_busy() {    # başka biri kilidi tutuyor mu? (salt okunur modlar için)
 }
 
 # ── Ignore list ("yoksay"): "CIDR YYYY-MM-DD KİM" satırları ──────────────────
-ign_until() {    # CIDR → 0 = süresi dolmamış bir yoksayma var (IGN_UNTIL)
+IGN_FOREVER="9999-12-31"   # süresiz yoksayma: dosyada bu tarih durur (tarih karşılaştırması aynı kalır), panelde "süresiz" yazar
+ign_txt() {      # BİTİŞ → REPLY = "2026-11-12 tarihine kadar" metinlerinde kullanılacak tarih ya da "süresiz"
+    if [ "$1" = "$IGN_FOREVER" ]; then REPLY="$M_FOREVER"; else REPLY="$1"; fi
+}
+ign_until() {    # CIDR → 0 = süresi dolmamış bir yoksayma var (IGN_UNTIL; IGN_UNTIL_TXT panel/mail metni için)
     local c u b
-    IGN_UNTIL=""
+    IGN_UNTIL=""; IGN_UNTIL_TXT=""
     [ -r "$IGNORE_FILE" ] || return 1
     while IFS=' ' read -r c u b; do         # durum çıktısı IFS=, ile çağırır
         [ "$c" = "$1" ] || continue
-        if [[ ! "$u" < "$TODAY" ]]; then IGN_UNTIL="$u"; return 0; fi
+        if [[ ! "$u" < "$TODAY" ]]; then IGN_UNTIL="$u"; ign_txt "$u"; IGN_UNTIL_TXT="$REPLY"; return 0; fi
     done < "$IGNORE_FILE"
     return 1
 }
@@ -2915,8 +2919,9 @@ do_lookup() {
     local p24="${ip%.*}"
     line=$(grep -m1 -E "^${p24//./\\.} " "$SAYAC_FILE" 2>/dev/null)
     [ -n "$line" ] && pend="${line#* }"
-    if ign_until "${ip%.*}.0/24"; then ign="${ip%.*}.0/24 → $IGN_UNTIL"
-    elif ign_until "${ip%.*.*}.0.0/16"; then ign="${ip%.*.*}.0.0/16 → $IGN_UNTIL"; fi
+    if ign_until "$ip"; then ign="$ip → $IGN_UNTIL_TXT"
+    elif ign_until "${ip%.*}.0/24"; then ign="${ip%.*}.0/24 → $IGN_UNTIL_TXT"
+    elif ign_until "${ip%.*.*}.0.0/16"; then ign="${ip%.*.*}.0.0/16 → $IGN_UNTIL_TXT"; fi
 
     if [ "$JSON" = 1 ]; then
         local o="{\"ok\":true,\"ip\":\"$ip\"" k v
@@ -4140,12 +4145,13 @@ do_action() {    # NAME TARGET [DAYS]
                 ev manual_unignore "$t" "by=\"$AG_BY\""
                 act_out 0 "$(m "$M_A_UNIGNORED" "$t")"; return
             fi
-            [[ "$days" =~ ^[0-9]{1,3}$ ]] && [ "$days" -ge 1 ] && [ "$days" -le 365 ] || days=30
-            local until; until=$(date -d "+$days days" +%Y-%m-%d)
+            [[ "$days" =~ ^[0-9]{1,3}$ ]] && [ "$days" -le 365 ] || days=30
+            local until; if [ "$days" = 0 ]; then until="$IGN_FOREVER"; else until=$(date -d "+$days days" +%Y-%m-%d); fi   # 0 gün = süresiz
             { printf '%s\n' "$keep" | sed '/^$/d'; echo "$t $until $AG_BY"; } > "$IGNORE_FILE"
-            log "$(m "$M_A_LOG" "$AG_BY" "$(m "$M_A_IGNORED" "$t" "$until")")"
+            local itxt; if [ "$days" = 0 ]; then itxt=$(m "$M_A_IGNORED_F" "$t"); else itxt=$(m "$M_A_IGNORED" "$t" "$until"); fi
+            log "$(m "$M_A_LOG" "$AG_BY" "$itxt")"
             ev manual_ignore "$t" "by=\"$AG_BY\"" "until=\"$until\""
-            act_out 0 "$(m "$M_A_IGNORED" "$t" "$until")" ;;
+            act_out 0 "$itxt" ;;
         *)
             act_out 2 "$(m "$M_A_UNKNOWN" "$name")" ;;
     esac
@@ -5377,7 +5383,7 @@ for prefix in $(printf '%s\n' "${!count16[@]}" | sort -V); do
     if [ "${count16[$prefix]}" -ge "$THRESHOLD_16" ] && [ "$subnet_count" -ge 2 ]; then
         ip2int "$prefix.0.0"; lo=$REPLY
         if perm_covers "$lo" $((lo + 65535)); then logr "$(m "$M_TSKIP16" "$prefix")"; continue; fi
-        if ign_until "$prefix.0.0/16"; then logr "$(m "$M_IGN16" "$prefix" "$IGN_UNTIL")"; continue; fi
+        if ign_until "$prefix.0.0/16"; then logr "$(m "$M_IGN16" "$prefix" "$IGN_UNTIL_TXT")"; continue; fi
         np="${perm16[$prefix]:-0}"; nt="${tmp16[$prefix]:-0}"
         # ağa eklentinin kısmi banı konmuşsa ondan önceki tekiller o kararla ele alınmıştır: yalnız sonrakiler sayılır
         pe=0; pnote=""; pl=$(grep -F "|s=$prefix.0.0/16 # csf_autogroup:" "$DENY_FILE" | head -n 1)

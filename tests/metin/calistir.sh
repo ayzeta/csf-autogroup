@@ -17,6 +17,8 @@ YASAK=(
   "cloud list|rented-server list"
   "Other blocks|Added by hand"
   "To review|Needs review"
+  "Aktif blok ban|Aktif aralık ban"
+  "Active block ban|Active range ban"
 )
 # kullanıcıya görünen metinler: ag.js sözlüğündeki 'anahtar: "metin"' değerleri ve motorun M_* değişkenleri
 texts() {

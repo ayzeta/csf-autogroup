@@ -4,7 +4,7 @@
 //   node tests/metin/sozluk.js whm/assets/ag.js
 const fs = require('fs');
 const src = fs.readFileSync(process.argv[2], 'utf8');
-const ETIKET = ['ab_b', 'ab_i', 'ab_y', 'ab_s', 'ab_g', 'po', 'ev_warn16', 'ev_skip_wl', 'kind_perm', 'kind_temp', 'kind_promoted',
+const ETIKET = ['ab_b', 'ab_i', 'ab_y', 'ab_s', 'ab_g', 'po', 'rep_n', 'ev_warn16', 'ev_skip_wl', 'kind_perm', 'kind_temp', 'kind_promoted',
   'kind_manual', 'kind_partial', 'dnd_s', 'f_old'];
 const enAt = src.indexOf('\n    en: {');
 function val(seg, k) {

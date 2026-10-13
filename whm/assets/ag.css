@@ -191,10 +191,13 @@
 .ag-im-t th.ag-th-r, .ag-im-t td.ag-rg-n { text-align: right; font-variant-numeric: tabular-nums; }
 .ag-rg-sv td:first-child { width: 45%; }
 /* yoksayılanlar: aralık · bitiş · yoksayan · düğme */
-.ag-thead.ag-tr-i, .ag-tr.ag-tr-i { grid-template-columns: 176px minmax(0, 1fr) minmax(0, 1fr) 150px; }
+/* Yoksayılanlar (dar sütunda kart): 1) aralık ····· Yoksaymayı kaldır  2) bitiş · yoksayan */
+.ag-thead.ag-tr-i { grid-template-columns: minmax(0, 1fr) auto; }
 .ag-thead.ag-tr-i .ag-th { cursor: default; }
 .ag-thead.ag-tr-i .ag-th:hover { color: var(--ag-text-3); }
-.ag-tr-i .ag-td-until, .ag-tr-i .ag-td-by { font-size: 12.5px; color: var(--ag-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-tr.ag-tr-i { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "main btn" "until until"; row-gap: 4px; column-gap: 8px; }
+.ag-tr-i .ag-td-main { grid-area: main; } .ag-tr-i .ag-td-btn { grid-area: btn; }
+.ag-tr-i .ag-td-until { grid-area: until; font-size: 12.5px; color: var(--ag-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ag-ip > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ag-ip .ag-mono { color: var(--ag-accent); cursor: pointer; }
 .ag-ip .ag-mono:hover { text-decoration: underline; }
@@ -504,10 +507,7 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
   .ag-ip > :nth-child(3) { display: none; }
   .ag-ip > :nth-child(4) { grid-area: why; white-space: normal; font-size: 12px; line-height: 1.4; color: var(--ag-text-2); }
   .ag-ip.ag-ip-h, .ag-im-t thead { display: none; }   /* satırlar alt alta dizilince sütun başlığı yanıltır */
-  /* yoksayılanlar: 1) aralık ····· düğme  2) bitiş · yoksayan */
-  .ag-tbl > .ag-item > .ag-tr.ag-tr-i { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "main btn" "until by"; row-gap: 4px; column-gap: 8px; padding: 10px 10px 10px 16px; }
-  .ag-tr-i .ag-td-main { grid-area: main; } .ag-tr-i .ag-td-btn { grid-area: btn; }
-  .ag-tr-i .ag-td-until { grid-area: until; font-size: 12px; } .ag-tr-i .ag-td-by { grid-area: by; font-size: 12px; text-align: right; }
+  .ag-tbl > .ag-item > .ag-tr.ag-tr-i { padding: 10px 10px 10px 16px; }
   .ag-modal-b { padding-left: 22px; }
 }
 
@@ -1153,3 +1153,10 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 
 /* Dar ekranda seçenek sıraları (ör. Ayarlar → Bildirim kanalları) kartın sağından taşmasın: satır kırılır */
 @media (max-width: 760px) { .ag-chips { display: flex; flex-wrap: wrap; max-width: 100%; } }
+
+/* Deneme turu özeti: bölümler, madde listeleri, ham çıktı açılır bölümde */
+.ag-dry-s { margin-bottom: 12px; }
+.ag-dry-l { margin: 4px 0 0 18px; padding: 0; font-size: 13px; line-height: 1.5; }
+.ag-dry-l.bad li { color: var(--ag-bad, #b42318); }
+.ag-dry-raw summary { cursor: pointer; font-size: 12.5px; color: var(--ag-text-3); margin: 6px 0; }
+.ag-dry-raw .ag-out { margin-top: 6px; }

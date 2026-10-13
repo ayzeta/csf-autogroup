@@ -167,6 +167,12 @@ mcheck "yoksayma kaldırılınca satır geri gelir" "rvrow 151.80.7.9 | grep -q 
 mkl aaigngrp; printf '151.80.7.0/25 # müşteri ağı\n' >> "$A"; lfdb 3600 151.80.7.9; lfdb 3000 151.80.7.20; quiet --action ignore 151.80.7.0/25 10
 mcheck "izin aralığı (/25) yoksayılınca 'İzinli aralık' satırı düşer" "[ -z \"\$(rvrow 151.80.7.0/25)\" ]"
 mcheck "/7 gibi aralık yoksayma hedefi olarak reddedilir" "run --action ignore 128.0.0.0/7 10 2>&1 | grep -q 'Geçersiz hedef'"
+# süresiz yoksayma: 0 gün → dosyada 9999-12-31, durumda ignored kaydı; IP kartı "süresiz" yazar; kaldırılabilir
+mkl aaignf; printf '151.80.7.9 # müşteri\n' >> "$A"; lfdb 3600 151.80.7.9
+mcheck "süresiz yoksayma (0 gün) kabul edilir, mesajı 'siz kaldırana kadar'" "run --action ignore 151.80.7.9 0 2>&1 | grep -q 'siz kaldırana kadar yoksayılacak' && grep -q '^151.80.7.9 9999-12-31 ' '$R/var/lib/csf_autogroup/ignored'"
+mcheck "süresiz yoksayılan IP listede yok, Yoksayılanlar'da 9999-12-31 ile, IP kartında 'süresiz'" "[ -z \"\$(rvrow 151.80.7.9)\" ] && run --status --json 2>/dev/null | grep -q '\"cidr\":\"151.80.7.9\",\"until\":\"9999-12-31\"' && run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"ign\":\"151.80.7.9 → süresiz\"'"
+quiet --action unignore 151.80.7.9
+mcheck "süresiz yoksayma kaldırılınca satır geri gelir" "rvrow 151.80.7.9 | grep -q '\"type\":\"allow_ban\"'"
 mk paopen; quiet --action ban24 151.80.7 --mode svc --svc web
 for x in 1 2 3; do printf '%s\n' "151.80.7.$x # lfd: (sshd) Failed SSH login from 151.80.7.$x (FR/France/-): 5 in the last 3600 secs - $(LC_ALL=C date -d '+1 min' '+%a %b %d %H:%M:%S %Y')" >> "$D"; done
 mcheck "kısmi web banından sonra SSH'ye blok eşiği kadar saldırı → 'Kısmi yetmiyor'" "rvrow 151.80.7.0/24 | grep -q '\"type\":\"part_open\".*\"ssh\":3'"

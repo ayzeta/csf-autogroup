@@ -1,5 +1,50 @@
 # Changelog
 
+## 1.13.14 — 2026-10-13
+
+Eight small panel items from the review list of 1.13.11, closed together:
+
+- **Glossary:** entries for ModSecurity, Imunify360, run, dry run, reverse
+  DNS / forward check, Team Cymru, AbuseIPDB, *repeating* and the new *range
+  ban*; the text test now requires the *repeating* badge to be covered.
+- **Range card:** when a wider ban covers the range, "whole range banned"
+  was said three times (verdict, layer list, question); now only the verdict
+  says it. A service counts as closed by a rented-server list or a provider
+  port list only when its UDP side is closed too (web needs UDP 443, HTTP/3).
+- **Ban window:** cPanel ports are written as the real list (2077–2080, 2082,
+  2083, 2086, 2087, 2095, 2096) instead of "2077–2096", which is not what CSF
+  opens; when the range is already inside a wider ban the note says what to
+  do (no new ban needed; remove the covering ban to ban it on its own).
+- **Most blocked providers:** the bar explains itself (ranking weight, the
+  lighter part = ranges added by hand or another tool; on the other tabs the
+  count shown) and the provider-ban suggestion says when it appears (5+
+  block bans, not already banned).
+- **Measure impact:** "web logs not found" names the directories looked at
+  and the `DOMLOGS` setting for another location; a long measurement can be
+  cancelled (the wait closes, a late answer is ignored).
+- **"Active block bans" is now "Active range bans"** on the KPI and the card:
+  it counts /16 network bans, announced-range and partial bans as well, which
+  the old name hid. Glossary entry *Range ban*.
+- **Settings:** the dots in the section menu have tooltips (unsaved change /
+  newer version / missing tool / field error) and the Save bar names the
+  section that holds an error, since Save is disabled until it is fixed.
+- **Dry run:** the window opens with a summary — what the run would do (ban,
+  unban), notifications that would go out, problems, the per-round lines —
+  and the raw engine output under "Raw output".
+
+Also in this version:
+
+- **Ignore indefinitely.** The Ignore window offers "Indefinitely" next to 7,
+  30 and 90 days; such an entry stays until you stop it (the Ignored card
+  shows "no end date"; the IP card and the event say "indefinitely").
+- **Fix: "Stop ignoring" was invisible.** The Ignored card sits in the narrow
+  column of the Overview, and its four-column row pushed the button past the
+  card's edge, where it was clipped. The row is now two lines (range · Stop
+  ignoring / end date · who), and the browser test checks that the button is
+  inside the card. The IP card of an ignored address also offers Stop
+  ignoring.
+- Mails and the weekly summary use the new "Active range bans" name too.
+
 ## 1.13.13 — 2026-10-13
 
 - **Fix: the IP card failed with "abKind is not defined"** for an address in

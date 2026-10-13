@@ -102,7 +102,7 @@ switch ($a) {
         $args = ['--action', $name, $target];
         if ($name === 'ignore') {
             $days = (int) ($_POST['days'] ?? 30);
-            $args[] = (string) max(1, min(365, $days));
+            $args[] = (string) max(0, min(365, $days));   // 0 = süresiz
         }
         if (($_POST['force'] ?? '') === '1') {
             $args[] = '--force';
