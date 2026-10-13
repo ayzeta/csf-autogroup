@@ -309,7 +309,7 @@ each section:
   counters on every reload: the plugin reads them before its own reloads, and
   `csfpost.sh` puts the rule back afterwards. Its last attempt shows in the
   state tip.
-- **Records** — how long entries stay in *Needs review*, and the log file. The
+- **Running → records** — how long entries stay in *Needs review*, and the log file. The
   log is rotated by the system's logrotate (`/etc/logrotate.d/csf_autogroup`,
   written from these settings; default 1 MB, 5 compressed archives); where
   logrotate is missing, a log line limit is used instead. A run where nothing

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.13.19 — 2026-10-14
+
+- **Records merged into Running:** the review period and the log file settings
+  were a section of their own next to Running (pause, run frequency); they
+  are groups of the Running section now. Settings has six sections.
+- **Fix:** the "restart watch" window pointed to "Settings → Records" for the
+  watch period, which lives under Ban rules → Watching.
+
 ## 1.13.18 — 2026-10-14
 
 Settings, from a desktop screenshot:
