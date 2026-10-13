@@ -141,6 +141,11 @@ printf '%s\n' 'Oct 11 04:28:26 lin dovecot[570645]: imap-login: Login aborted: C
     'Oct 11 04:28:46 lin dovecot[570645]: pop3-login: Login aborted: Connection closed (auth failed, 1 attempts in 2 secs) (auth_failed): user=<info@site-a.example>, method=PLAIN, rip=203.0.113.10, lip=203.0.113.10, TLS, session=<b>' \
     'Oct 11 04:29:00 lin dovecot[570645]: imap-login: Login aborted: Connection closed (auth failed, 3 attempts in 18 secs) (auth_failed): user=<info>, method=PLAIN, rip=203.0.113.100, lip=203.0.113.10, TLS, session=<c>' > "$R/maillog"
 mcheck "kendi IP'si: dovecot günlüğündeki hesaplar deneme sayısıyla exim'inkilerle birleşir (3 + 1 + 1), kaynak dosyalar" "rvrow 203.0.113.10 | grep -q '\"acct\":\[{\"u\":\"info@site-c.example\",\"n\":3},{\"u\":\"info@site-a.example\",\"n\":2}\],\"acctf\":\"exim_mainlog, maillog\"'"
+# döndürülmüş günlük (exim_mainlog-YYYYMMDD.gz, pencere içinde): hesaplar oradan da okunur, kaynak adı asıl dosya
+mkl aaselfr; lfdl 600 "Failed SMTP AUTH login from 203.0.113.10 - ignored"
+printf 'SMTPAUTH_LOG = "%s"\n' "$R/exim_mainlog" >> "$R/etc/csf/csf.conf"; : > "$R/exim_mainlog"
+printf '%s\n' '2026-10-07 05:07:23 dovecot_login authenticator failed for H=(site-r.example) [203.0.113.10]:38634: 535 Incorrect authentication data (set_id=info@site-r.example)' > "$R/exim_mainlog-20261011"; gzip -f "$R/exim_mainlog-20261011"
+mcheck "kendi IP'si: döndürülmüş (gz) posta günlüğündeki hesap da listelenir, kaynak adı asıl dosya" "rvrow 203.0.113.10 | grep -q '\"acct\":\[{\"u\":\"info@site-r.example\",\"n\":1}\],\"acctf\":\"exim_mainlog\"'"
 mkl aaselfa; printf '203.0.113.10 # kendi\n' >> "$A"; lfdl 600 "Failed SMTP AUTH login from 203.0.113.10 - ignored"
 mcheck "kendi IP'si csf.allow'da da olsa önce 'sunucu IP'si' sayılır" "rvrow 203.0.113.10 | grep -q '\"wl\":\"sunucu IP.si: 203.0.113.10\".*\"full\":2'"
 # "*SSH login*" başarılı giriş bildirimi (izinli IP'den), saldırı değil: listeye girmez
@@ -176,6 +181,10 @@ mcheck "süresiz yoksayma kaldırılınca satır geri gelir" "rvrow 151.80.7.9 |
 mk paopen; quiet --action ban24 151.80.7 --mode svc --svc web
 for x in 1 2 3; do printf '%s\n' "151.80.7.$x # lfd: (sshd) Failed SSH login from 151.80.7.$x (FR/France/-): 5 in the last 3600 secs - $(LC_ALL=C date -d '+1 min' '+%a %b %d %H:%M:%S %Y')" >> "$D"; done
 mcheck "kısmi web banından sonra SSH'ye blok eşiği kadar saldırı → 'Kısmi yetmiyor'" "rvrow 151.80.7.0/24 | grep -q '\"type\":\"part_open\".*\"ssh\":3'"
+# İzlemeyi yeniden başlat: sayaç satırının tarihi bugün olur, olay yazılır; izlenmeyen blok reddedilir
+mk rewatch; printf '151.80.7 %s\n151.80.9 %s\n' "$(date -d '-10 days' +%F)" "$(date -d '-3 days' +%F)" >> "$C"
+mcheck "izlemeyi yeniden başlat: tarih bugün, öteki satır dokunulmaz, olay kaydı" "run --action rewatch 151.80.7 2>&1 | grep -q 'izleme süresi yeniden başladı' && grep -q \"^151.80.7 $(date +%F)\$\" '$C' && grep -q \"^151.80.9 $(date -d '-3 days' +%F)\$\" '$C' && grep -q '\"type\":\"manual_rewatch\"' '$R/var/lib/csf_autogroup/events.jsonl'"
+mcheck "izlenmeyen blok için 'izlenmiyor'" "run --action rewatch 151.80.8 2>&1 | grep -q 'izlenmiyor'"
 # Otomatik /24: tekiller csf -dr ile değil dosyadan silinir (csf -dr lfd'nin tekrar ban geçmişini de siler)
 R="$W/roots/b24auto"
 mcheck "otomatik /24 banı tekilleri dosyadan siler, csf -dr çağırmaz" "grep -q '^151.80.7.0/24 ' '$R/etc/csf/csf.deny' && ! grep -qE '^151\.80\.7\.[1-6] ' '$R/etc/csf/csf.deny' && ! grep -q 'csf -dr' '$R/csf_calls.log'"

@@ -253,9 +253,10 @@ full one.
 | Ban anyway | ban a whitelist-skipped `/24` (overrides the whitelist) |
 | Make permanent | make a watched `/24` permanent right away |
 | Stop watching | forget a watched `/24` (next attack counts as the first) |
+| Restart watch | start a watched `/24`'s watch period again from today (**⋯** in Watched and the IP card) |
 | Remove | lift a block ban (`do not delete` blocks too; `csf.deny` is backed up first) |
 | Remove old ones | on the *Old* filter: remove every block ban older than the old-block limit |
-| Ignore | hide an item from review for 7/30/90 days or indefinitely (stops `/16` warning emails too); undo under *Ignored* or from the IP card |
+| Ignore | hide an item from review for 7/30/90 days or indefinitely (stops `/16` warning emails too), from a To review row's **⋯** or the IP card; change the duration or undo under *Ignored*, undo from the IP card too |
 | IPs | a block's IPs and ban reasons, as recorded in the event log |
 | Dry run | show what a run would do; changes nothing, sends nothing |
 | Run now | run immediately instead of waiting for cron |

@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.13.15 — 2026-10-13
+
+- **Ignore from the IP card.** The card's Needs review line offers Ignore for
+  the row the address belongs to (and Stop ignoring when it is ignored).
+- **Change an ignore's duration** from the Ignored card's menu (7/30/90 days
+  or indefinitely) without stopping and re-adding it.
+- **Restart the watch** of a watched block from its menu and from the IP
+  card: the watch period starts again from today (event *Watch restarted*).
+- **Fix: the server's-own-IP row listed accounts from today's mail log only.**
+  Attempts from a few days ago sit in the rotated `exim_mainlog-YYYYMMDD.gz`
+  / `maillog-*`; the plugin now reads the rotated files inside the review
+  window too (the row names the base file, not each rotation).
+- **Fix: a temporary block ban could be reported as failed although CSF
+  placed it.** The check took any "failed" in csf's output as a refusal; a
+  Perl locale warning ("Setting locale failed") on the server triggered it.
+  The plugin now looks for the ban in CSF's temporary list first and only
+  treats csf's own "failed:" / "deny failed:" lines as refusals.
+- **Panel polish from the screen review:** the Ignored card's actions sit in
+  the row's ⋯ menu (two buttons did not fit the narrow column); the event
+  list shows ignore end dates in the panel's date format; on a phone a row
+  whose owner is unknown no longer shows a lone "—"; the Settings-only
+  wrapping of option rows no longer stacks the chart's 7/30-day switch.
+- **Phone layout (390 px), card by card:** the Ignored row fell under the
+  general row layout, which left its ⋯ button mid-row; it keeps its own
+  two-line layout now. In Watched, the remaining-days bar spans the row when
+  the owner is unknown instead of leaving the left half empty. In Most
+  blocked providers, the "Ban…" button drops under the text instead of
+  squeezing it.
+- **Change duration opens its own window:** titled for the change, showing
+  the current end date, with a "Change duration" button (it opened the
+  "ignore?" window). The IP card's Needs review line no longer repeats the
+  address when the row is the address itself.
+- **Settings wording:** Ban rules fields are *Permanent ban threshold*, *Temp
+  ban threshold* and *Suspicious network threshold* (the group heading
+  already says /24 or /16; the label repeated it). The Old bans help named
+  the card by its old name "Active block bans".
+- Browser test: IP-card ignore, change duration, restart watch, menu
+  visibility; status-table cases for restart watch and rotated mail logs.
+
 ## 1.13.14 — 2026-10-13
 
 Eight small panel items from the review list of 1.13.11, closed together:

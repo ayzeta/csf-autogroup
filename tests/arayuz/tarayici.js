@@ -56,6 +56,9 @@ async function layoutChecks(page, label, width) {
     await el.click(); await page.waitForTimeout(1800);
     const txt = await page.evaluate(() => { const d = document.querySelector('.ag-drawer'); return d ? d.innerText : ''; });
     check(`IP kartı açılıyor: ${r.cidr}`, errs.length === before && txt.length > 40, errs.slice(before).join(' | '));
+    // kartın Kontrol edilecekler satırı Yoksay (yoksayılmamışsa) ya da Yoksaymayı kaldır sunmalı
+    const cardIgn = await page.evaluate(() => !!document.querySelector('.ag-drawer [data-act="ignore"], .ag-drawer [data-act="unignore"]'));
+    check(`IP kartında Yoksay / kaldır var: ${r.cidr}`, cardIgn);
     await page.keyboard.press('Escape');   // üst katmanı (IP kartı) kapatır
     await page.waitForFunction(() => !document.querySelector('.ag-drawer'), null, { timeout: 5000 }).catch(function () {});
     await page.waitForTimeout(300);
@@ -75,19 +78,48 @@ async function layoutChecks(page, label, width) {
     check('Yoksay penceresi açıldı', await page.$('.ag-modal [data-m="ok"]') !== null);
     await page.click('.ag-modal [data-m="ok"]'); await page.waitForTimeout(6000);
     const gone = await page.$(`.ag-item[data-row="${c}"] .ag-tr-r`) === null;
-    const listed = await page.evaluate(c => Array.from(document.querySelectorAll('[data-act="unignore"]')).some(b => b.getAttribute('data-c') === c), c);
+    const listed = await page.$(`[data-act="menu"][data-key="im:${c}"]`) !== null;
     check(`Yoksay: ${c} listeden düştü ve Yoksayılanlar'da`, gone && listed, `düştü=${gone} listede=${listed}`);
-    // "Yoksaymayı kaldır" düğmesi gerçekten görünür mü (dar sütunda kartın dışına taşıp gizlenmiş olmasın)
-    const vis = await page.evaluate(c => { const b = Array.from(document.querySelectorAll('[data-act="unignore"]')).filter(b => b.getAttribute('data-c') === c)[0]; if (!b) return 'yok';
-      const r = b.getBoundingClientRect(), card = b.closest('.ag-card').getBoundingClientRect(); return r.width > 0 && r.right <= card.right + 1 && r.left >= card.left - 1 ? 'ok' : `düğme ${Math.round(r.left)}–${Math.round(r.right)}, kart ${Math.round(card.left)}–${Math.round(card.right)}`; }, c);
-    check('Yoksaymayı kaldır düğmesi kartın içinde görünür', vis === 'ok', vis);
+    // Yoksayılanlar satırının ⋯ menüsü: Süreyi değiştir ve Yoksaymayı kaldır, görünür (kartın / görünümün dışına taşmadan)
+    const untilOf = () => page.evaluate(c => { const r = document.querySelector(`.ag-item[data-row="${c}"] .ag-td-until`); return r ? r.textContent : ''; }, c);
+    const openIm = async () => { await page.click(`[data-act="menu"][data-key="im:${c}"]`); await page.waitForTimeout(400); };
     if (listed) {
-      await page.click(`[data-act="unignore"][data-c="${c}"]`); await page.waitForTimeout(600);
+      await openIm();
+      const vis = await page.evaluate(() => { const b = document.querySelector('.ag-menu [data-act="unignore"]'); if (!b) return 'yok';
+        const r = b.getBoundingClientRect(); return r.width > 0 && r.right <= window.innerWidth + 1 && r.left >= -1 ? 'ok' : `menü ${Math.round(r.left)}–${Math.round(r.right)}`; });
+      const acts = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-menu [data-act]')).map(b => b.getAttribute('data-act')));
+      check('Yoksayılanlar menüsü: Süreyi değiştir + Yoksaymayı kaldır, görünür', vis === 'ok' && acts.includes('ignore') && acts.includes('unignore'), vis + ' ' + acts.join(','));
+      // Süreyi değiştir: 30 gün → 7 gün; bitiş tarihi değişmeli
+      const before7 = await untilOf();
+      await page.click(`.ag-menu [data-act="ignore"][data-c="${c}"]`); await page.waitForTimeout(600);
+      const d7 = await page.$('.ag-modal #ag-days [data-d="7"]'); if (d7) await d7.click();
+      await page.click('.ag-modal [data-m="ok"]'); await page.waitForTimeout(6000);
+      const after7 = await untilOf();
+      check(`Süreyi değiştir: ${c} bitişi değişti`, after7 && after7 !== before7, `${before7} → ${after7}`);
+      await openIm();
+      await page.click(`.ag-menu [data-act="unignore"][data-c="${c}"]`); await page.waitForTimeout(600);
       const ok = await page.$('.ag-modal [data-m="ok"]'); if (ok) await ok.click();
       await page.waitForTimeout(6000);
       check(`Yoksaymayı kaldır: ${c} geri geldi`, await page.$(`.ag-item[data-row="${c}"] .ag-tr-r`) !== null);
     }
   }
+  // İzlenenler: satır menüsünde "İzlemeyi yeniden başlat" ve kalan süre yenilenir (izlenen blok yoksa atlanır)
+  const wrow = await page.$('.ag-item [data-act="menu"][data-key^="pm:"], .ag-item [data-act="menu"][data-key^="wm:"]');
+  const wmenu = await page.evaluate(() => { const b = Array.from(document.querySelectorAll('[data-act="menu"]')).filter(b => /^(pm|wm|w):/.test(b.getAttribute('data-key') || ''))[0]; return b ? b.getAttribute('data-key') : ''; });
+  if (wmenu) {
+    await page.click(`[data-act="menu"][data-key="${wmenu}"]`); await page.waitForTimeout(400);
+    const acts = await page.evaluate(k => Array.from(document.querySelectorAll(`[data-key="${k}"] ~ .ag-menu [data-act], .ag-menu-wrap .ag-menu [data-act]`)).map(b => b.getAttribute('data-act')), wmenu);
+    check('İzlenenler menüsünde izlemeyi yeniden başlat var', acts.includes('rewatch'), acts.join(','));
+    const rw = await page.$('.ag-menu [data-act="rewatch"]');
+    if (rw) {
+      const pfx = await rw.getAttribute('data-t');
+      await rw.click(); await page.waitForTimeout(500);
+      const ok = await page.$('.ag-modal [data-m="ok"]'); if (ok) await ok.click();
+      await page.waitForTimeout(6000);
+      const left = await page.evaluate(p => { const r = Array.from(document.querySelectorAll('.ag-item[data-row]')).filter(x => x.getAttribute('data-row') === p + '.0/24')[0]; return r ? r.innerText : ''; }, pfx);
+      check(`İzlemeyi yeniden başlat: ${pfx}.0/24 satırı duruyor`, left.length > 0, left.slice(0, 60).replace(/\n/g, ' '));
+    }
+  } else console.log('  (izlenen blok yok: izlemeyi yeniden başlat denenmedi)');
   // Deneme turu: gerçek motor kuru çalışır; pencere özetle açılmalı (ham çıktı açılır bölümde)
   const dryBtn = await page.$('[data-act="dry"]');
   if (dryBtn) {

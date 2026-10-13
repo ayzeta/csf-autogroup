@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.13.14"   # sürüm — başlangıç log satırında görünür
+VERSION="1.13.15"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -315,7 +315,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_IN_SUM="İçinde: %s blok banı, %s tekil (%s do not delete), %s geçici ban, %s izlenen blok, %s başka aralık"
   M_IN_WL="Beyaz liste çakışması: %s"
   M_L_PORT="Port sınırlı"; M_L_CCD="CC_DENY"; M_L_CCP="CC_DENY_PORTS"
-  M_A_FORGOT="%s izlemeden çıkarıldı"
+  M_A_FORGOT="%s izlemeden çıkarıldı"; M_A_REWATCHED="%s izleme süresi yeniden başladı"
   M_A_NOREC="%s izlenmiyor"
   M_A_UNBANNED="%s kaldırıldı"
   M_A_RESTORED="%s · %s kayıt geri yüklendi"
@@ -555,7 +555,7 @@ else
   M_IN_SUM="Inside: %s block bans, %s singles (%s do not delete), %s temp bans, %s watched blocks, %s other ranges"
   M_IN_WL="Whitelist overlap: %s"
   M_L_PORT="Port-limited"; M_L_CCD="CC_DENY"; M_L_CCP="CC_DENY_PORTS"
-  M_A_FORGOT="%s is no longer watched"
+  M_A_FORGOT="%s is no longer watched"; M_A_REWATCHED="%s watch period restarted"
   M_A_NOREC="%s is not watched"
   M_A_UNBANNED="%s removed"
   M_A_RESTORED="%s · %s entries restored"
@@ -950,8 +950,12 @@ cnt_add()        { [ "$DRY" = 1 ] || echo "$1" >> "$SAYAC_FILE"; }      # sayaç
 cnt_del_prefix() { [ "$DRY" = 1 ] || sed -i "/^${1//./\\.} /d" "$SAYAC_FILE"; }
 temp_added() {   # CIDR → csf -td gerçekten tuttu mu? Sayaç kaydı buna bağlı, kaybolmasın diye iki yoldan bakılır.
     [ "$DRY" = 1 ] && return 0
-    [[ "$CSF_OUT" =~ (not\ a\ valid|failed|servers\ addresses) ]] && return 1
+    # Önce kanıt: kayıt CSF'in geçici listesindeyse tuttu. Sonra csf'in kendi ret satırları ("deny failed: …", "failed: …");
+    # çıktıdaki her "failed" değil — perl'ün yerel ayar uyarısı ("Setting locale failed") da geçer (ölçüldü) ve banı
+    # başarısız saydırıyordu.
     [ -r "$CSF_VAR/csf.tempban" ] && grep -qF "|$1|" "$CSF_VAR/csf.tempban" && return 0
+    [[ "$CSF_OUT" =~ (^|$'\n')(deny\ )?failed: ]] && return 1
+    [[ "$CSF_OUT" =~ (not\ a\ valid|servers\ addresses) ]] && return 1
     [[ "$CSF_OUT" == *blocked* ]] && return 0      # "... blocked on port" / "already temporarily blocked"
     # dosya okunamıyorsa CSF'in kendi listesine sorulur (önce "tuttu" sayılıyordu: izleme kaydı yanlış yazılabilirdi)
     [ ! -r "$CSF_VAR/csf.tempban" ] && "$CSF_BIN" -t 2>/dev/null 9>&- | grep -qF " $1 "
@@ -4103,6 +4107,13 @@ do_action() {    # NAME TARGET [DAYS]
             log "$(m "$M_A_LOG" "$AG_BY" "$(m "$M_A_FORGOT" "$t.0/24")")"
             ev manual_forget "$t.0/24" "by=\"$AG_BY\""
             act_out 0 "$(m "$M_A_FORGOT" "$t.0/24")" ;;
+        rewatch)   # izleme süresi baştan: sayaç satırının tarihi bugün olur (kalan süre = SAYAC_RETENTION_DAYS)
+            [[ "$t" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || { act_out 2 "$(m "$M_BAD_TARGET" "$t")"; return; }
+            grep -qE "^${t//./\\.} " "$SAYAC_FILE" || { act_out 1 "$(m "$M_A_NOREC" "$t.0/24")"; return; }
+            cnt_del_prefix "$t"; cnt_add "$t $TODAY"
+            log "$(m "$M_A_LOG" "$AG_BY" "$(m "$M_A_REWATCHED" "$t.0/24")")"
+            ev manual_rewatch "$t.0/24" "by=\"$AG_BY\""
+            act_out 0 "$(m "$M_A_REWATCHED" "$t.0/24")" ;;
         unban)
             { [[ "$t" =~ $CIDR4_RE ]] && cidr_range "$t"; } || { act_out 2 "$(m "$M_BAD_TARGET" "$t")"; return; }
             line=$(deny_line "$t")
@@ -4357,17 +4368,24 @@ aa_acct() {      # IP → REPLY = posta günlüklerinde bu IP'den yanlış şifr
     # (dovecot). Satır biçimleri (sunucuda ölçüldü 2026-10-13):
     #   exim:    "… authenticator failed for (ad) [IP]:port: 535 Incorrect authentication data (set_id=hesap)"   → 1 deneme
     #   dovecot: "… (auth failed, N attempts in S secs) (auth_failed): user=<hesap>, method=PLAIN, rip=IP, lip=…" → N deneme
-    # Yalnız bugünkü dosyalar.
-    local f files="" rows
+    # Bugünkü dosyalar ve Kontrol edilecekler penceresi (REVIEW_DAYS) içinde döndürülmüş kopyaları (exim_mainlog-YYYYMMDD.gz
+    # gibi; zcat -f düz ve gz okur): 6 gün önceki deneme bugünkü dosyada değil. Kaynak adı olarak asıl dosyanın adı yazılır.
+    local f r files="" labels="" rows since dir base
     REPLY=""; ACCT_F=""
+    since=$(( $(date +%s) - REVIEW_DAYS * 86400 ))
     for f in $(conf_val SMTPAUTH_LOG) $(conf_val POP3D_LOG) $(conf_val IMAPD_LOG); do
-        [ -n "$f" ] && [ -r "$f" ] && [[ " $files " != *" $f "* ]] && files+=" $f"
+        [ -n "$f" ] && [ -r "$f" ] || continue
+        [[ " $files " == *" $f "* ]] && continue
+        dir=$(dirname "$f"); base=$(basename "$f"); files+=" $f"; labels+=" $base"
+        while IFS= read -r r; do [ -r "$r" ] && [[ " $files " != *" $r "* ]] && { files+=" $r"; labels+=" $base"; }; done \
+            < <(find "$dir" -maxdepth 1 -name "$base[-.]*" -newermt "@$since" 2>/dev/null | sort)
     done
     [ -n "$files" ] || return 1
-    rows=$(for f in $files; do
-        LC_ALL=C grep -F "[$1]" "$f" 2>/dev/null | LC_ALL=C grep -F 'authenticator failed for' | LC_ALL=C grep -o 'set_id=[^)]*' | cut -d= -f2- | awk -v s="${f##*/}" '{ print $0 "|1|" s }'
-        LC_ALL=C grep -F "rip=$1," "$f" 2>/dev/null | LC_ALL=C grep -F 'auth failed' |
-            awk -v s="${f##*/}" 'match($0, /user=<[^>]*>/) { u = substr($0, RSTART + 6, RLENGTH - 7); n = 1
+    set -f; local -a FL=($files) LB=($labels); set +f
+    rows=$(for i in "${!FL[@]}"; do f="${FL[i]}"
+        zcat -f "$f" 2>/dev/null | LC_ALL=C grep -F "[$1]" | LC_ALL=C grep -F 'authenticator failed for' | LC_ALL=C grep -o 'set_id=[^)]*' | cut -d= -f2- | awk -v s="${LB[i]}" '{ print $0 "|1|" s }'
+        zcat -f "$f" 2>/dev/null | LC_ALL=C grep -F "rip=$1," | LC_ALL=C grep -F 'auth failed' |
+            awk -v s="${LB[i]}" 'match($0, /user=<[^>]*>/) { u = substr($0, RSTART + 6, RLENGTH - 7); n = 1
                 if (match($0, /auth failed, [0-9]+ attempts/)) n = substr($0, RSTART + 13, RLENGTH - 22) + 0
                 print u "|" n "|" s }'
     done)

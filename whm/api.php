@@ -89,6 +89,7 @@ switch ($a) {
         $target = trim((string) ($_POST['target'] ?? ''));
         $re = [
             'ban16' => AG_RE_16, 'ban24' => AG_RE_24, 'banpfx' => '/^([0-9]{1,3}\.){3}[0-9]{1,3}\/(1[7-9]|2[0-3])$/', 'forget' => AG_RE_24,
+            'rewatch' => AG_RE_24,
             'unban' => AG_RE_CIDR, 'ignore' => AG_RE_CIDR, 'unignore' => AG_RE_CIDR,
             'expire' => '/^[0-9]{2,4}$/',          // hedef: arayüzün gördüğü "eski" gün sayısı
         ];
