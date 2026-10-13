@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.13.18 — 2026-10-14
+
+Settings, from a desktop screenshot:
+
+- **Number fields** have − / + buttons and are narrow (they were 120 px wide
+  text boxes relying on the browser's tiny spin arrows). The buttons step
+  within the field's limits and run the same validation as typing.
+- **Right column aligned:** the Weekly digest rows (on/off and the day) were
+  left-aligned inside the column while every other control sat at the right
+  edge; they align right now (left on a phone, like the rest).
+- **Old bans moved into Ban rules** as a group of its own: three settings did
+  not need a section. Texts that pointed to "Settings → Old bans" now say
+  "Settings → Ban rules → Old bans".
+- **Fix: windows (Glossary, confirmations) ran past the screen on a phone**,
+  hiding the title and the Close button: the height limit was tied to the
+  viewport unit, which on phones is the largest viewport with the browser
+  bars hidden. The window now fits the visible area; its body scrolls.
+
 ## 1.13.17 — 2026-10-14
 
 - **History rows on a phone, tighter:** 1.13.16 moved the time to its own

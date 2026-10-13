@@ -53,7 +53,36 @@ async function layoutChecks(page, label, width) {
       }
     }
   }
+  // kısa telefon ekranı (tarayıcı çubukları açıkken): Terimler penceresi başlığı ve Kapat düğmesiyle görünüm içinde kalmalı
+  await page.setViewportSize({ width: 390, height: 560 });
+  await page.click('.ag-tabs [data-tab="overview"]'); await page.waitForTimeout(600);
+  {
+    const b = await page.$('[data-act="terms"]');
+    if (b) {
+      await b.click(); await page.waitForTimeout(600);
+      const r = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); if (!m) return null; const h = m.querySelector('.ag-modal-h'), f = m.querySelector('.ag-modal-f');
+        const R = e => e ? e.getBoundingClientRect() : null, mh = R(h), mf = R(f); return { ok: !!(mh && mf) && mh.top >= 0 && mf.bottom <= window.innerHeight, head: mh && Math.round(mh.top), foot: mf && Math.round(mf.bottom), vh: window.innerHeight }; });
+      check('390×560: Terimler penceresi başlık ve Kapat ile görünüm içinde', !!r && r.ok, JSON.stringify(r));
+      await page.keyboard.press('Escape'); await page.waitForTimeout(300);
+    }
+  }
+  // Ayarlar: sayı kutusunun + / − düğmesi bir adım atar (kaydedilmez; geri alınır)
   await page.setViewportSize({ width: 1280, height: 900 });
+  await page.click('.ag-tabs [data-tab="settings"]'); await page.waitForTimeout(900);
+  {
+    const nav = await page.$('.ag-setnav [data-s="thr"]'); if (nav) { await nav.click(); await page.waitForTimeout(500); }
+    const inp = await page.$('#ag-f-THRESHOLD_24');
+    if (inp) {
+      const v0 = +(await inp.inputValue());
+      await page.click('[data-act="numstep"][data-k="THRESHOLD_24"][data-d="1"]'); await page.waitForTimeout(200);
+      const v1 = +(await page.inputValue('#ag-f-THRESHOLD_24'));
+      await page.click('[data-act="numstep"][data-k="THRESHOLD_24"][data-d="-1"]'); await page.waitForTimeout(200);
+      const v2 = +(await page.inputValue('#ag-f-THRESHOLD_24'));
+      check('Ayarlar: sayı kutusu + / − bir adım atar', v1 === v0 + 1 && v2 === v0, `${v0} → ${v1} → ${v2}`);
+      const dirty = await page.$('.ag-savebar, [data-act="cfgsave"]');
+      check('Ayarlar: + sonra − ile taslak temiz (kaydet çubuğu yok)', !dirty || !(await dirty.isVisible()), '');
+    } else check('Ayarlar: sayı kutusu var', false, '#ag-f-THRESHOLD_24 yok');
+  }
   await page.click('.ag-tabs [data-tab="overview"]'); await page.waitForTimeout(900);
   // Terimler penceresi
   const terms = await page.$('[data-act="terms"]');

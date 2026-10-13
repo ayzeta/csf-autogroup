@@ -287,7 +287,9 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-x svg { width: 18px; height: 18px; }
 
 .ag-modal-wrap { position: fixed; inset: 0; z-index: 99992; display: flex; align-items: center; justify-content: center; padding: 20px; }
-.ag-modal { background: #fff; border-radius: 14px; box-shadow: var(--ag-shadow-lg); width: 480px; max-width: 100%; max-height: calc(100vh - 40px); display: flex; flex-direction: column; animation: ag-pop .16s cubic-bezier(.2, .8, .2, 1); color: var(--ag-text); }
+/* yükseklik sınırı sarmalayıcıya göre (%): telefonda 100vh tarayıcı çubukları gizliyken ölçülen en büyük görünüm olduğundan
+   pencere görünen alandan taşıyor, başlık ve Kapat kesiliyordu; sarmalayıcı (fixed, inset 0) her zaman görünen alan kadar */
+.ag-modal { background: #fff; border-radius: 14px; box-shadow: var(--ag-shadow-lg); width: 480px; max-width: 100%; max-height: 100%; display: flex; flex-direction: column; animation: ag-pop .16s cubic-bezier(.2, .8, .2, 1); color: var(--ag-text); }
 .ag-modal.wide { width: 860px; }
 @keyframes ag-pop { from { transform: scale(.97); opacity: 0; } }
 .ag-modal-h { padding: 20px 22px 6px; display: flex; gap: 12px; align-items: flex-start; }
@@ -1178,3 +1180,14 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 @media (max-width: 760px) { .ag-own-none { display: none; } }
 /* sağlayıcı satırı telefonda: Banla düğmesi metni sıkıştırmasın, yer kalmayınca alt satıra sağa geçsin */
 @media (max-width: 760px) { .ag-asn-r { flex-wrap: wrap; } .ag-asn-r .ag-asn-m { flex: 1 1 220px; } .ag-asn-r .ag-asn-act { margin-left: auto; } }
+
+/* ── Ayarlar: sayı kutusu − / + düğmeli ve dar; haftalık özet yığını sağa yaslı ── */
+.ag-numwrap { display: inline-flex; align-items: stretch; height: 32px; border: 1px solid var(--ag-line); border-radius: var(--ag-radius-sm); background: #fff; overflow: hidden; }
+.ag-numwrap:focus-within { border-color: #a5b4fc; box-shadow: 0 0 0 3px var(--ag-accent-soft); }
+.ag-numbtn { width: 30px; border: 0; padding: 0; background: var(--ag-neutral-soft); color: var(--ag-text-2); font: inherit; font-size: 16px; line-height: 1; cursor: pointer; }
+.ag-numbtn:hover { background: var(--ag-line-soft); color: var(--ag-text); }
+.ag-numwrap .ag-input.ag-num { width: 60px; height: 30px; border: 0; border-radius: 0; box-shadow: none; text-align: center; padding: 0 4px; -moz-appearance: textfield; appearance: textfield; }
+.ag-numwrap .ag-num::-webkit-outer-spin-button, .ag-numwrap .ag-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.ag-field.bad .ag-numwrap { border-color: #f87171; box-shadow: 0 0 0 3px var(--ag-bad-soft); }
+.ag-fstack { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+@media (max-width: 760px) { .ag-fstack { align-items: flex-start; } }

@@ -297,7 +297,7 @@ each section:
   again and after how many failed days it is reported; how old CSF's ASN data
   may get; how often Imunify360's list is read (default 60 minutes). The
   Providers cards link here.
-- **Old bans** — old-block limit (default 365 days), how recent an attempt
+- **Ban rules → Old bans** — old-block limit (default 365 days), how recent an attempt
   keeps a block from being old (default 30 days), and whether old block bans
   are removed automatically (default off; manual bans are never touched).
   Old-block removal keeps blocks marked "do not delete" and blocks still being
