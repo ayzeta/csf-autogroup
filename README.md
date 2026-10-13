@@ -135,7 +135,10 @@ settings, with no prompts. `config.env` is left untouched.
   permanent + `do not delete`. Sorted by days left; **⋯ → IPs** shows the IPs
   and reasons behind the temp block ban.
 - **History** (its own tab) — every ban, promotion, skip, warning and manual
-  action, back to the start of the event log: the latest 300 load first and
+  action, and once a day the review list's findings that are otherwise
+  recomputed from the logs (violations from allowed IPs, open services), so
+  they stay after the review row is gone; back to the start of the event log:
+  the latest 300 load first and
   **Show more** pages further back. Work from before the event log existed is
   filled in from the log. Click an address to open its IP card, or a range
   (/16, /24) to open its range card: whether the range itself is banned, which

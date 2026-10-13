@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.14.1"   # sürüm — başlangıç log satırında görünür
+VERSION="1.14.2"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -236,6 +236,8 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_WARN16_B="%s.0.0/16 -> %s IP (%s kalıcı, %s geçici), %s farklı bloktan"
   M_SKIP16="ATLANDI şüpheli ağ: %s.0.0/16 bugün zaten bildirildi"
   M_16_DONE="Şüpheli ağ turu bitti. %s bildirim."
+  M_AVIOL="İzinli IP'den ihlal (Geçmiş'e yazıldı): %s → %s, son 24 saatte %s kez"
+  M_POPEN="Açık servis (Geçmiş'e yazıldı): %s kısmi banından sonra açık kalan servislere %s ihlal"
   M_MAIL16_BODY="Aşağıdaki ağlarda (/16) birçok bloktan tekil ban (kalıcı ve geçici) birikti. Ağ banlanmadı;\nelle bakmanız önerilir:"
   M_MAIL16_SUBJ="%s şüpheli ağ"
   M_TCLEAN="Temizlendi: %s (kalıcı ban kapsamında)"
@@ -476,6 +478,8 @@ else
   M_WARN16_B="%s.0.0/16 -> %s IPs (%s permanent, %s temp) across %s distinct blocks"
   M_SKIP16="SKIPPED suspicious network: %s.0.0/16 already reported today"
   M_16_DONE="Suspicious network pass done. %s report(s)."
+  M_AVIOL="Violation from allowed IP (recorded in History): %s → %s, %s times in the last 24 hours"
+  M_POPEN="Open service (recorded in History): %s violations on the services the partial ban on %s leaves open"
   M_MAIL16_BODY="Single bans (permanent and temp) have piled up across several blocks of the following networks (/16). The network was not banned;\nmanual review recommended:"
   M_MAIL16_SUBJ="%s suspicious network(s)"
   M_TCLEAN="Cleaned: %s (covered by a permanent ban)"
@@ -987,6 +991,65 @@ ev() {           # TYPE CIDR [anahtar=HAZIR_JSON ...]
     shift 2
     for kv in "$@"; do line+=",\"${kv%%=*}\":${kv#*=}"; done
     printf '%s}\n' "$line" >> "$EVENTS_FILE" 2>/dev/null
+}
+# ── İzinli IP'den ihlal: Geçmiş'e kalıcı kayıt ───────────────────────────────────────────────────────
+# Kontrol edilecekler'deki izinli / yoksayılan / sunucunun kendi IP'si satırları her turda lfd günlüğünden yeniden
+# hesaplanır ve kontrol süresi (REVIEW_DAYS) bitince kaybolur. Burada her IP için günde bir olay (allow_viol) yazılır:
+# hangi servise, son 24 saatte kaç kez, tür (b ban işlemiyor / i lfd yoksaydı / y yoksayılıyor / s sunucu IP'si),
+# izin ya da yoksayma kaynağı, lfd'nin son sebebi. Deneme turu yazmaz. Gün damgası allowviol.seen dosyasında.
+allow_viol_events() {
+    [ -n "$LFD_LOG" ] && [ "$DRY" != 1 ] || return 0
+    local seenf="$(dirname "$SAYAC_FILE")/allowviol.seen" i ip k src kind sj rj
+    local -a new=(); local -A SEEN=(); local -A CLSM=()
+    [ -r "$seenf" ] && while read -r ip k; do [ "$k" = "$TODAY" ] && SEEN[$ip]=1; done < "$seenf"
+    allow_atk_load $(( $(date +%s) - 86400 ))          # son 24 saat: olay günde bir, sayı o güne ait
+    cls_map < <(for i in "${!AA_IP[@]}"; do printf 'av%s|%s\n' "$i" "${AA_R[i]}"; done)
+    for i in "${!AA_IP[@]}"; do
+        ip="${AA_IP[i]}"; [ -n "${SEEN[$ip]}" ] && continue
+        if [ "${AA_F[i]:-0}" = 2 ]; then kind=s; elif [ "${AA_K[i]}" = b ]; then kind=b; elif [ "${AA_F[i]:-0}" = 1 ]; then kind=i; else kind=y; fi
+        src=""; [ "${AA_W[i]}" -ge 0 ] && src="${WL_TXT[${AA_W[i]}]}"; [ -n "$src" ] || src="${AA_S[i]}"
+        jstr "$src"; sj="$REPLY"; jstr "${AA_R[i]}"; rj="$REPLY"
+        ev allow_viol "$ip" "svc=\"${CLSM[av$i]:-other}\"" "n=${AA_N[i]}" "kind=\"$kind\"" "src=$sj" "why=$rj"
+        log "$(m "$M_AVIOL" "$ip" "${CLSM[av$i]:-other}" "${AA_N[i]}")"
+        new+=("$ip")
+    done
+    { for ip in "${!SEEN[@]}"; do printf '%s %s\n' "$ip" "$TODAY"; done; for ip in "${new[@]}"; do printf '%s %s\n' "$ip" "$TODAY"; done; } > "$seenf" 2>/dev/null
+}
+pb_load() {      # eklentinin kısmi banları (csf.deny gelişmiş satırları; bölünmüş olanlar tek kayıt) → PB_P portlar, PB_S servis,
+    local pl re_d='- ([A-Z][a-z]{2} [A-Z][a-z]{2} +[0-9]{1,2} [0-9:]{8} [0-9]{4})[[:space:]]*$'   # PB_X ek portlar, PB_D tarih
+    declare -gA PB_P=() PB_S=() PB_D=() PB_X=()
+    while IFS= read -r pl; do
+        adv_parse "$pl" || continue
+        PB_P[$ADV_CIDR]+="${PB_P[$ADV_CIDR]:+,}$ADV_PORTS"
+        [[ "$pl" =~ $RE_SV ]] && PB_S[$ADV_CIDR]="${BASH_REMATCH[1]}"
+        [[ "$pl" =~ $RE_PO ]] && PB_X[$ADV_CIDR]="${BASH_REMATCH[1]}"
+        [[ "$pl" =~ $re_d ]] && PB_D[$ADV_CIDR]="${BASH_REMATCH[1]}"
+    done < <(grep -F '# csf_autogroup:' "$DENY_FILE" 2>/dev/null | grep -F '|')
+}
+# Açık servis: kısmi ban yalnız seçilen servisleri kapatıyor, bandan sonra açık kalan servislere blok (/24) ya da ağ eşiği kadar
+# ihlal geldi. Kontrol edilecekler'deki satır (part_open) da her turda yeniden hesaplanır; burada aralık başına günde bir olay.
+part_open_events() {
+    [ "$DRY" != 1 ] || return 0
+    local seenf="$(dirname "$SAYAC_FILE")/partopen.seen" c k pa aan aat ps
+    local -a new=(); local -A SEEN=()
+    [ -r "$seenf" ] && while read -r c k; do [ "$k" = "$TODAY" ] && SEEN[$c]=1; done < "$seenf"
+    pb_load
+    for c in "${!PB_P[@]}"; do
+        [ -n "${SEEN[$c]}" ] && continue
+        pa=0; [ -n "${PB_D[$c]}" ] && pa=$(LC_ALL=C date -d "${PB_D[$c]}" +%s 2>/dev/null || echo 0)
+        { [ "$pa" -gt 0 ] && cidr_range "$c"; } || continue
+        # tekiller doğrudan csf.deny'den (turda SINGLE_NOTE yok; parse_deny turun blok sayaçlarını ikinci kez artırırdı)
+        attack_json "$R_LO" "$R_HI" "$pa" "${PB_S[$c]}" < <(
+            awk '$1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ { print $1 "|" substr($0, length($1) + 1) }' "$DENY_FILE" 2>/dev/null
+            [ -r "$CSF_VAR/csf.tempban" ] && awk -F'|' '$2 !~ /\// { print $2 "|" $6 "|e:" $1 }' "$CSF_VAR/csf.tempban")
+        ps="$REPLY"; aan=$(grep -oE ':[0-9]+' <<< "$ps" | tr -d ':' | awk '{ s += $1 } END { print s + 0 }')
+        aat=$THRESHOLD_16; [ "${c#*/}" -ge 24 ] && aat=$THRESHOLD_24
+        [ "$aan" -ge "$aat" ] || continue
+        ign_until "$c" && continue
+        ev part_open "$c" "svc=\"${PB_S[$c]}\"" "extra=\"${PB_X[$c]}\"" "since=$ps" "n=$aan"
+        log "$(m "$M_POPEN" "$c" "$aan")"; new+=("$c")
+    done
+    { for c in "${!SEEN[@]}"; do printf '%s %s\n' "$c" "$TODAY"; done; for c in "${new[@]}"; do printf '%s %s\n' "$c" "$TODAY"; done; } > "$seenf" 2>/dev/null
 }
 # ── HTML mail ───────────────────────────────────────────────────────────────
 # Bütün mailler HTML + düz metin (multipart/alternative, UTF-8) olarak sendmail'e verilir; HTML
@@ -2017,15 +2080,9 @@ do_status() {
     wide_load
     prof wide_load
     # eklentinin kısmi banları (gelişmiş satırlar; bölünmüş olanlar tek kayıt) ve tam banların izin istisnaları
-    local -A PB_P=() PB_S=() PB_D=() PB_X=() EXC_S=() EXC_X=()
+    pb_load
+    local -A EXC_S=() EXC_X=()
     local pl re_ex='exception for ([0-9./]+) \[svc=([a-z,]*)(;ports=([0-9,-]+))?\]'
-    while IFS= read -r pl; do
-        adv_parse "$pl" || continue
-        PB_P[$ADV_CIDR]+="${PB_P[$ADV_CIDR]:+,}$ADV_PORTS"
-        [[ "$pl" =~ $RE_SV ]] && PB_S[$ADV_CIDR]="${BASH_REMATCH[1]}"
-        [[ "$pl" =~ $RE_PO ]] && PB_X[$ADV_CIDR]="${BASH_REMATCH[1]}"
-        [[ "$pl" =~ $re_d ]] && PB_D[$ADV_CIDR]="${BASH_REMATCH[1]}"
-    done < <(grep -F '# csf_autogroup:' "$DENY_FILE" 2>/dev/null | grep -F '|')
     while IFS= read -r pl; do
         [[ "$pl" =~ $re_ex ]] && { EXC_S[${BASH_REMATCH[1]}]="${BASH_REMATCH[2]}"; EXC_X[${BASH_REMATCH[1]}]="${BASH_REMATCH[4]}"; }
     done < <(grep -F 'csf_autogroup: exception for' "$CSF_DIR/csf.allow" 2>/dev/null)
@@ -5469,6 +5526,10 @@ if [ "$warn16" -gt 0 ]; then
     mail_add "$(m "$M_MAIL16_SUBJ" "$warn16")" "$(printf '%b' "$(m "$M_MAIL16_BODY")")$NL$NL$warn_body"
 fi
 logr "$(m "$M_16_DONE" "$warn16")"
+
+# ── Kontrol edilecekler'in kalıcı kaydı: izinli IP'den ihlal (IP başına günde bir), açık servis (aralık başına günde bir) ──
+allow_viol_events
+part_open_events
 
 # ── Whitelist skips: one email per run (each block once per day) ────────────
 if [ "$wl_skipped" -gt 0 ]; then

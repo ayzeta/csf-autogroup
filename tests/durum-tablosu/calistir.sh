@@ -9,7 +9,7 @@
 #
 # Senaryolar: ağ 151.80.0.0/16, blok 151.80.7.0/24, IP 151.80.7.9 (taklit DNS'te AS16276, FR).
 H="$(cd "$(dirname "$0")" && pwd)"; REPO="$(cd "$H/../.." && pwd)"
-W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
+W="$(mktemp -d)"; trap '[ -n "${AG_KEEP:-}" ] && echo "kökler duruyor: $W" || rm -rf "$W"' EXIT   # AG_KEEP=1: inceleme için kökler silinmez
 mkdir -p "$W/out" "$W/bin"; cp "$H"/bin/* "$W/bin/"; chmod +x "$W"/bin/*
 wp() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi; }
 NOW=$(date +%s); DT=$(LC_ALL=C date '+%a %b %d %H:%M:%S %Y')
@@ -24,7 +24,7 @@ mk() {   # ad → temiz kök: boş listeler, sınırlar, taklit araçlar
         "CSF_VAR=$R/var/lib/csf" "LOG_FILE=$R/autogroup.log" "SAYAC_FILE=$C" "IMUNIFY_BIN=$W/bin/imunify360-agent" > "$R/app/config.env"
 }
 run() { env SIM_ROOT="$R" PATH="$W/bin:/usr/bin:/bin" AG_BY=root bash "$R/app/csf_autogroup.sh" "$@"; }
-single() { printf '%s\n' "$1 # lfd: ($2) Failed login from $1 (FR/France/-): 5 in the last 3600 secs - $DT" >> "$D"; }
+single() { printf '%s\n' "$1 # lfd: ($2) Failed login from $1 (FR/France/-): 5 in the last 3600 secs - ${3:-$DT}" >> "$D"; }   # 3. parametre: tarih
 dump() {
     run --status --json > "$W/out/$1.status.json" 2>/dev/null
     run --lookup 151.80.7.9 --json > "$W/out/$1.lookup.json" 2>/dev/null
@@ -111,6 +111,15 @@ mkl aai;  printf '151.80.7.9 # müşteri\n' >> "$A"; for x in 1 2 3; do lfdi $((
 mcheck "IGNORE_ALLOW açıkken izinli IP yoksayıldı → 'lfd yoksaydı', 3 kez, tam izin" "rvrow 151.80.7.9 | grep -q '\"bk\":\"i\",\"cnt\":3,\"full\":1'"
 mkl aay;  printf '151.80.7.9\n' >> "$R/etc/csf/csf.ignore"; lfdi 600 151.80.7.9
 mcheck "csf.ignore IP'si yoksayıldı → 'Yoksayılıyor' (tam izin değil: elle ban işler)" "rvrow 151.80.7.9 | grep -q '\"bk\":\"i\",\"cnt\":1,\"full\":0'"
+# Geçmiş'e kalıcı kayıt: tur, izinli IP'den ihlali IP başına günde bir olay olarak yazar (ikinci tur tekrar yazmaz)
+mkl aaev; printf '151.80.7.9 # müşteri\n' >> "$A"; lfdb 3600 151.80.7.9; quiet; quiet
+mcheck "izinli IP'den ihlal: tur Geçmiş'e bir olay yazar (ssh, ban işlemiyor, 1 kez); ikinci tur tekrarlamaz" "[ \$(grep -c '\"type\":\"allow_viol\",\"cidr\":\"151.80.7.9\",\"svc\":\"ssh\",\"n\":1,\"kind\":\"b\"' '$R/var/lib/csf_autogroup/events.jsonl') = 1 ]"
+# web kısmi banından sonra 2 kalıcı + 1 geçici SSH tekili (hiçbir eşik tek başına dolmaz, blok banlanmaz): açık servis
+mk poev; quiet --action ban24 151.80.7 --mode svc --svc web; DT2=$(LC_ALL=C date -d '+2 min' '+%a %b %d %H:%M:%S %Y'); for x in 1 2; do single 151.80.7.$x sshd "$DT2"; done
+printf '%s|151.80.7.3||in|3600|lfd: (sshd) Failed SSH login from 151.80.7.3\n' "$(( $(date +%s) + 5 ))" >> "$T"; quiet; quiet
+mcheck "açık servis: tur Geçmiş'e bir olay yazar (web kısmi banından sonra 3 SSH ihlali); ikinci tur tekrarlamaz" "[ \$(grep -c '\"type\":\"part_open\",\"cidr\":\"151.80.7.0/24\",\"svc\":\"web\".*\"n\":3' '$R/var/lib/csf_autogroup/events.jsonl') = 1 ]"
+mkl aaevd; lfdb 3600 151.80.7.9; quiet
+mcheck "izinsiz IP'nin banı işliyor: Geçmiş'e izinli ihlal olayı yazılmaz" "! grep -q '\"type\":\"allow_viol\"' '$R/var/lib/csf_autogroup/events.jsonl'"
 mkl aano; lfdb 3600 151.80.7.9
 mcheck "izinsiz IP banlandı → ban işliyor, listede yok" "[ -z \"\$(rvrow 151.80.7.9)\" ]"
 mkl aaport; printf 'tcp|in|d=22|s=151.80.7.9 # müşteri yalnız SSH\n' >> "$A"; lfdb 3600 151.80.7.9

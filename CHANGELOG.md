@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.14.2 — 2026-10-14
+
+- **History keeps the review list's findings.** Rows for violations from
+  allowed, ignored or server-own addresses and for open services (a partial
+  ban whose open services keep taking violations) were recomputed from the
+  logs on every run and vanished after the review period; nothing was
+  recorded. Each run now writes them to History once a day: *Violation from
+  allowed IP* (kind, service, count in the last 24 hours, the allow entry,
+  lfd's last reason) per address, *Open service* (closed services, count
+  since the ban) per range. History has filters for both; the IP card shows
+  them. A dry run writes nothing.
+- **IP card:** the Needs review line now carries the same data as the table
+  row (the mail accounts tried from the server's own address, lfd's last
+  reason, the count in the review period); it gave only the short sentence.
+
 ## 1.14.1 — 2026-10-14
 
 - **Settings: one card per group.** Each section stacked its groups in a
