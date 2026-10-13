@@ -98,6 +98,10 @@ setc TESTING 0; setc LF_IPSET 1
 setc TCP_IN 1:65535; setc TCP_OUT 1:65535; setc UDP_IN 1:65535; setc UDP_OUT 1:65535   # oturumun kendi bağlantıları kesilmesin
 setc IPV6 0
 setc LF_DIRWATCH 0; setc LF_INTEGRITY 0                                                 # kapsayıcıda yavaş ve gereksiz
+# Senaryo testi lfd'nin SSH banını geçici listede bekler. LF_SSHD_PERM=1 (paket varsayılanı) ile lfd kalıcı ban için
+# "csf -d" çağırır; CSF izin listesindeki IP'yi reddeder ("deny failed: … is in the allow file", 16.33'te ölçüldü) ve
+# "izinli saldırgan" senaryoları ban göremez. Geçici ban lfd'nin kendi kuralıyla konur.
+setc LF_SSHD_PERM 0
 # İnternete vekil üzerinden çıkan oturum: CSF'in indirmeleri (ülke/ASN verisi, sağlayıcı aralıkları) de vekilden geçsin
 [ -n "${HTTPS_PROXY:-${https_proxy:-}}" ] && setc URLPROXY "${HTTPS_PROXY:-${https_proxy:-}}"
 for b in IPTABLES:iptables IP6TABLES:ip6tables IPSET:ipset IP:ip MODPROBE:modprobe SENDMAIL:sendmail HOST:host; do
@@ -112,5 +116,25 @@ pkill -f 'lfd - ' 2>/dev/null; pkill -f '/usr/sbin/lfd' 2>/dev/null; sleep 1
 sleep 3
 pgrep -f 'lfd - ' >/dev/null || die "lfd başlamadı (/var/log/lfd.log)"
 iptables -L LOCALINPUT -n >/dev/null 2>&1 || die "CSF zincirleri yüklenmedi"
+
+# Sağlayıcı / ülke banı senaryoları CSF'in bölge dosyalarını ister (/var/lib/csf/zone/as16276.zone, fr.zone). lfd bunları
+# yalnız başlarken ve kendi aralığında, CC_DENY'de yazılı olanlar için çıkarır (iptoasn verisinden; ölçüldü 16.33): testin
+# içindeki csf -r indirmez. Burada bir kez çıkartılır, dosyalar kalır. BOLGE="" ile atlanır.
+BOLGE="${BOLGE-AS16276,FR}"
+if [ -n "$BOLGE" ]; then
+    echo "== bölge dosyaları ($BOLGE)"
+    setc CC_DENY "$BOLGE"
+    pkill -f 'lfd - ' 2>/dev/null; sleep 1; /usr/sbin/lfd >/dev/null 2>&1
+    n=0; want=$(printf '%s\n' "${BOLGE//,/ }" | tr '[:upper:]' '[:lower:]')
+    while [ "$n" -lt 90 ]; do
+        ok=1; for z in $want; do [ -s "/var/lib/csf/zone/$z.zone" ] || ok=0; done
+        [ "$ok" = 1 ] && break; n=$((n + 1)); sleep 2
+    done
+    [ "$ok" = 1 ] && echo "   indi: $(ls /var/lib/csf/zone | paste -sd' ' -)" || echo "   uyarı: bölge dosyaları 3 dakikada inmedi (/var/log/lfd.log); sağlayıcı/ülke senaryoları düşer"
+    setc CC_DENY ""
+    csf -r >/tmp/kur-bulut-csf.log 2>&1 || die "csf -r başarısız"
+    pkill -f 'lfd - ' 2>/dev/null; sleep 1; /usr/sbin/lfd >/dev/null 2>&1; sleep 3
+    pgrep -f 'lfd - ' >/dev/null || die "lfd başlamadı (/var/log/lfd.log)"
+fi
 echo "kuruldu: $(csf -v 2>/dev/null | head -1) · lfd çalışıyor · kurallar yüklü"
 echo "şimdi: GERCEK=1 bash $(cd "$H/../.." && pwd)/tests/senaryo/calistir.sh"

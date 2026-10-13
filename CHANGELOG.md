@@ -30,10 +30,16 @@
   tab.
 - **Real-CSF tests in a disposable container.** `tests/senaryo/kur-bulut.sh`
   installs cPanel's CSF (from GitHub or a given `cpanel-csf` RPM / archive) with
-  the cPanel-only Perl modules stubbed and starts lfd, so
-  `GERCEK=1 bash tests/senaryo/calistir.sh` runs there; the scenario test
-  restarts lfd without systemd and keeps the session's proxy out of the test
-  client. New status-table cases for every item above.
+  the cPanel-only Perl modules stubbed, starts lfd and lets it extract the
+  provider and country zone files the scenarios need (lfd only does that on
+  start, for what `CC_DENY` names), so `GERCEK=1 bash tests/senaryo/calistir.sh`
+  runs there. The scenario test restarts lfd without systemd, keeps the
+  session's proxy out of the test client and binds its test web servers to
+  IPv4 (a network namespace without IPv6 refused the default dual-stack
+  bind). Measured on the way: with `LF_SSHD_PERM = "1"` lfd asks `csf -d` for
+  the ban and CSF refuses an address that is in `csf.allow` ("deny failed: …
+  is in the allow file"), so no ban is placed at all; the test VM uses
+  temporary bans. New status-table cases for every item above.
 
 ## 1.13.11 — 2026-10-13
 

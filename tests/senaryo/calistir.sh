@@ -308,8 +308,9 @@ if [ "${GERCEK:-0}" = 1 ] && command -v ip >/dev/null 2>&1 && command -v python3
     NC=10.99.0.2; NS=10.99.0.1
     nsup() { ip netns del agcli 2>/dev/null; ip link del agv0 2>/dev/null; ip netns add agcli; ip link add agv0 type veth peer name agv1
              ip link set agv1 netns agcli; ip addr add $NS/24 dev agv0; ip link set agv0 up
-             ip netns exec agcli ip addr add $NC/24 dev agv1; ip netns exec agcli ip link set agv1 up
-             (cd /tmp && nohup python3 -m http.server 80 >/dev/null 2>&1 &); (cd /tmp && nohup python3 -m http.server 52224 >/dev/null 2>&1 &); sleep 1; }
+             ip netns exec agcli ip addr add $NC/24 dev agv1; ip netns exec agcli ip link set agv1 up; ip netns exec agcli ip link set lo up
+             # --bind 0.0.0.0: http.server varsayılanı "::" (çift yığın); IPv6'sı olmayan ağ alanında (kapsayıcı) bağlanamıyor
+             (cd /tmp && nohup python3 -m http.server --bind 0.0.0.0 80 >/dev/null 2>&1 &); (cd /tmp && nohup python3 -m http.server --bind 0.0.0.0 52224 >/dev/null 2>&1 &); sleep 1; }
     imu() { ipset create agimu hash:ip -exist; ipset add agimu $NC -exist
             iptables -t nat -N IMU_T 2>/dev/null; iptables -t nat -F IMU_T; iptables -t nat -A IMU_T -p tcp -m set --match-set agimu src --dport 80 -j DNAT --to-destination :52224
             iptables -t nat -C PREROUTING -j IMU_T 2>/dev/null || iptables -t nat -I PREROUTING 1 -j IMU_T
@@ -398,8 +399,8 @@ if [ "${GERCEK:-0}" = 1 ] && command -v ip >/dev/null 2>&1 && command -v python3
     check "kiralık liste · CSF'in geçici izni (csf -ta) olan istemci geçer" G "$(web)"
     csf -tar $NC >/dev/null 2>&1
     # istemci 80'de dinler (TCP_OUT 80'e izin verir; cevabın kaynak portu da 80, kural yalnız hedef porta bakmalı)
-    c=$(ip netns exec agcli bash -c "cd /tmp && (nohup python3 -m http.server 80 >/dev/null 2>&1 &) ; sleep 1"; curl -s --noproxy '*' -m 4 -o /dev/null -w '%{http_code}' http://$NC/ 2>/dev/null)
-    ip netns exec agcli pkill -f 'http.server 80' 2>/dev/null
+    c=$(ip netns exec agcli bash -c "cd /tmp && (nohup python3 -m http.server --bind 0.0.0.0 80 >/dev/null 2>&1 &) ; sleep 1"; curl -s --noproxy '*' -m 4 -o /dev/null -w '%{http_code}' http://$NC/ 2>/dev/null)
+    ip netns exec agcli pkill -f 'http.server --bind 0.0.0.0 80$' 2>/dev/null   # yalnız istemcininki (pid alanı ortak; sunucunun 80'i kalır)
     check "kiralık liste · sunucunun listedeki adrese kendi bağlantısı kopmaz" G "$([ "$c" = 200 ] && echo G || echo -)"
     # banlı blok sayacı mangle'da kiralık listeden ÖNCE sayar: listede düşen deneme de "son deneme" tarihini yeniler
     printf '10.99.0.0/24 # test blok banı - %s\n' "$DT" >> "$D"; csf -r >/dev/null 2>&1; run >/dev/null 2>&1; imu; web >/dev/null
