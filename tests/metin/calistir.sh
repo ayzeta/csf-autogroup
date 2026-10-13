@@ -19,6 +19,14 @@ YASAK=(
   "To review|Needs review"
   "Aktif blok ban|Aktif aralık ban"
   "Active block ban|Active range ban"
+  "saldırgan|ihlal eden IP"
+  "Saldırgan|İhlal eden IP"
+  "saldır|ihlal"
+  "Saldır|İhlal"
+  "attacker|offending IP"
+  "Attacker|Offending IP"
+  "attack|violation"
+  "Attack|Violation"
 )
 # kullanıcıya görünen metinler: ag.js sözlüğündeki 'anahtar: "metin"' değerleri ve motorun M_* değişkenleri
 texts() {

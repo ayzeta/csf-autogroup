@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.14.0 — 2026-10-14
+
+- **Wording: "attack / attacker" is now "violation / offending IP"** across
+  the panel, the glossary, the mails and the weekly digest, and this README.
+  lfd bans an address for repeated failed logins, a ModSecurity match or a
+  port scan; a customer who forgot a password or a misconfigured mail client
+  trips the same rules, so "attack" overstated what the plugin knows. The
+  review list's "allowed attacker" is "violation from allowed IP". The
+  glossary explains the term. "Suspicious network" stays.
+  The text test refuses the old words in user-facing texts from now on.
+
 ## 1.13.20 — 2026-10-14
 
 - **Impact window: examples of refused requests from allowed services.**

@@ -5,9 +5,9 @@ scatter of single-IP bans into subnet bans, and gives you one page to see
 what your firewall is dealing with and act on it.
 
 Most floods come from the same neighbourhood. When 3–5 already-banned IPs pile
-up in a single `/24`, the rest of that range is almost always the same attacker
+up in a single `/24`, the rest of that range is almost always the same offender
 still coming. CSF Auto-Group bans the **whole `/24`** and drops the singles, so
-the attack is blocked before you have to touch anything. A range that comes back
+the violation is blocked before you have to touch anything. A range that comes back
 is escalated to a **permanent** ban. `/16` networks are only flagged for review
 (never auto-banned, too broad).
 
@@ -105,12 +105,12 @@ settings, with no prompts. `config.env` is left untouched.
   ban, violet made permanent, teal temp ban, blue partial ban, amber suspicious
   network, gray whitelist skip.
 - **To review** — suspicious networks and whitelist-skipped blocks from the last 7
-  days, as a table: why it was flagged (how many IPs attacked which services),
+  days, as a table: why it was flagged (how many IPs hit which services),
   owner, when, and the narrowest ban that would do; clicking the IP count lists
-  every IP's hostname, owner and ban reason. A range whose attacks a provider ban
+  every IP's hostname, owner and ban reason. A range whose violations a provider ban
   or rented-server list already closes is left out. A network flagged on 3 or
   more separate days is marked *repeating* and moves to the top.
-  It also lists attackers lfd can not stop, read from the lfd logs of the last
+  It also lists offending IPs lfd can not stop, read from the lfd logs of the last
   7 days: an address in `csf.allow` is still banned by lfd (with CSF's default
   `IGNORE_ALLOW = "0"`) but the ban does not work (*Ban not working*); with
   `IGNORE_ALLOW = "1"`, or in `csf.ignore` / `csf.rignore`, lfd does not ban it
@@ -122,11 +122,11 @@ settings, with no prompts. `config.env` is left untouched.
   server's own address (lfd never bans those) show as *Server's IP*, with
   the mail accounts that tried wrong passwords from inside the server when the
   mail log shows them. Several
-  attackers from one allow entry, block or network are grouped like normal bans.
-  A partial ban whose open services keep being attacked shows as *Open service*.
+  offending IPs from one allow entry, block or network are grouped like normal bans.
+  A partial ban whose open services keep being hit shows as *Open service*.
 - **Active range bans** — a sortable, paged table with each block's owner,
   searchable by CIDR, AS number or organisation. Filters show their counts.
-  Blocks that became permanent on a second attack are tagged *repeat
+  Blocks that became permanent on a second violation are tagged *repeat
   offender*; temp block bans show their time left. **⋯ → IPs** lists the IPs
   and ban reasons behind any block (from the event log). The
   *Old* filter lists block bans older than the old-block limit (default 365
@@ -139,14 +139,14 @@ settings, with no prompts. `config.env` is left untouched.
   **Show more** pages further back. Work from before the event log existed is
   filled in from the log. Click an address to open its IP card, or a range
   (/16, /24) to open its range card: whether the range itself is banned, which
-  attacked services are still open for it, and the bans inside it.
+  services hit are still open for it, and the bans inside it.
   Settings changes are listed under Settings → Settings history.
 - **Suggestions where decisions are made** — the ban window suggests a partial
-  ban when attacks hit only one or two services; the remove window shows when
-  and why the ban was added (and, for partial bans, attacks on other services
+  ban when violations hit only one or two services; the remove window shows when
+  and why the ban was added (and, for partial bans, violations on other services
   since then); the IP card shows how far the block is from its threshold;
   changing a threshold shows its effect on the current entries; suspicious
-  networks show the attacked services and suggest a single block when most
+  networks show the services hit and suggest a single block when most
   singles sit in one.
 - **History actions** — every row has a **⋯** menu with what can be done with
   that item *now* (ban, change, remove, ignore, show in Overview, IP card), and
@@ -167,9 +167,9 @@ settings, with no prompts. `config.env` is left untouched.
   /17 and /23, the IP card offers to ban just that range instead of the /16;
   a suspicious network whose IPs mostly sit in one such range offers it too.
 - **Most blocked providers** (by ASN) — three tabs:
-  - *Attacks* — ranked by block bans and single bans, with each provider's most
-    common ban reason, the attacked services (web, mail, SSH…) with their
-    counts, and when the last attack was. A provider with 5+ block bans gets a suggestion to add
+  - *Violations* — ranked by block bans and single bans, with each provider's most
+    common ban reason, the services hit (web, mail, SSH…) with their
+    counts, and when the last violation was. A provider with 5+ block bans gets a suggestion to add
     it to the provider ban. A provider partly inside a rented-server list is
     tagged with how much of it is already closed there.
   - *Added by hand* — ranges in `csf.deny` added outside CSF Auto-Group.
@@ -179,7 +179,7 @@ settings, with no prompts. `config.env` is left untouched.
   ban or fully covered by a rented-server list, with how they are closed and
   whether CSF has loaded their ranges; they are left out of the rankings above
   (and the weekly summary's). A provider banned with the port list only comes
-  back to *Attacks* while attacks continue on services that list leaves open.
+  back to *Violations* while violations continue on services that list leaves open.
 
   Each list shows the first 5 with the total in its header; *More* and
   *Show all* open the rest, *Collapse* closes them again.
@@ -229,11 +229,11 @@ can't be banned at all.
   CSF's `TCP_IN`). The rules are marked and removed with the ban, and are never
   counted as whitelist entries.
 
-Each service button shows how many IPs of the range attacked it, read from the
+Each service button shows how many IPs of the range hit it, read from the
 ban reasons LFD wrote (`(sshd)` → SSH, `(smtpauth)` / `(imapd)` → mail sync,
 ModSecurity and web rules → Web, port scans → "Everything" is suggested).
-**Selected services** preselects only the attacked services; **Everything
-except** preselects nothing and warns when an attacked service is kept open.
+**Selected services** preselects only the services hit; **Everything
+except** preselects nothing and warns when an service hit is kept open.
 A **Blocked / Stays open** summary under the choices says in plain words what
 the selection does. The window also points out services that depend on each other: mail may need DNS when
 this server also hosts the DNS for its domains (other mail servers look up MX,
@@ -252,7 +252,7 @@ full one.
 | Change ban | change what a CSF Auto-Group ban blocks (everything / selected services / everything except) |
 | Ban anyway | ban a whitelist-skipped `/24` (overrides the whitelist) |
 | Make permanent | make a watched `/24` permanent right away |
-| Stop watching | forget a watched `/24` (next attack counts as the first) |
+| Stop watching | forget a watched `/24` (next violation counts as the first) |
 | Restart watch | start a watched `/24`'s watch period again from today (**⋯** in Watched and the IP card) |
 | Remove | lift a block ban (`do not delete` blocks too; `csf.deny` is backed up first) |
 | Remove old ones | on the *Old* filter: remove every block ban older than the old-block limit |
@@ -509,7 +509,7 @@ Existing `/24` bans stay in `csf.deny` until you remove them (`csf -dr <cidr>`).
 ## Provider ban (experimental)
 
 The **Providers** tab bans a whole provider by its AS number with CSF —
-useful when attacks come from one cloud spread over hundreds of networks, too
+useful when violations come from one cloud spread over hundreds of networks, too
 many to ban one by one. Everything is managed from the panel; the wanted state
 is kept in `config.env`, and every run makes CSF match it. After a server move,
 restoring `config.env` is enough.
@@ -535,9 +535,9 @@ restoring `config.env` is enough.
 - After saving, the setting is written to CSF right away and lfd is restarted
   (lfd fills the address sets); the screen shows how many ranges are loaded.
   Turning it off removes only what the plugin added.
-- **Needs review** leaves out a suspicious network when every attacking IP is
-  in a banned provider and the ban covers the attacked service (a Web-only ban
-  covers web attacks, not SSH ones); no warning is sent for it.
+- **Needs review** leaves out a suspicious network when every offending IP is
+  in a banned provider and the ban covers the service hit (a Web-only ban
+  covers web violations, not SSH ones); no warning is sent for it.
 - Block bans already inside a banned provider stay in `csf.deny`; they are
   marked *inside a provider ban* (checked against the ranges CSF loaded) and
   the Providers tab lists them under *Bans no longer needed* and can remove them.
@@ -569,7 +569,7 @@ a chip on its tile and can be switched off on its own. Google: crawlers
 (training crawler), OAI-SearchBot (search) and ChatGPT-User (pages a user asks
 for). **Exclusions** (`SVC_EXCEPT`) keep single addresses or ranges out of the
 allowed lists even when a list contains them; the rest of the list stays
-allowed. Use it when one address of a service keeps attacking: a ban on an
+allowed. Use it when one address of a service keeps violating: a ban on an
 allowed address has no effect, because CSF applies allows first. The IP card,
 the review list and History offer this in one step for such an address.
 
@@ -606,7 +606,7 @@ the plugin runs it.
 
 Each list's download address can be changed from its tile (**Address**), and
 **Extra lists** take your own `name|https://url` lists. Tiles also show how
-many attackers from the event log fall in each list, selected or not.
+many offending IPs from the event log fall in each list, selected or not.
 
 ## Development
 
@@ -633,8 +633,8 @@ engine's `--config set` accept it. Needs bash and php.
 
 `bash tests/senaryo/calistir.sh` runs the engine's decisions against a scenario
 matrix: each protection layer (provider ban with a port list or everything,
-rented-server list, partial `/16` ban before or after the attacks, allowed
-services) × each attack type (web, mail, SSH, mixed, LFD PERMBLOCK) × timing,
+rented-server list, partial `/16` ban before or after the violations, allowed
+services) × each violation type (web, mail, SSH, mixed, LFD PERMBLOCK) × timing,
 and checks whether a suspicious network is hidden or shown, which services stay
 open, and whether a block is banned or skipped. `bash tests/senaryo/siniflama.sh`
 checks that the engine and the panel put the same lfd notes on the same service;
