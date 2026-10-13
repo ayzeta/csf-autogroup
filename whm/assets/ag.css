@@ -469,9 +469,6 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-form { padding: 6px 18px 16px; }
 .ag-field { padding: 12px 0; border-top: 1px solid var(--ag-line-soft); position: relative; }
 .ag-field:first-child { border-top: 0; }
-.ag-field-g { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ag-text-3); padding: 18px 0 2px; }
-.ag-field-g:first-child { padding-top: 0; }
-.ag-field-g + .ag-field { border-top: 0; }
 .ag-field-l { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
 .ag-field-l label { font-weight: 600; font-size: 13px; color: var(--ag-text); margin: 0; }
 .ag-field .ag-input { width: 100%; }
@@ -1192,3 +1189,4 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-fstack { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 @media (max-width: 760px) { .ag-fstack { align-items: flex-start; } }
 @media (max-width: 600px) { .ag-impact li span { white-space: normal; } }   /* telefonda örnek satırları kesilmesin, sarsın */
+.ag-sec-lead { margin: 0 0 -6px; font-size: 13px; color: var(--ag-text-2); line-height: 1.5; }   /* ayar bölümünün açıklaması, kartların üstünde */

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.14.1 — 2026-10-14
+
+- **Settings: one card per group.** Each section stacked its groups in a
+  single card under small uppercase headings while the Server section used
+  separate cards. Every group is its own card now (Block ban, Suspicious
+  network, Watching, Old bans; Runs, Needs review, Log file; Owner lookups,
+  Rented-server lists, Allowed-service lists, CSF's ASN data, Imunify360;
+  Channels and language, Weekly summary, Sent to Slack), with the section's
+  one-line explanation above the cards. Labels that repeated their card's
+  title were renamed (the log status row, the review-list days field, the
+  weekly-summary and Slack fields).
+
 ## 1.14.0 — 2026-10-14
 
 - **Wording: "attack / attacker" is now "violation / offending IP"** across
