@@ -121,7 +121,8 @@ settings, with no prompts. `config.env` is left untouched.
   `csf.rignore` is traced the way lfd traces it. Failed logins coming from the
   server's own address (lfd never bans those) show as *Server's IP*, with
   the mail accounts that tried wrong passwords from inside the server when the
-  mail log shows them. Several
+  mail log shows them. *Flagged* on these rows is the first record in the
+  review window; the note carries the last record and its time. Several
   offending IPs from one allow entry, block or network are grouped like normal bans.
   A partial ban whose open services keep being hit shows as *Open service*.
 - **Active range bans** — a sortable, paged table with each block's owner,

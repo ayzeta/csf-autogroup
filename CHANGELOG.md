@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.15.2 — 2026-10-15
+
+- **Allowed, ignored and own-IP rows: first and last record.** In *Needs
+  review* the *Flagged* column of these rows now shows the first record in
+  the review window (it showed the last one, while the "Last entry" note had
+  no time at all); the note reads "Last entry: … (1 day ago)". The IP card
+  shows the same in short lines: last entry with its time and the count,
+  then the mail accounts for the server's own IP, or the allow / ignore
+  source for the others; the "cannot be banned" sentence is no longer
+  repeated under the card's firewall result.
+
 ## 1.15.1 — 2026-10-15
 
 - **Run card keeps up:** the page asks for a fresh status 3 seconds after

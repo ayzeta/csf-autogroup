@@ -109,6 +109,8 @@ mkl aab;  printf '151.80.7.9 # müşteri\n' >> "$A"; lfdb 3600 151.80.7.9
 mcheck "izinli IP lfd'de banlandı → 'Ban işlemiyor' (tam izin)" "rvrow 151.80.7.9 | grep -q '\"type\":\"allow_ban\".*\"bk\":\"b\".*\"full\":1'"
 mkl aai;  printf '151.80.7.9 # müşteri\n' >> "$A"; for x in 1 2 3; do lfdi $(( 600 * x )) 151.80.7.9; done
 mcheck "IGNORE_ALLOW açıkken izinli IP yoksayıldı → 'lfd yoksaydı', 3 kez, tam izin" "rvrow 151.80.7.9 | grep -q '\"bk\":\"i\",\"cnt\":3,\"full\":1'"
+rvt() { local r a b; r=$(rvrow "$1"); a="${r#*\"t\":}"; a="${a%%,*}"; b="${r#*\"ips\":[}"; b="${b#*\"t\":}"; b="${b%%,*}"; echo $((b - a)); }   # IP'nin son kaydı − satırın zamanı (saniye)
+mcheck "izinli IP satırı: İşaretlendi ilk kayıt (30 dk önce), IP'nin zamanı son kayıt (10 dk önce)" "d=\$(rvt 151.80.7.9); [ \$d -ge 1150 ] && [ \$d -le 1250 ]"
 mkl aay;  printf '151.80.7.9\n' >> "$R/etc/csf/csf.ignore"; lfdi 600 151.80.7.9
 mcheck "csf.ignore IP'si yoksayıldı → 'Yoksayılıyor' (tam izin değil: elle ban işler)" "rvrow 151.80.7.9 | grep -q '\"bk\":\"i\",\"cnt\":1,\"full\":0'"
 # Geçmiş'e kalıcı kayıt: tur, izinli IP'den ihlali IP başına günde bir olay olarak yazar (ikinci tur tekrar yazmaz)

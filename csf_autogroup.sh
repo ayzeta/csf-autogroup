@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.1"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.2"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -2318,7 +2318,8 @@ do_status() {
     cls_map < <(for aai in "${!RSI[@]}"; do printf 'rs%s|%s\n' "$aai" "${RSI[$aai]//|/ }"; done)
     rv_add() {   # TÜR CIDR WL_ETİKETİ "izinli indisleri" "izinsiz IP'ler" EK_JSON
         local js="" x n=0 nb=0 t=0 aa=0 bl=" "
-        for x in $4; do n=$((n + 1)); aa=$((aa + 1)); [ "${AA_T[x]}" -gt "$t" ] && t=${AA_T[x]}; [[ "$bl" == *" ${AA_IP[x]%.*} "* ]] || bl+="${AA_IP[x]%.*} "; done
+        # satırın zamanı (İşaretlendi) = kontrol süresindeki İLK kayıt; IP listesindeki t son kayıt (satır notunda "Son kayıt: … (ne zaman)")
+        for x in $4; do n=$((n + 1)); aa=$((aa + 1)); { [ "$t" -eq 0 ] || [ "${AA_T0[x]:-${AA_T[x]}}" -lt "$t" ]; } && t=${AA_T0[x]:-${AA_T[x]}}; [[ "$bl" == *" ${AA_IP[x]%.*} "* ]] || bl+="${AA_IP[x]%.*} "; done
         aa_ipj $4; js="$REPLY"
         for x in $5; do n=$((n + 1)); [[ "$bl" == *" ${x%.*} "* ]] || bl+="${x%.*} "
             short_reason "${RSI[$x]}" "$x"; jstr "$REPLY"; local w="$REPLY"; local v="${CLSM[rs$x]:-other}"
@@ -4341,7 +4342,7 @@ cls_map() {      # stdin "anahtar|sebep" → CLSM[anahtar] = servis (tek awk; IP
     local k c
     while IFS='|' read -r k c; do [ -n "$k" ] && CLSM[$k]="$c"; done < <(LC_ALL=C awk -F'|' "$AWK_CLS"' { k = $1; r = substr($0, length($1) + 2); print k "|" cls(r) }')
 }
-aa_days() {      # DOSYA… → stdout "ip|k|gün|sayı|son|sebep" (k: b = banlandı ama izinli olabilir, i = yoksayıldı)
+aa_days() {      # DOSYA… → stdout "ip|k|gün|sayı|son|sebep|ilk" (k: b = banlandı ama izinli olabilir, i = yoksayıldı)
     # "*SSH login*" başarılı giriş bildirimidir (LF_SSH_EMAIL_ALERT; izinli IP için "- ignored" ile biter), saldırı değil
     { for f in "$@"; do zcat -f "$f" 2>/dev/null; done; } | LC_ALL=C grep -E '\*Blocked in csf\*| - ignored[[:space:]]*$' | LC_ALL=C grep -vF '*SSH login*' |
     LC_ALL=C awk -v now="$(date +%s)" -v Y="$(date +%Y)" '
@@ -4352,11 +4353,11 @@ aa_days() {      # DOSYA… → stdout "ip|k|gün|sayı|son|sebep" (k: b = banla
           if (!match(g, /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/)) next; ip = substr(g, RSTART, RLENGTH)
           k = (g ~ / - ignored[ \t]*$/) ? "i" : "b"; d = strftime("%Y%m%d", ts)
           r = g; sub(/ (from|by) [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+.*$/, "", r); gsub(/\|/, " ", r)
-          K = ip "|" k "|" d; N[K]++; if (ts >= T[K]) { T[K] = ts; R[K] = r } }
-        END { for (K in N) print K "|" N[K] "|" T[K] "|" R[K] }'
+          K = ip "|" k "|" d; N[K]++; if (ts >= T[K]) { T[K] = ts; R[K] = r }; if (!(K in T0) || ts < T0[K]) T0[K] = ts }
+        END { for (K in N) print K "|" N[K] "|" T[K] "|" R[K] "|" T0[K] }'
 }
-AA_IP=(); AA_K=(); AA_N=(); AA_T=(); AA_R=(); AA_W=(); AA_F=()
-allow_atk_load() {  # SINCE_EPOCH → AA_* (IP başına: k, olay sayısı, son zaman, son sebep, izin kaydı indisi, tam izin mi)
+AA_IP=(); AA_K=(); AA_N=(); AA_T=(); AA_R=(); AA_W=(); AA_F=(); AA_T0=()
+allow_atk_load() {  # SINCE_EPOCH → AA_* (IP başına: k, olay sayısı, son zaman, son sebep, izin kaydı indisi, tam izin mi, ilk zaman)
     # Yalnız "ban işlemiyor"u gösteren kayıtlar: b → IP bütün portlara izin veren bir listede (csf.allow ve Include'ları, GLOBAL_ALLOW,
     # geçici izin, dyndns; tek portluk izin satırı ve sunucunun kendi IP'si değil); i → her zaman (lfd hiç banlamadı).
     # Imunify360'ın beyaz listesi CSF'e csf.allow Include'u ile girer (/var/imunify360/files/whitelist/v2/imunify360.txt; sunucuda
@@ -4367,18 +4368,18 @@ allow_atk_load() {  # SINCE_EPOCH → AA_* (IP başına: k, olay sayısı, son z
     # Gelişmiş satırda port 1:65535 ya da * bütün portları açar: tam izin. Hiçbir listede olmayan "ignored" kaydının
     # kaynağı lfd'nin sırasıyla aranır (aa_src_resolve): CC_IGNORE, relay listeleri, csf.rignore.
     local since="$1" dir base f sig day0 cache rot=() cur i
-    AA_IP=(); AA_K=(); AA_N=(); AA_T=(); AA_R=(); AA_W=(); AA_F=(); AA_S=()
+    AA_IP=(); AA_K=(); AA_N=(); AA_T=(); AA_R=(); AA_W=(); AA_F=(); AA_S=(); AA_T0=()
     [ -n "$LFD_LOG" ] || return 0
     [ "$WL_LOADED" = 1 ] || load_whitelist
     dir=$(dirname "$LFD_LOG"); base=$(basename "$LFD_LOG"); day0=$(date -d "@$since" +%Y%m%d)
     cache="$(dirname "$SAYAC_FILE")/allowatk.cache"
     while IFS= read -r f; do [ "$f" = "$LFD_LOG" ] || rot+=("$f"); done < <(find "$dir" -maxdepth 1 -name "$base*" -newermt "@$since" -printf '%T@ %p\n' 2>/dev/null | sort -n | cut -d' ' -f2-)
-    sig=$(for f in "${rot[@]}"; do stat -c '%n %s %Y' "$f" 2>/dev/null; done | cksum | cut -d' ' -f1)
+    sig="2.$(for f in "${rot[@]}"; do stat -c '%n %s %Y' "$f" 2>/dev/null; done | cksum | cut -d' ' -f1)"   # 2.: satır biçimi (ilk zaman alanı)
     if [ "${#rot[@]}" -gt 0 ] && { [ ! -r "$cache" ] || [ "$(head -n 1 "$cache")" != "$sig" ]; }; then
         { echo "$sig"; aa_days "${rot[@]}"; } > "$cache.tmp" 2>/dev/null && mv -f "$cache.tmp" "$cache"
     fi
-    while IFS='|' read -r AAx AAk AAn AAt AAw AAf AAr; do
-        AA_IP+=("$AAx"); AA_K+=("$AAk"); AA_N+=("$AAn"); AA_T+=("$AAt"); AA_W+=("$AAw"); AA_F+=("$AAf"); AA_R+=("$AAr")
+    while IFS='|' read -r AAx AAk AAn AAt AAw AAf AAr AAt0; do
+        AA_IP+=("$AAx"); AA_K+=("$AAk"); AA_N+=("$AAn"); AA_T+=("$AAt"); AA_W+=("$AAw"); AA_F+=("$AAf"); AA_R+=("$AAr"); AA_T0+=("${AAt0:-$AAt}")
     done < <({
         for f in "${!WL_LO[@]}"; do
             local ff=0
@@ -4393,14 +4394,14 @@ allow_atk_load() {  # SINCE_EPOCH → AA_* (IP başına: k, olay sayısı, son z
         function v4(x,  p) { split(x, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
         !S && $0 == "#--" { S = 1; FS = "|"; next }
         !S { n++; L[n] = $2 + 0; H[n] = $3 + 0; I[n] = $4; F[n] = $5; next }
-        { K = $1 "|" $2; N[K] += $4; if ($5 >= T[K]) { T[K] = $5; R[K] = $6 } }
+        { K = $1 "|" $2; N[K] += $4; if ($5 >= T[K]) { T[K] = $5; R[K] = $6 }; if (!(K in T0) || $7 + 0 < T0[K]) T0[K] = $7 + 0 }
         END { for (K in N) { split(K, f, "|"); v = v4(f[1]); hit = -1; full = 0
                 for (i = 1; i <= n; i++) if (v >= L[i] && v <= H[i]) {
                     if (F[i] == 2) { hit = I[i]; full = 2; break }                    # sunucunun kendi adresi her kaydin onunde
                     else if (F[i] == 1 && full < 1) { hit = I[i]; full = 1 }
                     else if (hit < 0) hit = I[i] }
                 if (f[2] == "b" && full < 1) continue    # banlandı ve izinli değil: ban işliyor
-                print f[1] "|" f[2] "|" N[K] "|" T[K] "|" hit "|" full "|" R[K] } }' | sort -t'|' -k4,4nr | awk -F'|' '!($1 in S) { S[$1] = 1; print }')
+                print f[1] "|" f[2] "|" N[K] "|" T[K] "|" hit "|" full "|" R[K] "|" T0[K] } }' | sort -t'|' -k4,4nr | awk -F'|' '!($1 in S) { S[$1] = 1; print }')
     for i in "${!AA_IP[@]}"; do      # listelerde olmayan yoksayma: kaynağı lfd'nin sırasıyla bul
         AA_S[i]=""
         [ "${AA_K[i]}" = i ] && [ "${AA_W[i]}" -lt 0 ] && { aa_src_resolve "${AA_IP[i]}"; AA_S[i]="$REPLY"; }
