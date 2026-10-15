@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.15.1 — 2026-10-15
+
+- **Run card keeps up:** the page asks for a fresh status 3 seconds after
+  the cron minute and every 5 seconds until the run's record arrives (it
+  waited for the regular 60-second poll before); a tab shown again after
+  being hidden, or a page restored from the browser's back/forward cache,
+  refreshes right away when its data is older than 30 seconds, with an
+  "updating…" note under *Last run* meanwhile. The *Last run* tip shows when
+  the status data was fetched, so a stale number can be told apart from a
+  stale page.
+
 ## 1.15.0 — 2026-10-14
 
 - **Notifications: one table for events and channels.** Settings →

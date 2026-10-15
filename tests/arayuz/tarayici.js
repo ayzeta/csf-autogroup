@@ -155,6 +155,11 @@ async function layoutChecks(page, label, width) {
     }
   }
   await page.click('.ag-tabs [data-tab="overview"]'); await page.waitForTimeout(900);
+  {
+    // Son tur ipucu: durum verisinin alındığı saat (ss:dd:ss); geri sayım kutusu var
+    const tip = await page.$eval('#ag-last', b => b.parentElement.getAttribute('title') || '').catch(() => '');
+    check('Son tur ipucunda veri saati var', /\d{1,2}:\d\d:\d\d/.test(tip), tip);
+  }
   // Terimler penceresi
   const terms = await page.$('[data-act="terms"]');
   if (terms) { await terms.click(); await page.waitForTimeout(600); check('Terimler penceresi açılıyor', await page.$('.ag-terms') !== null); const no = await page.$('[data-m="no"], [data-m="ok"]'); if (no) await no.click(); await page.waitForTimeout(400); }

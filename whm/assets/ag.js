@@ -66,7 +66,7 @@
   var DICT = {
     tr: {
      
-      dry: 'Deneme turu', dry_h: 'Hiçbir şeyi değiştirmeden bir turun ne yapacağını gösterir.', sb_last_h: 'Tur: eklentinin banları tarayıp karar verdiği her çalışma (cron ile düzenli çalışır).', run: 'Şimdi çalıştır', run_log: 'Tur çıktısı',
+      dry: 'Deneme turu', dry_h: 'Hiçbir şeyi değiştirmeden bir turun ne yapacağını gösterir.', sb_last_h: 'Tur: eklentinin banları tarayıp karar verdiği her çalışma (cron ile düzenli çalışır).', sb_fetched: 'Durum verisinin alındığı saat: {0}.', sb_updating: 'güncelleniyor…', run: 'Şimdi çalıştır', run_log: 'Tur çıktısı',
       upd_avail: '<b>Güncelleme var:</b> v{0} → v{1}', upd_commits: '{0} değişiklik', upd_show: 'Değişiklikleri gör', upd_hide: 'Gizle',
       upd_apply: 'Güncelle', upd_dirty: 'Sunucudaki kopyada yerel değişiklik var; güncelleme SSH üzerinden yapılmalı. Neyin değiştiğine kurulum klasöründe git status ile bakabilirsiniz.',
       upd_diverged: 'Sunucudaki kopya GitHub\'dakinden ayrılmış; güncelleme SSH üzerinden yapılmalı. Kurulum klasöründe git status ile bakabilirsiniz.',
@@ -158,7 +158,7 @@
     },
     en: {
      
-      dry: 'Dry run', dry_h: 'Shows what a run would do without changing anything.', sb_last_h: 'Run: each time the plugin scans the bans and acts on them (on a cron schedule).', run: 'Run now', run_log: 'Run output',
+      dry: 'Dry run', dry_h: 'Shows what a run would do without changing anything.', sb_last_h: 'Run: each time the plugin scans the bans and acts on them (on a cron schedule).', sb_fetched: 'Status data fetched at {0}.', sb_updating: 'updating…', run: 'Run now', run_log: 'Run output',
       upd_avail: '<b>Update available:</b> v{0} → v{1}', upd_commits: '{0} changes', upd_show: 'View changes', upd_hide: 'Hide',
       upd_apply: 'Update', upd_dirty: 'The server copy has local changes; update over SSH. Run git status in the install folder to see what changed.',
       upd_diverged: 'The server copy has diverged from GitHub; update over SSH. Run git status in the install folder to see the state.',
@@ -476,16 +476,23 @@
 
   /* Durum bandı: koruma çalışıyor mu, son tur, süre, sıradaki tur, son turların süreleri */
   function sec(s) { s = Math.max(0, Math.round(s || 0)); return s < 60 ? t('sec', s) : dur(s); }
-  function nextIn() {
-    if (S.enabled === false) return '';                     // duraklatılmış: tur çalışsa da iş yapmaz, geri sayım yanıltır
+  function nextLeft() {          // sıradaki cron tikine kaç saniye var (-1: bilinmiyor / duraklatılmış)
+    if (S.enabled === false) return -1;                     // duraklatılmış: tur çalışsa da iş yapmaz, geri sayım yanıltır
     var cm = String(S.cron_min || ''), d = new Date(nowSec() * 1000), m = d.getMinutes(), s = d.getSeconds(), x, left;
     if ((x = /^\*\/(\d+)$/.exec(cm)) && +x[1] > 0) { var n = +x[1]; left = (Math.min(60, (Math.floor(m / n) + 1) * n) - m) * 60 - s; }
     else if (/^\d+(,\d+)*$/.test(cm)) {                     // "0" ya da "5,35": en yakın sonraki dakika
       left = Math.min.apply(null, cm.split(',').map(function (v) { return (((+v - m + 60) % 60) || 60) * 60 - s; }));
     }
-    else return '';
-    left = Math.max(0, left);
-    return Math.floor(left / 60) + ':' + ('0' + (left % 60)).slice(-2);
+    else return -1;
+    return Math.max(0, left);
+  }
+  function nextIn() { var left = nextLeft(); return left < 0 ? '' : Math.floor(left / 60) + ':' + ('0' + (left % 60)).slice(-2); }
+  // tur zamanı geldi mi: tik 2 dakikadan yeni ve son tur olayı tikten önce → tur bitince hemen görünsün diye sık yoklanır
+  function runDue() {
+    var left = nextLeft(), iv = S.cron_interval || 0, lr = S.last_run;
+    if (left < 0 || !(iv > 0) || S.running) return false;
+    var since = iv - left;
+    return since >= 0 && since < 120 && (!lr || nowSec() - lr.t > since);
   }
   function healthChips(HL, late) {
     function chip(name, cls, tip) { return '<span class="ag-hc ' + cls + '" title="' + esc(tip) + '">' + (cls === 'ok' ? IC.check : IC.alert) + esc(name) + '</span>'; }
@@ -518,7 +525,7 @@
     }
     return '<section class="ag-band st-' + st + '"><div class="ag-band-s"><span class="ag-pulse"><i></i></span><div><b>' +
       t(run ? 'sb_run' : paused ? 'sb_paused' : fwBad ? 'sb_fw' : late ? 'sb_late' : 'sb_ok') + '</b><span>' + esc(sub) + '</span>' + healthChips(HL, late) + '</div></div>' +
-      m(t('sb_last'), lr ? esc(rel(lr.t)) : '—', '', '', t('sb_last_h')) +
+      m(t('sb_last'), lr ? esc(rel(lr.t)) : '—', '', 'ag-last', t('sb_last_h') + ' ' + t('sb_fetched', new Date(LAST_OK * 1000).toLocaleTimeString(loc()))) +
       m(t('sb_dur'), ds.length ? esc(sec(ds[ds.length - 1])) : '—', ds.length > 1 ? esc(t('sb_avg', sec(avg))) : '') +
       m(t('sb_next'), run ? t('sb_now') : (nextIn() || '—'), '', 'ag-next') +
       (L.length > 1 ? '<div class="ag-band-g"><small>' + t('sb_spark', L.length) + '</small><div class="ag-spark">' + spark + '</div></div>' : '<div></div>') +
@@ -2078,7 +2085,8 @@
   }
 
   /* ── Durum / yoklama ───────────────────────────────────────────── */
-  function refresh() {
+  function refresh(light) {       // light: sekmeye / sayfaya dönüşte; eski ekran kalır, Son tur kutusu 'güncelleniyor…' der
+    if (light) { var lb = document.getElementById('ag-last'); if (lb && !lb.nextElementSibling) lb.insertAdjacentHTML('afterend', '<span>' + esc(t('sb_updating')) + '</span>'); }
     return api('status').then(function (d) {
       if (!d || d.ok === false) { throw new Error((d && (d.message || d.error)) || 'status'); }
       S = d; if (STALE !== 'work') STALE = false; LANG = d.lang === 'tr' ? 'tr' : 'en'; try { localStorage.setItem('ag-lang', LANG); } catch (e) {} CLOCK = d.now - Date.now() / 1000; LAST_OK = d.now; setConn(null);
@@ -2088,7 +2096,7 @@
       wasRunning = d.running;
       // CSF sağlayıcı kümelerini dolduruyorsa (lfd yeni başladı, boş küme var) sonucu bir dakika bekletme
       var filling = setsLoading() && (((d.prov || {}).asn || {}).sets || []).some(function (x) { return x.n === 0; });
-      schedule(d.running ? 3000 : filling ? 10000 : 60000);
+      schedule(d.running ? 3000 : filling ? 10000 : runDue() ? 5000 : 60000);
       if (!busy && !(cfgTab() && CFG && changedKeys().length)) render();
       else if (!STALE) {          // çizilemedi (kaydedilmemiş ayar): bekleme görünümü yine de kalkmalı
         var wr = $app.querySelector('.ag-wrap.ag-stale'); if (wr) wr.classList.remove('ag-stale');
@@ -2102,14 +2110,24 @@
       schedule(60000);
     });
   }
-  setInterval(function () { if (document.hidden) return; var el = document.getElementById('ag-next'); if (el && S && !S.running) el.textContent = nextIn() || '—'; }, 1000);
+  var DUE_HIT = false;
+  setInterval(function () {
+    if (document.hidden || !S) return;
+    var el = document.getElementById('ag-next'); if (el && !S.running) el.textContent = nextIn() || '—';
+    var left = nextLeft();                                  // cron tiki: 60 sn'lik yoklamayı beklemeden 3 sn sonra sor, run olayı gelene kadar 5 sn'de bir sürer
+    if (left === 0 && !DUE_HIT) { DUE_HIT = true; schedule(3000); } else if (left > 5) DUE_HIT = false;
+  }, 1000);
   function schedule(ms) {
     clearTimeout(pollTimer);
     if (CONN === 'session') return;
     // Sekme görünmüyorsa sunucuyu yorma: vakti gelen yoklama sekmeye dönülünce yapılır
     pollTimer = setTimeout(function () { if (document.hidden) { HIDDEN_DUE = true; return; } refresh(); }, ms);
   }
-  document.addEventListener('visibilitychange', function () { if (!document.hidden && HIDDEN_DUE) { HIDDEN_DUE = false; refresh(); } });
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden || !S || CONN === 'session') return;
+    if (HIDDEN_DUE || nowSec() - LAST_OK > 30) { HIDDEN_DUE = false; refresh(true); }
+  });
+  window.addEventListener('pageshow', function (e) { if (e.persisted && S && CONN !== 'session') refresh(true); });   // tarayıcının geri/ileri önbelleğinden dönüş: eski ekran yenilenir
 
   /* ── Toast ─────────────────────────────────────────────────────── */
   var $toasts = null;
