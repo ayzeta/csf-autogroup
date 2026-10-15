@@ -293,18 +293,21 @@ its own:
   counters on every reload: the plugin reads them before its own reloads, and
   `csfpost.sh` puts the rule back afterwards. Its last attempt shows in the
   state tip.
-- **Notifications** — channels: *all channels set in WHM* (default: email +
-  Slack), *email only* or *Slack only*. Both addresses come from WHM: the
-  contact email in Basic WebHost Manager Setup (or any other address you type)
-  and the Slack address set there, which is read at send time and never stored
-  by the plugin. The plugin sends the HTML emails and Slack messages itself, so
-  nothing arrives twice. Choose which events go to Slack (firewall problem,
-  list filling up, run notices, weekly summary): urgent ones go right away,
-  run notices are collected into at most one Slack message per hour. *Send test
-  email*, *Send a Slack test*, and the **weekly summary**: new block
-  bans, providers CSF and Imunify360 block most, watched blocks about to
-  expire, list usage, run health, and a note when a new version is available.
-  Sent with the first run after 09:00 on the chosen day (default Monday).
+- **Notifications** — an *Events and channels* table: four kinds of event
+  (firewall problem, list filling up, run notices, weekly summary) × two
+  channels (email, Slack), each cell on or off. Run notices are the bans,
+  suspicious networks, skips and the daily review records (violations from
+  allowed IPs, open services); by email they go at the end of the run, on
+  Slack collected into at most one message per hour; firewall and list
+  problems go right away. The email address comes from WHM's Basic WebHost
+  Manager Setup (or any address you type); the Slack address is the one set
+  there, read at send time and never stored by the plugin. The plugin sends
+  the HTML emails and Slack messages itself, so nothing arrives twice. *Send
+  test email*, *Send a Slack test*, and the day of the **weekly summary**:
+  new block bans, the week's review records, providers CSF and Imunify360
+  block most, watched blocks about to expire, list usage, run health, and a
+  note when a new version is available. Sent with the first run after 09:00
+  on the chosen day (default Monday).
 
 ![Notification settings](docs/settings.png)
 
@@ -482,9 +485,12 @@ tab. Key options:
 - `MSG_LANG` — `en` or `tr` (plugin, logs, emails and `csf.deny` comments).
 - `ALERT_MAIL` — where alert emails go: `whm` (the contact address set in WHM,
   default) or an email address.
-- `NOTIFY` — `all` (email + Slack, default), `email` or `slack`.
-- `IC_FIREWALL`, `IC_LISTFULL`, `IC_RUN`, `IC_DIGEST` — which events go to Slack;
-  `SLACK_BATCH_MIN` — run notices go to Slack at most this often (default 60).
+- `IE_FIREWALL`, `IE_LISTFULL`, `IE_RUN`, `IE_DIGEST` — which events go by
+  email; `IC_FIREWALL`, `IC_LISTFULL`, `IC_RUN`, `IC_DIGEST` — which go to
+  Slack (1 = on, all on by default); `SLACK_BATCH_MIN` — run notices go to
+  Slack at most this often (default 60). `NOTIFY` (`all`, `email`, `slack`)
+  is the older master switch and still works; the panel writes `all` and
+  uses the per-event keys.
 - `THRESHOLD_24`, `THRESHOLD_24_PERMANENT`, `THRESHOLD_16`, `THRESHOLD_TEMP_24` —
   sensitivity.
 - `LOOKUP`, `LOOKUP_TIMEOUT` — owner/hostname lookups.

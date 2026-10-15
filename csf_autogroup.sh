@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.14.5"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.0"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -61,6 +61,8 @@ ALERT_MAIL="${ALERT_MAIL:-whm}"                  # whm = WHM'deki iletişim adre
 # Slack: WHM'deki Slack adresi) · email = yalnız e-posta · slack = yalnız Slack. IC_* = Slack'e gidecek olaylar.
 NOTIFY="${NOTIFY:-all}"
 IC_FIREWALL="${IC_FIREWALL:-1}"; IC_LISTFULL="${IC_LISTFULL:-1}"; IC_RUN="${IC_RUN:-1}"; IC_DIGEST="${IC_DIGEST:-1}"
+# IE_* = e-postaya gidecek olaylar (Slack'teki IC_* ile aynı dört sınıf): güvenlik duvarı sorunu, liste doluyor, tur bildirimleri, haftalık özet
+IE_FIREWALL="${IE_FIREWALL:-1}"; IE_LISTFULL="${IE_LISTFULL:-1}"; IE_RUN="${IE_RUN:-1}"; IE_DIGEST="${IE_DIGEST:-1}"
 WWWACCT_SHADOW="${WWWACCT_SHADOW:-/etc/wwwacct.conf.shadow}"   # WHM'in Slack adresi burada (CONTACTSLACK); eklentide saklanmaz
 SLACK_BATCH_MIN="${SLACK_BATCH_MIN:-60}"         # tur bildirimleri Slack'e en fazla bu kadar dakikada bir (toplanarak) gider; acil olanlar hemen
 WWWACCT_CONF="${WWWACCT_CONF:-/etc/wwwacct.conf}"
@@ -238,6 +240,10 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_16_DONE="Şüpheli ağ turu bitti. %s bildirim."
   M_AVIOL="İzinli IP'den ihlal (Geçmiş'e yazıldı): %s → %s, son 24 saatte %s kez"
   M_POPEN="Açık servis (Geçmiş'e yazıldı): %s kısmi banından sonra açık kalan servislere %s ihlal"
+  M_AVIOL_SUBJ="%s izinli IP'den ihlal"; M_AVIOL_BODY="İzin listesindeki, yoksayılan ya da sunucunun kendi adreslerinden lfd kuralına takılan denemeler (lfd banlamadı ya da ban işlemedi). Kontrol edilecekler'de ve Geçmiş'te; IP başına günde bir kez bildirilir. IP · servis · son 24 saatte kaç kez · durum · izin kaydı:"
+  M_AVK_b="ban işlemiyor"; M_AVK_i="lfd yoksaydı"; M_AVK_y="yoksayılıyor"; M_AVK_s="sunucu IP'si"
+  M_POPEN_SUBJ="%s açık servis"; M_POPEN_BODY="Kısmi ban yalnız seçilen servisleri kapatıyor; bandan sonra açık kalan servislere blok ya da ağ eşiği kadar ihlal geldi. Banı değiştirip o servisleri de kapatabilirsiniz (aralık başına günde bir kez bildirilir):"; M_POPEN_L="kapalı: %s · açık servislere %s ihlal"
+  M_DG_RV="Kontrol edilecekler (7 gün): %s izinli IP'den ihlal kaydı · %s açık servis kaydı"
   M_MAIL16_BODY="Aşağıdaki ağlarda (/16) birçok bloktan tekil ban (kalıcı ve geçici) birikti. Ağ banlanmadı;\nelle bakmanız önerilir:"
   M_MAIL16_SUBJ="%s şüpheli ağ"
   M_TCLEAN="Temizlendi: %s (kalıcı ban kapsamında)"
@@ -480,6 +486,10 @@ else
   M_16_DONE="Suspicious network pass done. %s report(s)."
   M_AVIOL="Violation from allowed IP (recorded in History): %s → %s, %s times in the last 24 hours"
   M_POPEN="Open service (recorded in History): %s violations on the services the partial ban on %s leaves open"
+  M_AVIOL_SUBJ="%s violations from allowed IPs"; M_AVIOL_BODY="Attempts from allowed, ignored or server-own addresses that tripped an lfd rule (lfd did not ban them or the ban did not apply). In Needs review and History; reported once per IP per day. IP · service · times in the last 24 hours · state · allow entry:"
+  M_AVK_b="ban not working"; M_AVK_i="ignored by lfd"; M_AVK_y="ignored"; M_AVK_s="server IP"
+  M_POPEN_SUBJ="%s open services"; M_POPEN_BODY="A partial ban closes only the chosen services; since it went in, the services left open took violations up to the block or network threshold. Change the ban to close them too (reported once per range per day):"; M_POPEN_L="closed: %s · %s violations on the open services"
+  M_DG_RV="Needs review (7 days): %s allowed-IP violation records · %s open-service records"
   M_MAIL16_BODY="Single bans (permanent and temp) have piled up across several blocks of the following networks (/16). The network was not banned;\nmanual review recommended:"
   M_MAIL16_SUBJ="%s suspicious network(s)"
   M_TCLEAN="Cleaned: %s (covered by a permanent ban)"
@@ -735,7 +745,7 @@ mail() {
 
 # ── Settings: validation (panel + --config set + --dry-run --set) ──────────
 # Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
-CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_URLS CLOUD_EXTRA ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS OWNER_TTL_DAYS IMUNIFY_REFRESH_MIN BLOCK_ACTIVE_DAYS"
+CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_URLS CLOUD_EXTRA ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS OWNER_TTL_DAYS IMUNIFY_REFRESH_MIN BLOCK_ACTIVE_DAYS"
 PROV_KEYS="SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_URLS CLOUD_EXTRA ENABLED"
 SVC_CATALOG="google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake microsoft365"
 CLOUD_CATALOG="gcp aws azure oracle digitalocean linode vultr"
@@ -755,7 +765,7 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
         MSG_LANG) opts="tr en" ;;
         LOOKUP) opts="0 1" ;;
         CRON_MIN) opts="*/5 */10 */15 */30 0" ;;
-        DIGEST|IC_FIREWALL|IC_LISTFULL|IC_RUN|IC_DIGEST) opts="0 1" ;;
+        DIGEST|IC_FIREWALL|IC_LISTFULL|IC_RUN|IC_DIGEST|IE_FIREWALL|IE_LISTFULL|IE_RUN|IE_DIGEST) opts="0 1" ;;
         NOTIFY) opts="all email slack" ;;
         DIGEST_DAY) opts="1 2 3 4 5 6 7" ;;
         ALERT_MAIL)
@@ -999,8 +1009,8 @@ ev() {           # TYPE CIDR [anahtar=HAZIR_JSON ...]
 # izin ya da yoksayma kaynağı, lfd'nin son sebebi. Deneme turu yazmaz. Gün damgası allowviol.seen dosyasında.
 allow_viol_events() {
     [ -n "$LFD_LOG" ] && [ "$DRY" != 1 ] || return 0
-    local seenf="$(dirname "$SAYAC_FILE")/allowviol.seen" i ip k src kind sj rj
-    local -a new=(); local -A SEEN=(); local -A CLSM=()
+    local seenf="$(dirname "$SAYAC_FILE")/allowviol.seen" i ip k src kind sj rj kt
+    local -a new=(); local -A SEEN=(); local -A CLSM=(); AV_MAIL=()
     [ -r "$seenf" ] && while read -r ip k; do [ "$k" = "$TODAY" ] && SEEN[$ip]=1; done < "$seenf"
     allow_atk_load $(( $(date +%s) - 86400 ))          # son 24 saat: olay günde bir, sayı o güne ait
     cls_map < <(for i in "${!AA_IP[@]}"; do printf 'av%s|%s\n' "$i" "${AA_R[i]}"; done)
@@ -1011,6 +1021,7 @@ allow_viol_events() {
         jstr "$src"; sj="$REPLY"; jstr "${AA_R[i]}"; rj="$REPLY"
         ev allow_viol "$ip" "svc=\"${CLSM[av$i]:-other}\"" "n=${AA_N[i]}" "kind=\"$kind\"" "src=$sj" "why=$rj"
         log "$(m "$M_AVIOL" "$ip" "${CLSM[av$i]:-other}" "${AA_N[i]}")"
+        kt="M_AVK_$kind"; AV_MAIL+=("   $(printf '%-18s' "$ip") ${CLSM[av$i]:-other} · ${AA_N[i]} · ${!kt}${src:+ · $src}")   # tur maili (IE_RUN) ve Slack tur bildirimi
         new+=("$ip")
     done
     { for ip in "${!SEEN[@]}"; do printf '%s %s\n' "$ip" "$TODAY"; done; for ip in "${new[@]}"; do printf '%s %s\n' "$ip" "$TODAY"; done; } > "$seenf" 2>/dev/null
@@ -1031,7 +1042,7 @@ pb_load() {      # eklentinin kısmi banları (csf.deny gelişmiş satırları; 
 part_open_events() {
     [ "$DRY" != 1 ] || return 0
     local seenf="$(dirname "$SAYAC_FILE")/partopen.seen" c k pa aan aat ps
-    local -a new=(); local -A SEEN=()
+    local -a new=(); local -A SEEN=(); PO_MAIL=()
     [ -r "$seenf" ] && while read -r c k; do [ "$k" = "$TODAY" ] && SEEN[$c]=1; done < "$seenf"
     pb_load
     for c in "${!PB_P[@]}"; do
@@ -1048,6 +1059,7 @@ part_open_events() {
         ign_until "$c" && continue
         ev part_open "$c" "svc=\"${PB_S[$c]}\"" "extra=\"${PB_X[$c]}\"" "since=$ps" "n=$aan"
         log "$(m "$M_POPEN" "$c" "$aan")"; new+=("$c")
+        PO_MAIL+=("   $(printf '%-18s' "$c") $(m "$M_POPEN_L" "${PB_S[$c]}${PB_X[$c]:+,$PB_X[$c]}" "$aan")")
     done
     { for c in "${!SEEN[@]}"; do printf '%s %s\n' "$c" "$TODAY"; done; for c in "${new[@]}"; do printf '%s %s\n' "$c" "$TODAY"; done; } > "$seenf" 2>/dev/null
 }
@@ -1233,6 +1245,7 @@ slack_queue_flush() {
     if ic_send Run "$subj" "$txt"; then : > "$SLACK_QUEUE"; echo "$now" > "$SLACK_LAST"; fi
 }
 mail_on()  { [ "$NOTIFY" != slack ]; }   # e-posta kanalı seçili mi (all | email)
+mail_cat() { mail_on && [ "${!1}" = 1 ]; }   # e-posta açık ve bu olay sınıfı e-postaya seçili (IE_FIREWALL / IE_LISTFULL / IE_RUN / IE_DIGEST)
 ic_track() {     # AYAR DURUM_ANAHTARI SORUN(1|0) KONU METİN DÜZELDİ_KONUSU — başlayınca bir kez, düzelince bir kez
     slack_on && [ "${!1}" = 1 ] && [ "$DRY" != 1 ] || return 0
     slack_url; [ -n "$REPLY" ] || return 0
@@ -1284,36 +1297,43 @@ send_mail() {    # KONU DÜZ_METİN [HTML] → çıkış kodu; SM_OUT = komutun 
 }
 # Tek mail: tur içindeki tüm bildirimler (blok banları, şüpheli ağlar, atlamalar, limit, sağlık) tek
 # mailde bölüm bölüm gider; konu satırı bölümlerin özetidir.
-MAIL_PARTS=(); MAIL_BODY=""; MAIL_URGENT=0; MAIL_TEXTS=(); MAIL_TONES=()
-mail_add() {     # KONU-PARÇASI GÖVDE [bad] (bad: HTML'de kırmızı kart — liste doluyor, güvenlik duvarı sorunu)
-    MAIL_PARTS+=("$1"); MAIL_TEXTS+=("$2"); MAIL_TONES+=("${3:-}")
+MAIL_PARTS=(); MAIL_BODY=""; MAIL_URGENT=0; MAIL_TEXTS=(); MAIL_TONES=(); MAIL_CATS=()
+mail_add() {     # KONU-PARÇASI GÖVDE [bad] [SINIF] (bad: HTML'de kırmızı kart; SINIF: IE_RUN varsayılan, IE_FIREWALL, IE_LISTFULL)
+    MAIL_PARTS+=("$1"); MAIL_TEXTS+=("$2"); MAIL_TONES+=("${3:-}"); MAIL_CATS+=("${4:-IE_RUN}")
     MAIL_BODY+="${MAIL_BODY:+$NL────────────────────────────────────────$NL$NL}$2$NL"
 }
 mail_flush() {
     [ ${#MAIL_PARTS[@]} -gt 0 ] || return 0
-    local subj="" pp i txt html="" hs
-    for pp in "${MAIL_PARTS[@]}"; do subj+="${subj:+ · }$pp"; done
-    txt=$( printf '%s\n' "$MAIL_BODY"
+    local subj="" i txt html="" hs body="" urg=0
+    # e-postaya yalnız sınıfı e-postaya seçili parçalar (IE_*); hiçbiri seçili değilse mail gitmez, Slack kuyruğu yine dolar
+    local -a MI=()
+    for i in "${!MAIL_PARTS[@]}"; do
+        mail_cat "${MAIL_CATS[i]:-IE_RUN}" || continue
+        MI+=("$i"); subj+="${subj:+ · }${MAIL_PARTS[i]}"; body+="${body:+$NL────────────────────────────────────────$NL$NL}${MAIL_TEXTS[i]}$NL"
+        [ "${MAIL_TONES[i]}" = bad ] && [ "$MAIL_URGENT" = 1 ] && urg=1
+    done
+    txt=$( printf '%s\n' "$body"
            [ -n "$doluluk_satiri" ] && printf '%s\n' "$doluluk_satiri"
            [ -n "$temp_doluluk_satiri" ] && printf '%s\n' "$temp_doluluk_satiri"
            printf '\n%s%s\n%s\n' "$PANEL_FOOT" "$(m "$M_MAIL_DETAIL" "$LOG_FILE")" "$M_H_GLOSS" )
     # HTML: her bölüm bir kart, altta liste doluluğu
-    for i in "${!MAIL_PARTS[@]}"; do
+    for i in "${MI[@]}"; do
         h_text "${MAIL_TEXTS[i]}"; h_card "${MAIL_PARTS[i]}" "$REPLY" "${MAIL_TONES[i]}"; html+="$REPLY"
     done
     h_usage "${current_count:-0}" "${limit:-0}" "${temp_current:-0}" "${temp_limit:-0}"; html+="$REPLY"
     printf -v hs '%s · %(%d.%m.%Y %H:%M)T' "$(hostname 2>/dev/null || echo "$HOSTNAME")" -1
     h_doc "CSF Auto-Group" "$hs" "$html"
-    mail_on && send_mail "$([ "$MAIL_URGENT" = 1 ] && printf '!!! ')$M_SUBJ_PREFIX$subj" "$txt" "$REPLY"
-    if slack_on && [ "$IC_RUN" = 1 ]; then
-        local rs="" rt=""
+    [ ${#MI[@]} -gt 0 ] && send_mail "$([ "$urg" = 1 ] && printf '!!! ')$M_SUBJ_PREFIX$subj" "$txt" "$REPLY"
+    if slack_on; then     # tur bildirimleri (kırmızı kartlar ic_track ile ayrı gider): parçanın sınıfı Slack'e seçiliyse (IC_*)
+        local rs="" rt="" icv
         for i in "${!MAIL_PARTS[@]}"; do
             [ "${MAIL_TONES[i]}" = bad ] && continue
+            icv="IC_${MAIL_CATS[i]#IE_}"; [ "${!icv:-1}" = 1 ] || continue
             rs+="${rs:+ · }${MAIL_PARTS[i]}"; rt+="${rt:+$NL$NL}${MAIL_TEXTS[i]}"
         done
         [ -n "$rs" ] && slack_queue_add "$rs" "$rt"
     fi
-    MAIL_PARTS=(); MAIL_BODY=""; MAIL_URGENT=0; MAIL_TEXTS=(); MAIL_TONES=()
+    MAIL_PARTS=(); MAIL_BODY=""; MAIL_URGENT=0; MAIL_TEXTS=(); MAIL_TONES=(); MAIL_CATS=()
 }
 perm_remove() {  # CIDR → csf.deny'den kaldır ("do not delete" ise önce işaret silinir); 0 = kaldırıldı
     local line; line=$(deny_line "$1"); [ -n "$line" ] || return 1
@@ -3375,7 +3395,7 @@ limit_watch() {
         log "$(m "$M_LIM_GONE" "$c")"; ev limit_gone "$c" "limit=$(num "$lim")"
         body+="  $c$NL"
     done
-    mail_add "$(m "$M_LIM_SUBJ" "${#gone[@]}")" "$(m "$M_LIM_BODY" "${lim:-?}")$NL$NL$body" bad
+    mail_add "$(m "$M_LIM_SUBJ" "${#gone[@]}")" "$(m "$M_LIM_BODY" "${lim:-?}")$NL$NL$body" bad IE_LISTFULL
 }
 udp_has() {      # DOSYA ÖNEK SONEK PORT → "ÖNEK<portlar>SONEK" biçiminde, port listesinde PORT olan satır var mı
     awk -v pre="$2" -v suf="$3" -v p="$4" 'index($0, pre) == 1 { r = substr($0, length(pre) + 1); i = index(r, suf)
@@ -4878,6 +4898,7 @@ digest_build() { # → DG_SUBJ, DG_BODY
         fi
     fi
     DG_BODY+="$(m "$M_DG_COUNTS" "${C[add24]:-0}" "${C[temp24]:-0}" "${C[promote]:-0}" "${C[warn16]:-0}" "${C[skip_wl]:-0}" "${C[manual]:-0}" "${C[config]:-0}")$NL"
+    DG_BODY+="$(m "$M_DG_RV" "${C[allow_viol]:-0}" "${C[part_open]:-0}")$NL"
     DG_BODY+="$(m "$M_DG_USAGE" "$pc" "$limit" "$([ "$limit" -gt 0 ] && echo $(( pc * 100 / limit )) || echo 0)" "$perm0")$NL"
     DG_BODY+="$(m "$M_DG_TUSAGE" "$tc" "$tlimit")$NL$NL"
     # HTML: sayılar (yedi hücre) + liste doluluğu
@@ -4888,6 +4909,10 @@ digest_build() { # → DG_SUBJ, DG_BODY
     done
     DGH+="<tr><td bgcolor=\"#ffffff\" style=\"background:#ffffff;border:1px solid #e6e8ef;border-radius:12px;padding:6px;font-family:$H_FONT;\"><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"><tr>$hr</tr></table></td></tr>$H_SP"
     h_usage "$pc" "$limit" "$tc" "$tlimit" "$([[ "$perm0" =~ ^[0-9]+$ ]] && echo "$perm0")"; DGH+="$REPLY"
+    if [ "${C[allow_viol]:-0}" -gt 0 ] || [ "${C[part_open]:-0}" -gt 0 ]; then   # kontrol edilecekler (Geçmiş'teki günlük kayıtlar)
+        h_esc "$(m "$M_DG_RV" "${C[allow_viol]:-0}" "${C[part_open]:-0}")"
+        DGH+="<tr><td bgcolor=\"#fffbeb\" style=\"background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:12px 18px;font-family:$H_FONT;font-size:13px;color:#92400e;\">$REPLY</td></tr>$H_SP"
+    fi
     hr=""
     # yeni grup banları (7 gün): add24 / promote / manual_ban
     DG_BODY+="$M_DG_NEW$NL"
@@ -5029,7 +5054,7 @@ digest_maybe() { # çalışma sonunda: seçilen gün, 09:00'dan sonra, haftada b
     wk="DIGEST_$(date +%G-W%V)"
     grep -q "^$wk " "$SAYAC_FILE" && return 0
     digest_build
-    mail_on && send_mail "$DG_SUBJ" "$DG_BODY" "$DG_HTML"
+    mail_cat IE_DIGEST && send_mail "$DG_SUBJ" "$DG_BODY" "$DG_HTML"
     slack_on && [ "$IC_DIGEST" = 1 ] && ic_send Digest "$DG_SUBJ" "$DG_BODY"
     cnt_add "$wk $TODAY"
     log "$(m "$M_DG_SENT" "$ALERT_MAIL")"
@@ -5087,7 +5112,7 @@ do_config() {
                 o="{\"ok\":true,\"values\":{"
                 i=0
                 for k in $CFG_KEYS; do jstr "$(cfg_value "$k")"; o+="$([ $i -gt 0 ] && echo ,)\"$k\":$REPLY"; i=1; done
-                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"whm\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"NOTIFY\":\"all\",\"IC_FIREWALL\":\"1\",\"IC_LISTFULL\":\"1\",\"IC_RUN\":\"1\",\"IC_DIGEST\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_MAX_LINES\":\"5000\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"BLOCK_EXPIRE_DAYS\":\"365\",\"BLOCK_ACTIVE_DAYS\":\"30\",\"OWNER_TTL_DAYS\":\"30\",\"IMUNIFY_REFRESH_MIN\":\"60\",\"CLOUD_REFRESH_DAYS\":\"1\",\"CLOUD_FAIL_DAYS\":\"3\",\"SVC_REFRESH_DAYS\":\"1\",\"SVC_FAIL_DAYS\":\"3\",\"GEO_REFRESH_DAYS\":\"25\",\"BLOCK_EXPIRE_AUTO\":\"0\",\"CRON_MIN\":\"*/10\"}"
+                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"whm\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"NOTIFY\":\"all\",\"IC_FIREWALL\":\"1\",\"IC_LISTFULL\":\"1\",\"IC_RUN\":\"1\",\"IC_DIGEST\":\"1\",\"IE_FIREWALL\":\"1\",\"IE_LISTFULL\":\"1\",\"IE_RUN\":\"1\",\"IE_DIGEST\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_MAX_LINES\":\"5000\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"BLOCK_EXPIRE_DAYS\":\"365\",\"BLOCK_ACTIVE_DAYS\":\"30\",\"OWNER_TTL_DAYS\":\"30\",\"IMUNIFY_REFRESH_MIN\":\"60\",\"CLOUD_REFRESH_DAYS\":\"1\",\"CLOUD_FAIL_DAYS\":\"3\",\"SVC_REFRESH_DAYS\":\"1\",\"SVC_FAIL_DAYS\":\"3\",\"GEO_REFRESH_DAYS\":\"25\",\"BLOCK_EXPIRE_AUTO\":\"0\",\"CRON_MIN\":\"*/10\"}"
                 ALERT_MAIL=whm mail_to; jstr "$REPLY"; o+=",\"whm_contact\":$REPLY"
                 slack_url; o+=",\"slack\":$([ -n "$REPLY" ] && echo true || echo false)"
                 o+=",\"csf\":{\"deny_limit\":$(num "$(conf_val DENY_IP_LIMIT)"),\"temp_limit\":$(num "$(conf_val DENY_TEMP_IP_LIMIT)")}"
@@ -5213,7 +5238,7 @@ case "$MODE" in
     busy)   if lock_busy; then echo busy; else echo idle; fi; exit 0 ;;
     logrotate) logrotate_write && { echo "$LOGROTATE_CONF"; exit 0; }; exit 1 ;;   # install.sh çağırır   # eklenti "Şimdi çalıştır"dan önce sorar
     digest) LOG_MODE=file; owners_load; parse_deny "$DENY_FILE" 1; panel_init; digest_build
-            if [ "$SEND" = 1 ]; then mail_on && send_mail "$DG_SUBJ" "$DG_BODY" "$DG_HTML"; slack_on && [ "$IC_DIGEST" = 1 ] && ic_send Digest "$DG_SUBJ" "$DG_BODY"; log "$(m "$M_DG_SENT" "$ALERT_MAIL")"; ev digest "" "by=\"$AG_BY\""
+            if [ "$SEND" = 1 ]; then mail_cat IE_DIGEST && send_mail "$DG_SUBJ" "$DG_BODY" "$DG_HTML"; slack_on && [ "$IC_DIGEST" = 1 ] && ic_send Digest "$DG_SUBJ" "$DG_BODY"; log "$(m "$M_DG_SENT" "$ALERT_MAIL")"; ev digest "" "by=\"$AG_BY\""
             else printf '%s\n\n%s\n' "$DG_SUBJ" "$DG_BODY"; fi
             exit 0 ;;
 esac
@@ -5244,7 +5269,7 @@ if [ -n "$limit" ] && [ "$limit" -gt 0 ] 2>/dev/null; then
         log "$(m "$M_PERM_WARN")"
         doluluk_satiri=$(m "$M_PERM_FULL" "$current_count" "$limit" "$percent")
         if ! grep -qF "LIMIT_PERM $TODAY" "$SAYAC_FILE"; then      # günde bir kez (her turda değil)
-            MAIL_URGENT=1; mail_add "$(m "$M_MAIL_PERMFULL_SUBJ" "$percent")" "$(m "$M_MAIL_PERMFULL_BODY")" bad; cnt_add "LIMIT_PERM $TODAY"
+            MAIL_URGENT=1; mail_add "$(m "$M_MAIL_PERMFULL_SUBJ" "$percent")" "$(m "$M_MAIL_PERMFULL_BODY")" bad IE_LISTFULL; cnt_add "LIMIT_PERM $TODAY"
         fi
     else
         doluluk_satiri=$(m "$M_PERM_USAGE" "$current_count" "$limit" "$percent")
@@ -5265,7 +5290,7 @@ if [ -n "$temp_limit" ] && [ "$temp_limit" -gt 0 ] 2>/dev/null; then
         log "$(m "$M_TEMP_WARN")"
         temp_doluluk_satiri=$(m "$M_TEMP_FULL" "$temp_current" "$temp_limit" "$temp_percent")
         if ! grep -qF "LIMIT_TEMP $TODAY" "$SAYAC_FILE"; then
-            MAIL_URGENT=1; mail_add "$(m "$M_MAIL_TEMPFULL_SUBJ" "$temp_percent")" "$(m "$M_MAIL_TEMPFULL_BODY")" bad; cnt_add "LIMIT_TEMP $TODAY"
+            MAIL_URGENT=1; mail_add "$(m "$M_MAIL_TEMPFULL_SUBJ" "$temp_percent")" "$(m "$M_MAIL_TEMPFULL_BODY")" bad IE_LISTFULL; cnt_add "LIMIT_TEMP $TODAY"
         fi
     else
         temp_doluluk_satiri=$(m "$M_TEMP_USAGE" "$temp_current" "$temp_limit" "$temp_percent")
@@ -5528,8 +5553,11 @@ fi
 logr "$(m "$M_16_DONE" "$warn16")"
 
 # ── Kontrol edilecekler'in kalıcı kaydı: izinli IP'den ihlal (IP başına günde bir), açık servis (aralık başına günde bir) ──
+# Olay Geçmiş'e yazılır; aynı gün ilk kez görülenler tur bildirimine de girer (e-posta IE_RUN, Slack IC_RUN)
 allow_viol_events
 part_open_events
+[ "${#AV_MAIL[@]}" -gt 0 ] && mail_add "$(m "$M_AVIOL_SUBJ" "${#AV_MAIL[@]}")" "$M_AVIOL_BODY$NL$NL$(printf '%s\n' "${AV_MAIL[@]}")"
+[ "${#PO_MAIL[@]}" -gt 0 ] && mail_add "$(m "$M_POPEN_SUBJ" "${#PO_MAIL[@]}")" "$M_POPEN_BODY$NL$NL$(printf '%s\n' "${PO_MAIL[@]}")"
 
 # ── Whitelist skips: one email per run (each block once per day) ────────────
 if [ "$wl_skipped" -gt 0 ]; then
@@ -5553,7 +5581,7 @@ if [ ${#h_msgs[@]} -gt 0 ]; then
         MAIL_URGENT=1
         h_body="$M_H_BODY$NL"; for hm in "${h_msgs[@]}"; do h_body+="  - $hm$NL"; done
         h_subj=""; for hm in "${h_msgs[@]}"; do h_subj+="${h_subj:+, }$hm"; done
-        mail_add "$h_subj" "$h_body" bad; cnt_add "HEALTH $TODAY"
+        mail_add "$h_subj" "$h_body" bad IE_FIREWALL; cnt_add "HEALTH $TODAY"
     fi
 fi
 

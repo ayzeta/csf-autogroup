@@ -103,6 +103,11 @@ async function layoutChecks(page, label, width) {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.click('.ag-tabs [data-tab="settings"]'); await page.waitForTimeout(900);
   {
+    // Ayarlar ilk açılışta menünün ilk bölümüyle (Genel) gelir; öncelik sırası menüdeki sırayla aynı
+    const first = await page.$$eval('.ag-setnav [data-s]', L => ({ f: L[0] && L[0].getAttribute('data-s'), on: (L.filter(b => b.classList.contains('on'))[0] || {}).getAttribute ? L.filter(b => b.classList.contains('on'))[0].getAttribute('data-s') : null }));
+    check('Ayarlar: ilk açılışta ilk bölüm (Genel) seçili', first.f === 'general' && first.on === 'general', JSON.stringify(first));
+  }
+  {
     // her bölüm aynı kalıpla açılır: ilk öğe tek satır açıklama, sonra kartlar (bölümler arası geçişte içerik kaymasın)
     const secs = await page.$$eval('.ag-setnav [data-s]', L => L.map(b => b.getAttribute('data-s')));
     const bad = [], tops = [];
@@ -128,6 +133,26 @@ async function layoutChecks(page, label, width) {
       const dirty = await page.$('.ag-savebar, [data-act="cfgsave"]');
       check('Ayarlar: + sonra − ile taslak temiz (kaydet çubuğu yok)', !dirty || !(await dirty.isVisible()), '');
     } else check('Ayarlar: sayı kutusu var', false, '#ag-f-THRESHOLD_24 yok');
+  }
+  {
+    // Bildirim: olay × kanal tablosu — 4 olay × 2 kanal; hücre tıklanınca kaydet çubuğu çıkar, geri tıklanınca taslak temiz; telefonda sığar
+    const nav = await page.$('.ag-setnav [data-s="notify"]'); if (nav) { await nav.click(); await page.waitForTimeout(500); }
+    const cells = await page.$$('.ag-evm .ag-chk');
+    check('Bildirim: olay × kanal tablosu 8 hücre', cells.length === 8, String(cells.length));
+    if (cells.length === 8) {
+      const sel = '.ag-evm .ag-chk[data-k="IE_RUN"]';
+      const p0 = await page.getAttribute(sel, 'aria-pressed');
+      await page.click(sel); await page.waitForTimeout(300);
+      const p1 = await page.getAttribute(sel, 'aria-pressed'), bar1 = await page.$('.ag-savebar');
+      await page.click(sel); await page.waitForTimeout(300);
+      const p2 = await page.getAttribute(sel, 'aria-pressed'), bar2 = await page.$('.ag-savebar');
+      check('Bildirim: hücre tıklanınca değişir ve kaydet çubuğu çıkar, geri tıklanınca taslak temiz', p1 !== p0 && p2 === p0 && !!bar1 && !bar2, `${p0}→${p1}→${p2}`);
+      await page.setViewportSize({ width: 390, height: 800 }); await page.waitForTimeout(400);
+      const r = await page.evaluate(() => { const t = document.querySelector('.ag-evm'); const b = t && t.getBoundingClientRect();
+        return b ? { r: Math.round(b.right), w: document.documentElement.clientWidth, sw: document.documentElement.scrollWidth } : null; });
+      check('Bildirim: tablo 390 px\'te sığıyor', !!r && r.r <= r.w && r.sw <= r.w, JSON.stringify(r));
+      await page.setViewportSize({ width: 1280, height: 900 }); await page.waitForTimeout(400);
+    }
   }
   await page.click('.ag-tabs [data-tab="overview"]'); await page.waitForTimeout(900);
   // Terimler penceresi

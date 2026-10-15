@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.15.0 — 2026-10-14
+
+- **Notifications: one table for events and channels.** Settings →
+  Notifications now starts with an *Events and channels* table: four kinds
+  of event (firewall problem, list filling up, run notices, weekly summary)
+  × email and Slack, each cell on or off. Email gets the same per-event
+  choice Slack already had (`IE_FIREWALL`, `IE_LISTFULL`, `IE_RUN`,
+  `IE_DIGEST` in `config.env`). The old `NOTIFY` and `DIGEST` keys keep
+  working and are shown through the table (`NOTIFY=email` reads as the Slack
+  column off, `DIGEST=0` as the summary row off); touching the table writes
+  the per-event keys. The email and Slack cards are shown only while at
+  least one event goes to that channel; the weekly summary card keeps the
+  day.
+- **Review records in the mail and the summary:** the run mail has sections
+  for the day's new review records — violations from allowed, ignored or the
+  server's own IPs (service, count, why the ban did not apply, where the
+  allowance comes from) and open services behind a partial ban; the weekly
+  summary counts both for the week.
+- **Fix:** the "since your last visit" bar counted the daily review records
+  (and block bans removed outside the plugin) as suspicious networks; each
+  kind is named on its own now.
+- **Fix:** Settings opened on the Notifications section; it opens on the
+  first section (General) now.
+- Tests: the state table checks that a run with run notices off by email
+  sends no mail and that the list-filling warning still goes on its own;
+  the browser test covers the table (eight cells, one click is one unsaved
+  change, fits a phone screen).
+
 ## 1.14.5 — 2026-10-14
 
 - **History rows line up:** rows without a ⋯ menu (provider-ban changes,

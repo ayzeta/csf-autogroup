@@ -1193,3 +1193,14 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 /* telefonda öncelik: 30 günlük grafik Kontrol edilecekler ve listelerin altına (geniş ekranda yeri değişmez) */
 @media (max-width: 760px) { .ag-wrap { display: flex; flex-direction: column; } .ag-wrap > .ag-activity { order: 5; } .ag-wrap > .ag-foot { order: 9; } }
 .ag-ev-m0 { display: inline-block; width: 30px; height: 30px; }   /* menüsüz Geçmiş satırında ⋯ düğmesinin yeri boş kalır, sütun kaymaz */
+/* olay × kanal tablosu (Ayarlar → Bildirim): satır olay sınıfı, sütun kanal; hücre onay kutusu */
+.ag-evm { border-collapse: collapse; margin-top: 2px; font-size: 13px; width: auto; }
+.ag-setform .ag-field.w > .ag-evm.ag-evm { justify-self: start; }   /* geniş alanda tablo yayılmaz (genel geniş alan kuralıyla aynı özgüllük, sonra geldiği için kazanır) */
+.ag-evm th { font-size: 11.5px; font-weight: 600; color: var(--ag-text-3); text-align: center; padding: 0 16px 6px; white-space: nowrap; }
+.ag-evm th:first-child, .ag-evm td:first-child { text-align: left; padding-left: 0; padding-right: 28px; }
+.ag-evm td { padding: 4px 16px; border-top: 1px solid var(--ag-line-soft); text-align: center; color: var(--ag-text); }
+.ag-chk { width: 26px; height: 26px; padding: 0; border: 1px solid var(--ag-line); border-radius: 7px; background: #fff; color: #fff; display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; cursor: pointer; }
+.ag-chk:hover { border-color: var(--ag-accent-line); }
+.ag-chk.on { background: var(--ag-accent); border-color: var(--ag-accent); }
+.ag-chk svg { width: 16px; height: 16px; }
+@media (max-width: 600px) { .ag-evm th, .ag-evm td { padding-left: 10px; padding-right: 10px; } .ag-evm th:first-child, .ag-evm td:first-child { padding-left: 0; padding-right: 12px; } }

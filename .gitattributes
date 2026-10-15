@@ -1,1 +1,10 @@
+# Satır sonları her yerde LF: betikler sunucuda bash ile çalışır (CRLF bozar); Windows'ta GitHub Desktop
+# satır sonu çevirmesi yüzünden dosyaları "değişmiş" göstermesin.
 * text=auto eol=lf
+*.sh text eol=lf
+*.php text eol=lf
+*.js text eol=lf
+*.css text eol=lf
+*.md text eol=lf
+*.png binary
+*.tgz binary
