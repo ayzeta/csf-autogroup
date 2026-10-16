@@ -135,7 +135,7 @@
       try_save: 'Kaydetmeden önce dene', save: 'Kaydet', m_save_t: 'Ayarlar kaydedilsin mi?', m_save_b: 'Şu değişiklikler kaydedilecek (önceki ayar yedeklenir). Sağlayıcı ayarları hemen, diğerleri bir sonraki turda uygulanır:',
       m_try_t: 'Yeni eşiklerle deneme turu', m_try_b: 'Kaydedilmemiş ayarlarla; hiçbir şey değişmez.',
       auto: 'otomatik', focus_gone: '{0} artık listede değil; güncel durumu gösteriliyor.',
-      new_badge: 'Son ziyaretinizden beri yeni', actions: 'İşlemler', overdue: 'Tur gecikti · son tur {0} (beklenen aralık {1})',
+      new_badge: 'Son ziyaretinizden beri yeni', new_rec: 'Son ziyaretinizden beri yeni kayıt ({0}); İşaretlendi sütunu ilk kaydı gösterir.', actions: 'İşlemler', overdue: 'Tur gecikti · son tur {0} (beklenen aralık {1})',
       since_visit: 'Son ziyaretinizden beri ({0}):', sn_add: '{0} blok banı', sn_temp: '{0} geçici blok banı', sn_warn: '{0} şüpheli ağ',
       sn_skip: '{0} atlanan blok', sn_aviol: '{0} izinli IP\'den ihlal kaydı', sn_po: '{0} açık servis kaydı', sn_gone: '{0} eklenti dışında kaldırılan blok banı', show_new: 'Göster', e_new: 'Son ziyaretten beri', ch_total: '{0} olay', ch_title_n: 'Son {0} gün', ch_d: '{0} gün', sb_ok: 'Koruma çalışıyor', sb_run: 'Tur çalışıyor', sb_late: 'Turlar zamanında çalışmıyor', sb_every: 'Cron her {0}', sb_24: 'son 24 saatte {0}/{1} tur', sb_none: 'henüz tur yok', sb_last: 'Son tur', sb_dur: 'Tur süresi', sb_avg: 'ort. {0}', sb_next: 'Sıradaki', sb_now: 'şimdi', sb_spark: 'Son {0} turun süresi', pg_prev: 'Önceki sayfa', pg_next: 'Sonraki sayfa', dirty_leave: '{0} değişiklik kaydedilmedi', dirty_leave_b: 'Sekme değiştirilirse kaydedilmemiş değişiklikler kaybolur. Kalıp Kaydet ile saklayabilir ya da vazgeçip devam edebilirsiniz.', dirty_go: 'Kaydetmeden geç', conn_net: 'Sunucuya ulaşılamıyor; gösterilenler {0} alındı. Yeniden deneniyor…', conn_session: 'Oturumun süresi doldu.', upd_busy: 'Bir güncelleme zaten çalışıyor.', sec: '{0} sn', lk_recent: 'Son bakılanlar',
       ch_add: 'Blok banı', ch_promote: 'Tekrar geldi, kalıcı', ch_temp: 'Geçici blok banı', ch_warn: 'Şüpheli ağ', ch_skip: 'Atlandı',
@@ -227,7 +227,7 @@
       try_save: 'Try before saving', save: 'Save', m_save_t: 'Save settings?', m_save_b: 'These changes will be saved (the previous settings are backed up). Provider settings apply right away, the others on the next run:',
       m_try_t: 'Dry run with the new thresholds', m_try_b: 'Uses the unsaved settings; nothing is changed.',
       auto: 'automatic', focus_gone: '{0} is no longer on the list; showing its current state.',
-      new_badge: 'New since your last visit', actions: 'Actions', overdue: 'Run overdue · last run {0} (expected every {1})',
+      new_badge: 'New since your last visit', new_rec: 'New record since your last visit ({0}); the Flagged column shows the first record.', actions: 'Actions', overdue: 'Run overdue · last run {0} (expected every {1})',
       since_visit: 'Since your last visit ({0}):', sn_add: '{0} block bans', sn_temp: '{0} temp block bans', sn_warn: '{0} suspicious networks',
       sn_skip: '{0} skipped blocks', sn_aviol: '{0} allowed-IP violation records', sn_po: '{0} open-service records', sn_gone: '{0} block bans removed outside the plugin', show_new: 'Show', e_new: 'Since last visit', ch_total: '{0} events', ch_title_n: 'Last {0} days', ch_d: '{0} days', sb_ok: 'Protection is running', sb_run: 'A run is in progress', sb_late: 'Runs are not on schedule', sb_every: 'Cron every {0}', sb_24: '{0}/{1} runs in the last 24 h', sb_none: 'no runs yet', sb_last: 'Last run', sb_dur: 'Run time', sb_avg: 'avg {0}', sb_next: 'Next', sb_now: 'now', sb_spark: 'Last {0} run times', pg_prev: 'Previous page', pg_next: 'Next page', dirty_leave: '{0} unsaved changes', dirty_leave_b: 'Switching tabs discards the unsaved changes. Stay and Save to keep them, or continue without saving.', dirty_go: 'Leave without saving', conn_net: 'Can\'t reach the server; what you see was fetched {0}. Retrying…', conn_session: 'Your session has expired.', upd_busy: 'An update is already running.', sec: '{0} s', lk_recent: 'Recently viewed',
       ch_add: 'Block ban', ch_promote: 'Came back, permanent', ch_temp: 'Temp block ban', ch_warn: 'Suspicious network', ch_skip: 'Skipped',
@@ -323,7 +323,7 @@
   function pfx(cidr) { return String(cidr).replace(/\.0\/24$/, '').replace(/\.0\.0\/16$/, ''); }
 
   /* ── API ───────────────────────────────────────────────────────── */
-  function api(a, params) {
+  function api(a, params, again) {
     var body = new URLSearchParams();
     body.set('a', a); body.set('csrf', BOOT.csrf || '');
     Object.keys(params || {}).forEach(function (k) { body.set(k, params[k]); });
@@ -338,6 +338,9 @@
         return j || { ok: false, error: /<html|<form/i.test(tx) ? 'session' : 'http', message: 'HTTP ' + r.status };
       });
     }, function () { return { ok: false, error: 'network' }; }).then(function (j) {
+      // sayfa 12 saatten uzun açık kaldı, anahtarın süresi geçti ama WHM oturumu açık: yeni anahtarla bir kez yinele
+      // (önce "Oturumun süresi doldu" deyip yoklamayı durduruyordu; Son tur günlerce eski kalıyordu)
+      if (j && j.error === 'csrf_stale' && j.csrf && !again) { BOOT.csrf = j.csrf; return api(a, params, true); }
       if (j && j.error === 'session') setConn('session');
       // PHP'nin kodlu hatası (session, unsafe_repo…) İngilizce iletiyle gelir: panelin dilindeki cümle yazılır, ayrıntı (yol) korunur
       if (j && j.error && DICT[LANG]['e_' + j.error] !== undefined) {
@@ -451,6 +454,14 @@
   function flag(cc) { return cc ? '<span class="ag-flag" title="' + esc(t('t_cc', ccName(cc), cc)) + '">' + esc(cc) + '</span>' : ''; }
   function asnB(n, name) { n = String(n || '').replace(/^AS/i, ''); return '<span class="ag-asn" title="' + esc(t('t_asn', 'AS' + n) + (name ? ' — ' + name : '')) + '">AS' + esc(n) + '</span>'; }
   function newDot(ts) { return isNew(ts) ? '<span class="ag-newdot" title="' + esc(t('new_badge')) + '"></span>' : ''; }
+  // Kontrol edilecekler satırı: satırın zamanı ilk kayıttır (izinli IP günlerdir kayıt alıyor olabilir); son ziyaretten beri
+  // o IP'ye / aralığa yeni kayıt geldiyse de "yeni" — son ziyaret çubuğunun saydığı ve "Göster"in götürdüğü satır bu
+  function rvDot(e, noT) {
+    if (!noT && isNew(e.t)) return newDot(e.t);
+    var k = {}, m = 0; k[e.cidr] = 1; (e.ips || []).forEach(function (x) { if (x.ip) k[x.ip] = 1; });
+    (S.events || []).forEach(function (v) { if (k[v.cidr] && NEW_TYPES.indexOf(v.type) >= 0 && v.t > m) m = v.t; });
+    return isNew(m) ? '<span class="ag-newdot" title="' + esc(t('new_rec', rel(m))) + '"></span>' : '';
+  }
   function menu(key, items) {      // "⋯" menüsü; items: [{act, label, attrs, danger}]
     var open = UI.menu === key;
     return '<div class="ag-menu-wrap"><button class="ag-iconbtn' + (open ? ' on' : '') + '" data-act="menu" data-key="' + esc(key) + '" aria-label="' + esc(t('actions')) + '" aria-expanded="' + open + '">' + IC.dots + '</button>' +
@@ -723,7 +734,7 @@
       var first = (e.ips || [])[0] ? e.ips[0].ip : e.cidr.replace(/\/\d+$/, '').replace(/\.0$/, '.1');
       if (ips) mitems = [{ act: 'toggle', label: open ? t('hide') : t('ips'), icon: 'list', attrs: 'data-key="' + esc(key) + '"' }].concat(mitems);
       return '<div class="ag-item" data-row="' + esc(e.cidr) + '"><div class="ag-tr ag-tr-r">' +
-        '<div class="ag-td ag-td-main">' + newDot(e.t) + '<span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(e.cidr) + '</span></div>' +
+        '<div class="ag-td ag-td-main">' + rvDot(e) + '<span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(e.cidr) + '</span></div>' +
         '<div class="ag-td ag-td-state">' + pill + '</div>' +
         '<div class="ag-td ag-td-why">' + (whyH || '<span class="ag-muted">—</span>') + '</div>' +
         '<div class="ag-td ag-td-own" title="' + esc(ow.o.label || '') + '">' + ow.h + '</div>' +
@@ -825,7 +836,7 @@
       if (!o.asn && i0 && i0.asn) o = { asn: i0.asn, cc: i0.cc, name: String(i0.owner || '').replace(/^AS\d+\s*/, '').replace(/^[^ ]+ - /, '').replace(/,\s*[A-Z]{2}$/, ''), label: i0.owner };
       var ownH = o.asn ? flag(o.cc) + asnB(o.asn) + '<span class="ag-org">' + esc(o.name || '') + '</span>' : owner ? '<span class="ag-org">' + esc(owner) + '</span>' : '';   // sahip yoksa boş
       return '<div class="ag-item" data-row="' + esc(e.cidr) + '"><div class="ag-tr ag-tr-r">' +
-        '<div class="ag-td ag-td-main">' + newDot(e.hist ? 0 : e.t) + '<span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(e.cidr) + '</span>' +
+        '<div class="ag-td ag-td-main">' + rvDot(e, e.hist) + '<span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(e.cidr) + '</span>' +
           (repOf(e) ? '<span class="ag-pill ag-pill-dw ag-rep" title="' + esc(t('rep_h', num(e.rep))) + '">' + esc(t('rep_n', num(e.rep))) + '</span>' : '') + '</div>' +
         '<div class="ag-td ag-td-state">' + pill + '</div>' +
         '<div class="ag-td ag-td-why">' + (meta.length ? meta.join(' · ') : '<span class="ag-muted">—</span>') + '</div>' +

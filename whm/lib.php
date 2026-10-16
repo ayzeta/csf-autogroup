@@ -216,13 +216,21 @@ function ag_csrf_check(): void
     }
     $sent = (string) ($_POST['csrf'] ?? '');
     $ok = false;
+    $stale = false;
     $key = ag_secret();
     if ($key !== '' && preg_match('/^([0-9]{1,12})\.([a-f0-9]{64})$/', $sent, $m)) {
-        $age = time() - (int) $m[1];
-        if ($age >= -300 && $age <= AG_CSRF_TTL) {
-            $want = hash_hmac('sha256', 'csf-autogroup|' . ag_user() . '|' . $m[1], $key);
-            $ok = hash_equals($want, $m[2]);
+        $want = hash_hmac('sha256', 'csf-autogroup|' . ag_user() . '|' . $m[1], $key);
+        if (hash_equals($want, $m[2])) {
+            $age = time() - (int) $m[1];
+            $ok = $age >= -300 && $age <= AG_CSRF_TTL;
+            $stale = !$ok;
         }
+    }
+    if ($stale) {
+        // İmza doğru, yalnız süresi geçmiş (sayfa 12 saatten uzun açık kaldı). Bu noktaya gelen istek WHM oturumuyla
+        // doğrulanmıştır (ag_guard önce çalışır): yeni anahtar verilir, panel isteği bir kez yineler. Anahtar yalnız
+        // cevaptadır; başka bir sitenin isteği cevabı okuyamaz.
+        ag_json(['ok' => false, 'error' => 'csrf_stale', 'csrf' => ag_csrf_token()], 403);
     }
     if (!$ok) {
         ag_json(['ok' => false, 'error' => 'session', 'message' => 'Session expired — reload the page.'], 403);

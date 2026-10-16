@@ -190,7 +190,8 @@ settings, with no prompts. `config.env` is left untouched.
 - **Terms** (header button) — a short glossary of the words the panel uses
   (single, block, watched, partial, provider ban, rented servers…).
 - **Since your last visit** — what happened since you last opened the page; new
-  rows carry a dot.
+  rows carry a dot, and so does a *Needs review* row that got a new record
+  (its *Flagged* time stays the first record).
 
 ### Actions
 

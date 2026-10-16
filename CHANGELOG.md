@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.15.3 — 2026-10-16
+
+- **Fix — "Your session has expired" on a page left open for long.** Each
+  panel request carries a security token that is valid for 12 hours. After
+  that the panel said the session had expired and stopped refreshing, so the
+  run card and everything else stayed old, even though the WHM session was
+  still open. Now an expired but genuine token is replaced automatically and
+  the request is repeated once; the notice remains only when the WHM session
+  itself has ended (WHM answers with its login page).
+
+- **New-since-last-visit dot on review rows with a new record.** Since 1.15.2
+  the *Flagged* time of an allowed, ignored or own-IP row is its first record,
+  so a row that got a new record today (counted in the "since your last
+  visit" bar, and the row **Show** jumps to) had no "new" mark once the brief
+  highlight faded. The dot now also appears when a new record arrived for the
+  row's address or range since your last visit; its tooltip gives the time and
+  says that *Flagged* shows the first record.
+
 ## 1.15.2 — 2026-10-15
 
 - **Allowed, ignored and own-IP rows: first and last record.** In *Needs
