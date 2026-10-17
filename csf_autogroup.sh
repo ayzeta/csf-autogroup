@@ -1070,6 +1070,8 @@ part_open_events() {
         [ -n "${SEEN[$c]}" ] && continue
         pa=0; [ -n "${PB_D[$c]}" ] && pa=$(LC_ALL=C date -d "${PB_D[$c]}" +%s 2>/dev/null || echo 0)
         { [ "$pa" -gt 0 ] && cidr_range "$c"; } || continue
+        # Kontrol edilecekler satırıyla aynı pencere: kısmi bandan sonra ve son REVIEW_DAYS içinde konan tekiller
+        local rvw=$(( $(date +%s) - REVIEW_DAYS * 86400 )); [ "$pa" -lt "$rvw" ] && pa=$rvw
         # tekiller doğrudan csf.deny'den (turda SINGLE_NOTE yok; parse_deny turun blok sayaçlarını ikinci kez artırırdı)
         attack_json "$R_LO" "$R_HI" "$pa" "${PB_S[$c]}" < <(
             awk '$1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ { print $1 "|" substr($0, length($1) + 1) }' "$DENY_FILE" 2>/dev/null
@@ -2436,13 +2438,24 @@ do_status() {
     done
     # Kısmi banı yetmeyen aralık: kısmi ban konduktan sonra kapalı olmayan servislere gelen saldırılar blok (/24) ya da ağ
     # (/16 ve daha geniş) eşiğine ulaştı — tekiller tek tek banlanıyor ama aralık o servislere açık
+    # Öteki satırlar gibi Kontrol edilecekler penceresine bağlı: yalnız kısmi bandan sonra VE son REVIEW_DAYS içinde konan
+    # tekiller sayılır; o sürede yeni ihlal gelmezse satır düşer (önce bandan sonraki bütün tekiller sayılıyordu, csf.deny'de
+    # duran eski tekiller yüzünden satır hiç düşmeyebiliyordu). Aktif banlar'daki "bandan sonra" bilgisi bütün geçmişi tutar.
+    local rvwin=$(( now - REVIEW_DAYS * 86400 )) pao pws pjs
     for aac in "${!PSINCE[@]}"; do
         [ -n "${seen[$aac]}" ] && continue
-        aan=$(grep -oE ':[0-9]+' <<< "${PSINCE[$aac]}" | tr -d ':' | awk '{ s += $1 } END { print s + 0 }')
+        pao=0; [ -n "${PB_D[$aac]}" ] && pao=$(LC_ALL=C date -d "${PB_D[$aac]}" +%s 2>/dev/null || echo 0)
+        pws=$(( pao > rvwin ? pao : rvwin ))
+        cidr_range "$aac" || continue
+        attack_json "$R_LO" "$R_HI" "$pws" "${PB_S[$aac]}" < <(
+            for x in "${!SINGLE_NOTE[@]}"; do printf '%s|%s\n' "$x" "${SINGLE_NOTE[$x]}"; done
+            [ -r "$CSF_VAR/csf.tempban" ] && awk -F'|' '$2 !~ /\// { print $2 "|" $6 "|e:" $1 }' "$CSF_VAR/csf.tempban")
+        pjs="$REPLY"
+        aan=$(grep -oE ':[0-9]+' <<< "$pjs" | tr -d ':' | awk '{ s += $1 } END { print s + 0 }')
         aat=$THRESHOLD_16; [ "${aac#*/}" -ge 24 ] && aat=$THRESHOLD_24
         [ "$aan" -ge "$aat" ] || continue
         ign_until "$aac" && continue; seen[$aac]=1
-        review+=("{\"t\":$now,\"type\":\"part_open\",\"cidr\":\"$aac\",\"svc\":\"${PB_S[$aac]}\",\"extra\":\"${PB_X[$aac]}\",\"since\":${PSINCE[$aac]},\"n\":$aan}")
+        review+=("{\"t\":$now,\"type\":\"part_open\",\"cidr\":\"$aac\",\"svc\":\"${PB_S[$aac]}\",\"extra\":\"${PB_X[$aac]}\",\"since\":$pjs,\"n\":$aan,\"last\":$ATK_LAST}")
         rtext+=("$(printf '%-18s %s · %s' "$aac" "part_open" "$aan")")
     done
     prof review_allowban
@@ -2839,7 +2852,8 @@ function datekey(n,  a, k, M, i, h) {   # "… - Sat Sep 26 12:00:00 2026" → 2
     return 0
 }'
 attack_json() {  # LO HI [SONRA_EPOCH ATLANACAK_SERVİSLER] < "ip|sebep[|e:epoch]" → REPLY = {"ssh":12,…}
-    # her IP bir kez; SONRA verilirse yalnız o zamandan sonra konan banlar (tekilde nottaki tarih, geçicide epoch)
+    # her IP bir kez; SONRA verilirse yalnız o zamandan sonra konan banlar (tekilde nottaki tarih, geçicide epoch).
+    # ATK_LAST = sayılan banların en yenisinin zamanı (epoch; bilinmiyorsa 0) — Kontrol edilecekler'in düşme tarihi için
     local sk=0
     [ -n "$3" ] && [ "$3" != 0 ] && sk=$(LC_ALL=C date -d "@$3" +%Y%m%d%H%M%S 2>/dev/null || echo 0)
     REPLY=$(awk -F'|' -v lo="$1" -v hi="$2" -v se="${3:-0}" -v sk="$sk" -v skip=",${4}," "$AWK_CLS"'
@@ -2847,8 +2861,13 @@ attack_json() {  # LO HI [SONRA_EPOCH ATLANACAK_SERVİSLER] < "ip|sebep[|e:epoch
         $1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && !($1 in S) {
             v = ipn($1); if (v < lo || v > hi) next
             if (se > 0) { if ($3 ~ /^e:/) { if (substr($3, 3) + 0 <= se + 0) next } else { d = datekey($2); if (d == 0 || d <= sk + 0) next } }
-            S[$1] = 1; k = cls($2); if (index(skip, "," k ",")) next; C[k]++ }
-        END { o = ""; for (k in C) o = o (o == "" ? "" : ",") "\"" k "\":" C[k]; print "{" o "}" }')
+            S[$1] = 1; k = cls($2); if (index(skip, "," k ",")) next; C[k]++
+            if ($3 ~ /^e:/) t = substr($3, 3) + 0
+            else { d = sprintf("%.0f", datekey($2)); t = (d + 0 > 0) ? mktime(substr(d, 1, 4) " " substr(d, 5, 2) " " substr(d, 7, 2) " " substr(d, 9, 2) " " substr(d, 11, 2) " " substr(d, 13, 2)) : 0 }
+            if (t > L) L = t }
+        END { o = ""; for (k in C) o = o (o == "" ? "" : ",") "\"" k "\":" C[k]; print "{" o "}|" (L + 0) }')
+    ATK_LAST="${REPLY##*|}"; REPLY="${REPLY%|*}"
+    [[ "$ATK_LAST" =~ ^[0-9]+$ ]] || ATK_LAST=0
     [ -n "$REPLY" ] || REPLY="{}"
 }
 inside_attacks() { # CIDR → REPLY = {"ssh":12,"web":3,…}: aralıktaki IP'lerin ban sebeplerinden servis başına saldıran IP

@@ -124,7 +124,11 @@ settings, with no prompts. `config.env` is left untouched.
   mail log shows them. *Flagged* on these rows is the first record in the
   review window; the note carries the last record and its time. Several
   offending IPs from one allow entry, block or network are grouped like normal bans.
-  A partial ban whose open services keep being hit shows as *Open service*.
+  A partial ban whose open services keep being hit shows as *Open service*
+  (counting the violations of the last 7 days after the ban).
+  Every row says when it drops off the list by itself if nothing new comes:
+  7 days (the *Days kept in the list* setting) after its last attempt, warning
+  or violation. To silence a row before that, use Ignore.
 - **Active range bans** — a sortable, paged table with each block's owner,
   searchable by CIDR, AS number or organisation. Filters show their counts.
   Blocks that became permanent on a second violation are tagged *repeat

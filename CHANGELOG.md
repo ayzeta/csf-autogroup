@@ -32,6 +32,20 @@
   (`IE_REVIEW`, `IC_REVIEW`; on by default, as before).
 - Slack: collected notices are sent whenever any kind in the queue is turned
   on for Slack (before, only when *Run notices* was on).
+- **When a review row drops out.** Every *Needs review* row now says when it
+  leaves the list by itself if nothing new comes: "Drops off the list by
+  itself on Oct 23 if no new attempt comes" — counted from the last attempt
+  (allowed / ignored / server-IP rows), the last warning (suspicious
+  networks, skips) or the last violation of the open services (open
+  services). The IP card says the same, and the glossary explains it. So you
+  can wait and watch instead of ignoring a row.
+- **Open services follow the same window.** An open-service row counted every
+  single ban placed after the partial ban, however old; singles stay in
+  `csf.deny` for long, so the row could stay for good. It now counts only
+  those from the last *Days kept in the list* days and drops out when the open
+  services see no new violation for that long; the daily notice uses the same
+  window. *Active range bans* and the unban window still show every violation
+  since the partial ban.
 - The help of *Days kept in the list* named only suspicious networks
   and skipped blocks; it now says it applies to every *Needs review* row and
   counts from the row's last record.

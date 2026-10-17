@@ -218,6 +218,14 @@ mcheck "süresiz yoksayma kaldırılınca satır geri gelir" "rvrow 151.80.7.9 |
 mk paopen; quiet --action ban24 151.80.7 --mode svc --svc web
 for x in 1 2 3; do printf '%s\n' "151.80.7.$x # lfd: (sshd) Failed SSH login from 151.80.7.$x (FR/France/-): 5 in the last 3600 secs - $(LC_ALL=C date -d '+1 min' '+%a %b %d %H:%M:%S %Y')" >> "$D"; done
 mcheck "kısmi web banından sonra SSH'ye blok eşiği kadar saldırı → 'Kısmi yetmiyor'" "rvrow 151.80.7.0/24 | grep -q '\"type\":\"part_open\".*\"ssh\":3'"
+# açık servis de Kontrol edilecekler penceresine bağlı: bandan sonra ama 7 günden eski ihlaller satır açmaz (csf.deny'de dursa da)
+pdt() { LC_ALL=C date -d "$1" '+%a %b %d %H:%M:%S %Y'; }
+mk poold; printf '%s\n' "tcp|in|d=80,443|s=151.80.7.0/24 # csf_autogroup: elle /24 kısmi ban (root) [svc=web] - do not delete - $(pdt '-20 days')" >> "$D"
+for x in 1 2 3; do single 151.80.7.$x sshd "$(pdt '-10 days')"; done
+mcheck "açık servis: bandan sonraki ama 7 günden eski ihlaller satır açmaz" "[ -z \"\$(rvrow 151.80.7.0/24)\" ]"
+mk ponew; printf '%s\n' "tcp|in|d=80,443|s=151.80.7.0/24 # csf_autogroup: elle /24 kısmi ban (root) [svc=web] - do not delete - $(pdt '-20 days')" >> "$D"
+for x in 1 2; do single 151.80.7.$x sshd "$(pdt '-10 days')"; done; for x in 3 4 5; do single 151.80.7.$x sshd "$(pdt '-1 day')"; done
+mcheck "açık servis: son 7 gündeki ihlaller sayılır (eskiler değil), satır son ihlal zamanını taşır" "rvrow 151.80.7.0/24 | grep -q '\"type\":\"part_open\".*\"ssh\":3,*.*\"n\":3,\"last\":[0-9]'"
 # İzlemeyi yeniden başlat: sayaç satırının tarihi bugün olur, olay yazılır; izlenmeyen blok reddedilir
 mk rewatch; printf '151.80.7 %s\n151.80.9 %s\n' "$(date -d '-10 days' +%F)" "$(date -d '-3 days' +%F)" >> "$C"
 mcheck "izlemeyi yeniden başlat: tarih bugün, öteki satır dokunulmaz, olay kaydı" "run --action rewatch 151.80.7 2>&1 | grep -q 'izleme süresi yeniden başladı' && grep -q \"^151.80.7 $(date +%F)\$\" '$C' && grep -q \"^151.80.9 $(date -d '-3 days' +%F)\$\" '$C' && grep -q '\"type\":\"manual_rewatch\"' '$R/var/lib/csf_autogroup/events.jsonl'"
