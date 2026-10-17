@@ -261,7 +261,7 @@ full one.
 | Restart watch | start a watched `/24`'s watch period again from today (**⋯** in Watched and the IP card) |
 | Remove | lift a block ban (`do not delete` blocks too; `csf.deny` is backed up first) |
 | Remove old ones | on the *Old* filter: remove every block ban older than the old-block limit |
-| Ignore | hide an item from review for 7/30/90 days or indefinitely (stops `/16` warning emails too), from a To review row's **⋯** or the IP card; change the duration or undo under *Ignored*, undo from the IP card too |
+| Ignore | hide an item from review for 7/30/90 days or indefinitely (its emails, Slack messages and History records stop too, also for addresses inside an ignored range), from a To review row's **⋯** or the IP card; *Ignored* and the IP card show who ignored it and when; change the duration or undo under *Ignored*, undo from the IP card too |
 | IPs | a block's IPs and ban reasons, as recorded in the event log |
 | Dry run | show what a run would do; changes nothing, sends nothing |
 | Run now | run immediately instead of waiting for cron |
@@ -295,13 +295,15 @@ its own:
   counters on every reload: the plugin reads them before its own reloads, and
   `csfpost.sh` puts the rule back afterwards. Its last attempt shows in the
   state tip.
-- **Notifications** — an *Events and channels* table: four kinds of event
-  (firewall problem, list filling up, run notices, weekly summary) × two
-  channels (email, Slack), each cell on or off. Run notices are the bans,
-  suspicious networks, skips and the daily review records (violations from
-  allowed IPs, open services); by email they go at the end of the run, on
-  Slack collected into at most one message per hour; firewall and list
-  problems go right away. The email address comes from WHM's Basic WebHost
+- **Notifications** — an *Events and channels* table: five kinds of event
+  (firewall problem, list filling up, run notices, allowed-IP violations and
+  open services, weekly summary) × two channels (email, Slack), each cell on
+  or off. Run notices are the bans, suspicious networks and skips; the
+  allowed-IP violation and open-service records are the allowed / ignored /
+  server-IP and open-service rows of *Needs review*, sent once per IP or
+  range per day and never for what you ignored. Both go by email at the end
+  of the run and on Slack collected into at most one message per hour;
+  firewall and list problems go right away. The email address comes from WHM's Basic WebHost
   Manager Setup (or any address you type); the Slack address is the one set
   there, read at send time and never stored by the plugin. The plugin sends
   the HTML emails and Slack messages itself, so nothing arrives twice. *Send
@@ -487,10 +489,11 @@ tab. Key options:
 - `MSG_LANG` — `en` or `tr` (plugin, logs, emails and `csf.deny` comments).
 - `ALERT_MAIL` — where alert emails go: `whm` (the contact address set in WHM,
   default) or an email address.
-- `IE_FIREWALL`, `IE_LISTFULL`, `IE_RUN`, `IE_DIGEST` — which events go by
-  email; `IC_FIREWALL`, `IC_LISTFULL`, `IC_RUN`, `IC_DIGEST` — which go to
-  Slack (1 = on, all on by default); `SLACK_BATCH_MIN` — run notices go to
-  Slack at most this often (default 60). `NOTIFY` (`all`, `email`, `slack`)
+- `IE_FIREWALL`, `IE_LISTFULL`, `IE_RUN`, `IE_REVIEW`, `IE_DIGEST` — which
+  events go by email; `IC_FIREWALL`, `IC_LISTFULL`, `IC_RUN`, `IC_REVIEW`,
+  `IC_DIGEST` — which go to Slack (1 = on, all on by default; `*_REVIEW` =
+  allowed-IP violations and open services); `SLACK_BATCH_MIN` — run notices
+  and review records go to Slack at most this often (default 60). `NOTIFY` (`all`, `email`, `slack`)
   is the older master switch and still works; the panel writes `all` and
   uses the per-event keys.
 - `THRESHOLD_24`, `THRESHOLD_24_PERMANENT`, `THRESHOLD_16`, `THRESHOLD_TEMP_24` —

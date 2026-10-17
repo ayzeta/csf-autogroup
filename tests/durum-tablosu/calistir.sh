@@ -131,6 +131,23 @@ mkm mailcat0 0; for x in 1 2 3; do single 151.80.7.$x sshd; done; quiet
 mcheck "IE_RUN=0: aynı tur e-posta göndermez" "[ ! -e '$R/mail_calls.log' ]"
 mkm mailcatl 0; printf '%s\n' 'DENY_IP_LIMIT = "4"' 'DENY_TEMP_IP_LIMIT = "100"' > "$R/etc/csf/csf.conf"; for x in 1 2 3 4; do single 151.80.7.$x sshd; done; quiet
 mcheck "IE_RUN=0, IE_LISTFULL=1: liste doluyor uyarısı tek mailde gider, blok banı bölümü girmez" "[ \$(grep -c sendmail '$R/mail_calls.log') = 1 ] && mtext | grep -q 'csf.deny' && ! mtext | grep -q '151.80.7.0/24'"
+# izinli IP'den ihlal: kendi sınıfı (IE_REVIEW), maildeki izin kaydı panelle aynı (satır yorumuyla); yoksayılan IP bildirilmez
+mkav() { mkm "$1" 1; echo "LFD_LOG=$R/lfd.log" >> "$R/app/config.env"; : > "$R/lfd.log"; printf '151.80.7.9 # Ofis yedek - Tue Oct 31 2023\n' >> "$A"; lfdb 3600 151.80.7.9; }
+mkav avmail; quiet
+mcheck "izinli IP ihlali: mail gider, izin kaydı yorumuyla (panelle aynı); olay kaynağında da yorum" "mtext | grep -q '151.80.7.9.*csf.allow: 151.80.7.9 (Ofis yedek - Tue Oct 31 2023)' && grep -q '\"type\":\"allow_viol\".*Ofis yedek' '$R/var/lib/csf_autogroup/events.jsonl'"
+mkav avcat; echo "IE_REVIEW=0" >> "$R/app/config.env"; quiet
+mcheck "IE_REVIEW=0: izinli IP ihlali mail yazmaz (IE_RUN açık olsa da), Geçmiş'e yine yazılır" "[ ! -e '$R/mail_calls.log' ] && grep -q '\"type\":\"allow_viol\"' '$R/var/lib/csf_autogroup/events.jsonl'"
+mkav avign; quiet --action ignore 151.80.7.9 0; quiet
+mcheck "yoksayılan IP: izinli ihlal olayı da maili de yazılmaz" "[ ! -e '$R/mail_calls.log' ] && ! grep -q '\"type\":\"allow_viol\"' '$R/var/lib/csf_autogroup/events.jsonl'"
+mkav avign2; printf '151.80.7.0/25 9999-12-31 root\n' > "$R/var/lib/csf_autogroup/ignored"; quiet
+mcheck "IP'yi içine alan yoksayılmış aralık da bildirimi durdurur (panelle aynı kural)" "[ ! -e '$R/mail_calls.log' ] && ! grep -q '\"type\":\"allow_viol\"' '$R/var/lib/csf_autogroup/events.jsonl'"
+# yoksayma kaydı kimi ve zamanı taşır; eski satırda zaman olay kaydından
+mk igsince; quiet --action ignore 151.80.7.9 0
+mcheck "yoksayma: Yoksayılanlar kaydında yoksayan ve zaman, IP kartında da" "run --status --json 2>/dev/null | grep -q '\"cidr\":\"151.80.7.9\",\"until\":\"9999-12-31\",\"by\":\"root\",\"since\":[0-9]' && run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"ign_by\":\"root\".*\"ign_t\":[0-9]'"
+mk igold; quiet --action ignore 151.80.7.9 0; sed -i 's/^\(151\.80\.7\.9 [^ ]* [^ ]*\) [0-9]*$/\1/' "$R/var/lib/csf_autogroup/ignored"
+mcheck "1.15.3 öncesi yoksayma satırı (zaman alanı yok): zaman olay kaydından" "grep -qx '151.80.7.9 9999-12-31 root' '$R/var/lib/csf_autogroup/ignored' && run --status --json 2>/dev/null | grep -q '\"cidr\":\"151.80.7.9\",\"until\":\"9999-12-31\",\"by\":\"root\",\"since\":[0-9]'"
+mk igskip; printf '151.80.7.0/24 # müşteri\n' >> "$A"; printf '151.80.7.0/24 9999-12-31 root 1\n' > "$R/var/lib/csf_autogroup/ignored"; for x in 1 2 3 4 5 6; do single 151.80.7.$x sshd; done; quiet
+mcheck "yoksayılan aralık izin yüzünden atlansa da 'atlandı' olayı/bildirimi yazılmaz" "! grep -q '\"type\":\"skip_wl\"' '$R/var/lib/csf_autogroup/events.jsonl'"
 mkl aano; lfdb 3600 151.80.7.9
 mcheck "izinsiz IP banlandı → ban işliyor, listede yok" "[ -z \"\$(rvrow 151.80.7.9)\" ]"
 mkl aaport; printf 'tcp|in|d=22|s=151.80.7.9 # müşteri yalnız SSH\n' >> "$A"; lfdb 3600 151.80.7.9

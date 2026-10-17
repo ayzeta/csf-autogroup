@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.3"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.4"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -60,9 +60,9 @@ ALERT_MAIL="${ALERT_MAIL:-whm}"                  # whm = WHM'deki iletişim adre
 # Bildirim kanalları: all = WHM'de tanımlı kanalların hepsi (e-posta: bizim HTML mailimiz, adres WHM'den ·
 # Slack: WHM'deki Slack adresi) · email = yalnız e-posta · slack = yalnız Slack. IC_* = Slack'e gidecek olaylar.
 NOTIFY="${NOTIFY:-all}"
-IC_FIREWALL="${IC_FIREWALL:-1}"; IC_LISTFULL="${IC_LISTFULL:-1}"; IC_RUN="${IC_RUN:-1}"; IC_DIGEST="${IC_DIGEST:-1}"
+IC_FIREWALL="${IC_FIREWALL:-1}"; IC_LISTFULL="${IC_LISTFULL:-1}"; IC_RUN="${IC_RUN:-1}"; IC_DIGEST="${IC_DIGEST:-1}"; IC_REVIEW="${IC_REVIEW:-1}"
 # IE_* = e-postaya gidecek olaylar (Slack'teki IC_* ile aynı dört sınıf): güvenlik duvarı sorunu, liste doluyor, tur bildirimleri, haftalık özet
-IE_FIREWALL="${IE_FIREWALL:-1}"; IE_LISTFULL="${IE_LISTFULL:-1}"; IE_RUN="${IE_RUN:-1}"; IE_DIGEST="${IE_DIGEST:-1}"
+IE_FIREWALL="${IE_FIREWALL:-1}"; IE_LISTFULL="${IE_LISTFULL:-1}"; IE_RUN="${IE_RUN:-1}"; IE_DIGEST="${IE_DIGEST:-1}"; IE_REVIEW="${IE_REVIEW:-1}"
 WWWACCT_SHADOW="${WWWACCT_SHADOW:-/etc/wwwacct.conf.shadow}"   # WHM'in Slack adresi burada (CONTACTSLACK); eklentide saklanmaz
 SLACK_BATCH_MIN="${SLACK_BATCH_MIN:-60}"         # tur bildirimleri Slack'e en fazla bu kadar dakikada bir (toplanarak) gider; acil olanlar hemen
 WWWACCT_CONF="${WWWACCT_CONF:-/etc/wwwacct.conf}"
@@ -240,7 +240,11 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_16_DONE="Şüpheli ağ turu bitti. %s bildirim."
   M_AVIOL="İzinli IP'den ihlal (Geçmiş'e yazıldı): %s → %s, son 24 saatte %s kez"
   M_POPEN="Açık servis (Geçmiş'e yazıldı): %s kısmi banından sonra açık kalan servislere %s ihlal"
-  M_AVIOL_SUBJ="%s izinli IP'den ihlal"; M_AVIOL_BODY="İzin listesindeki, yoksayılan ya da sunucunun kendi adreslerinden lfd kuralına takılan denemeler (lfd banlamadı ya da ban işlemedi). Kontrol edilecekler'de ve Geçmiş'te; IP başına günde bir kez bildirilir. IP · servis · son 24 saatte kaç kez · durum · izin kaydı:"
+  M_AVIOL_SUBJ="%s izinli IP'den ihlal"; M_AVIOL_BODY="İzin listesindeki, yoksayılan ya da sunucunun kendi adreslerinden lfd kuralına takılan denemeler (lfd banlamadı ya da ban işlemedi). Kontrol edilecekler'de ve Geçmiş'te; IP başına günde bir kez bildirilir; yoksaydıklarınız bildirilmez. Her satırda IP, hostname ve sahibi; servis, son 24 saatte kaç kez, durum, izin ya da yoksayma kaydı ve lfd'nin son kaydı:"
+  M_AV_N="%s kez"; M_AV_SRC="kayıt: %s"; M_AV_LAST="son: %s (%s)"; M_AV_ACCT="denenen hesaplar: %s"
+  # servis adları panelle aynı (ag.js svc_*)
+  M_SVCN_web="Web"; M_SVCN_ssh="SSH"; M_SVCN_ftp="FTP"; M_SVCN_cp="cPanel · WHM · Webmail"; M_SVCN_min="Gelen posta"; M_SVCN_mout="Giden posta"
+  M_SVCN_sync="Posta eşitleme"; M_SVCN_dns="DNS"; M_SVCN_scan="port taraması"; M_SVCN_repeat="tekrar banlanan"; M_SVCN_other="diğer"
   M_AVK_b="ban işlemiyor"; M_AVK_i="lfd yoksaydı"; M_AVK_y="yoksayılıyor"; M_AVK_s="sunucu IP'si"
   M_POPEN_SUBJ="%s açık servis"; M_POPEN_BODY="Kısmi ban yalnız seçilen servisleri kapatıyor; bandan sonra açık kalan servislere blok ya da ağ eşiği kadar ihlal geldi. Banı değiştirip o servisleri de kapatabilirsiniz (aralık başına günde bir kez bildirilir):"; M_POPEN_L="kapalı: %s · açık servislere %s ihlal"
   M_DG_RV="Kontrol edilecekler (7 gün): %s izinli IP'den ihlal kaydı · %s açık servis kaydı"
@@ -486,7 +490,10 @@ else
   M_16_DONE="Suspicious network pass done. %s report(s)."
   M_AVIOL="Violation from allowed IP (recorded in History): %s → %s, %s times in the last 24 hours"
   M_POPEN="Open service (recorded in History): %s violations on the services the partial ban on %s leaves open"
-  M_AVIOL_SUBJ="%s violations from allowed IPs"; M_AVIOL_BODY="Attempts from allowed, ignored or server-own addresses that tripped an lfd rule (lfd did not ban them or the ban did not apply). In Needs review and History; reported once per IP per day. IP · service · times in the last 24 hours · state · allow entry:"
+  M_AVIOL_SUBJ="%s violations from allowed IPs"; M_AVIOL_BODY="Attempts from allowed, ignored or server-own addresses that tripped an lfd rule (lfd did not ban them or the ban did not apply). In Needs review and History; reported once per IP per day; nothing is sent for what you ignored. Each row: IP, hostname and owner; service, times in the last 24 hours, state, allow or ignore entry and lfd's last record:"
+  M_AV_N="%s times"; M_AV_SRC="entry: %s"; M_AV_LAST="last: %s (%s)"; M_AV_ACCT="accounts tried: %s"
+  M_SVCN_web="Web"; M_SVCN_ssh="SSH"; M_SVCN_ftp="FTP"; M_SVCN_cp="cPanel · WHM · Webmail"; M_SVCN_min="Incoming mail"; M_SVCN_mout="Outgoing mail"
+  M_SVCN_sync="Mail sync"; M_SVCN_dns="DNS"; M_SVCN_scan="port scan"; M_SVCN_repeat="banned repeatedly"; M_SVCN_other="other"
   M_AVK_b="ban not working"; M_AVK_i="ignored by lfd"; M_AVK_y="ignored"; M_AVK_s="server IP"
   M_POPEN_SUBJ="%s open services"; M_POPEN_BODY="A partial ban closes only the chosen services; since it went in, the services left open took violations up to the block or network threshold. Change the ban to close them too (reported once per range per day):"; M_POPEN_L="closed: %s · %s violations on the open services"
   M_DG_RV="Needs review (7 days): %s allowed-IP violation records · %s open-service records"
@@ -745,7 +752,7 @@ mail() {
 
 # ── Settings: validation (panel + --config set + --dry-run --set) ──────────
 # Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
-CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_URLS CLOUD_EXTRA ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS OWNER_TTL_DAYS IMUNIFY_REFRESH_MIN BLOCK_ACTIVE_DAYS"
+CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST IC_REVIEW IE_REVIEW THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_URLS CLOUD_EXTRA ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS OWNER_TTL_DAYS IMUNIFY_REFRESH_MIN BLOCK_ACTIVE_DAYS"
 PROV_KEYS="SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_URLS CLOUD_EXTRA ENABLED"
 SVC_CATALOG="google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake microsoft365"
 CLOUD_CATALOG="gcp aws azure oracle digitalocean linode vultr"
@@ -765,7 +772,7 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
         MSG_LANG) opts="tr en" ;;
         LOOKUP) opts="0 1" ;;
         CRON_MIN) opts="*/5 */10 */15 */30 0" ;;
-        DIGEST|IC_FIREWALL|IC_LISTFULL|IC_RUN|IC_DIGEST|IE_FIREWALL|IE_LISTFULL|IE_RUN|IE_DIGEST) opts="0 1" ;;
+        DIGEST|IC_FIREWALL|IC_LISTFULL|IC_RUN|IC_DIGEST|IE_FIREWALL|IE_LISTFULL|IE_RUN|IE_DIGEST|IC_REVIEW|IE_REVIEW) opts="0 1" ;;
         NOTIFY) opts="all email slack" ;;
         DIGEST_DAY) opts="1 2 3 4 5 6 7" ;;
         ALERT_MAIL)
@@ -1016,12 +1023,26 @@ allow_viol_events() {
     cls_map < <(for i in "${!AA_IP[@]}"; do printf 'av%s|%s\n' "$i" "${AA_R[i]}"; done)
     for i in "${!AA_IP[@]}"; do
         ip="${AA_IP[i]}"; [ -n "${SEEN[$ip]}" ] && continue
+        # panelde yoksaydığınız IP (ya da onu içine alan aralık): Kontrol edilecekler'de görünmez, olay ve bildirim de yazılmaz
+        ign_covers "$ip" && continue
         if [ "${AA_F[i]:-0}" = 2 ]; then kind=s; elif [ "${AA_K[i]}" = b ]; then kind=b; elif [ "${AA_F[i]:-0}" = 1 ]; then kind=i; else kind=y; fi
-        src=""; [ "${AA_W[i]}" -ge 0 ] && src="${WL_TXT[${AA_W[i]}]}"; [ -n "$src" ] || src="${AA_S[i]}"
+        wl_label "${AA_W[i]}"; src="$REPLY"; [ -n "$src" ] || src="${AA_S[i]}"   # izin kaydı yorumuyla (panelle aynı)
         jstr "$src"; sj="$REPLY"; jstr "${AA_R[i]}"; rj="$REPLY"
         ev allow_viol "$ip" "svc=\"${CLSM[av$i]:-other}\"" "n=${AA_N[i]}" "kind=\"$kind\"" "src=$sj" "why=$rj"
         log "$(m "$M_AVIOL" "$ip" "${CLSM[av$i]:-other}" "${AA_N[i]}")"
-        kt="M_AVK_$kind"; AV_MAIL+=("   $(printf '%-18s' "$ip") ${CLSM[av$i]:-other} · ${AA_N[i]} · ${!kt}${src:+ · $src}")   # tur maili (IE_RUN) ve Slack tur bildirimi
+        # mail ve Slack satırı panelin satırıyla aynı bilgiler: IP, hostname, sahibi (IP / Hostname / Sebep tablosu), servis,
+        # kaç kez, durum, izin ya da yoksayma kaydı (yorumuyla), lfd'nin son kaydı ve zamanı, sunucu IP'sinde denenen hesaplar
+        kt="M_AVK_$kind"; local avh="-" avo="" avw acc
+        ptr_lookup "$ip"; [ -n "$REPLY" ] && avh="${REPLY%.}"
+        owner_lookup "$ip"; avo="$OWN_LONG"
+        svc_names "${CLSM[av$i]:-other}"; avw="$REPLY · $(m "$M_AV_N" "${AA_N[i]}") · ${!kt}${src:+ · $(m "$M_AV_SRC" "$src")}"
+        [ -n "${AA_R[i]}" ] && avw+=" · $(m "$M_AV_LAST" "${AA_R[i]}" "$(date -d "@${AA_T[i]:-0}" '+%d.%m %H:%M' 2>/dev/null)")"
+        if [ "$kind" = s ] && aa_acct "$ip" && [ -n "$REPLY" ]; then
+            acc=$(grep -oE '"u":"[^"]*","n":[0-9]+' <<< "$REPLY" | sed -E 's/"u":"([^"]*)","n":([0-9]+)/\1 (\2)/' | paste -sd, - | sed 's/,/, /g')
+            [ -n "$acc" ] && avw+=" · $(m "$M_AV_ACCT" "$acc")"
+        fi
+        avw=$(tr -s ' ' <<< "${avw//$'\t'/ }")      # tabloda alan ayıracı iki boşluk: alan içinde çift boşluk kalmasın
+        AV_MAIL+=("   - $ip  $avh  ${avo:+[$avo]  }$avw")   # mail (IE_REVIEW) ve Slack (IC_REVIEW)
         new+=("$ip")
     done
     { for ip in "${!SEEN[@]}"; do printf '%s %s\n' "$ip" "$TODAY"; done; for ip in "${new[@]}"; do printf '%s %s\n' "$ip" "$TODAY"; done; } > "$seenf" 2>/dev/null
@@ -1059,7 +1080,12 @@ part_open_events() {
         ign_until "$c" && continue
         ev part_open "$c" "svc=\"${PB_S[$c]}\"" "extra=\"${PB_X[$c]}\"" "since=$ps" "n=$aan"
         log "$(m "$M_POPEN" "$c" "$aan")"; new+=("$c")
-        PO_MAIL+=("   $(printf '%-18s' "$c") $(m "$M_POPEN_L" "${PB_S[$c]}${PB_X[$c]:+,$PB_X[$c]}" "$aan")")
+        # panelin satırıyla aynı: aralık, kapalı servisler, açık servislere ihlal (servis başına), sahibi
+        local pos="" pk pn pcl
+        while IFS=: read -r pk pn; do [ -n "$pk" ] || continue; svc_names "$pk"; pos+="${pos:+, }$REPLY $pn"; done < <(grep -oE '"[a-z0-9_]+":[0-9]+' <<< "$ps" | tr -d '"')
+        svc_names "${PB_S[$c]}"; pcl="$REPLY${PB_X[$c]:+, port ${PB_X[$c]}}"
+        PO_MAIL+=("$c -> $(m "$M_POPEN_L" "$pcl" "$aan")${pos:+ ($pos)}")
+        owner_lookup "${c%/*}"; [ -n "$OWN_LONG" ] && PO_MAIL+=("$(m "$M_OWNER" "$OWN_LONG")")
     done
     { for c in "${!SEEN[@]}"; do printf '%s %s\n' "$c" "$TODAY"; done; for c in "${new[@]}"; do printf '%s %s\n' "$c" "$TODAY"; done; } > "$seenf" 2>/dev/null
 }
@@ -1827,14 +1853,19 @@ load_whitelist() {
     CC_LIST=$( { conf_val CC_IGNORE | sed 's/^/CC_IGNORE=/'; conf_val CC_ALLOW | sed 's/^/CC_ALLOW=/'; } | grep -v '=$' | LC_ALL=C tr '[:lower:]' '[:upper:]')
     logr "$(m "$M_WL_LOADED" "${#WL_LO[@]}" "${#RIGNORE[@]}")"
 }
-wl_overlap() {   # LO HI → WL_HIT = çakışan beyaz liste kaydı (WL_HIT_CM = satırdaki yorum)
+wl_overlap() {   # LO HI → WL_HIT = çakışan beyaz liste kaydı, satır yorumuyla ("csf.allow: IP (ofis)"); WL_HIT_CM yorum
+    # Yorum her yerde aynı biçimde: panel, IP kartı, mail, olay ve ban penceresi (önce yalnız IP kartı ve satırlar gösteriyordu)
     local i
     WL_HIT=""; WL_HIT_CM=""
     [ "$WL_LOADED" = 1 ] || load_whitelist
     for i in "${!WL_LO[@]}"; do
-        (( WL_LO[i] <= $2 && WL_HI[i] >= $1 )) && { WL_HIT="${WL_TXT[i]}"; WL_HIT_CM="${WL_CM[i]}"; return 0; }
+        (( WL_LO[i] <= $2 && WL_HI[i] >= $1 )) && { WL_HIT="${WL_TXT[i]}${WL_CM[i]:+ (${WL_CM[i]})}"; WL_HIT_CM="${WL_CM[i]}"; return 0; }
     done
     return 1
+}
+wl_label() {     # İZİN_KAYDI_İNDİSİ → REPLY = "kaynak: kayıt (yorum)"; indis yoksa boş
+    REPLY=""; [ -n "$1" ] && [ "$1" -ge 0 ] 2>/dev/null || return 0
+    REPLY="${WL_TXT[$1]}${WL_CM[$1]:+ (${WL_CM[$1]})}"
 }
 self_overlap() { # LO HI → aralıkta sunucunun kendi IP'si var mı (SELF_HIT); "yine de banla" ile de geçilmez
     local i
@@ -1910,6 +1941,8 @@ wl_skip() {      # CIDR COUNT PREFIX24 "IPS" KIND — doğrulanamadıysa yalnız
 }
 wl_skip_body=""; wl_skipped=0
 wl_report() {    # CIDR COUNT PREFIX24 "IPS" KIND — günde bir kez maile ekle
+    # panelde yoksayılan aralık: Kontrol edilecekler'de olduğu gibi olay ve bildirim de yok (yalnız günlükte)
+    if ign_until "$1"; then logr "$(m "$M_WL_SKIPD" "$1" "$WL_HIT")"; return; fi
     if grep -qF "WLSKIP_$3 $TODAY" "$SAYAC_FILE"; then logr "$(m "$M_WL_SKIPD" "$1" "$WL_HIT")"; return; fi
     log "$(m "$M_WL_SKIP" "$1" "$WL_HIT")"
     cnt_add "WLSKIP_$3 $TODAY"
@@ -1977,15 +2010,40 @@ IGN_FOREVER="9999-12-31"   # süresiz yoksayma: dosyada bu tarih durur (tarih ka
 ign_txt() {      # BİTİŞ → REPLY = "2026-11-12 tarihine kadar" metinlerinde kullanılacak tarih ya da "süresiz"
     if [ "$1" = "$IGN_FOREVER" ]; then REPLY="$M_FOREVER"; else REPLY="$1"; fi
 }
-ign_until() {    # CIDR → 0 = süresi dolmamış bir yoksayma var (IGN_UNTIL; IGN_UNTIL_TXT panel/mail metni için)
-    local c u b
-    IGN_UNTIL=""; IGN_UNTIL_TXT=""
+svc_names() {    # "web,ssh" → REPLY = "Web, SSH" (panelin servis adlarıyla; bilinmeyen anahtar olduğu gibi)
+    local k v out=""
+    for k in ${1//,/ }; do v="M_SVCN_$k"; out+="${out:+, }${!v:-$k}"; done
+    REPLY="$out"
+}
+ign_covers() {   # IP → 0 = IP'nin kendisi ya da onu içine alan bir aralık yoksayılmış, süresi dolmamış (IGN_HIT = kayıt)
+    local c u n
+    IGN_HIT=""
     [ -r "$IGNORE_FILE" ] || return 1
-    while IFS=' ' read -r c u b; do         # durum çıktısı IFS=, ile çağırır
-        [ "$c" = "$1" ] || continue
-        if [[ ! "$u" < "$TODAY" ]]; then IGN_UNTIL="$u"; ign_txt "$u"; IGN_UNTIL_TXT="$REPLY"; return 0; fi
+    ip2int "$1"; n=$REPLY
+    while IFS=' ' read -r c u _; do
+        [[ "$u" < "$TODAY" ]] && continue
+        if [[ "$c" == */* ]]; then cidr_range "$c" && (( R_LO <= n && R_HI >= n )) || continue
+        else [ "$c" = "$1" ] || continue; fi
+        IGN_HIT="$c"; return 0
     done < "$IGNORE_FILE"
     return 1
+}
+ign_until() {    # CIDR → 0 = süresi dolmamış bir yoksayma var (IGN_UNTIL; IGN_UNTIL_TXT panel/mail metni için;
+    # IGN_BY yoksayan, IGN_T yoksayma zamanı — satırın 4. alanı, eski satırda boş: ign_since doldurur)
+    local c u b s
+    IGN_UNTIL=""; IGN_UNTIL_TXT=""; IGN_BY=""; IGN_T=""
+    [ -r "$IGNORE_FILE" ] || return 1
+    while IFS=' ' read -r c u b s _; do         # durum çıktısı IFS=, ile çağırır
+        [ "$c" = "$1" ] || continue
+        if [[ ! "$u" < "$TODAY" ]]; then
+            IGN_UNTIL="$u"; ign_txt "$u"; IGN_UNTIL_TXT="$REPLY"; IGN_BY="$b"; [[ "$s" =~ ^[0-9]+$ ]] && IGN_T="$s"; return 0
+        fi
+    done < "$IGNORE_FILE"
+    return 1
+}
+ign_since() {    # CIDR → IGN_T boşsa (1.15.3 öncesi satır) olay kaydındaki son "yoksayıldı" olayının zamanı
+    [ -n "$IGN_T" ] && return 0
+    IGN_T=$(grep -F "\"type\":\"manual_ignore\",\"cidr\":\"$1\"" "$EVENTS_FILE" 2>/dev/null | tail -n 1 | grep -oE '^\{"t":[0-9]+' | grep -oE '[0-9]+$')
 }
 
 # ── Temp group bans: csf.tempban içinde bizim eklediğimiz /24'ler ────────────
@@ -2361,8 +2419,8 @@ do_status() {
         [ "$(printf '%s\n' ${RS16[$aap]} $(for aai in "${aaa[@]}"; do echo "${AA_IP[aai]}"; done) | sed 's/\.[0-9]*$//' | sort -u | grep -c .)" -ge 2 ] || continue
         aac="$aap.0.0/16"; [ -n "${seen[$aac]}" ] && continue; ign_until "$aac" && continue
         cidr_range "$aac" && perm_covers "$R_LO" "$R_HI" && continue
-        seen[$aac]=1; aal=""; [ "${AA_W[${aaa[0]}]}" -ge 0 ] && aal="${WL_TXT[${AA_W[${aaa[0]}]}]}"
-        rv_add warn16 "$aac" "$aal" "${aaa[*]}" "${RS16[$aap]}" ",\"perm\":null"
+        seen[$aac]=1; aal=""; aalc=""; [ "${AA_W[${aaa[0]}]}" -ge 0 ] && { aal="${WL_TXT[${AA_W[${aaa[0]}]}]}"; aalc="${WL_CM[${AA_W[${aaa[0]}]}]}"; }
+        rv_add warn16 "$aac" "$aal" "${aaa[*]}" "${RS16[$aap]}" ",\"perm\":null"; aalc=""
         for aai in "${aaa[@]}"; do AAU[$aai]=1; done
     done
     # d) kalanlar tek IP
@@ -2413,10 +2471,13 @@ do_status() {
     # Yoksayılanlar
     local ignored=() itext=()
     if [ -r "$IGNORE_FILE" ]; then
-        while read -r c u b; do
+        local is
+        while read -r c u b is _; do
             [[ "$c" =~ $CIDR4_RE ]] || continue
             [[ "$u" < "$TODAY" ]] && continue
-            jstr "$b"; ignored+=("{\"cidr\":\"$c\",\"until\":\"$u\",\"by\":$REPLY}")
+            # yoksayma zamanı: satırın 4. alanı (1.15.3+); eski satırda olay kaydındaki son "yoksayıldı" olayından
+            [[ "$is" =~ ^[0-9]+$ ]] || is=$(grep -F "\"type\":\"manual_ignore\",\"cidr\":\"$c\"" "$EVENTS_FILE" 2>/dev/null | tail -n 1 | grep -oE '^\{"t":[0-9]+' | grep -oE '[0-9]+$')
+            jstr "$b"; ignored+=("{\"cidr\":\"$c\",\"until\":\"$u\",\"by\":$REPLY${is:+,\"since\":$is}}")
             itext+=("$(printf '%-18s → %s (%s)' "$c" "$u" "$b")")
         done < "$IGNORE_FILE"
     fi
@@ -2994,23 +3055,26 @@ do_lookup() {
             fi
         done < "$CSF_VAR/csf.tempban"
     fi
-    wl_overlap "$n" "$n" && { wl="$WL_HIT"; [ -n "$WL_HIT_CM" ] && wl="$wl ($WL_HIT_CM)"; }   # satır yorumu: "csf.allow: IP (ofis)"
+    wl_overlap "$n" "$n" && wl="$WL_HIT"   # satır yorumuyla: "csf.allow: IP (ofis)"
     if [ -n "$host" ] && [ "${#RIGNORE[@]}" -gt 0 ]; then
         rig_match "$(printf '%s' "$host" | LC_ALL=C tr '[:upper:]' '[:lower:]')" "$ip" && rig="$REPLY"   # motorun beyaz liste kuralıyla aynı
     fi
     local p24="${ip%.*}"
     line=$(grep -m1 -E "^${p24//./\\.} " "$SAYAC_FILE" 2>/dev/null)
     [ -n "$line" ] && pend="${line#* }"
-    if ign_until "$ip"; then ign="$ip → $IGN_UNTIL_TXT"
-    elif ign_until "${ip%.*}.0/24"; then ign="${ip%.*}.0/24 → $IGN_UNTIL_TXT"
-    elif ign_until "${ip%.*.*}.0.0/16"; then ign="${ip%.*.*}.0.0/16 → $IGN_UNTIL_TXT"; fi
+    # IP'yi içine alan her yoksayma (tek IP, /24, /16, izin ya da duyurulan aralık): motorun bildirim kuralıyla aynı
+    local ign_by="" ign_t=""
+    if ign_covers "$ip" && ign_until "$IGN_HIT"; then
+        ign="$IGN_HIT → $IGN_UNTIL_TXT"; ign_since "$IGN_HIT"; ign_by="$IGN_BY"; ign_t="$IGN_T"
+    fi
 
     if [ "$JSON" = 1 ]; then
         local o="{\"ok\":true,\"ip\":\"$ip\"" k v
         if self_overlap "$n" "$n"; then o+=",\"self\":true"; else o+=",\"self\":false"; fi   # sunucunun kendi adresi: ban konamaz
-        for k in host asname pfx cc reg alloc deny temp wl rig pend ign; do
+        for k in host asname pfx cc reg alloc deny temp wl rig pend ign ign_by; do
             v="${!k}"; jstr "$v"; o+=",\"$k\":$REPLY"
         done
+        [ -n "$ign_t" ] && o+=",\"ign_t\":$ign_t"
         local bp="${ip%.*}" btc=0
         [ -r "$CSF_VAR/csf.tempban" ] && btc=$(awk -F'|' -v p="$bp." 'index($2, p) == 1 && $2 !~ /\// && !S[$2]++ { n++ } END { print n + 0 }' "$CSF_VAR/csf.tempban")
         o+=",\"blk\":{\"s\":${count24[$bp]:-0},\"t\":$btc,\"ts\":$THRESHOLD_24,\"tt\":$THRESHOLD_TEMP_24}"
@@ -4237,7 +4301,10 @@ do_action() {    # NAME TARGET [DAYS]
             fi
             [[ "$days" =~ ^[0-9]{1,3}$ ]] && [ "$days" -le 365 ] || days=30
             local until; if [ "$days" = 0 ]; then until="$IGN_FOREVER"; else until=$(date -d "+$days days" +%Y-%m-%d); fi   # 0 gün = süresiz
-            { printf '%s\n' "$keep" | sed '/^$/d'; echo "$t $until $AG_BY"; } > "$IGNORE_FILE"
+            # satır: "hedef bitiş kim başlangıç(epoch)"; süre değiştirilince ilk yoksayma zamanı korunur
+            local isince=""; [ -r "$IGNORE_FILE" ] && isince=$(awk -v c="$t" '$1 == c && $4 ~ /^[0-9]+$/ { print $4; exit }' "$IGNORE_FILE")
+            [ -n "$isince" ] || isince=$(date +%s)
+            { printf '%s\n' "$keep" | sed '/^$/d'; echo "$t $until $AG_BY $isince"; } > "$IGNORE_FILE"
             local itxt; if [ "$days" = 0 ]; then itxt=$(m "$M_A_IGNORED_F" "$t"); else itxt=$(m "$M_A_IGNORED" "$t" "$until"); fi
             log "$(m "$M_A_LOG" "$AG_BY" "$itxt")"
             ev manual_ignore "$t" "by=\"$AG_BY\"" "until=\"$until\""
@@ -5113,7 +5180,7 @@ do_config() {
                 o="{\"ok\":true,\"values\":{"
                 i=0
                 for k in $CFG_KEYS; do jstr "$(cfg_value "$k")"; o+="$([ $i -gt 0 ] && echo ,)\"$k\":$REPLY"; i=1; done
-                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"whm\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"NOTIFY\":\"all\",\"IC_FIREWALL\":\"1\",\"IC_LISTFULL\":\"1\",\"IC_RUN\":\"1\",\"IC_DIGEST\":\"1\",\"IE_FIREWALL\":\"1\",\"IE_LISTFULL\":\"1\",\"IE_RUN\":\"1\",\"IE_DIGEST\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_MAX_LINES\":\"5000\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"BLOCK_EXPIRE_DAYS\":\"365\",\"BLOCK_ACTIVE_DAYS\":\"30\",\"OWNER_TTL_DAYS\":\"30\",\"IMUNIFY_REFRESH_MIN\":\"60\",\"CLOUD_REFRESH_DAYS\":\"1\",\"CLOUD_FAIL_DAYS\":\"3\",\"SVC_REFRESH_DAYS\":\"1\",\"SVC_FAIL_DAYS\":\"3\",\"GEO_REFRESH_DAYS\":\"25\",\"BLOCK_EXPIRE_AUTO\":\"0\",\"CRON_MIN\":\"*/10\"}"
+                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"whm\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"NOTIFY\":\"all\",\"IC_FIREWALL\":\"1\",\"IC_LISTFULL\":\"1\",\"IC_RUN\":\"1\",\"IC_DIGEST\":\"1\",\"IE_FIREWALL\":\"1\",\"IE_LISTFULL\":\"1\",\"IE_RUN\":\"1\",\"IE_DIGEST\":\"1\",\"IC_REVIEW\":\"1\",\"IE_REVIEW\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_MAX_LINES\":\"5000\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"BLOCK_EXPIRE_DAYS\":\"365\",\"BLOCK_ACTIVE_DAYS\":\"30\",\"OWNER_TTL_DAYS\":\"30\",\"IMUNIFY_REFRESH_MIN\":\"60\",\"CLOUD_REFRESH_DAYS\":\"1\",\"CLOUD_FAIL_DAYS\":\"3\",\"SVC_REFRESH_DAYS\":\"1\",\"SVC_FAIL_DAYS\":\"3\",\"GEO_REFRESH_DAYS\":\"25\",\"BLOCK_EXPIRE_AUTO\":\"0\",\"CRON_MIN\":\"*/10\"}"
                 ALERT_MAIL=whm mail_to; jstr "$REPLY"; o+=",\"whm_contact\":$REPLY"
                 slack_url; o+=",\"slack\":$([ -n "$REPLY" ] && echo true || echo false)"
                 o+=",\"csf\":{\"deny_limit\":$(num "$(conf_val DENY_IP_LIMIT)"),\"temp_limit\":$(num "$(conf_val DENY_TEMP_IP_LIMIT)")}"
@@ -5554,11 +5621,12 @@ fi
 logr "$(m "$M_16_DONE" "$warn16")"
 
 # ── Kontrol edilecekler'in kalıcı kaydı: izinli IP'den ihlal (IP başına günde bir), açık servis (aralık başına günde bir) ──
-# Olay Geçmiş'e yazılır; aynı gün ilk kez görülenler tur bildirimine de girer (e-posta IE_RUN, Slack IC_RUN)
+# Olay Geçmiş'e yazılır; aynı gün ilk kez görülenler bildirime de girer — kendi sınıfı: e-posta IE_REVIEW, Slack IC_REVIEW
+# (1.15.3; önce tur bildirimleriyle birlikte IE_RUN / IC_RUN'du, ayrı açılıp kapatılamıyordu)
 allow_viol_events
 part_open_events
-[ "${#AV_MAIL[@]}" -gt 0 ] && mail_add "$(m "$M_AVIOL_SUBJ" "${#AV_MAIL[@]}")" "$M_AVIOL_BODY$NL$NL$(printf '%s\n' "${AV_MAIL[@]}")"
-[ "${#PO_MAIL[@]}" -gt 0 ] && mail_add "$(m "$M_POPEN_SUBJ" "${#PO_MAIL[@]}")" "$M_POPEN_BODY$NL$NL$(printf '%s\n' "${PO_MAIL[@]}")"
+[ "${#AV_MAIL[@]}" -gt 0 ] && mail_add "$(m "$M_AVIOL_SUBJ" "${#AV_MAIL[@]}")" "$M_AVIOL_BODY$NL$NL$(printf '%s\n' "${AV_MAIL[@]}")" "" IE_REVIEW
+[ "${#PO_MAIL[@]}" -gt 0 ] && mail_add "$(m "$M_POPEN_SUBJ" "${#PO_MAIL[@]}")" "$M_POPEN_BODY$NL$NL$(printf '%s\n' "${PO_MAIL[@]}")" "" IE_REVIEW
 
 # ── Whitelist skips: one email per run (each block once per day) ────────────
 if [ "$wl_skipped" -gt 0 ]; then
@@ -5591,7 +5659,8 @@ ic_track IC_FIREWALL Firewall "$([ ${#h_msgs[@]} -gt 0 ] && echo 1 || echo 0)" "
 
 # ── Bu turun bildirimleri: tek mail ─────────────────────────────────────────
 mail_flush
-slack_on && [ "$IC_RUN" = 1 ] && slack_queue_flush
+# kuyrukta yalnız Slack'e seçili sınıfların parçaları var (mail_flush IC_* denetler): hangi sınıftan olursa olsun boşaltılır
+slack_on && slack_queue_flush
 
 # ── Counter retention + log rotation ────────────────────────────────────────
 if [ "$DRY" != 1 ] && [ -f "$SAYAC_FILE" ]; then

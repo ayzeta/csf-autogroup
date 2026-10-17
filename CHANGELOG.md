@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.15.4 — 2026-10-17
+
+- **Fix — an ignored address was still reported.** *Needs review* hid an
+  ignored allowed / ignored / server-IP row, but the run still wrote its daily
+  History record and sent it by email (and Slack). The same held for a block
+  skipped because of an allow entry when that block was ignored. Now nothing
+  is recorded or sent for what you ignored — also for an address inside an
+  ignored range, the same rule as the panel. The IP card finds the ignore
+  that covers the address whatever its size (before: only the address, its
+  /24 and its /16).
+- **Allow entries carry their comment everywhere.** The comment you wrote on
+  an allow line (`1.2.3.4 # office`) showed on the review rows and the IP card,
+  but not in the email, the History record, the skipped-block email, the ban
+  window and the suspicious-network row. All of them now show the entry the
+  same way: `csf.allow: 1.2.3.4 (office)`.
+- **Email and Slack say what the panel row says.** An allowed-IP violation is
+  listed with its hostname and owner, the service (by the panel's name, e.g.
+  *Mail sync* instead of `sync`), how many times, the state, the allow or
+  ignore entry with its comment, lfd's last record with its time and, for the
+  server's own IP, the mail accounts that were tried. An open service names
+  the range, the closed services, the violations per open service and the
+  owner.
+- **Who ignored, and when.** *Ignored* and the IP card show "root ignored it,
+  2 days ago" (full date in the tooltip). Entries made before this version get
+  the time from the History record of the ignore. Changing the duration keeps
+  the original time.
+- **New event kind: allowed-IP violations and open services.** These daily
+  review records were part of *Run notices* and could not be turned off on
+  their own. They have their own row in *Events and channels*
+  (`IE_REVIEW`, `IC_REVIEW`; on by default, as before).
+- Slack: collected notices are sent whenever any kind in the queue is turned
+  on for Slack (before, only when *Run notices* was on).
+
 ## 1.15.3 — 2026-10-16
 
 - **Fix — "Your session has expired" on a page left open for long.** Each
