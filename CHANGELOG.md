@@ -32,6 +32,9 @@
   (`IE_REVIEW`, `IC_REVIEW`; on by default, as before).
 - Slack: collected notices are sent whenever any kind in the queue is turned
   on for Slack (before, only when *Run notices* was on).
+- The help of *Days kept in the list* named only suspicious networks
+  and skipped blocks; it now says it applies to every *Needs review* row and
+  counts from the row's last record.
 
 ## 1.15.3 — 2026-10-16
 
