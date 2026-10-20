@@ -170,14 +170,14 @@ printf '%s\n' '2026-10-12 13:34:31 dovecot_login authenticator failed for H=(sit
     '2026-10-13 06:00:00 dovecot_login authenticator failed for H=(x) [203.0.113.99]:1: 535 Incorrect authentication data (set_id=baska@site.example)' > "$R/exim_mainlog"
 mcheck "sunucunun kendi IP'si yoksayıldı → 'Sunucunun kendi IP'si' (full=2), kaynak 'sunucu IP'si'" "rvrow 203.0.113.10 | grep -q '\"wl\":\"sunucu IP.si: 203.0.113.10\".*\"bk\":\"i\",\"cnt\":3,\"full\":2'"
 mcheck "kendi IP'si: posta günlüğündeki hesaplar çoktan aza, yalnız bu IP'ninkiler" "rvrow 203.0.113.10 | grep -q '\"acct\":\[{\"u\":\"info@site-a.example\",\"n\":2},{\"u\":\"info@site-b.example\",\"n\":1}\],\"acctf\":\"exim_mainlog\"'"
-# dovecot (POP3D_LOG / IMAPD_LOG, aynı dosya bir kez okunur): user=<hesap> … rip=IP; "N attempts" deneme sayısı; exim ile birleşir
+# dovecot (POP3D_LOG / IMAPD_LOG, aynı dosya bir kez okunur): user=<hesap> … rip=IP; satır başına bir deneme (lfd gibi); exim ile birleşir
 mkl aaselfd; lfdl 600 "Failed IMAP login from 203.0.113.10 - ignored"
 printf 'SMTPAUTH_LOG = "%s"\nPOP3D_LOG = "%s"\nIMAPD_LOG = "%s"\n' "$R/exim_mainlog" "$R/maillog" "$R/maillog" >> "$R/etc/csf/csf.conf"
 printf '%s\n' '2026-10-13 05:07:23 dovecot_login authenticator failed for H=(site-a.example) [203.0.113.10]:38634: 535 Incorrect authentication data (set_id=info@site-a.example)' > "$R/exim_mainlog"
 printf '%s\n' 'Oct 11 04:28:26 lin dovecot[570645]: imap-login: Login aborted: Connection closed (auth failed, 3 attempts in 21 secs) (auth_failed): user=<info@site-c.example>, method=PLAIN, rip=203.0.113.10, lip=203.0.113.10, TLS, session=<a>' \
     'Oct 11 04:28:46 lin dovecot[570645]: pop3-login: Login aborted: Connection closed (auth failed, 1 attempts in 2 secs) (auth_failed): user=<info@site-a.example>, method=PLAIN, rip=203.0.113.10, lip=203.0.113.10, TLS, session=<b>' \
     'Oct 11 04:29:00 lin dovecot[570645]: imap-login: Login aborted: Connection closed (auth failed, 3 attempts in 18 secs) (auth_failed): user=<info>, method=PLAIN, rip=203.0.113.100, lip=203.0.113.10, TLS, session=<c>' > "$R/maillog"
-mcheck "kendi IP'si: dovecot günlüğündeki hesaplar deneme sayısıyla exim'inkilerle birleşir (3 + 1 + 1), kaynak dosyalar" "rvrow 203.0.113.10 | grep -q '\"acct\":\[{\"u\":\"info@site-c.example\",\"n\":3},{\"u\":\"info@site-a.example\",\"n\":2}\],\"acctf\":\"exim_mainlog, maillog\"'"
+mcheck "kendi IP'si: dovecot satırı lfd gibi bir deneme sayılır, exim'inkilerle birleşir (1 + 1, 1), kaynak dosyalar" "rvrow 203.0.113.10 | grep -q '\"acct\":\[{\"u\":\"info@site-a.example\",\"n\":2},{\"u\":\"info@site-c.example\",\"n\":1}\],\"acctf\":\"exim_mainlog, maillog\"'"
 # döndürülmüş günlük (exim_mainlog-YYYYMMDD.gz, pencere içinde): hesaplar oradan da okunur, kaynak adı asıl dosya
 mkl aaselfr; lfdl 600 "Failed SMTP AUTH login from 203.0.113.10 - ignored"
 printf 'SMTPAUTH_LOG = "%s"\n' "$R/exim_mainlog" >> "$R/etc/csf/csf.conf"; : > "$R/exim_mainlog"
@@ -185,15 +185,49 @@ printf '%s\n' '2026-10-07 05:07:23 dovecot_login authenticator failed for H=(sit
 mcheck "kendi IP'si: döndürülmüş (gz) posta günlüğündeki hesap da listelenir, kaynak adı asıl dosya" "rvrow 203.0.113.10 | grep -q '\"acct\":\[{\"u\":\"info@site-r.example\",\"n\":1}\],\"acctf\":\"exim_mainlog\"'"
 mkl aaselfa; printf '203.0.113.10 # kendi\n' >> "$A"; lfdl 600 "Failed SMTP AUTH login from 203.0.113.10 - ignored"
 mcheck "kendi IP'si csf.allow'da da olsa önce 'sunucu IP'si' sayılır" "rvrow 203.0.113.10 | grep -q '\"wl\":\"sunucu IP.si: 203.0.113.10\".*\"full\":2'"
-# Denenen posta hesapları her IP için (sunucu IP'si değil de): durum haritası (IP listeleri), IP kartı, mail satırları
+# Denemeler her IP için (sunucu IP'si değil de): durum haritası (IP listeleri), IP kartı, mail satırları. Tarihler bugün:
+# yalnız Kontrol edilecekler penceresindeki satırlar sayılır
+DTI=$(date '+%F %T'); DTS=$(LC_ALL=C date '+%b %e %H:%M:%S'); DTA=$(LC_ALL=C date '+%a %b %d %H:%M:%S.000000 %Y')
 amail() { printf 'SMTPAUTH_LOG = "%s"\n' "$R/exim_mainlog" >> "$R/etc/csf/csf.conf"
-    printf '2026-10-13 05:07:2%s dovecot_login authenticator failed for H=(x) [%s]:1: 535 Incorrect authentication data (set_id=%s)\n' 1 "$1" info@site-a.example 2 "$1" info@site-a.example 3 "$1" info@site-b.example 4 198.51.100.77 baska@site.example > "$R/exim_mainlog"; }
+    printf '%s dovecot_login authenticator failed for H=(x) [%s]:1: 535 Incorrect authentication data (set_id=%s)\n' "$DTI" "$1" info@site-a.example "$DTI" "$1" info@site-a.example "$DTI" "$1" info@site-b.example "$DTI" 198.51.100.77 baska@site.example > "$R/exim_mainlog"; }
 mkav avacct; amail 151.80.7.9; quiet
-mcheck "izinli IP: durumda hesap haritası (yalnız ekrandaki IP'ler), mail satırında denenen hesaplar" "run --status --json 2>/dev/null | grep -q '\"accts\":{\"151.80.7.9\":\[{\"u\":\"info@site-a.example\",\"n\":2},{\"u\":\"info@site-b.example\",\"n\":1}\]}' && mtext | grep -q 'denenen hesaplar: info@site-a.example (2), info@site-b.example (1)'"
+mcheck "izinli IP: durumda deneme haritası (yalnız ekrandaki IP'ler), mail satırında denenen posta hesapları" "run --status --json 2>/dev/null | grep -q '\"accts\":{\"151.80.7.9\":\[{\"s\":\"mail\",\"u\":\"info@site-a.example\",\"n\":2},{\"s\":\"mail\",\"u\":\"info@site-b.example\",\"n\":1}\]}' && mtext | grep -q 'denenen posta hesapları: info@site-a.example (2), info@site-b.example (1)'"
 mk lkacct; amail 198.51.100.77
-mcheck "IP kartı: listede olmayan IP'nin de denediği hesaplar (JSON ve terminal)" "run --lookup 198.51.100.77 --json 2>/dev/null | grep -q '\"acct\":\[{\"u\":\"info@site-a.example\",\"n\":2},{\"u\":\"baska@site.example\",\"n\":1},{\"u\":\"info@site-b.example\",\"n\":1}\]' && run --lookup 198.51.100.77 2>/dev/null | grep -q 'Denenen hesaplar *info@site-a.example (2), baska@site.example (1), info@site-b.example (1)'"
+mcheck "IP kartı: listede olmayan IP'nin de denedikleri (JSON ve terminal)" "run --lookup 198.51.100.77 --json 2>/dev/null | grep -q '\"acct\":\[{\"s\":\"mail\",\"u\":\"info@site-a.example\",\"n\":2},{\"s\":\"mail\",\"u\":\"baska@site.example\",\"n\":1},{\"s\":\"mail\",\"u\":\"info@site-b.example\",\"n\":1}\]' && run --lookup 198.51.100.77 2>/dev/null | grep -q 'Denemeler *denenen posta hesapları: info@site-a.example (2), baska@site.example (1), info@site-b.example (1)'"
 mkm mailacct 1; amail 151.80.7.1; for x in 1 2 3; do single 151.80.7.$x sshd; done; quiet
-mcheck "blok banı maili: tekil satırında denenen hesaplar" "mtext | grep -q '151.80.7.1 .*denenen hesaplar: info@site-a.example (2)'"
+mcheck "blok banı maili: tekil satırında denenen posta hesapları" "mtext | grep -q '151.80.7.1 .*denenen posta hesapları: info@site-a.example (2)'"
+mk acold; printf 'SMTPAUTH_LOG = "%s"\n' "$R/exim_mainlog" >> "$R/etc/csf/csf.conf"
+printf '%s dovecot_login authenticator failed for H=(x) [198.51.100.77]:1: 535 Incorrect authentication data (set_id=eski@site.example)\n' "$(date -d '-9 days' '+%F %T')" > "$R/exim_mainlog"
+mcheck "Kontrol edilecekler penceresinden (7 gün) eski deneme sayılmaz" "! run --lookup 198.51.100.77 --json 2>/dev/null | grep -q 'eski@site.example'"
+# SSH, FTP, cPanel/WHM, web şifresi, ModSecurity: örnek satırlar lfd'nin biçiminde (denemeler-ornek.txt; aşağıda lfd'nin kendi
+# ayrıştırıcısıyla da karşılaştırılır). ModSecurity "Warning" satırları (404 izleme) lfd gibi sayılmaz; 2024 tarihli login_log satırı da.
+ORNEK="$(dirname "$0")/denemeler-ornek.txt"
+ornek() {
+    local k e l f
+    printf '%s\n' "SSHD_LOG = \"$R/secure\"" "FTPD_LOG = \"$R/messages\"" "CPANEL_LOG = \"$R/login_log\"" "MODSEC_LOG = \"$R/error_log\"" "HTACCESS_LOG = \"$R/error_log\"" >> "$R/etc/csf/csf.conf"
+    while IFS=$'\t' read -r k e l; do
+        l="${l//\{DTI\}/$DTI}"; l="${l//\{DTS\}/$DTS}"; l="${l//\{DTA\}/$DTA}"
+        case "$k" in SSHD) f=secure ;; FTPD) f=messages ;; CPANEL) f=login_log ;; *) f=error_log ;; esac
+        printf '%s\n' "$l" >> "$R/$f"
+    done < "$ORNEK"
+}
+mk acall; ornek
+AL=$(run --lookup 198.51.100.50 2>/dev/null | grep '^  Denemeler')
+mcheck "SSH: lfd'nin saydığı satırlardaki kullanıcılar (sshd ve sshd-session; tanıtım dizgisi gelmeyen satır hesap taşımaz)" "grep -q 'denenen SSH kullanıcıları: root (2), admin (1), guest (1)' <<< \"\$AL\""
+mcheck "FTP: pure-ftpd satırındaki hesap" "grep -q 'denenen FTP hesapları: admin (1)' <<< \"\$AL\""
+mcheck "cPanel/WHM: hesap ve giriş türü, API anahtarı ayrı; 2024 tarihli satır sayılmaz" "grep -q 'denenen cPanel/WHM girişleri: root · WHM (1), root · WHM API (1)' <<< \"\$AL\" && ! grep -q eski <<< \"\$AL\""
+mcheck "web şifresi (htpasswd): Apache 2.2 ve 2.4 biçimi (pid, client:port)" "grep -q 'denenen web şifresi kullanıcıları: webadmin (1), webadmin2 (1)' <<< \"\$AL\""
+mcheck "ModSecurity: yalnız Access denied satırlarının site ve adresi; Warning (404 izleme) sayılmaz" "grep -q 'hedef: site-a.example /wp-login.php (2), site-b.example /x (1)' <<< \"\$AL\" && ! grep -q '/2399' <<< \"\$AL\""
+mcheck "IP kartı JSON'unda servis ve web kuralı" "run --lookup 198.51.100.50 --json 2>/dev/null | grep -q '{\"s\":\"web\",\"u\":\"site-a.example /wp-login.php\",\"n\":2,\"i\":\"1302\"}'"
+mkm acweb 1; ornek
+printf '%s\n' "198.51.100.50 # lfd: (mod_security) mod_security (id:9999) triggered by 198.51.100.50 (FR/France/-): 5 in the last 3600 secs - $DT" >> "$D"
+for x in 51 52; do single 198.51.100.$x sshd; done; quiet
+mcheck "blok banı maili: ModSecurity tekilinde yalnız banı doğuran kuralın hedefi (id:9999 → site-b), öteki servisler de" "mtext | grep -q '198.51.100.50 .*denenen SSH kullanıcıları: root (2).*hedef: site-b.example /x (1)' && ! mtext | grep -q 'wp-login'"
+# lfd'nin kendi ayrıştırıcısı (CSF kuruluysa): örnek satırları lfd de aynı IP ve hesapla sayıyor mu
+if [ -r /usr/local/csf/lib/ConfigServer/RegexMain.pm ]; then
+    LK=$(DTI="$DTI" DTS="$DTS" DTA="$DTA" "$(command -v /usr/local/cpanel/3rdparty/bin/perl || command -v perl)" "$(dirname "$0")/lfd-karsilastir.pl" "$ORNEK" 2>&1)
+    mcheck "lfd'nin ayrıştırıcısı (RegexMain.pm) örnek satırları aynı IP ve hesapla sayıyor: $(tail -n 1 <<< "$LK")" "grep -q 'farklı yok' <<< \"\$LK\""
+fi
 # PERMBLOCK: lfd'nin nedeni (kaç geçici ban, hangi sürede) kesilmez, okunur metne çevrilir
 mk permwhy; printf 'WARN16_151.80 %s\n' "$(date -d '-3 days' +%F)" >> "$C"; for x in 7.1 7.2 8.1 8.2; do single 151.80.$x sshd; done
 printf '%s\n' "151.80.9.1 # lfd: (PERMBLOCK) 151.80.9.1 (FR/France/-) has had more than 3 temp blocks in the last 86400 secs - $DT" >> "$D"

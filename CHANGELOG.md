@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.15.6 — 2026-10-20
+
+- **What an address tried, for every service.** Next to the mail accounts,
+  the IP lists, the IP card (*Attempts*, also `--lookup`) and email / Slack
+  lines now show the SSH users, FTP accounts, cPanel / WHM / Webmail logins
+  (an API-token attempt is marked separately from a wrong password) and web
+  password users an address tried, and the sites and addresses ModSecurity
+  blocked for it. A web ban whose reason names a ModSecurity rule shows only
+  that rule's targets. Only lines lfd itself counts are read (its own
+  patterns; ModSecurity *Warning* lines such as 404 tracking are not), from
+  `SSHD_LOG`, `FTPD_LOG`, `CPANEL_LOG`, `HTACCESS_LOG`, `MODSEC_LOG` and the
+  mail logs, with rotated copies including cPanel's log archive.
+- **Only the review window counts.** Each line's own date decides, so a log
+  that is rarely rotated (cPanel rotates its logs by size) no longer brings
+  back attempts from years ago.
+- **Counts match lfd.** A dovecot failure line counts as one attempt, as lfd
+  counts it, so the numbers add up to the count in the ban reason.
+
 ## 1.15.5 — 2026-10-20
 
 - **Mail accounts tried, for every address.** The accounts an address tried

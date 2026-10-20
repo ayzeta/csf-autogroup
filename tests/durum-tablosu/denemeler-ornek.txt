@@ -1,0 +1,15 @@
+SSHD	198.51.100.50|admin	{DTS} lin sshd[123]: Failed password for invalid user admin from 198.51.100.50 port 5555 ssh2
+SSHD	198.51.100.50|root	{DTS} lin sshd-session[124]: Failed password for root from 198.51.100.50 port 5556 ssh2
+SSHD	198.51.100.50|root	{DTS} lin sshd-session[125]: Failed password for root from 198.51.100.50 port 5557 ssh2
+SSHD	198.51.100.50|guest	{DTS} lin sshd[126]: Invalid user guest from 198.51.100.50 port 5558
+SSHD	198.51.100.50|	{DTS} lin sshd[127]: Did not receive identification string from 198.51.100.50 port 5559
+FTPD	198.51.100.50|admin	{DTS} lin pure-ftpd[3005563]: (?@198.51.100.50) [WARNING] Authentication failed for user [admin]
+CPANEL	198.51.100.50|root	[{DTI} +0300] info [whostmgrd] 198.51.100.50 - root "POST /login/?login_only=1 HTTP/1.1" FAILED LOGIN whostmgrd: user password incorrect
+CPANEL	198.51.100.50|root	[{DTI} +0300] info [whostmgrd] 198.51.100.50 - root "GET /json-api/version HTTP/1.1" FAILED LOGIN whostmgrd: login attempt to WHM with bad accesshash or API token
+CPANEL	198.51.100.50|eski	[2024-04-27 22:07:51 +0300] info [cpaneld] 198.51.100.50 - eski "POST /login/ HTTP/1.1" FAILED LOGIN cpaneld: user password incorrect
+MODSEC	198.51.100.50||site-a.example	[{DTA}] [error] [client 198.51.100.50] ModSecurity: Access denied with code 403 (phase 2). Pattern match "x" at ARGS. [file "/etc/x.conf"] [line "1"] [id "1302"] [msg "WP LOGIN"] [hostname "site-a.example"] [uri "/wp-login.php"] [unique_id "a"]
+MODSEC	198.51.100.50||site-a.example	[{DTA}] [error] [client 198.51.100.50] ModSecurity: Access denied with code 403 (phase 2). Pattern match "x" at ARGS. [file "/etc/x.conf"] [line "1"] [id "1302"] [msg "WP LOGIN"] [hostname "site-a.example"] [uri "/wp-login.php"] [unique_id "b"]
+MODSEC	198.51.100.50||site-b.example	[{DTA}] [error] [client 198.51.100.50] ModSecurity: Access denied with code 403 (phase 2). Pattern match "y" at ARGS. [file "/etc/y.conf"] [line "2"] [id "9999"] [msg "OTHER"] [hostname "site-b.example"] [uri "/x"] [unique_id "c"]
+MODSEC	-	[{DTA}] [error] [client 198.51.100.50] ModSecurity: Warning. [Rule: 'RESPONSE_STATUS' '@streq 404'] [id "2004"] [msg "Tracking: 404 on non-static URI"] [hostname "site-a.example"] [uri "/2399"] [unique_id "d"]
+HTACCESS	198.51.100.50|webadmin	[{DTA}] [error] [client 198.51.100.50] AH01617: user webadmin: authentication failure for "/": Password Mismatch
+HTACCESS	198.51.100.50|webadmin2	[{DTA}] [auth_basic:error] [pid 11:tid 22] [client 198.51.100.50:5555] AH01617: user webadmin2: authentication failure for "/": Password Mismatch
