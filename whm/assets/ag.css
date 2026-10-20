@@ -391,6 +391,9 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-tr-note:not(:has(div, .ag-own-n:not(:empty))) { padding-bottom: 5px; }
 .ag-tr-note .ag-row-n { margin-top: 2px; }
 .ag-own-n { display: none; }
+/* "tekrar ediyor" rozeti not satırının başında; dar kartta sahip aynı satırda yanında */
+.ag-note-top { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin-bottom: 3px; }
+.ag-note-top .ag-own-n { margin-bottom: 0; }
 .ag-tbl > .ag-item:nth-child(odd) > .ag-tr-note { background: var(--ag-zebra); }
 .ag-tbl > .ag-item:hover > .ag-tr, .ag-tbl > .ag-item:hover > .ag-tr-note { background: var(--ag-row-hover); }
 .ag-thead.ag-tr-r .ag-th { cursor: default; }
@@ -400,10 +403,7 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-td-why .ag-row-n { margin-top: 3px; }
 .ag-td-btn { display: flex; justify-content: flex-end; min-width: 0; }
 .ag-td-btn .ag-btn { white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-.ag-tr-r .ag-td-main { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; min-width: 0; }
-/* adres hiç daralmaz; "tekrar ediyor" rozeti sığmazsa alt satıra iner (önce adresi tamamen gizliyordu) */
-.ag-tr-r .ag-td-main .ag-cidr { flex: 0 1 auto; min-width: 0; max-width: 100%; }
-.ag-tr-r .ag-td-main .ag-rep { flex: 0 0 auto; }
+.ag-tr-r .ag-td-main { display: flex; align-items: center; gap: 6px; min-width: 0; }
 /* dar kart (sağ sütunun yanında): sahip sütunu kalkar, not satırının başına geçer */
 @container agtbl (max-width: 860px) {
   .ag-thead.ag-tr-r, .ag-tr.ag-tr-r { grid-template-columns: 140px 100px minmax(0, 1fr) 84px 136px 32px; gap: 10px; }

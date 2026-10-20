@@ -869,16 +869,18 @@
       if (!o.asn && i0 && i0.asn) o = { asn: i0.asn, cc: i0.cc, name: String(i0.owner || '').replace(/^AS\d+\s*/, '').replace(/^[^ ]+ - /, '').replace(/,\s*[A-Z]{2}$/, ''), label: i0.owner };
       var ownH = o.asn ? flag(o.cc) + asnB(o.asn) + '<span class="ag-org">' + esc(o.name || '') + '</span>' : owner ? '<span class="ag-org">' + esc(owner) + '</span>' : '';   // sahip yoksa boş
       return '<div class="ag-item" data-row="' + esc(e.cidr) + '"><div class="ag-tr ag-tr-r">' +
-        '<div class="ag-td ag-td-main">' + rvDot(e, e.hist) + '<span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(e.cidr) + '</span>' +
-          (repOf(e) ? '<span class="ag-pill ag-pill-dw ag-rep" title="' + esc(t('rep_h', num(e.rep))) + '">' + esc(t('rep_n', num(e.rep))) + '</span>' : '') + '</div>' +
+        '<div class="ag-td ag-td-main">' + rvDot(e, e.hist) + '<span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(e.cidr) + '</span></div>' +
         '<div class="ag-td ag-td-state">' + pill + '</div>' +
         '<div class="ag-td ag-td-why">' + (meta.length ? meta.join(' · ') : '<span class="ag-muted">—</span>') + '</div>' +
         '<div class="ag-td ag-td-own" title="' + esc(o.label || owner || '') + '">' + ownH + '</div>' +
         '<div class="ag-td ag-when">' + relT(e.t) + '</div>' +
         '<div class="ag-td ag-td-btn"><button class="ag-btn ag-btn-sm ag-btn-danger" data-act="' + b0.act + '" ' + b0.attrs + '>' + esc(b0.label) + '</button></div>' +
         '<div class="ag-td ag-td-act">' + menu('rm:' + e.cidr, mitems) + '</div></div>' +
-        // notlar: Durum sütunu hizasından başlar; dar kartta sahip de burada (sahip sütunu gizlenir)
-        '<div class="ag-tr-note">' + (o.asn || owner ? '<span class="ag-own-n">' + ownH + '</span>' : '') + (det.length ? '<div>' + det.join(' · ') + '</div>' : '') + pnote +
+        // notlar: Durum sütunu hizasından başlar; dar kartta sahip de burada (sahip sütunu gizlenir). "Tekrar ediyor" rozeti de
+        // burada, sahibin önünde: ağ sütununda adresi daraltıp gizliyordu, alt satıra inince satırın ilk satır hizasını bozuyordu
+        // (sahip satırı geniş ekranda ve telefonda gizli; rozet her düzende görünsün diye kendi kabında, sahibin yanında)
+        '<div class="ag-tr-note">' + (repOf(e) ? '<div class="ag-note-top"><span class="ag-pill ag-pill-dw ag-rep" title="' + esc(t('rep_h', num(e.rep))) + '">' + esc(t('rep_n', num(e.rep))) + '</span>' : '') +
+          (o.asn || owner ? '<span class="ag-own-n">' + ownH + '</span>' : '') + (repOf(e) ? '</div>' : '') + (det.length ? '<div>' + det.join(' · ') + '</div>' : '') + pnote +
           (rvDrop(e) ? '<div class="ag-muted">' + esc(rvDrop(e)) + '</div>' : '') + '</div>' +
         (open ? ipTable(e.ips, e.total) : '') + '</div>';
     }).join('');

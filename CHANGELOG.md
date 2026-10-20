@@ -18,7 +18,8 @@
 - **Counts match lfd.** A dovecot failure line counts as one attempt, as lfd
   counts it, so the numbers add up to the count in the ban reason.
 - **Fix:** on a narrow screen the *repeating* tag of a suspicious network hid
-  the network address in *Needs review*; the tag now moves below the address.
+  the network address in *Needs review*; the tag now starts the row's note
+  line, so the first line of every row stays aligned.
 
 ## 1.15.5 — 2026-10-20
 
