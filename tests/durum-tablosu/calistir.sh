@@ -185,6 +185,19 @@ printf '%s\n' '2026-10-07 05:07:23 dovecot_login authenticator failed for H=(sit
 mcheck "kendi IP'si: döndürülmüş (gz) posta günlüğündeki hesap da listelenir, kaynak adı asıl dosya" "rvrow 203.0.113.10 | grep -q '\"acct\":\[{\"u\":\"info@site-r.example\",\"n\":1}\],\"acctf\":\"exim_mainlog\"'"
 mkl aaselfa; printf '203.0.113.10 # kendi\n' >> "$A"; lfdl 600 "Failed SMTP AUTH login from 203.0.113.10 - ignored"
 mcheck "kendi IP'si csf.allow'da da olsa önce 'sunucu IP'si' sayılır" "rvrow 203.0.113.10 | grep -q '\"wl\":\"sunucu IP.si: 203.0.113.10\".*\"full\":2'"
+# Denenen posta hesapları her IP için (sunucu IP'si değil de): durum haritası (IP listeleri), IP kartı, mail satırları
+amail() { printf 'SMTPAUTH_LOG = "%s"\n' "$R/exim_mainlog" >> "$R/etc/csf/csf.conf"
+    printf '2026-10-13 05:07:2%s dovecot_login authenticator failed for H=(x) [%s]:1: 535 Incorrect authentication data (set_id=%s)\n' 1 "$1" info@site-a.example 2 "$1" info@site-a.example 3 "$1" info@site-b.example 4 198.51.100.77 baska@site.example > "$R/exim_mainlog"; }
+mkav avacct; amail 151.80.7.9; quiet
+mcheck "izinli IP: durumda hesap haritası (yalnız ekrandaki IP'ler), mail satırında denenen hesaplar" "run --status --json 2>/dev/null | grep -q '\"accts\":{\"151.80.7.9\":\[{\"u\":\"info@site-a.example\",\"n\":2},{\"u\":\"info@site-b.example\",\"n\":1}\]}' && mtext | grep -q 'denenen hesaplar: info@site-a.example (2), info@site-b.example (1)'"
+mk lkacct; amail 198.51.100.77
+mcheck "IP kartı: listede olmayan IP'nin de denediği hesaplar (JSON ve terminal)" "run --lookup 198.51.100.77 --json 2>/dev/null | grep -q '\"acct\":\[{\"u\":\"info@site-a.example\",\"n\":2},{\"u\":\"baska@site.example\",\"n\":1},{\"u\":\"info@site-b.example\",\"n\":1}\]' && run --lookup 198.51.100.77 2>/dev/null | grep -q 'Denenen hesaplar *info@site-a.example (2), baska@site.example (1), info@site-b.example (1)'"
+mkm mailacct 1; amail 151.80.7.1; for x in 1 2 3; do single 151.80.7.$x sshd; done; quiet
+mcheck "blok banı maili: tekil satırında denenen hesaplar" "mtext | grep -q '151.80.7.1 .*denenen hesaplar: info@site-a.example (2)'"
+# PERMBLOCK: lfd'nin nedeni (kaç geçici ban, hangi sürede) kesilmez, okunur metne çevrilir
+mk permwhy; printf 'WARN16_151.80 %s\n' "$(date -d '-3 days' +%F)" >> "$C"; for x in 7.1 7.2 8.1 8.2; do single 151.80.$x sshd; done
+printf '%s\n' "151.80.9.1 # lfd: (PERMBLOCK) 151.80.9.1 (FR/France/-) has had more than 3 temp blocks in the last 86400 secs - $DT" >> "$D"
+mcheck "PERMBLOCK tekili: 'son 24 saat içinde en az 4 geçici ban aldı, kalıcıya alındı'" "run --status --json 2>/dev/null | grep -q '\"ip\":\"151.80.9.1\",\"host\":\"\",\"why\":\"Tekrar ban (PERMBLOCK): son 24 saat içinde en az 4 geçici ban aldı, kalıcıya alındı\"'"
 # "*SSH login*" başarılı giriş bildirimi (izinli IP'den), saldırı değil: listeye girmez
 mkl aassh; printf '151.80.7.9 # ofis\n' >> "$A"; lfdl 600 "*SSH login* from 151.80.7.9 into the root account using password authentication - ignored"
 mcheck "'*SSH login*' bildirimi (başarılı giriş) izinli saldırgan sayılmaz" "[ -z \"\$(rvrow 151.80.7.9)\" ]"

@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.15.5 — 2026-10-20
+
+- **Mail accounts tried, for every address.** The accounts an address tried
+  to log in to with a wrong password (SMTP, IMAP, POP3; from `SMTPAUTH_LOG`,
+  `POP3D_LOG`, `IMAPD_LOG` and their rotated copies in the review window) were
+  shown only for the server's own IP. They now show for any address: in the
+  IP lists of review rows, ban groups and History, on the IP card (also
+  `--lookup` in the terminal), and in email and Slack lines next to the ban
+  reason. The logs are read in one pass for all addresses and the result is
+  kept for 10 minutes.
+- **Why lfd made an address permanent.** An lfd repeat ban showed only
+  `(PERMBLOCK)`: the rest of lfd's line was cut off with the address. It now
+  reads e.g. "Repeat ban (PERMBLOCK): in the last 24 hours, at least 4 temp
+  bans, made permanent" (from `LF_PERMBLOCK_COUNT` and
+  `LF_PERMBLOCK_INTERVAL`), with the service of the earlier temp ban when
+  lfd's log still has it. Records from before this version explain what
+  PERMBLOCK means.
+
 ## 1.15.4 — 2026-10-17
 
 - **Fix — an ignored address was still reported.** *Needs review* hid an

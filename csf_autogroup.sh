@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.4"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.5"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -242,6 +242,8 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_POPEN="Açık servis (Geçmiş'e yazıldı): %s kısmi banından sonra açık kalan servislere %s ihlal"
   M_AVIOL_SUBJ="%s izinli IP'den ihlal"; M_AVIOL_BODY="İzin listesindeki, yoksayılan ya da sunucunun kendi adreslerinden lfd kuralına takılan denemeler (lfd banlamadı ya da ban işlemedi). Kontrol edilecekler'de ve Geçmiş'te; IP başına günde bir kez bildirilir; yoksaydıklarınız bildirilmez. Her satırda IP, hostname ve sahibi; servis, son 24 saatte kaç kez, durum, izin ya da yoksayma kaydı ve lfd'nin son kaydı:"
   M_AV_N="%s kez"; M_AV_SRC="kayıt: %s"; M_AV_LAST="son: %s (%s)"; M_AV_ACCT="denenen hesaplar: %s"
+  M_PERMB="Tekrar ban (PERMBLOCK): son %s içinde en az %s geçici ban aldı, kalıcıya alındı"; M_PB_SVC="önceki ban: %s"
+  M_T_H="%s saat"; M_T_M="%s dakika"; M_T_S="%s saniye"
   # servis adları panelle aynı (ag.js svc_*)
   M_SVCN_web="Web"; M_SVCN_ssh="SSH"; M_SVCN_ftp="FTP"; M_SVCN_cp="cPanel · WHM · Webmail"; M_SVCN_min="Gelen posta"; M_SVCN_mout="Giden posta"
   M_SVCN_sync="Posta eşitleme"; M_SVCN_dns="DNS"; M_SVCN_scan="port taraması"; M_SVCN_repeat="tekrar banlanan"; M_SVCN_other="diğer"
@@ -389,7 +391,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_S_NONE="yok"; M_S_DAYSLEFT="%s gün kaldı"; M_S_TTL="geçici ban %s kaldı"
   M_L_HOST="Hostname"; M_L_FWD="ileri yönde doğrulandı"; M_L_NOFWD="ileri yönde doğrulanamadı"
   M_L_OWNER="Sahibi"; M_L_PREFIX="Duyurulan blok"; M_L_REG="Kayıt"; M_L_DENY="csf.deny"
-  M_L_TEMP="Geçici liste"; M_L_WL="Beyaz liste"; M_L_PENDING="İzleniyor"; M_L_IGN="Yoksayılıyor"
+  M_L_TEMP="Geçici liste"; M_L_WL="Beyaz liste"; M_L_PENDING="İzleniyor"; M_L_IGN="Yoksayılıyor"; M_L_ACCT="Denenen hesaplar"
   M_H_NOREASON="geçici ban (günlükte sebep yok)"
   M_CFG_BAD="Geçersiz değer: %s = %s (%s olmalı)"
   M_CFG_RANGE="%s ile %s arası bir tam sayı"
@@ -492,6 +494,8 @@ else
   M_POPEN="Open service (recorded in History): %s violations on the services the partial ban on %s leaves open"
   M_AVIOL_SUBJ="%s violations from allowed IPs"; M_AVIOL_BODY="Attempts from allowed, ignored or server-own addresses that tripped an lfd rule (lfd did not ban them or the ban did not apply). In Needs review and History; reported once per IP per day; nothing is sent for what you ignored. Each row: IP, hostname and owner; service, times in the last 24 hours, state, allow or ignore entry and lfd's last record:"
   M_AV_N="%s times"; M_AV_SRC="entry: %s"; M_AV_LAST="last: %s (%s)"; M_AV_ACCT="accounts tried: %s"
+  M_PERMB="Repeat ban (PERMBLOCK): in the last %s, at least %s temp bans, made permanent"; M_PB_SVC="earlier ban: %s"
+  M_T_H="%s hour(s)"; M_T_M="%s minute(s)"; M_T_S="%s second(s)"
   M_SVCN_web="Web"; M_SVCN_ssh="SSH"; M_SVCN_ftp="FTP"; M_SVCN_cp="cPanel · WHM · Webmail"; M_SVCN_min="Incoming mail"; M_SVCN_mout="Outgoing mail"
   M_SVCN_sync="Mail sync"; M_SVCN_dns="DNS"; M_SVCN_scan="port scan"; M_SVCN_repeat="banned repeatedly"; M_SVCN_other="other"
   M_AVK_b="ban not working"; M_AVK_i="ignored by lfd"; M_AVK_y="ignored"; M_AVK_s="server IP"
@@ -638,7 +642,7 @@ else
   M_S_NONE="none"; M_S_DAYSLEFT="%s days left"; M_S_TTL="temp ban %s left"
   M_L_HOST="Hostname"; M_L_FWD="forward-confirmed"; M_L_NOFWD="not forward-confirmed"
   M_L_OWNER="Owner"; M_L_PREFIX="Announced prefix"; M_L_REG="Registry"; M_L_DENY="csf.deny"
-  M_L_TEMP="Temp list"; M_L_WL="Whitelist"; M_L_PENDING="Watched"; M_L_IGN="Ignored"
+  M_L_TEMP="Temp list"; M_L_WL="Whitelist"; M_L_PENDING="Watched"; M_L_IGN="Ignored"; M_L_ACCT="Accounts tried"
   M_H_NOREASON="temp ban (no reason in the log)"
   M_CFG_BAD="Invalid value: %s = %s (must be %s)"
   M_CFG_RANGE="a whole number from %s to %s"
@@ -1037,10 +1041,8 @@ allow_viol_events() {
         owner_lookup "$ip"; avo="$OWN_LONG"
         svc_names "${CLSM[av$i]:-other}"; avw="$REPLY · $(m "$M_AV_N" "${AA_N[i]}") · ${!kt}${src:+ · $(m "$M_AV_SRC" "$src")}"
         [ -n "${AA_R[i]}" ] && avw+=" · $(m "$M_AV_LAST" "${AA_R[i]}" "$(date -d "@${AA_T[i]:-0}" '+%d.%m %H:%M' 2>/dev/null)")"
-        if [ "$kind" = s ] && aa_acct "$ip" && [ -n "$REPLY" ]; then
-            acc=$(grep -oE '"u":"[^"]*","n":[0-9]+' <<< "$REPLY" | sed -E 's/"u":"([^"]*)","n":([0-9]+)/\1 (\2)/' | paste -sd, - | sed 's/,/, /g')
-            [ -n "$acc" ] && avw+=" · $(m "$M_AV_ACCT" "$acc")"
-        fi
+        acct_all; acc="${ACCTT[$ip]}"
+        [ -n "$acc" ] && avw+=" · $(m "$M_AV_ACCT" "$acc")"
         avw=$(tr -s ' ' <<< "${avw//$'\t'/ }")      # tabloda alan ayıracı iki boşluk: alan içinde çift boşluk kalmasın
         AV_MAIL+=("   - $ip  $avh  ${avo:+[$avo]  }$avw")   # mail (IE_REVIEW) ve Slack (IC_REVIEW)
         new+=("$ip")
@@ -1613,6 +1615,14 @@ short_reason() { # "# lfd: (sshd) Failed SSH login from IP (CC/..): 5 in ... - S
     local r="$1" w
     r="${r#"${r%%[![:space:]]*}"}"; r="${r#\#}"; r="${r#"${r%%[![:space:]]*}"}"; r="${r#lfd: }"; r="${r#lfd - }"
     r="${r% - [A-Z][a-z][a-z] [A-Z][a-z][a-z] *}"
+    # "(PERMBLOCK) IP (CC/…) has had more than 3 temp blocks in the last 86400 secs": IP'den kesilince yalnız "(PERMBLOCK)"
+    # kalıyordu; neden kalıcıya alındığı (LF_PERMBLOCK_COUNT / _INTERVAL) okunur metne çevrilir ("PERMBLOCK" sözcüğü kalır:
+    # panel servisi ondan tanır)
+    if [[ "$r" =~ \(PERMBLOCK\).*more\ than\ ([0-9]+)\ temp\ blocks\ in\ the\ last\ ([0-9]+)\ secs ]]; then
+        local pn=$(( BASH_REMATCH[1] + 1 )) ps="${BASH_REMATCH[2]}"
+        if (( ps % 3600 == 0 )); then w=$(m "$M_T_H" $(( ps / 3600 ))); elif (( ps % 60 == 0 )); then w=$(m "$M_T_M" $(( ps / 60 ))); else w=$(m "$M_T_S" "$ps"); fi
+        REPLY=$(m "$M_PERMB" "$w" "$pn"); return 0
+    fi
     [[ "$r" == *"$2"* ]] && [ -n "${r%%"$2"*}" ] && r="${r%%"$2"*}"
     r="${r%"${r##*[![:space:]]}"}"
     for w in " from" " by" " for" ":" " -"; do [[ "$r" == *"$w" ]] && r="${r%"$w"}"; done
@@ -1648,6 +1658,12 @@ ip_line() {      # IP NOTE WITH_OWNER(0|1) → REPLY = "   - IP  hostname  [ASN 
         fi
         jstr "$OWN_LONG"; IPJ+=",\"owner\":$REPLY,\"asn\":\"$OWN_ASN\",\"cc\":\"$OWN_CC\",\"pfx\":\"${OWN_P[$q]}\""
     fi
+    # PERMBLOCK: önceki geçici banın servisi (lfd günlüğünden, biliniyorsa); posta günlüğünde bu IP'den denenen hesaplar
+    if [[ "$why" == *PERMBLOCK* ]] && [ -n "${PERM_CLS[$1]+x}" ] && [ -n "${PERM_CLS[$1]}" ]; then
+        svc_names "${PERM_CLS[$1]}"; why+=" · $(m "$M_PB_SVC" "$REPLY")"
+    fi
+    acct_all
+    if [ -n "${ACCTT[$1]}" ]; then why+="${why:+ · }$(m "$M_AV_ACCT" "${ACCTT[$1]}")"; IPJ+=",\"acct\":${ACCTM[$1]}"; fi
     IPJ+="}"
     [ -n "$why" ] && out+="  $why"
     REPLY="$out"
@@ -2684,6 +2700,13 @@ do_status() {
             $1 != k { if (k != "") printf "%s\"%s\":[%s]", (n++ ? "," : ""), k, v; k = $1; v = "" }
             { v = v (v == "" ? "" : ",") "\"" $2 "\"" }
             END { if (k != "") printf "%s\"%s\":[%s]", (n ? "," : ""), k, v }')"
+        # ekrandaki IP'lerin posta günlüğünde yanlış şifreyle denediği hesaplar (IP listeleri ve IP kartı bu haritadan okur)
+        acct_all
+        local -A AQ=(); local aj="" ax
+        [ ${#ACCTM[@]} -gt 0 ] && while read -r ax; do
+            [ -n "${ACCTM[$ax]}" ] && [ -z "${AQ[$ax]}" ] && { AQ[$ax]=1; aj+="${aj:+,}\"$ax\":${ACCTM[$ax]}"; }
+        done < <(printf '%s\n' "${groups[*]}" "${review[*]}" "${ignored[*]}" "${recent[*]}" | grep -oE '"(ip|cidr)":"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"' | cut -d'"' -f4)
+        printf '"accts":{%s},' "$aj"
         printf '"groups":[%s],"pending":[%s],"review":[%s],"ignored":[%s],"events":[%s]}\n' \
             "${groups[*]}" "${pending[*]}" "${review[*]}" "${ignored[*]}" "${recent[*]}"
         prof dist_end
@@ -3094,6 +3117,7 @@ do_lookup() {
             v="${!k}"; jstr "$v"; o+=",\"$k\":$REPLY"
         done
         [ -n "$ign_t" ] && o+=",\"ign_t\":$ign_t"
+        acct_all; [ -n "${ACCTM[$ip]}" ] && o+=",\"acct\":${ACCTM[$ip]}"   # posta günlüğünde bu IP'den denenen hesaplar
         local bp="${ip%.*}" btc=0
         [ -r "$CSF_VAR/csf.tempban" ] && btc=$(awk -F'|' -v p="$bp." 'index($2, p) == 1 && $2 !~ /\// && !S[$2]++ { n++ } END { print n + 0 }' "$CSF_VAR/csf.tempban")
         o+=",\"blk\":{\"s\":${count24[$bp]:-0},\"t\":$btc,\"ts\":$THRESHOLD_24,\"tt\":$THRESHOLD_TEMP_24}"
@@ -3121,6 +3145,7 @@ do_lookup() {
     [ -n "$rig" ]   && printf '  %-18s %s\n' "$M_L_WL" "csf.rignore: $rig"
     [ -n "$pend" ]  && printf '  %-18s %s\n' "$M_L_PENDING" "${ip%.*}.0/24 · $pend"
     [ -n "$ign" ]   && printf '  %-18s %s\n' "$M_L_IGN" "$ign"
+    acct_all; [ -n "${ACCTT[$ip]}" ] && printf '  %-18s %s\n' "$M_L_ACCT" "${ACCTT[$ip]}"
     return 0
 }
 
@@ -4535,18 +4560,10 @@ aa_acct() {      # IP → REPLY = posta günlüklerinde bu IP'den yanlış şifr
     #   dovecot: "… (auth failed, N attempts in S secs) (auth_failed): user=<hesap>, method=PLAIN, rip=IP, lip=…" → N deneme
     # Bugünkü dosyalar ve Kontrol edilecekler penceresi (REVIEW_DAYS) içinde döndürülmüş kopyaları (exim_mainlog-YYYYMMDD.gz
     # gibi; zcat -f düz ve gz okur): 6 gün önceki deneme bugünkü dosyada değil. Kaynak adı olarak asıl dosyanın adı yazılır.
-    local f r files="" labels="" rows since dir base
+    local f rows
     REPLY=""; ACCT_F=""
-    since=$(( $(date +%s) - REVIEW_DAYS * 86400 ))
-    for f in $(conf_val SMTPAUTH_LOG) $(conf_val POP3D_LOG) $(conf_val IMAPD_LOG); do
-        [ -n "$f" ] && [ -r "$f" ] || continue
-        [[ " $files " == *" $f "* ]] && continue
-        dir=$(dirname "$f"); base=$(basename "$f"); files+=" $f"; labels+=" $base"
-        while IFS= read -r r; do [ -r "$r" ] && [[ " $files " != *" $r "* ]] && { files+=" $r"; labels+=" $base"; }; done \
-            < <(find "$dir" -maxdepth 1 -name "$base[-.]*" -newermt "@$since" 2>/dev/null | sort)
-    done
-    [ -n "$files" ] || return 1
-    set -f; local -a FL=($files) LB=($labels); set +f
+    acct_files || return 1
+    local -a FL=("${ACCT_FL[@]}") LB=("${ACCT_LB[@]}")
     rows=$(for i in "${!FL[@]}"; do f="${FL[i]}"
         zcat -f "$f" 2>/dev/null | LC_ALL=C grep -F "[$1]" | LC_ALL=C grep -F 'authenticator failed for' | LC_ALL=C grep -o 'set_id=[^)]*' | cut -d= -f2- | awk -v s="${LB[i]}" '{ print $0 "|1|" s }'
         zcat -f "$f" 2>/dev/null | LC_ALL=C grep -F "rip=$1," | LC_ALL=C grep -F 'auth failed' |
@@ -4558,6 +4575,52 @@ aa_acct() {      # IP → REPLY = posta günlüklerinde bu IP'den yanlış şifr
     ACCT_F=$(printf '%s\n' "$rows" | cut -d'|' -f3 | sort -u | paste -sd, - | sed 's/,/, /g')
     REPLY="[$(printf '%s\n' "$rows" | awk -F'|' '{ N[$1] += $2 } END { for (u in N) print N[u] "\t" u }' | sort -rn | head -n 10 |
         awk -F'\t' '{ u = $2; gsub(/\\/, "\\\\", u); gsub(/"/, "\\\"", u); printf "%s{\"u\":\"%s\",\"n\":%d}", (n++ ? "," : ""), u, $1 }')]"
+}
+acct_files() {   # → ACCT_FL = okunacak posta günlükleri (bugünkü + REVIEW_DAYS içinde döndürülmüşler), ACCT_LB = asıl dosya adları
+    local f r dir base since=$(( $(date +%s) - REVIEW_DAYS * 86400 ))
+    ACCT_FL=(); ACCT_LB=()
+    for f in $(conf_val SMTPAUTH_LOG) $(conf_val POP3D_LOG) $(conf_val IMAPD_LOG); do
+        [ -n "$f" ] && [ -r "$f" ] || continue
+        [[ " ${ACCT_FL[*]} " == *" $f "* ]] && continue
+        dir=$(dirname "$f"); base=$(basename "$f"); ACCT_FL+=("$f"); ACCT_LB+=("$base")
+        while IFS= read -r r; do [ -r "$r" ] && [[ " ${ACCT_FL[*]} " != *" $r "* ]] && { ACCT_FL+=("$r"); ACCT_LB+=("$base"); }; done \
+            < <(find "$dir" -maxdepth 1 -name "$base[-.]*" -newermt "@$since" 2>/dev/null | sort)
+    done
+    [ ${#ACCT_FL[@]} -gt 0 ]
+}
+ACCT_CACHE="$(dirname "$SAYAC_FILE")/accts"      # "IP<TAB>JSON<TAB>metin": bütün IP'lerin denenen hesapları, en çok 10 dakikalık
+acct_all() {     # → ACCTM[IP] = JSON [{"u","n"}], ACCTT[IP] = "hesap (n), …": posta günlüklerinde yanlış şifreyle denenen hesaplar,
+    # bütün IP'ler için tek geçişte (aa_acct'in toplu hâli: aynı dosyalar, aynı iki satır biçimi, IP başına en çok 10 hesap).
+    # Süreç başına bir kez; sonuç ACCT_CACHE'te 10 dakika saklanır (her turda günlükleri yeniden okumamak için).
+    [ -n "$ACCT_DONE" ] && return 0; ACCT_DONE=1
+    declare -gA ACCTM=() ACCTT=()
+    local ip js tx now; printf -v now '%(%s)T' -1
+    if ! [ -f "$ACCT_CACHE" ] || (( now - $(stat -c %Y "$ACCT_CACHE" 2>/dev/null || echo 0) > 600 )); then
+        if acct_files; then
+            for ip in "${ACCT_FL[@]}"; do zcat -f "$ip" 2>/dev/null; done | LC_ALL=C grep -E 'authenticator failed for|auth failed' | LC_ALL=C awk '
+                (p = index($0, "authenticator failed for")) > 0 {
+                    s = substr($0, p)
+                    if (!match(s, /\[[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\]/)) next
+                    ip = substr(s, RSTART + 1, RLENGTH - 2)
+                    if (!match(s, /set_id=[^)]*/)) next
+                    N[ip "\t" substr(s, RSTART + 7, RLENGTH - 7)] += 1; next }
+                index($0, "auth failed") && match($0, /rip=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+,/) {
+                    ip = substr($0, RSTART + 4, RLENGTH - 5)
+                    if (!match($0, /user=<[^>]*>/)) next
+                    u = substr($0, RSTART + 6, RLENGTH - 7); n = 1
+                    if (match($0, /auth failed, [0-9]+ attempts/)) n = substr($0, RSTART + 13, RLENGTH - 22) + 0
+                    N[ip "\t" u] += n }
+                END { for (k in N) { split(k, a, "\t"); print a[1] "\t" N[k] "\t" a[2] } }' |
+                LC_ALL=C sort -t$'\t' -k1,1 -k2,2rn | LC_ALL=C awk -F'\t' '
+                function out() { if (ip != "") print ip "\t[" j "]\t" t }
+                $1 != ip { out(); ip = $1; j = ""; t = ""; c = 0 }
+                c < 10 { u = $3; gsub(/\\/, "\\\\", u); gsub(/"/, "\\\"", u)
+                    j = j (c ? "," : "") "{\"u\":\"" u "\",\"n\":" $2 "}"; t = t (c ? ", " : "") $3 " (" $2 ")"; c++ }
+                END { out() }' > "$ACCT_CACHE.tmp" 2>/dev/null && mv -f "$ACCT_CACHE.tmp" "$ACCT_CACHE"
+        else : > "$ACCT_CACHE" 2>/dev/null; fi
+    fi
+    [ -r "$ACCT_CACHE" ] || return 0
+    while IFS=$'\t' read -r ip js tx; do ACCTM[$ip]="$js"; ACCTT[$ip]="$tx"; done < "$ACCT_CACHE"
 }
 aa_ipj() {       # İNDİS … → REPLY = IP listesi JSON'u (izinli saldırganlar: sebep, servis, izin kaydı, kaç kez)
     local i o="" v w q x

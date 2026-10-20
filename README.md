@@ -107,7 +107,11 @@ settings, with no prompts. `config.env` is left untouched.
 - **To review** — suspicious networks and whitelist-skipped blocks from the last 7
   days, as a table: why it was flagged (how many IPs hit which services),
   owner, when, and the narrowest ban that would do; clicking the IP count lists
-  every IP's hostname, owner and ban reason. A range whose violations a provider ban
+  every IP's hostname, owner and ban reason, with the mail accounts it tried
+  with wrong passwords when the mail logs show them (`SMTPAUTH_LOG`,
+  `POP3D_LOG`, `IMAPD_LOG`). An lfd repeat ban (PERMBLOCK) says why it became
+  permanent — how many temp bans in what time — and the service of the earlier
+  ban when lfd's log still has it. A range whose violations a provider ban
   or rented-server list already closes is left out. A network flagged on 3 or
   more separate days is marked *repeating* and moves to the top.
   It also lists offending IPs lfd can not stop, read from the lfd logs of the last
@@ -152,7 +156,8 @@ settings, with no prompts. `config.env` is left untouched.
 - **Suggestions where decisions are made** — the ban window suggests a partial
   ban when violations hit only one or two services; the remove window shows when
   and why the ban was added (and, for partial bans, violations on other services
-  since then); the IP card shows how far the block is from its threshold;
+  since then); the IP card shows how far the block is from its threshold and
+  the mail accounts the address tried with wrong passwords;
   changing a threshold shows its effect on the current entries; suspicious
   networks show the services hit and suggest a single block when most
   singles sit in one.
