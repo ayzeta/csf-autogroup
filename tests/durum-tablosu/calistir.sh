@@ -160,28 +160,28 @@ mkl aaold; printf '151.80.7.9 # müşteri\n' >> "$A"; lfdb $(( 9 * 86400 )) 151.
 mcheck "7 günden eski kayıt → listede yok" "[ -z \"\$(rvrow 151.80.7.9)\" ]"
 mkl aarot; printf '151.80.7.9 # müşteri\n' >> "$A"; lfdb 172800 151.80.7.9; mv "$R/lfd.log" "$R/lfd.log.1"; gzip -f "$R/lfd.log.1"; : > "$R/lfd.log"
 mcheck "döndürülmüş, sıkıştırılmış günlük (lfd.log.1.gz) sayılır" "rvrow 151.80.7.9 | grep -q '\"type\":\"allow_ban\"'"
-# Sunucunun kendi IP'si (taklit ip: 203.0.113.10): lfd kendi adreslerini her zaman yoksayar → full=2; posta günlüğünden
+# Sunucunun kendi IP'si (taklit ip: 203.0.113.10; günlük tarihleri bugün: yalnız Kontrol edilecekler penceresi sayılır): lfd kendi adreslerini her zaman yoksayar → full=2; posta günlüğünden
 # (csf.conf SMTPAUTH_LOG, exim biçimi) hangi hesapla denendiği, çoktan aza
 mkl aaself; for x in 1 2 3; do lfdl $(( 600 * x )) "Failed SMTP AUTH login from 203.0.113.10 - ignored"; done
 printf 'SMTPAUTH_LOG = "%s"\n' "$R/exim_mainlog" >> "$R/etc/csf/csf.conf"
-printf '%s\n' '2026-10-12 13:34:31 dovecot_login authenticator failed for H=(site-a.example) [203.0.113.10]:56816: 535 Incorrect authentication data (set_id=info@site-a.example)' \
-    '2026-10-12 14:48:59 dovecot_login authenticator failed for H=(site-b.example) [203.0.113.10]:36256: 535 Incorrect authentication data (set_id=info@site-b.example)' \
-    '2026-10-13 05:07:23 dovecot_login authenticator failed for H=(site-a.example) [203.0.113.10]:38634: 535 Incorrect authentication data (set_id=info@site-a.example)' \
-    '2026-10-13 06:00:00 dovecot_login authenticator failed for H=(x) [203.0.113.99]:1: 535 Incorrect authentication data (set_id=baska@site.example)' > "$R/exim_mainlog"
+printf '%s\n' "$(date +%F)"' 13:34:31 dovecot_login authenticator failed for H=(site-a.example) [203.0.113.10]:56816: 535 Incorrect authentication data (set_id=info@site-a.example)' \
+    "$(date +%F)"' 14:48:59 dovecot_login authenticator failed for H=(site-b.example) [203.0.113.10]:36256: 535 Incorrect authentication data (set_id=info@site-b.example)' \
+    "$(date +%F)"' 05:07:23 dovecot_login authenticator failed for H=(site-a.example) [203.0.113.10]:38634: 535 Incorrect authentication data (set_id=info@site-a.example)' \
+    "$(date +%F)"' 06:00:00 dovecot_login authenticator failed for H=(x) [203.0.113.99]:1: 535 Incorrect authentication data (set_id=baska@site.example)' > "$R/exim_mainlog"
 mcheck "sunucunun kendi IP'si yoksayıldı → 'Sunucunun kendi IP'si' (full=2), kaynak 'sunucu IP'si'" "rvrow 203.0.113.10 | grep -q '\"wl\":\"sunucu IP.si: 203.0.113.10\".*\"bk\":\"i\",\"cnt\":3,\"full\":2'"
 mcheck "kendi IP'si: posta günlüğündeki hesaplar çoktan aza, yalnız bu IP'ninkiler" "rvrow 203.0.113.10 | grep -q '\"acct\":\[{\"u\":\"info@site-a.example\",\"n\":2},{\"u\":\"info@site-b.example\",\"n\":1}\],\"acctf\":\"exim_mainlog\"'"
 # dovecot (POP3D_LOG / IMAPD_LOG, aynı dosya bir kez okunur): user=<hesap> … rip=IP; satır başına bir deneme (lfd gibi); exim ile birleşir
 mkl aaselfd; lfdl 600 "Failed IMAP login from 203.0.113.10 - ignored"
 printf 'SMTPAUTH_LOG = "%s"\nPOP3D_LOG = "%s"\nIMAPD_LOG = "%s"\n' "$R/exim_mainlog" "$R/maillog" "$R/maillog" >> "$R/etc/csf/csf.conf"
-printf '%s\n' '2026-10-13 05:07:23 dovecot_login authenticator failed for H=(site-a.example) [203.0.113.10]:38634: 535 Incorrect authentication data (set_id=info@site-a.example)' > "$R/exim_mainlog"
-printf '%s\n' 'Oct 11 04:28:26 lin dovecot[570645]: imap-login: Login aborted: Connection closed (auth failed, 3 attempts in 21 secs) (auth_failed): user=<info@site-c.example>, method=PLAIN, rip=203.0.113.10, lip=203.0.113.10, TLS, session=<a>' \
-    'Oct 11 04:28:46 lin dovecot[570645]: pop3-login: Login aborted: Connection closed (auth failed, 1 attempts in 2 secs) (auth_failed): user=<info@site-a.example>, method=PLAIN, rip=203.0.113.10, lip=203.0.113.10, TLS, session=<b>' \
-    'Oct 11 04:29:00 lin dovecot[570645]: imap-login: Login aborted: Connection closed (auth failed, 3 attempts in 18 secs) (auth_failed): user=<info>, method=PLAIN, rip=203.0.113.100, lip=203.0.113.10, TLS, session=<c>' > "$R/maillog"
+printf '%s\n' "$(date +%F)"' 05:07:23 dovecot_login authenticator failed for H=(site-a.example) [203.0.113.10]:38634: 535 Incorrect authentication data (set_id=info@site-a.example)' > "$R/exim_mainlog"
+printf '%s\n' "$(LC_ALL=C date '+%b %e')"' 04:28:26 lin dovecot[570645]: imap-login: Login aborted: Connection closed (auth failed, 3 attempts in 21 secs) (auth_failed): user=<info@site-c.example>, method=PLAIN, rip=203.0.113.10, lip=203.0.113.10, TLS, session=<a>' \
+    "$(LC_ALL=C date '+%b %e')"' 04:28:46 lin dovecot[570645]: pop3-login: Login aborted: Connection closed (auth failed, 1 attempts in 2 secs) (auth_failed): user=<info@site-a.example>, method=PLAIN, rip=203.0.113.10, lip=203.0.113.10, TLS, session=<b>' \
+    "$(LC_ALL=C date '+%b %e')"' 04:29:00 lin dovecot[570645]: imap-login: Login aborted: Connection closed (auth failed, 3 attempts in 18 secs) (auth_failed): user=<info>, method=PLAIN, rip=203.0.113.100, lip=203.0.113.10, TLS, session=<c>' > "$R/maillog"
 mcheck "kendi IP'si: dovecot satırı lfd gibi bir deneme sayılır, exim'inkilerle birleşir (1 + 1, 1), kaynak dosyalar" "rvrow 203.0.113.10 | grep -q '\"acct\":\[{\"u\":\"info@site-a.example\",\"n\":2},{\"u\":\"info@site-c.example\",\"n\":1}\],\"acctf\":\"exim_mainlog, maillog\"'"
 # döndürülmüş günlük (exim_mainlog-YYYYMMDD.gz, pencere içinde): hesaplar oradan da okunur, kaynak adı asıl dosya
 mkl aaselfr; lfdl 600 "Failed SMTP AUTH login from 203.0.113.10 - ignored"
 printf 'SMTPAUTH_LOG = "%s"\n' "$R/exim_mainlog" >> "$R/etc/csf/csf.conf"; : > "$R/exim_mainlog"
-printf '%s\n' '2026-10-07 05:07:23 dovecot_login authenticator failed for H=(site-r.example) [203.0.113.10]:38634: 535 Incorrect authentication data (set_id=info@site-r.example)' > "$R/exim_mainlog-20261011"; gzip -f "$R/exim_mainlog-20261011"
+printf '%s\n' "$(date -d '-2 days' +%F)"' 05:07:23 dovecot_login authenticator failed for H=(site-r.example) [203.0.113.10]:38634: 535 Incorrect authentication data (set_id=info@site-r.example)' > "$R/exim_mainlog-20261011"; gzip -f "$R/exim_mainlog-20261011"
 mcheck "kendi IP'si: döndürülmüş (gz) posta günlüğündeki hesap da listelenir, kaynak adı asıl dosya" "rvrow 203.0.113.10 | grep -q '\"acct\":\[{\"u\":\"info@site-r.example\",\"n\":1}\],\"acctf\":\"exim_mainlog\"'"
 mkl aaselfa; printf '203.0.113.10 # kendi\n' >> "$A"; lfdl 600 "Failed SMTP AUTH login from 203.0.113.10 - ignored"
 mcheck "kendi IP'si csf.allow'da da olsa önce 'sunucu IP'si' sayılır" "rvrow 203.0.113.10 | grep -q '\"wl\":\"sunucu IP.si: 203.0.113.10\".*\"full\":2'"
@@ -228,6 +228,13 @@ if [ -r /usr/local/csf/lib/ConfigServer/RegexMain.pm ]; then
     LK=$(DTI="$DTI" DTS="$DTS" DTA="$DTA" "$(command -v /usr/local/cpanel/3rdparty/bin/perl || command -v perl)" "$(dirname "$0")/lfd-karsilastir.pl" "$ORNEK" 2>&1)
     mcheck "lfd'nin ayrıştırıcısı (RegexMain.pm) örnek satırları aynı IP ve hesapla sayıyor: $(tail -n 1 <<< "$LK")" "grep -q 'farklı yok' <<< \"\$LK\""
 fi
+# sunucu IP'si satırının hesapları da IP kartıyla aynı pencerede (satırın kendi tarihi)
+mkl aaselfo; lfdl 600 "Failed SMTP AUTH login from 203.0.113.10 - ignored"; printf 'SMTPAUTH_LOG = "%s"\n' "$R/exim_mainlog" >> "$R/etc/csf/csf.conf"
+printf '%s dovecot_login authenticator failed for H=(x) [203.0.113.10]:1: 535 Incorrect authentication data (set_id=%s)\n' "$(date '+%F %T')" yeni@site.example "$(date -d '-9 days' '+%F %T')" eski@site.example > "$R/exim_mainlog"
+mcheck "sunucu IP'si satırı: 7 günden eski posta denemesi sayılmaz (IP kartıyla aynı)" "rvrow 203.0.113.10 | grep -q '\"acct\":\[{\"u\":\"yeni@site.example\",\"n\":1}\]'"
+# IP kartı: aynı IP için tek portluk ve tam izin satırı varsa tam izin gösterilir (ban işlemez)
+mk wlbest; printf '%s\n' 'tcp|in|d=22|s=151.80.7.9 # ssh ofis' '151.80.7.9 # tam izin' > "$A"
+mcheck "IP kartı: tam izin satırı tek portluk satırdan önce (karar 'ban işlemiyor')" "run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"wl\":\"csf.allow: 151.80.7.9 (tam izin)\"'"
 # İzinli IP'nin banı işlemez (CSF izni bandan önce uygular; csf -td izin denetlemez): hiçbir sayıma girmez
 izgec() { printf '151.80.7.9 # musteri\n' >> "$A"; printf '%s|151.80.7.9||in|3600|lfd: (pop3d) Failed POP3 login from 151.80.7.9 (FR/France/-): 5 in the last 3600 secs\n' "$NOW" >> "$T"; }
 mk izw16; izgec; for x in 7.1 8.1 8.2 9.1; do single 151.80.$x sshd; done; printf 'WARN16_151.80 %s\n' "$(date -d '-3 days' +%F)" >> "$C"

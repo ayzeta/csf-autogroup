@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.15.8 — 2026-10-22
+
+- **Fix — IP card picked the wrong allow line.** With both a single-port and
+  an all-ports allow line for the same address, the card showed the first one
+  and said a ban on the address works; it now prefers the all-ports line
+  (the ban does not work).
+- **Fix:** the mail accounts on a *Server's IP* review row now use the same
+  window as the IP card (each line's own date), so both show the same
+  accounts and counts.
+
 ## 1.15.7 — 2026-10-22
 
 - **Fix — an allowed address's ban was counted.** lfd writes temp bans for

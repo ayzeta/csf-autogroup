@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.7"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.8"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1885,6 +1885,19 @@ wl_overlap() {   # LO HI → WL_HIT = çakışan beyaz liste kaydı, satır yoru
     done
     return 1
 }
+wl_best() {      # LO HI → WL_HIT gibi, ama çakışan kayıtlardan bütün portlara izin vereni önce: aynı IP için hem tek portluk hem
+    # tam izin satırı varsa ilk bulunan (tek portluk) "ban işler" dedirtiyordu, oysa tam izin yüzünden ban işlemez (IP kartı)
+    local i b=-1
+    WL_HIT=""; WL_HIT_CM=""
+    [ "$WL_LOADED" = 1 ] || load_whitelist
+    for i in "${!WL_LO[@]}"; do
+        (( WL_LO[i] <= $2 && WL_HI[i] >= $1 )) || continue
+        [ "$b" -lt 0 ] && b=$i
+        wl_full_idx "$i"; [ "$REPLY" = 1 ] && { b=$i; break; }
+    done
+    [ "$b" -ge 0 ] || return 1
+    WL_HIT="${WL_TXT[b]}${WL_CM[b]:+ (${WL_CM[b]})}"; WL_HIT_CM="${WL_CM[b]}"
+}
 wl_label() {     # İZİN_KAYDI_İNDİSİ → REPLY = "kaynak: kayıt (yorum)"; indis yoksa boş
     REPLY=""; [ -n "$1" ] && [ "$1" -ge 0 ] 2>/dev/null || return 0
     REPLY="${WL_TXT[$1]}${WL_CM[$1]:+ (${WL_CM[$1]})}"
@@ -3142,7 +3155,7 @@ do_lookup() {
             fi
         done < "$CSF_VAR/csf.tempban"
     fi
-    wl_overlap "$n" "$n" && wl="$WL_HIT"   # satır yorumuyla: "csf.allow: IP (ofis)"
+    wl_best "$n" "$n" && wl="$WL_HIT"   # satır yorumuyla: "csf.allow: IP (ofis)"; tam izin tek portluk satırdan önce
     if [ -n "$host" ] && [ "${#RIGNORE[@]}" -gt 0 ]; then
         rig_match "$(printf '%s' "$host" | LC_ALL=C tr '[:upper:]' '[:lower:]')" "$ip" && rig="$REPLY"   # motorun beyaz liste kuralıyla aynı
     fi
@@ -4594,6 +4607,24 @@ rig_pat() {      # HOST(küçük harf) → 0: bir csf.rignore kaydıyla eşleşi
     done
     REPLY=""; return 1
 }
+# Günlük satırının günü (awk işlevi dk(); since/cy/cm değişkenleriyle): exim/ISO "2026-10-20 …", login_log "[2026-10-20 …",
+# syslog "Oct 20 …" (yıl yok: bu yıl, ay ileride ise geçen yıl), Apache "[Tue Oct 20 … 2026]", nginx "2026/10/20 …", eski
+# login_log "[10/20/2026:…". acct_all ve aa_acct aynı pencereyi uygulasın diye ortak.
+AWK_DK='
+                function dk(   a, m, y) {       # satırın günü YYYYMMDD; tanınmazsa 0 (sayılır)
+                    if (!MOI) { MOI = split("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec", A, " "); for (i = 1; i <= 12; i++) MO[A[i]] = i }
+                    if (match($0, /^\[?[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/)) { a = substr($0, RSTART, RLENGTH); sub(/^\[/, "", a); gsub(/-/, "", a); return a + 0 }
+                    if ($0 ~ /^[A-Z][a-z][a-z] +[0-9]+ [0-9]/) { m = MO[substr($0, 1, 3)]; y = cy; if (m > cm + 0) y--; return y * 10000 + m * 100 + $2 }
+                    if (match($0, /^\[[A-Z][a-z][a-z] [A-Z][a-z][a-z] +[0-9]+ [0-9:.]+ [0-9][0-9][0-9][0-9]\]/)) {
+                        a = substr($0, RSTART + 1, RLENGTH - 2); split(a, P, / +/); return P[5] * 10000 + MO[P[2]] * 100 + P[3] }
+                    if (match($0, /^[0-9][0-9][0-9][0-9]\/[0-9][0-9]\/[0-9][0-9] /)) { a = substr($0, 1, 10); gsub(/\//, "", a); return a + 0 }
+                    if (match($0, /\[[0-9][0-9]\/[0-9][0-9]\/[0-9][0-9][0-9][0-9]:/)) { a = substr($0, RSTART + 1, 10); split(a, P, "/"); return P[3] * 10000 + P[1] * 100 + P[2] }
+                    return 0
+                }
+'
+dk_keep() {     # stdin → yalnız Kontrol edilecekler penceresindeki (REVIEW_DAYS) satırlar; tarihi tanınmayan satır kalır
+    LC_ALL=C awk -v since="$(date -d "$REVIEW_DAYS days ago" +%Y%m%d)" -v cy="$(date +%Y)" -v cm="$(date +%m)" "$AWK_DK"'{ k = dk(); if (k && k < since + 0) next; print }'
+}
 aa_acct() {      # IP → REPLY = posta günlüklerinde bu IP'den yanlış şifreyle giriş denenen hesaplar, JSON [{"u":hesap,"n":deneme}]
     # (en çok 10, çoktan aza); ACCT_F = okunan dosya adları. Dosyalar csf.conf'tan: SMTPAUTH_LOG (exim), POP3D_LOG ve IMAPD_LOG
     # (dovecot). Satır biçimleri (sunucuda ölçüldü 2026-10-13):
@@ -4602,13 +4633,14 @@ aa_acct() {      # IP → REPLY = posta günlüklerinde bu IP'den yanlış şifr
     #            (lfd de satır başına bir sayar, "N attempts"e bakmaz: sayı banın sebebindekiyle tutarlı)
     # Bugünkü dosyalar ve Kontrol edilecekler penceresi (REVIEW_DAYS) içinde döndürülmüş kopyaları (exim_mainlog-YYYYMMDD.gz
     # gibi; zcat -f düz ve gz okur): 6 gün önceki deneme bugünkü dosyada değil. Kaynak adı olarak asıl dosyanın adı yazılır.
+    # Satırın kendi tarihi de pencerede olmalı (dk_keep; acct_all ile aynı): IP kartıyla aynı hesaplar ve sayılar.
     local f rows
     REPLY=""; ACCT_F=""
     acct_files || return 1
     local -a FL=("${ACCT_FL[@]}") LB=("${ACCT_LB[@]}")
     rows=$(for i in "${!FL[@]}"; do f="${FL[i]}"
-        zcat -f "$f" 2>/dev/null | LC_ALL=C grep -F "[$1]" | LC_ALL=C grep -F 'authenticator failed for' | LC_ALL=C grep -o 'set_id=[^)]*' | cut -d= -f2- | awk -v s="${LB[i]}" '{ print $0 "|1|" s }'
-        zcat -f "$f" 2>/dev/null | LC_ALL=C grep -F "rip=$1," | LC_ALL=C grep -F 'auth failed' |
+        zcat -f "$f" 2>/dev/null | LC_ALL=C grep -F "[$1]" | LC_ALL=C grep -F 'authenticator failed for' | dk_keep | LC_ALL=C grep -o 'set_id=[^)]*' | cut -d= -f2- | awk -v s="${LB[i]}" '{ print $0 "|1|" s }'
+        zcat -f "$f" 2>/dev/null | LC_ALL=C grep -F "rip=$1," | LC_ALL=C grep -F 'auth failed' | dk_keep |
             awk -v s="${LB[i]}" 'match($0, /user=<[^>]*>/) { u = substr($0, RSTART + 6, RLENGTH - 7); n = 1
                 print u "|" n "|" s }'
     done)
@@ -4655,17 +4687,7 @@ acct_all() {     # → ACCTM[IP] = JSON [{"s":servis,"u":hesap/hedef,"n":deneme(
             for ip in "${ACCT_FL[@]}"; do zcat -f "$ip" 2>/dev/null; done |
             LC_ALL=C grep -F -e 'authenticator failed for' -e 'auth failed' -e 'sshd' -e 'pure-ftpd' -e ' FAILED LOGIN' -e 'Access denied' \
                 -e ' not found:' -e 'authentication failure for' -e 'password mismatch, client:' -e 'was not found in' |
-            LC_ALL=C awk -v since="$(date -d "@$(( now - REVIEW_DAYS * 86400 ))" +%Y%m%d)" -v cy="$(date +%Y)" -v cm="$(date +%m)" '
-                BEGIN { split("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec", A, " "); for (i = 1; i <= 12; i++) MO[A[i]] = i }
-                function dk(   a, m, y) {       # satırın günü YYYYMMDD; tanınmazsa 0 (sayılır)
-                    if (match($0, /^\[?[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/)) { a = substr($0, RSTART, RLENGTH); sub(/^\[/, "", a); gsub(/-/, "", a); return a + 0 }
-                    if ($0 ~ /^[A-Z][a-z][a-z] +[0-9]+ [0-9]/) { m = MO[substr($0, 1, 3)]; y = cy; if (m > cm + 0) y--; return y * 10000 + m * 100 + $2 }
-                    if (match($0, /^\[[A-Z][a-z][a-z] [A-Z][a-z][a-z] +[0-9]+ [0-9:.]+ [0-9][0-9][0-9][0-9]\]/)) {
-                        a = substr($0, RSTART + 1, RLENGTH - 2); split(a, P, / +/); return P[5] * 10000 + MO[P[2]] * 100 + P[3] }
-                    if (match($0, /^[0-9][0-9][0-9][0-9]\/[0-9][0-9]\/[0-9][0-9] /)) { a = substr($0, 1, 10); gsub(/\//, "", a); return a + 0 }
-                    if (match($0, /\[[0-9][0-9]\/[0-9][0-9]\/[0-9][0-9][0-9][0-9]:/)) { a = substr($0, RSTART + 1, 10); split(a, P, "/"); return P[3] * 10000 + P[1] * 100 + P[2] }
-                    return 0
-                }
+            LC_ALL=C awk -v since="$(date -d "@$(( now - REVIEW_DAYS * 86400 ))" +%Y%m%d)" -v cy="$(date +%Y)" -v cm="$(date +%m)" "$AWK_DK"'
                 function tag(t,   p, s) {       # [t "değer"] → değer
                     p = index($0, "[" t " \""); if (!p) return ""
                     s = substr($0, p + length(t) + 3); return substr(s, 1, index(s, "\"") - 1)
