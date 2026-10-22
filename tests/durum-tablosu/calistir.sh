@@ -193,12 +193,14 @@ amail() { printf 'SMTPAUTH_LOG = "%s"\n' "$R/exim_mainlog" >> "$R/etc/csf/csf.co
 mkav avacct; amail 151.80.7.9; quiet
 mcheck "izinli IP: durumda deneme haritası (yalnız ekrandaki IP'ler), mail satırında denenen posta hesapları" "run --status --json 2>/dev/null | grep -q '\"accts\":{\"151.80.7.9\":\[{\"s\":\"mail\",\"u\":\"info@site-a.example\",\"n\":2},{\"s\":\"mail\",\"u\":\"info@site-b.example\",\"n\":1}\]}' && mtext | grep -q 'denenen posta hesapları: info@site-a.example (2), info@site-b.example (1)'"
 mk lkacct; amail 198.51.100.77
-mcheck "IP kartı: listede olmayan IP'nin de denedikleri (JSON ve terminal)" "run --lookup 198.51.100.77 --json 2>/dev/null | grep -q '\"acct\":\[{\"s\":\"mail\",\"u\":\"info@site-a.example\",\"n\":2},{\"s\":\"mail\",\"u\":\"baska@site.example\",\"n\":1},{\"s\":\"mail\",\"u\":\"info@site-b.example\",\"n\":1}\]' && run --lookup 198.51.100.77 2>/dev/null | grep -q 'Denemeler *denenen posta hesapları: info@site-a.example (2), baska@site.example (1), info@site-b.example (1)'"
+mcheck "IP kartı: listede olmayan IP'nin de denedikleri (terminal önbelleği kurar, sonra JSON)" "run --lookup 198.51.100.77 2>/dev/null | grep -q 'Denemeler *denenen posta hesapları: info@site-a.example (2), baska@site.example (1), info@site-b.example (1)' && run --lookup 198.51.100.77 --json 2>/dev/null | grep -q '\"acct\":\[{\"s\":\"mail\",\"u\":\"info@site-a.example\",\"n\":2},{\"s\":\"mail\",\"u\":\"baska@site.example\",\"n\":1},{\"s\":\"mail\",\"u\":\"info@site-b.example\",\"n\":1}\]'"
 mkm mailacct 1; amail 151.80.7.1; for x in 1 2 3; do single 151.80.7.$x sshd; done; quiet
 mcheck "blok banı maili: tekil satırında denenen posta hesapları" "mtext | grep -q '151.80.7.1 .*denenen posta hesapları: info@site-a.example (2)'"
 mk acold; printf 'SMTPAUTH_LOG = "%s"\n' "$R/exim_mainlog" >> "$R/etc/csf/csf.conf"
 printf '%s dovecot_login authenticator failed for H=(x) [198.51.100.77]:1: 535 Incorrect authentication data (set_id=eski@site.example)\n' "$(date -d '-9 days' '+%F %T')" > "$R/exim_mainlog"
-mcheck "Kontrol edilecekler penceresinden (7 gün) eski deneme sayılmaz" "! run --lookup 198.51.100.77 --json 2>/dev/null | grep -q 'eski@site.example'"
+mcheck "Kontrol edilecekler penceresinden (7 gün) eski deneme sayılmaz" "! run --lookup 198.51.100.77 2>/dev/null | grep -q 'eski@site.example' && [ -e '$R/var/lib/csf_autogroup/denemeler' ] && ! run --lookup 198.51.100.77 --json 2>/dev/null | grep -q 'eski@site.example'"
+mk acbg; amail 198.51.100.77
+mcheck "panel (IP kartı JSON) önbellek yokken beklemez: kurulum arka planda, sonraki istekte denemeler gelir" "run --lookup 198.51.100.77 --json >/dev/null 2>&1; for i in 1 2 3 4 5 6 7 8 9 10; do [ -s '$R/var/lib/csf_autogroup/denemeler' ] && break; sleep 0.5; done; run --lookup 198.51.100.77 --json 2>/dev/null | grep -q '\"u\":\"baska@site.example\"'"
 # SSH, FTP, cPanel/WHM, web şifresi, ModSecurity: örnek satırlar lfd'nin biçiminde (denemeler-ornek.txt; aşağıda lfd'nin kendi
 # ayrıştırıcısıyla da karşılaştırılır). ModSecurity "Warning" satırları (404 izleme) lfd gibi sayılmaz; 2024 tarihli login_log satırı da.
 ORNEK="$(dirname "$0")/denemeler-ornek.txt"

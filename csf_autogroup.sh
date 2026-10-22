@@ -2038,7 +2038,7 @@ ineff_load() {   # → INEFF[IP] = izin kaydı ("csf.allow: IP (yorum)"), INEFF_
     [ "$WL_LOADED" = 1 ] || load_whitelist
     # liste burada yüklendiyse iş bitince bırakılır: tur sonra izinleri değiştirebilir (izinli servisler, sağlayıcı istisnası),
     # sonraki kararlar (blok banı beyaz liste denetimi) güncel listeyi yeniden okusun
-    [ "$was" = 1 ] || rst=1
+    [ "$was" = 1 ] || [ "${INEFF_RESET:-0}" != 1 ] || rst=1    # yalnız tur (izinleri sonradan değiştirebilir); panel bırakmaz
     while IFS='|' read -r ip i; do
         wl_label "$i"; INEFF[$ip]="$REPLY"; INEFF_S+="$ip "
         if [ -n "${SINGLE_NOTE[$ip]+x}" ]; then          # blok eşiği sayımından çıkar (tekil satırı yerinde kalır)
@@ -4589,7 +4589,10 @@ aa_ineff_rows() {  # SINCE_EPOCH → stdout "Z|ip|zaman|sebep": CSF'te banı ola
     for ip in "${!INEFF[@]}"; do
         if [ -n "${TB[$ip]}" ]; then t="${TB[$ip]%%|*}"; note="${TB[$ip]#*|}"
         elif [ -n "${SINGLE_NOTE[$ip]+x}" ]; then note="${SINGLE_NOTE[$ip]}"
-            t=$(LC_ALL=C date -d "$(sed -n 's/.* - \([A-Z][a-z][a-z] [A-Z][a-z][a-z] [ 0-9]*[0-9] [0-9:]* [0-9]*\)[[:space:]]*$/\1/p' <<< "$note")" +%s 2>/dev/null) || t=0
+            # satırın sonundaki tarih; yoksa (elle yazılmış, "do not delete") zamanı bilinmez, satır açılmaz: date -d "" hata
+            # vermeden bugünü döndürür, ban her gün yeniden "bugün" sayılıp her gün bildirilirdi
+            t=$(sed -n 's/.* - \([A-Z][a-z][a-z] [A-Z][a-z][a-z] [ 0-9]*[0-9] [0-9:]* [0-9]*\)[[:space:]]*$/\1/p' <<< "$note")
+            if [ -n "$t" ]; then t=$(LC_ALL=C date -d "$t" +%s 2>/dev/null) || t=0; else t=0; fi
         else continue; fi
         [[ "$t" =~ ^[0-9]+$ ]] && [ "$t" -ge "$1" ] || continue
         short_reason "$note" "$ip"; printf 'Z|%s|%s|%s\n' "$ip" "$t" "${REPLY//|/ }"
@@ -4711,10 +4714,22 @@ acct_all() {     # → ACCTM[IP] = JSON [{"s":servis,"u":hesap/hedef,"n":deneme(
     # büyük günlükte kurmak saniyeler sürer, sayfa beklemesin
     age=$(( now - $(stat -c %Y "$ACCT_CACHE" 2>/dev/null || echo 0) ))
     if ! [ -f "$ACCT_CACHE" ] || { [ "${ACCT_RO:-0}" != 1 ] && [ "$age" -gt 600 ]; } || [ "$age" -gt 7200 ]; then
+        if [ "${ACCT_RO:-0}" = 1 ]; then
+            # panel ve IP kartı: kurulum arka planda (istek beklemez, zaman aşımına düşüp her yoklamada yeniden denemez); bu istek
+            # var olanı okur, önbellek henüz yoksa denemeler bir sonraki yenilemede gelir
+            ( acct_build ) </dev/null >/dev/null 2>&1 9>&- &
+        else acct_build; fi
+    fi
+}
+acct_build() {   # → ACCT_CACHE'i günlüklerden yeniden kurar (acct_all'ın taraması). Aynı anda tek kurulum (flock; panel ve tur birlikte
+    # kurmaya kalkarsa ikincisi atlar), kendi geçici dosyası (iki kurulum aynı dosyayı yarım bırakmasın), eşleşen satır yoksa da
+    # (grep 1 döner; pipefail) boş önbellek yazılır: eski sonuç pencereden taşmasın, her istek günlükleri yeniden taramasın
+    local ip now tmp="$ACCT_CACHE.tmp.$$"; printf -v now '%(%s)T' -1
+    if command -v flock >/dev/null 2>&1; then { exec 6>"$ACCT_CACHE.lock"; } 2>/dev/null && { flock -n 6 || { exec 6>&-; return 0; }; }; fi
         if acct_files SMTPAUTH_LOG POP3D_LOG IMAPD_LOG SSHD_LOG FTPD_LOG CPANEL_LOG MODSEC_LOG HTACCESS_LOG; then
             for ip in "${ACCT_FL[@]}"; do zcat -f "$ip" 2>/dev/null; done |
-            LC_ALL=C grep -F -e 'authenticator failed for' -e 'auth failed' -e 'sshd' -e 'pure-ftpd' -e ' FAILED LOGIN' -e 'Access denied' \
-                -e ' not found:' -e 'authentication failure for' -e 'password mismatch, client:' -e 'was not found in' |
+            { LC_ALL=C grep -F -e 'authenticator failed for' -e 'auth failed' -e 'sshd' -e 'pure-ftpd' -e ' FAILED LOGIN' -e 'Access denied' \
+                -e ' not found:' -e 'authentication failure for' -e 'password mismatch, client:' -e 'was not found in' || true; } |
             LC_ALL=C awk -v since="$(date -d "@$(( now - REVIEW_DAYS * 86400 ))" +%Y%m%d)" -v cy="$(date +%Y)" -v cm="$(date +%m)" "$AWK_DK"'
                 function tag(t,   p, s) {       # [t "değer"] → değer
                     p = index($0, "[" t " \""); if (!p) return ""
@@ -4776,9 +4791,10 @@ acct_all() {     # → ACCTM[IP] = JSON [{"s":servis,"u":hesap/hedef,"n":deneme(
                     if ($2 == "web") w = w (w != "" ? "\036" : "") $3 ":" u " (" $4 ")"
                     else t = t (c ? ", " : "") u " (" $4 ")"
                     c++ }
-                END { out() }' > "$ACCT_CACHE.tmp" 2>/dev/null && mv -f "$ACCT_CACHE.tmp" "$ACCT_CACHE"
-        else : > "$ACCT_CACHE" 2>/dev/null; fi
-    fi
+                END { out() }' > "$tmp" 2>/dev/null
+        else : > "$tmp" 2>/dev/null; fi
+    mv -f "$tmp" "$ACCT_CACHE" 2>/dev/null || rm -f "$tmp"
+    exec 6>&-    # kilidi bırak (turun sonradan başlattığı süreçler devralmasın)
 }
 acct_need() {    # IP … → bu IP'lerin satırları ACCTM / ACCTT / ACCTW'ye (önbellekten tek awk geçişi; yüklenmiş olanlar atlanır)
     local ip js tx wb q=""
@@ -5638,6 +5654,7 @@ else
 fi
 
 # ── Read csf.deny: singles (grouping) + CIDRs (coverage) ────────────────────
+INEFF_RESET=1         # ineff_load beyaz listeyi bıraksın: tur izinleri değiştirebilir (izinli servisler, sağlayıcı istisnası)
 parse_deny "$DENY_FILE" 1
 [ "$DRY" = 1 ] || orphans_clean       # eklenti dışından kaldırılmış elle banların artıkları
 [ "$DRY" = 1 ] || limit_watch         # CSF sınır dolunca sildiyse: izlemeye al, bildir

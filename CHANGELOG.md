@@ -9,6 +9,18 @@
 - **Fix:** the mail accounts on a *Server's IP* review row now use the same
   window as the IP card (each line's own date), so both show the same
   accounts and counts.
+- **A ban that does not work always gets its row.** *Ban not working* rows
+  came only from the lfd log, so an address allowed after it was banned, or
+  whose lfd log line had rotated away, was shown correctly only on its IP
+  card. Bans in CSF on fully allowed addresses now get the row too (once per
+  address; the count comes from lfd when it has a line). A ban line without a
+  date opens no row.
+- **Faster panel on busy servers.** The attempts cache is no longer read
+  whole on every refresh, only the lines of the addresses on screen (a server
+  hit by SSH brute force can have tens of thousands of addresses in it). The
+  cache is rebuilt by the run; the panel and the IP card rebuild it in the
+  background only when it is missing or more than two hours old, so a page
+  never waits for a log scan. Only one rebuild runs at a time.
 
 ## 1.15.7 — 2026-10-22
 
