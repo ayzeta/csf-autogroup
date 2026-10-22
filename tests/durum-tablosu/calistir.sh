@@ -228,6 +228,15 @@ if [ -r /usr/local/csf/lib/ConfigServer/RegexMain.pm ]; then
     LK=$(DTI="$DTI" DTS="$DTS" DTA="$DTA" "$(command -v /usr/local/cpanel/3rdparty/bin/perl || command -v perl)" "$(dirname "$0")/lfd-karsilastir.pl" "$ORNEK" 2>&1)
     mcheck "lfd'nin ayrıştırıcısı (RegexMain.pm) örnek satırları aynı IP ve hesapla sayıyor: $(tail -n 1 <<< "$LK")" "grep -q 'farklı yok' <<< \"\$LK\""
 fi
+# İzinli IP'nin banı işlemez (CSF izni bandan önce uygular; csf -td izin denetlemez): hiçbir sayıma girmez
+izgec() { printf '151.80.7.9 # musteri\n' >> "$A"; printf '%s|151.80.7.9||in|3600|lfd: (pop3d) Failed POP3 login from 151.80.7.9 (FR/France/-): 5 in the last 3600 secs\n' "$NOW" >> "$T"; }
+mk izw16; izgec; for x in 7.1 8.1 8.2 9.1; do single 151.80.$x sshd; done; printf 'WARN16_151.80 %s\n' "$(date -d '-3 days' +%F)" >> "$C"
+mcheck "izinli IP'nin geçici banı şüpheli ağ sayımına girmez (4 tekil + izinli IP, eşik 5: uyarı yok)" "! run --status --json 2>/dev/null | grep -q '\"cidr\":\"151.80.0.0/16\"'"
+mcheck "Ayarlar → Eşikler etkisi ve IP kartının eşiğe uzaklığı izinli IP'nin banını saymaz" "run --status --json 2>/dev/null | grep -q '\"dist\":{\"151.80\":\[\"1:0\",\"1:0\",\"2:0\"\]}' && run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"blk\":{\"s\":1,\"t\":0,'"
+mkm izblk 1; printf '151.80.7.9 # musteri\n' >> "$A"; for x in 7.1 7.2 7.9; do single 151.80.$x sshd; done; quiet
+mcheck "blok eşiği: 2 tekil + izinli IP'nin kalıcı banı eşiği doldurmaz (ban da 'atlandı' satırı da yok)" "! grep -q '^151.80.7.0/24' '$D' && ! grep -q '\"type\":\"skip_wl\"' '$R/var/lib/csf_autogroup/events.jsonl' 2>/dev/null"
+mk iztmp; izgec; for x in 1 2; do printf '%s|151.80.7.%s||in|3600|lfd: (sshd) Failed SSH login from 151.80.7.%s\n' "$NOW" "$x" "$x" >> "$T"; done; quiet
+mcheck "geçici blok eşiği: 2 geçici tekil + izinli IP'nin geçici banı eşiği doldurmaz" "! grep -q '151.80.7.0/24' '$T'"
 # PERMBLOCK: lfd'nin nedeni (kaç geçici ban, hangi sürede) kesilmez, okunur metne çevrilir
 mk permwhy; printf 'WARN16_151.80 %s\n' "$(date -d '-3 days' +%F)" >> "$C"; for x in 7.1 7.2 8.1 8.2; do single 151.80.$x sshd; done
 printf '%s\n' "151.80.9.1 # lfd: (PERMBLOCK) 151.80.9.1 (FR/France/-) has had more than 3 temp blocks in the last 86400 secs - $DT" >> "$D"

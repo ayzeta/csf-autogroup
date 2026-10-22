@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.15.7 — 2026-10-22
+
+- **Fix — an allowed address's ban was counted.** lfd writes temp bans for
+  addresses in `csf.allow` too (`csf -td` does not check allows), and a
+  permanent ban can stay after an address is allowed. These bans do not work,
+  but they counted toward the suspicious-network and block thresholds (four
+  real bans plus one allowed address raised a network warning), the
+  threshold preview in Settings and the IP card's distance to the threshold.
+  A ban on an address allowed on all ports is no longer counted anywhere; the
+  address keeps its own *Ban not working* row. A range that is allowed as a
+  whole (an allowed service) therefore no longer shows as a whitelist-skipped
+  block.
+
 ## 1.15.6 — 2026-10-20
 
 - **What an address tried, for every service.** Next to the mail accounts,

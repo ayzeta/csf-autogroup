@@ -131,6 +131,10 @@ settings, with no prompts. `config.env` is left untouched.
   mail log shows them. *Flagged* on these rows is the first record in the
   review window; the note carries the last record and its time. Several
   offending IPs from one allow entry, block or network are grouped like normal bans.
+  A ban on an address allowed on all ports does not work (CSF applies allows
+  first, and `csf -td` writes temp bans without checking them), so it is not
+  counted anywhere: not toward block or network thresholds, the threshold
+  preview in Settings, or the IP card's distance to the threshold.
   A partial ban whose open services keep being hit shows as *Open service*
   (counting the violations of the last 7 days after the ban).
   Every row says when it drops off the list by itself if nothing new comes:

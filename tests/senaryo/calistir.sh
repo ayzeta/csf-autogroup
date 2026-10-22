@@ -155,7 +155,8 @@ for x in 11.1 11.2 12.1 12.2 13.1 13.2; do single 151.80.$x ssh "$P5"; done   # 
 attack web; run >/dev/null 2>&1                                               # bandan sonra, web (listeyle de kapalı)
 check "kısmi ban · bandan önceki SSH, sonraki web (kapalı) → uyarı/mail üretilmez" - "$(grep -q '"type":"warn16","cidr":"151.80.0.0/16"' "$R/var/lib/csf_autogroup/events.jsonl" 2>/dev/null && echo G || echo -)"
 
-# ── 3) İzinli servisler beyaz liste sayılır: o aralıkta blok banı konmaz, "atlandı" diye görünür ──
+# ── 3) İzinli servisler beyaz liste sayılır: o aralıkta blok banı konmaz. Aralığın tamamı izinliyse içindeki tekillerin banı
+# işlemiyor (1.15.7): blok eşiğine girmezler, "atlandı" satırı da çıkmaz; IP'ler lfd günlüğünden "İzinli aralık" satırında ──
 mk; SVA="$(dirname "$A")/csf_autogroup.services.allow"
 if [ "${GERCEK:-0}" = 1 ]; then     # gerçek: panelin yaptığı gibi özellik açılır, dosyayı ve Include'u eklentinin aracı yazar
     printf '%s\n' SVC_ALLOW=1 SVC_SOURCES= 'SVC_EXTRA="test|151.80.7.0/24"' >> "$R/app/config.env"; run --prov-apply >/dev/null 2>&1
@@ -163,7 +164,7 @@ else printf 'Include %s\n' "$SVA" >> "$A"; echo "151.80.7.0/24 # csf_autogroup: 
 NEEDR=1
 for x in 1 2 3 4 5 6; do single 151.80.7.$x web; done; run >/dev/null 2>&1
 check "izinli servis aralığına blok banı konmaz" - "$(grep -q '^151.80.7.0/24 ' "$D" && echo G || echo -)"
-check "izinli servis aralığı 'beyaz liste yüzünden atlandı' olarak görünür" G "$(grep -q '"type":"skip_wl","cidr":"151.80.7.0/24"' "$R/var/lib/csf_autogroup/events.jsonl" && echo G || echo -)"
+check "izinli servis aralığındaki tekiller (banı işlemiyor) blok eşiğine girmez: 'atlandı' satırı yok" - "$(grep -q '"type":"skip_wl","cidr":"151.80.7.0/24"' "$R/var/lib/csf_autogroup/events.jsonl" && echo G || echo -)"
 [ "${GERCEK:-0}" = 1 ] && rm -f "$SVA"
 # eklentinin kendi port istisnası ise beyaz liste değildir
 mk; printf '%s\n' "tcp|in|d=80,443|s=151.80.7.0/24 # csf_autogroup: exception for 151.80.7.0/24 [svc=web]" >> "$A"
