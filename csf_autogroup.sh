@@ -2759,11 +2759,12 @@ do_status() {
             { v = v (v == "" ? "" : ",") "\"" $2 "\"" }
             END { if (k != "") printf "%s\"%s\":[%s]", (n ? "," : ""), k, v }')"
         # ekrandaki IP'lerin posta günlüğünde yanlış şifreyle denediği hesaplar (IP listeleri ve IP kartı bu haritadan okur)
-        acct_all
-        local -A AQ=(); local aj="" ax
-        [ ${#ACCTM[@]} -gt 0 ] && while read -r ax; do
+        local -A AQ=(); local aj="" ax; local -a AXS=()
+        mapfile -t AXS < <(printf '%s\n' "${groups[*]}" "${review[*]}" "${ignored[*]}" "${recent[*]}" | grep -oE '"(ip|cidr)":"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"' | cut -d'"' -f4 | sort -u)
+        ACCT_RO=1; acct_need "${AXS[@]}"          # panel: önbelleği kurmaz (tur kurar)
+        for ax in "${AXS[@]}"; do
             [ -n "${ACCTM[$ax]}" ] && [ -z "${AQ[$ax]}" ] && { AQ[$ax]=1; aj+="${aj:+,}\"$ax\":${ACCTM[$ax]}"; }
-        done < <(printf '%s\n' "${groups[*]}" "${review[*]}" "${ignored[*]}" "${recent[*]}" | grep -oE '"(ip|cidr)":"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"' | cut -d'"' -f4)
+        done
         printf '"accts":{%s},' "$aj"
         printf '"groups":[%s],"pending":[%s],"review":[%s],"ignored":[%s],"events":[%s]}\n' \
             "${groups[*]}" "${pending[*]}" "${review[*]}" "${ignored[*]}" "${recent[*]}"
@@ -3175,7 +3176,7 @@ do_lookup() {
             v="${!k}"; jstr "$v"; o+=",\"$k\":$REPLY"
         done
         [ -n "$ign_t" ] && o+=",\"ign_t\":$ign_t"
-        acct_all; [ -n "${ACCTM[$ip]}" ] && o+=",\"acct\":${ACCTM[$ip]}"   # günlüklerde bu IP'nin denedikleri (posta, SSH, FTP, cPanel, web)
+        ACCT_RO=1; acct_need "$ip"; [ -n "${ACCTM[$ip]}" ] && o+=",\"acct\":${ACCTM[$ip]}"   # günlüklerde bu IP'nin denedikleri (posta, SSH, FTP, cPanel, web)
         local bp="${ip%.*}" btc=0
         [ -r "$CSF_VAR/csf.tempban" ] && btc=$(awk -F'|' -v p="$bp." -v ex="$INEFF_S" 'index($2, p) == 1 && $2 !~ /\// && !index(ex, " " $2 " ") && !S[$2]++ { n++ } END { print n + 0 }' "$CSF_VAR/csf.tempban")
         o+=",\"blk\":{\"s\":${count24[$bp]:-0},\"t\":$btc,\"ts\":$THRESHOLD_24,\"tt\":$THRESHOLD_TEMP_24}"
@@ -4555,12 +4556,15 @@ allow_atk_load() {  # SINCE_EPOCH → AA_* (IP başına: k, olay sayısı, son z
         done
         echo "#--"
         { [ "${#rot[@]}" -gt 0 ] && tail -n +2 "$cache" 2>/dev/null; [ -r "$LFD_LOG" ] && aa_days "$LFD_LOG"; } | awk -F'|' -v d0="$day0" '$3 >= d0'
+        aa_ineff_rows "$since"
     } | awk '
         function v4(x,  p) { split(x, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
         !S && $0 == "#--" { S = 1; FS = "|"; next }
         !S { n++; L[n] = $2 + 0; H[n] = $3 + 0; I[n] = $4; F[n] = $5; next }
+        $1 == "Z" { K = $2 "|b"; ZT[K] = $3 + 0; ZR[K] = $4; next }     # CSF içindeki işlemeyen ban (aa_ineff_rows)
         { K = $1 "|" $2; N[K] += $4; if ($5 >= T[K]) { T[K] = $5; R[K] = $6 }; if (!(K in T0) || $7 + 0 < T0[K]) T0[K] = $7 + 0 }
-        END { for (K in N) { split(K, f, "|"); v = v4(f[1]); hit = -1; full = 0
+        END { for (K in ZT) if (!(K in N)) { N[K] = 1; T[K] = ZT[K]; R[K] = ZR[K]; T0[K] = ZT[K] }   # lfd günlüğünde kaydı yoksa
+              for (K in N) { split(K, f, "|"); v = v4(f[1]); hit = -1; full = 0
                 for (i = 1; i <= n; i++) if (v >= L[i] && v <= H[i]) {
                     if (F[i] == 2) { hit = I[i]; full = 2; break }                    # sunucunun kendi adresi her kaydin onunde
                     else if (F[i] == 1 && full < 1) { hit = I[i]; full = 1 }
@@ -4570,6 +4574,25 @@ allow_atk_load() {  # SINCE_EPOCH → AA_* (IP başına: k, olay sayısı, son z
     for i in "${!AA_IP[@]}"; do      # listelerde olmayan yoksayma: kaynağı lfd'nin sırasıyla bul
         AA_S[i]=""
         [ "${AA_K[i]}" = i ] && [ "${AA_W[i]}" -lt 0 ] && { aa_src_resolve "${AA_IP[i]}"; AA_S[i]="$REPLY"; }
+    done
+}
+aa_ineff_rows() {  # SINCE_EPOCH → stdout "Z|ip|zaman|sebep": CSF'te banı olan ama bütün portlara izinli (banı işlemeyen, INEFF) IP'ler.
+    # Kontrol edilecekler'in "İzinli · Ban işlemiyor" satırı lfd günlüğünden kurulur; izin bandan sonra eklenmişse ya da günlük
+    # dönmüşse o satır yoktu ve yalnız IP kartı "ban işlemiyor" diyordu. lfd'de aynı IP'nin kaydı varsa o kullanılır (sayı ondan).
+    # Zaman: geçici banda ekleme anı, kalıcı tekilde satırın sonundaki tarih; pencereden (REVIEW_DAYS) eski ban satır açmaz.
+    local ip t note
+    [ "${#INEFF[@]}" -gt 0 ] || return 0
+    local -A TB=()
+    [ -r "$CSF_VAR/csf.tempban" ] && while IFS='|' read -r t ip _ _ _ note; do
+        [ -n "${INEFF[$ip]+x}" ] && [ -z "${TB[$ip]}" ] && TB[$ip]="$t|$note"
+    done < "$CSF_VAR/csf.tempban"
+    for ip in "${!INEFF[@]}"; do
+        if [ -n "${TB[$ip]}" ]; then t="${TB[$ip]%%|*}"; note="${TB[$ip]#*|}"
+        elif [ -n "${SINGLE_NOTE[$ip]+x}" ]; then note="${SINGLE_NOTE[$ip]}"
+            t=$(LC_ALL=C date -d "$(sed -n 's/.* - \([A-Z][a-z][a-z] [A-Z][a-z][a-z] [ 0-9]*[0-9] [0-9:]* [0-9]*\)[[:space:]]*$/\1/p' <<< "$note")" +%s 2>/dev/null) || t=0
+        else continue; fi
+        [[ "$t" =~ ^[0-9]+$ ]] && [ "$t" -ge "$1" ] || continue
+        short_reason "$note" "$ip"; printf 'Z|%s|%s|%s\n' "$ip" "$t" "${REPLY//|/ }"
     done
 }
 AA_SRC_Q=0
@@ -4679,10 +4702,15 @@ acct_all() {     # → ACCTM[IP] = JSON [{"s":servis,"u":hesap/hedef,"n":deneme(
     # Yalnız Kontrol edilecekler penceresi (REVIEW_DAYS): her satırın kendi tarihi (login_log yıllarca döndürülmeyebilir; error_log'da
     # iki tarih biçimi var). Hesabı olmayan satırlar (Did not receive identification…) bilgi taşımaz, sayılmaz. IP+servis başına en çok
     # 10 kayıt (web: kural başına 5). Bütün günlükler tek geçişte, önce sabit sözcüklerle süzülür; sonuç ACCT_CACHE'te 10 dakika.
+    # Bu işlev yalnız önbelleği güncel tutar; satırlar acct_need ile, istenen IP'ler için yüklenir (kaba kuvvet alan sunucuda önbellekte
+    # on binlerce IP olur: hepsini her durum isteğinde belleğe almak paneli saniyelerce yavaşlatıyordu, ölçüldü 40.000 IP ≈ 1,5 sn).
     [ -n "$ACCT_DONE" ] && return 0; ACCT_DONE=1
-    declare -gA ACCTM=() ACCTT=() ACCTW=()
-    local ip js tx wb now; printf -v now '%(%s)T' -1
-    if ! [ -f "$ACCT_CACHE" ] || (( now - $(stat -c %Y "$ACCT_CACHE" 2>/dev/null || echo 0) > 600 )); then
+    declare -gA ACCTM=() ACCTT=() ACCTW=() ACCTL=()
+    local ip now age; printf -v now '%(%s)T' -1
+    # tur 10 dakikadan eski önbelleği yeniden kurar; panel ve IP kartı (ACCT_RO=1) yalnız önbellek yoksa ya da 2 saatten eskiyse:
+    # büyük günlükte kurmak saniyeler sürer, sayfa beklemesin
+    age=$(( now - $(stat -c %Y "$ACCT_CACHE" 2>/dev/null || echo 0) ))
+    if ! [ -f "$ACCT_CACHE" ] || { [ "${ACCT_RO:-0}" != 1 ] && [ "$age" -gt 600 ]; } || [ "$age" -gt 7200 ]; then
         if acct_files SMTPAUTH_LOG POP3D_LOG IMAPD_LOG SSHD_LOG FTPD_LOG CPANEL_LOG MODSEC_LOG HTACCESS_LOG; then
             for ip in "${ACCT_FL[@]}"; do zcat -f "$ip" 2>/dev/null; done |
             LC_ALL=C grep -F -e 'authenticator failed for' -e 'auth failed' -e 'sshd' -e 'pure-ftpd' -e ' FAILED LOGIN' -e 'Access denied' \
@@ -4751,13 +4779,20 @@ acct_all() {     # → ACCTM[IP] = JSON [{"s":servis,"u":hesap/hedef,"n":deneme(
                 END { out() }' > "$ACCT_CACHE.tmp" 2>/dev/null && mv -f "$ACCT_CACHE.tmp" "$ACCT_CACHE"
         else : > "$ACCT_CACHE" 2>/dev/null; fi
     fi
-    [ -r "$ACCT_CACHE" ] || return 0
-    while IFS=$'\t' read -r ip js tx wb; do ACCTM[$ip]="$js"; [ "$tx" != "-" ] && ACCTT[$ip]="$tx"; [ "$wb" != "-" ] && ACCTW[$ip]="$wb"; done < "$ACCT_CACHE"
+}
+acct_need() {    # IP … → bu IP'lerin satırları ACCTM / ACCTT / ACCTW'ye (önbellekten tek awk geçişi; yüklenmiş olanlar atlanır)
+    local ip js tx wb q=""
+    acct_all
+    for ip in "$@"; do [ -n "$ip" ] && [ -z "${ACCTL[$ip]}" ] && { ACCTL[$ip]=1; q+="$ip"$'\n'; }; done
+    [ -n "$q" ] && [ -s "$ACCT_CACHE" ] || return 0
+    while IFS=$'\t' read -r ip js tx wb; do
+        ACCTM[$ip]="$js"; [ "$tx" != "-" ] && ACCTT[$ip]="$tx"; [ "$wb" != "-" ] && ACCTW[$ip]="$wb"
+    done < <(printf '%s' "$q" | LC_ALL=C awk -F'\t' 'NR == FNR { W[$1] = 1; next } ($1 in W)' - "$ACCT_CACHE")
 }
 acct_text() {    # IP [SEBEP] → REPLY = "denenen posta hesapları: a (2) · denenen SSH kullanıcıları: root (4) · hedef: site /x (3)";
     # sebepte ModSecurity kural numarası varsa (lfd "id:1302", kısa sebep "ModSecurity 1302") web hedefleri yalnız o kuralınkiler
     local p s k rid="" wt="" out="" wn=0; local -a PA=(); local -A SV=()
-    acct_all; REPLY=""
+    acct_need "$1"; REPLY=""
     [ -n "${ACCTM[$1]}" ] || return 0
     IFS=$'\036' read -r -a PA <<< "${ACCTT[$1]}"
     for p in "${PA[@]}"; do [ -n "$p" ] && SV[${p%%:*}]="${p#*:}"; done

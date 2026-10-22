@@ -244,6 +244,15 @@ mkm izblk 1; printf '151.80.7.9 # musteri\n' >> "$A"; for x in 7.1 7.2 7.9; do s
 mcheck "blok eşiği: 2 tekil + izinli IP'nin kalıcı banı eşiği doldurmaz (ban da 'atlandı' satırı da yok)" "! grep -q '^151.80.7.0/24' '$D' && ! grep -q '\"type\":\"skip_wl\"' '$R/var/lib/csf_autogroup/events.jsonl' 2>/dev/null"
 mk iztmp; izgec; for x in 1 2; do printf '%s|151.80.7.%s||in|3600|lfd: (sshd) Failed SSH login from 151.80.7.%s\n' "$NOW" "$x" "$x" >> "$T"; done; quiet
 mcheck "geçici blok eşiği: 2 geçici tekil + izinli IP'nin geçici banı eşiği doldurmaz" "! grep -q '151.80.7.0/24' '$T'"
+# lfd günlüğünde kaydı olmayan işlemeyen ban (izin bandan sonra eklenmiş, günlük dönmüş): yine "Ban işlemiyor" satırı
+mkl izperm; printf '151.80.7.9 # musteri\n' >> "$A"; single 151.80.7.9 pop3d
+mcheck "izinli IP'nin kalıcı banı, lfd günlüğünde kayıt yokken de 'Ban işlemiyor' satırı (izin kaydı, sebep)" "rvrow 151.80.7.9 | grep -q '\"type\":\"allow_ban\".*\"why\":\"(pop3d) Failed login\".*\"al\":\"csf.allow: 151.80.7.9 (musteri)\",\"bk\":\"b\",\"cnt\":1,\"full\":1'"
+mkl iztemp; izgec
+mcheck "izinli IP'nin geçici banı, lfd günlüğünde kayıt yokken de 'Ban işlemiyor' satırı" "rvrow 151.80.7.9 | grep -q '\"type\":\"allow_ban\".*\"bk\":\"b\",\"cnt\":1,\"full\":1'"
+mkl izboth; izgec; lfdb 600 151.80.7.9
+mcheck "lfd günlüğünde de kaydı varsa satır bir kez, sayı lfd'den (CSF'teki ban ikinci kez sayılmaz)" "rvrow 151.80.7.9 | grep -q '\"bk\":\"b\",\"cnt\":1,'"
+mkl izold; printf '151.80.7.9 # musteri\n' >> "$A"; single 151.80.7.9 pop3d "$(LC_ALL=C date -d '-9 days' '+%a %b %d %H:%M:%S %Y')"
+mcheck "pencereden (7 gün) eski işlemeyen ban satır açmaz" "[ -z \"\$(rvrow 151.80.7.9)\" ]"
 # PERMBLOCK: lfd'nin nedeni (kaç geçici ban, hangi sürede) kesilmez, okunur metne çevrilir
 mk permwhy; printf 'WARN16_151.80 %s\n' "$(date -d '-3 days' +%F)" >> "$C"; for x in 7.1 7.2 8.1 8.2; do single 151.80.$x sshd; done
 printf '%s\n' "151.80.9.1 # lfd: (PERMBLOCK) 151.80.9.1 (FR/France/-) has had more than 3 temp blocks in the last 86400 secs - $DT" >> "$D"
