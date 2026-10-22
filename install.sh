@@ -145,11 +145,51 @@ if [ -x "$REGISTER" ] && [ -d "$SRC/whm" ]; then
     fi
 fi
 
+# ── Management command ──────────────────────────────────────────────
+# Short command for the usual jobs: "csf-autogroup update" instead of "cd …; bash update.sh". In /usr/sbin like CSF's own
+# "csf": sudo's secure_path on RHEL-family systems has no /usr/local/bin. Written next to its target and renamed into place;
+# a file of that name that this installer did not write is left alone.
+WRAPPER=/usr/sbin/csf-autogroup
+MARK='# CSF Auto-Group management command'
+if [ -e "$WRAPPER" ] && ! grep -qF "$MARK" "$WRAPPER" 2>/dev/null; then
+    CMD="skipped ($WRAPPER exists and was not written by this installer)"
+else
+    {
+        echo '#!/bin/bash'
+        echo "$MARK — written by install.sh, do not edit (re-run install.sh to refresh)."
+        printf 'REPO=%q\n' "$SRC"
+        printf 'SCRIPT=%q\n' "$SCRIPT"
+        echo 'logf() { local l; l=$(sed -n "s/^LOG_FILE=//p" "$REPO/config.env" 2>/dev/null | tail -n 1); l="${l%\"}"; echo "${l#\"}"; }'
+        echo 'case "${1:-}" in'
+        echo '  update)    exec bash "$REPO/update.sh" ;;'
+        echo '  check)     exec bash "$REPO/update.sh" --check ;;'
+        echo '  reinstall) exec bash "$REPO/install.sh" --yes ;;'
+        echo '  run)       exec "$SCRIPT" ;;'
+        echo '  dry-run)   exec "$SCRIPT" --dry-run ;;'
+        echo '  status)    exec "$SCRIPT" --status ;;'
+        echo '  lookup)    shift; exec "$SCRIPT" --lookup "$@" ;;'
+        echo '  log)       L=$(logf); exec tail -n 50 -f "${L:-/var/log/csf_autogroup.log}" ;;'
+        echo '  version)   echo "CSF Auto-Group $("$SCRIPT" --version) ($(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo "no git")) — $REPO" ;;'
+        echo '  *) echo "Usage: csf-autogroup {update|check|reinstall|run|dry-run|status|lookup IP|log|version}"'
+        echo '     echo "  update     pull from GitHub if it is ahead, then reinstall with your saved settings"'
+        echo '     echo "  check      only tell whether an update is available"'
+        echo '     echo "  reinstall  reinstall the current version (cron, WHM plugin, log rotation)"'
+        echo '     echo "  run        one run now            dry-run  one run that changes nothing"'
+        echo '     echo "  status     current state          lookup IP  who is this IP, what covers it"'
+        echo '     echo "  log        follow the log         version  installed version and commit"'
+        echo '     [ -z "${1:-}" ] || exit 1 ;;'
+        echo 'esac'
+    } > "$WRAPPER.new.$$" && chmod 0755 "$WRAPPER.new.$$" && mv -f "$WRAPPER.new.$$" "$WRAPPER" \
+        && CMD="$WRAPPER   (csf-autogroup update · check · status · lookup IP · log · version)" \
+        || { rm -f "$WRAPPER.new.$$"; CMD="failed to write $WRAPPER"; }
+fi
+
 echo
 echo "── Done ──"
 echo "Installed cron: $CRON_LINE"
 echo "WHM plugin: $PLUGIN"
 echo "Log rotation: $ROTATE"
+echo "Command: $CMD"
 echo "Config: $SRC/config.env   ·   Log: /var/log/csf_autogroup.log"
 echo
 echo "⚠️  This auto-bans /24 subnets. Make sure your own IPs are in csf.allow,"

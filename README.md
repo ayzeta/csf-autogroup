@@ -64,6 +64,22 @@ contact address set in WHM, the default) and cron interval,
 writes `config.env`, installs the root cron job and, on cPanel, the plugin under
 **WHM → Plugins → CSF Auto-Group**. Re-run it any time.
 
+It also installs a short command, `csf-autogroup`, for the usual jobs:
+
+```bash
+csf-autogroup update        # pull from GitHub if it is ahead, then reinstall
+csf-autogroup check         # only tell whether an update is available
+csf-autogroup reinstall     # reinstall the current version
+csf-autogroup status        # current state (same data as the plugin page)
+csf-autogroup lookup 1.2.3.4
+csf-autogroup run           # one run now (dry-run: one that changes nothing)
+csf-autogroup log           # follow the log
+csf-autogroup version
+```
+
+It lives in `/usr/sbin`, next to CSF's own `csf`, so `sudo csf-autogroup …`
+works too.
+
 Only `root` and WHM accounts with the `all` privilege can open the plugin.
 Resellers can't.
 
@@ -77,11 +93,10 @@ updates** asks right away. The weekly summary email also mentions a new
 version. From SSH:
 
 ```bash
-cd csf-autogroup
-sudo bash update.sh
+sudo csf-autogroup update
 ```
 
-`update.sh` pulls **only if GitHub is ahead**, then reinstalls with your saved
+(`sudo bash update.sh` in the repository does the same.) It pulls **only if GitHub is ahead**, then reinstalls with your saved
 settings, with no prompts. `config.env` is left untouched.
 
 ## The plugin
@@ -526,6 +541,7 @@ guard (`AG_GUARD`). Without the panel, `bash tools/block-hits.sh --remove` and
 
 ```bash
 crontab -l | grep -v 'csf_autogroup.sh' | crontab -
+rm -f /usr/sbin/csf-autogroup
 # WHM plugin (cPanel):
 /usr/local/cpanel/bin/unregister_appconfig csf_autogroup
 rm -rf /usr/local/cpanel/whostmgr/docroot/cgi/csf_autogroup /var/cpanel/csf_autogroup

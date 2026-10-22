@@ -3,9 +3,12 @@
 # CSF Auto-Group — quick update.  Run as root:  bash update.sh
 # Pulls ONLY if the GitHub remote is ahead, then redeploys with your
 # saved settings (no prompts; config.env thresholds/lang preserved).
+#   bash update.sh --check   only tells whether GitHub is ahead (exit 10 = update available)
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 cd "$(cd "$(dirname "$0")" && pwd)"
+CHECK=0
+case "${1:-}" in --check) CHECK=1;; esac
 
 [ "$(id -u)" -eq 0 ] || { echo "ERROR: run as root (install step needs cron)."; exit 1; }
 [ -d .git ] || { echo "ERROR: not a git checkout — 'git clone' the repo and run from it."; exit 1; }
@@ -35,6 +38,7 @@ fi
 
 echo "Update available: $(git rev-parse --short @) → $(git rev-parse --short "origin/$BRANCH")"
 git log --oneline "@..origin/$BRANCH" | sed 's/^/  /'
+if [ "$CHECK" = 1 ]; then echo "Run 'csf-autogroup update' to install it."; exit 10; fi
 git merge --ff-only "origin/$BRANCH"
 
 echo

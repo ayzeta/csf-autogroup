@@ -2,6 +2,13 @@
 
 ## 1.15.8 — 2026-10-22
 
+- **Short command: `csf-autogroup`.** The installer adds
+  `/usr/sbin/csf-autogroup` with `update`, `check` (only says whether an
+  update is available), `reinstall`, `run`, `dry-run`, `status`,
+  `lookup IP`, `log` and `version`; `sudo csf-autogroup update` replaces
+  `cd csf-autogroup; sudo bash update.sh`. Existing installs get it with this
+  update (the panel's **Update** button or `bash update.sh` one last time).
+  `update.sh --check` is new too.
 - **Fix — IP card picked the wrong allow line.** With both a single-port and
   an all-ports allow line for the same address, the card showed the first one
   and said a ban on the address works; it now prefers the all-ports line
