@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.15.11 — 2026-10-23
+
+- **Faster status, second round** (from a real server's `AG_PROF` profile):
+  the *Ban not working* rows matched every ban in the lfd log against every
+  allow-list range one by one, now ranges are grouped by network; Imunify360's
+  allow list (search-engine bots) is read in one pass; the review list
+  filters the event log before reversing it instead of reversing all of it;
+  and the threshold preview's per-block loop runs in one pass. Output is
+  unchanged.
+
 ## 1.15.10 — 2026-10-23
 
 - **Faster status with large allow lists.** With allowed services on, the

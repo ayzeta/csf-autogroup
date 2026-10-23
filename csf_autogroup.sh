@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.10"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.11"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1879,14 +1879,20 @@ load_whitelist() {
     wl_load "$CSF_VAR/csf.tempallow"  "csf.tempallow"
     # Imunify360'ın yerel beyaz listesi (elle eklenenler ve Imunify'ın doğruladığı arama motoru botları).
     # Önbellekten okunur (imunify_refresh, IMUNIFY_REFRESH_MIN dakikada bir); süresi dolan kayıt sayılmaz.
+    # Satırlar awk'ta süzülüp atamaya çevrilir, tek eval (arama motoru botlarıyla binlerce satır; satır başına bash read +
+    # cidr_range yavaştı). Kurallar wl_add ile aynı: geçersiz IP / maske atlanır, aralık hizalanır.
     if [ -r "$IMUNIFY_WL_FILE" ]; then
-        local now wip wexp wcm
-        now=$(date +%s)
-        while IFS='|' read -r wip wexp wcm; do
-            [[ "$wip" =~ ^[0-9] ]] || continue
-            [[ "$wexp" =~ ^[0-9]+$ ]] && [ "$wexp" -gt 0 ] && [ "$wexp" -le "$now" ] && continue
-            wl_add "$wip" "Imunify: $wip${wcm:+ ($wcm)}"
-        done < "$IMUNIFY_WL_FILE"
+        eval "$(LC_ALL=C awk -F'|' -v now="$(date +%s)" '
+            function q(x) { gsub(/[\\"$`]/, "\\\\&", x); return "\"" x "\"" }
+            $1 ~ /^[0-9]/ {
+                if ($2 ~ /^[0-9]+$/ && $2 + 0 > 0 && $2 + 0 <= now + 0) next
+                ip = $1; bits = 32; k = index(ip, "/"); if (k) { bits = substr(ip, k + 1); ip = substr(ip, 1, k - 1) }
+                if (ip !~ /^[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?$/ || bits !~ /^[0-9]+$/) next
+                bits += 0; if (bits < 1 || bits > 32) next
+                split(ip, o, "."); if (o[1] + 0 > 255 || o[2] + 0 > 255 || o[3] + 0 > 255 || o[4] + 0 > 255) next
+                v = ((o[1] * 256 + o[2]) * 256 + o[3]) * 256 + o[4]; size = 2 ^ (32 - bits); lo = v - v % size
+                cm = $3; for (j = 4; j <= NF; j++) cm = cm "|" $j
+                printf "WL_LO+=(%.0f);WL_HI+=(%.0f);WL_TXT+=(%s);WL_CM+=(\"\")\n", lo, lo + size - 1, q("Imunify: " $1 (cm != "" ? " (" cm ")" : "")) }' "$IMUNIFY_WL_FILE")"
     fi
     # Sunucunun kendi IP'leri: CSF yalnızca IP'nin kendisini korur, içinde bulunduğu /24'ü değil.
     for ip in $( { ip -4 -o addr show 2>/dev/null | awk '{print $4}'; hostname -I 2>/dev/null | tr ' ' '\n'; } | sed 's#/.*##' | grep -E "$IPV4_RE" | sort -u); do
@@ -2420,7 +2426,7 @@ do_status() {
             fi
             review+=("$line")
             rtext+=("$(printf '%-18s %s · %s' "$c" "$ty" "$(date -d "@$t" '+%d.%m %H:%M')")")
-        done < <(tac "$EVENTS_FILE" | LC_ALL=C grep -E '"type":"(warn16|warn16t|skip_wl)"')   # yalnız bu türler: her satırı bash'te gezmek pahalı
+        done < <(LC_ALL=C grep -E '"type":"(warn16|warn16t|skip_wl)"' "$EVENTS_FILE" | tac)   # yalnız bu türler, önce süzülür sonra ters çevrilir
     fi
     prof review_events
     # Olay kaydı başlamadan önceki uyarılar ve atlamalar sayaçta tarihiyle duruyor (IP ayrıntısı yok)
@@ -2811,15 +2817,21 @@ do_status() {
                 TPC[${dx%.*}]=$(( ${TPC[${dx%.*}]:-0} + 1 ))
             done < "$CSF_VAR/csf.tempban"
         fi
+        # adaylar bash'te (yalnız dizi bakışları); geniş banın kapsadığı bloklar tek awk geçişinde düşülür: blok başına ip2int +
+        # under_of döngüsü binlerce blokta ~0,4 sn sürüyordu
+        local -a DCAND=()
         for dx in "${!count24[@]}" "${!TPC[@]}"; do
             [[ "$dx" == x* ]] && continue
-            [ -n "${DB[$dx]}" ] && continue
+            [ -n "${DB[$dx]}" ] && continue; DB[$dx]=1
             [ -n "${DLINE[$dx.0/24]+x}" ] || [ "${TG_TTL[$dx.0/24]:-0}" -gt 0 ] && continue
-            ip2int "$dx.0"; under_of "$REPLY" $((REPLY + 255)) "" && continue
             ign_until "$dx.0/24" && continue
-            DB[$dx]="${count24[$dx]:-0}:${TPC[$dx]:-0}"
+            DCAND+=("$dx ${count24[$dx]:-0}:${TPC[$dx]:-0}")
         done
-        printf '"dist":{%s},' "$(for dx in "${!DB[@]}"; do printf '%s %s\n' "${dx%.*}" "${DB[$dx]}"; done | sort | awk '
+        printf '"dist":{%s},' "$( { for dx in "${!WD_LO[@]}"; do echo "W ${WD_LO[dx]} ${WD_HI[dx]}"; done; echo "#--"; printf '%s\n' "${DCAND[@]}"; } | awk '
+            !S && $0 == "#--" { S = 1; next }
+            !S { n++; WL[n] = $2 + 0; WH[n] = $3 + 0; next }
+            NF == 2 { split($1, o, "."); lo = ((o[1] * 256 + o[2]) * 256 + o[3]) * 256; for (i = 1; i <= n; i++) if (WL[i] <= lo && WH[i] >= lo + 255) next
+                      p = $1; sub(/\.[0-9]+$/, "", p); print p, $2 }' | sort | awk '
             $1 != k { if (k != "") printf "%s\"%s\":[%s]", (n++ ? "," : ""), k, v; k = $1; v = "" }
             { v = v (v == "" ? "" : ",") "\"" $2 "\"" }
             END { if (k != "") printf "%s\"%s\":[%s]", (n ? "," : ""), k, v }')"
@@ -4646,15 +4658,21 @@ allow_atk_load() {  # SINCE_EPOCH → AA_* (IP başına: k, olay sayısı, son z
     } | awk '
         function v4(x,  p) { split(x, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
         !S && $0 == "#--" { S = 1; FS = "|"; next }
-        !S { n++; L[n] = $2 + 0; H[n] = $3 + 0; I[n] = $4; F[n] = $5; next }
+        # beyaz liste kayıtları /16 kovalarına (256 kovadan geniş olanlar ayrı): her IP yalnız kendi kovasıyla karşılaştırılır. lfd
+        # günlüğündeki her ban satırı burada (binlerce IP) × binlerce izinli servis aralığı sunucuda ~0,7 sn sürüyordu. Seçim aynı:
+        # sunucunun kendi adresi (ff 2), yoksa tam izin (ff 1), yoksa herhangi bir kayıt; her birinde en küçük indis.
+        !S { lo = $2 + 0; hi = $3 + 0; a = int(lo / 65536); b = int(hi / 65536)
+             if (b - a > 256) { nw++; XL[nw] = lo; XH[nw] = hi; XI[nw] = $4 + 0; XF[nw] = $5 + 0 }
+             else for (k = a; k <= b; k++) { c = ++BN[k]; BL[k, c] = lo; BH[k, c] = hi; BI[k, c] = $4 + 0; BF[k, c] = $5 + 0 }
+             next }
+        function pick(ix, fx) { if (fx == 2) { if (h2 < 0 || ix < h2) h2 = ix } else if (fx == 1) { if (h1 < 0 || ix < h1) h1 = ix }; if (h0 < 0 || ix < h0) h0 = ix }
         $1 == "Z" { K = $2 "|b"; ZT[K] = $3 + 0; ZR[K] = $4; next }     # CSF içindeki işlemeyen ban (aa_ineff_rows)
         { K = $1 "|" $2; N[K] += $4; if ($5 >= T[K]) { T[K] = $5; R[K] = $6 }; if (!(K in T0) || $7 + 0 < T0[K]) T0[K] = $7 + 0 }
         END { for (K in ZT) if (!(K in N)) { N[K] = 1; T[K] = ZT[K]; R[K] = ZR[K]; T0[K] = ZT[K] }   # lfd günlüğünde kaydı yoksa
-              for (K in N) { split(K, f, "|"); v = v4(f[1]); hit = -1; full = 0
-                for (i = 1; i <= n; i++) if (v >= L[i] && v <= H[i]) {
-                    if (F[i] == 2) { hit = I[i]; full = 2; break }                    # sunucunun kendi adresi her kaydin onunde
-                    else if (F[i] == 1 && full < 1) { hit = I[i]; full = 1 }
-                    else if (hit < 0) hit = I[i] }
+              for (K in N) { split(K, f, "|"); v = v4(f[1]); h2 = -1; h1 = -1; h0 = -1; k = int(v / 65536)
+                for (i = 1; i <= BN[k]; i++) if (v >= BL[k, i] && v <= BH[k, i]) pick(BI[k, i], BF[k, i])
+                for (i = 1; i <= nw; i++) if (v >= XL[i] && v <= XH[i]) pick(XI[i], XF[i])
+                if (h2 >= 0) { hit = h2; full = 2 } else if (h1 >= 0) { hit = h1; full = 1 } else { hit = h0; full = 0 }   # kendi adresi önce
                 if (f[2] == "b" && full < 1) continue    # banlandı ve izinli değil: ban işliyor
                 print f[1] "|" f[2] "|" N[K] "|" T[K] "|" hit "|" full "|" R[K] "|" T0[K] } }' | sort -t'|' -k4,4nr | awk -F'|' '!($1 in S) { S[$1] = 1; print }')
     for i in "${!AA_IP[@]}"; do      # listelerde olmayan yoksayma: kaynağı lfd'nin sırasıyla bul
