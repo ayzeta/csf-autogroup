@@ -17,6 +17,7 @@ printf '%s\n' \
     'tcp|in|d=2000_2010|s=3.3.3.5 # port aralığı' \
     'tcp|in|d=80,443|s=4.4.4.0/24 # csf_autogroup: exception for 4.4.4.0/24 [svc=web]' \
     'tcp|in|s=5.5.5.5 # portsuz gelişmiş satır' \
+    'tcp|in|s=22|s=3.3.3.6 # kaynak portu (giden bağlantının cevabı)' \
     'tcp|out|d=25|d=6.6.6.6 # dışarı' \
     'tcp|in|d=80|s=0.0.0.0/0 # herkese açan port kuralı' \
     'tcp|out|d=25|u=0 # kullanıcıya bağlı' \
@@ -45,7 +46,8 @@ want 'P tcp 3.3.3.5 2000:2010' 1 'port aralığı a_b → a:b'
 want 'P tcp 4.4.4.0/24 80' 1 'eklentinin istisna satırı: port 80'
 want 'P tcp 4.4.4.0/24 443' 1 'eklentinin istisna satırı: port 443'
 want 'F 4.4.4.0/24' 0 'eklentinin istisna satırı tam izin değil'
-want 'P tcp 5.5.5.5 all' 1 'portsuz gelişmiş satır: protokolün bütün portları'
+want 'P tcp 5.5.5.5 all' 0 'portsuz gelişmiş satır alınmaz (CSF ilk s= alanını port okur, satırı reddeder)'
+want 'P tcp 3.3.3.6 22' 0 'kaynak portlu satır (s=22|s=IP) gelen servise izin değil'
 want 'F 6.6.6.6' 0 'dışarı giden satır alınmaz'
 grep -q '0.0.0.0' <<< "$GOT" && { F=$((F + 1)); OUT+="  ✗ /0 port kuralı izin sayıldı"$'\n'; } || OUT+="  ✓ /8'den geniş kaynak alınmaz"$'\n'; N=$((N + 1))
 want 'F 7.7.7.7' 1 'Include edilen dosya'

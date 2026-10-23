@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.18"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.19"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -938,10 +938,14 @@ adv_parse() {
     ADV_PROTO=""; ADV_DIR=""; ADV_PORTS=""; ADV_CIDR=""
     IFS='|' read -ra f <<< "$s"
     ADV_PROTO="${f[0]}"; ADV_DIR="${f[1]}"
+    # CSF'in okuma sırası (csf.pl linefilter, 16.33): yön alanından sonraki ilk s= / d= alanı PORT, sonraki s= / d= alanı adres.
+    # İlk alan adresse ("tcp|in|s=IP") port doğrulaması düşer ve CSF satırı hiç yüklemez (ölçüldü: kural kurulmuyor).
+    local pf=0
     for k in "${f[@]:2}"; do
+        [[ "$k" == [sd]=* ]] || continue
         v="${k#*=}"
-        if [[ "$v" =~ $CIDR4_RE ]]; then ADV_CIDR="$v"
-        elif [[ "$k" == [sd]=* ]]; then ADV_PORTS="${ADV_PORTS:+$ADV_PORTS,}$v"; fi
+        if [ "$pf" = 0 ]; then [[ "$v" =~ $CIDR4_RE ]] && return 1; ADV_PORTS="$v"; pf=1
+        elif [[ "$v" =~ $CIDR4_RE ]]; then ADV_CIDR="$v"; break; fi
     done
     [[ "$ADV_PROTO" =~ ^[a-z]+$ ]] || ADV_PROTO="?"
     [[ "$ADV_DIR" =~ ^[a-z]+$ ]] || ADV_DIR="?"
@@ -1803,12 +1807,15 @@ wl_load() {      # FILE LABEL [DEPTH] — IP, CIDR, gelişmiş satır (tcp|in|d=
               printf "WL_LO+=(%.0f);WL_HI+=(%.0f);WL_TXT+=(%s);WL_CM+=(%s)\n", lo, lo + size - 1, q(lab (svn != "" ? " (" svn ")" : "") ": " tok), q(cm)
               next }
           # gelişmiş satır (tcp|in|d=22|s=IP): adv_parse + adv_wide + wl_add ile aynı kurallar (sunucuda 196 satır bash yolunda
-          # ~0,6 sn ölçüldü). Son CIDR alanı adres; s= / d= değerleri port; protokol ve yön küçük harf değilse "?"
+          # ~0,6 sn ölçüldü). CSF sırası: ilk s= / d= alanı port (adresse satır reddedilir), sonraki s= / d= adres; protokol
+          # ve yön küçük harf değilse "?"
           if (index(tok, "|")) {
-              nf = split(tok, f, "|"); pr = f[1]; dr = f[2]; ports = ""; cid = ""
-              for (i = 3; i <= nf; i++) { kv = f[i]; v = kv; e = index(kv, "="); if (e) v = substr(kv, e + 1)
-                  if (v ~ /^[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?(\/[0-9][0-9]?)?$/) cid = v
-                  else if (kv ~ /^[sd]=/) ports = ports (ports != "" ? "," : "") v }
+              nf = split(tok, f, "|"); pr = f[1]; dr = f[2]; ports = ""; cid = ""; pf = 0; bad = 0
+              for (i = 3; i <= nf; i++) { kv = f[i]; if (kv !~ /^[sd]=/) continue; v = substr(kv, 3)
+                  isip = (v ~ /^[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?(\/[0-9][0-9]?)?$/)
+                  if (!pf) { if (isip) { bad = 1; break }; ports = v; pf = 1 }
+                  else if (isip) { cid = v; break } }
+              if (bad) next
               if (pr !~ /^[a-z]+$/) pr = "?"; if (dr !~ /^[a-z]+$/) dr = "?"; if (ports !~ /^[0-9,:_-]*$/) ports = ""
               if (cid == "") next
               ip = cid; bits = 32; k = index(cid, "/"); if (k) { bits = substr(cid, k + 1) + 0; ip = substr(cid, 1, k - 1) }
@@ -2097,11 +2104,21 @@ parse_deny() {   # FILE MAIN(1|0) [DEPTH]
     [ "$2" = 1 ] && [ "$depth" = 0 ] && { prof deny_read; ineff_load; }
 }
 wl_full_idx() {  # İZİN_İNDİSİ → REPLY = 1 bütün portlara izin (csf.allow ve Include'ları, GLOBAL_ALLOW, geçici izin, dyndns),
-    # 2 sunucunun kendi IP'si, 0 değil (tek portluk gelişmiş satır, csf.ignore, rignore…). allow_atk_load ve ineff_load aynı ölçüt.
-    local pre='\((tcp|udp) (in|out) ([^)]*)\)'
+    # 2 sunucunun kendi IP'si, 3 yalnız gelen yönü kesen bana karşı tam izin, 0 değil. allow_atk_load ve ineff_load aynı ölçüt.
+    # Gelişmiş satır (ölçüldü, CSF 16.33): ban DENYIN'e, iki yönlüyse DENYOUT'a da girer; kurulmuş bağlantıların kabulü bunlardan
+    # sonra gelir. Tek yönlü satırın açtığı bağlantının cevabı öbür yönde banla düşer: yalnız "tcp|in|d=1:65535|s=IP" yalnız gelen
+    # yönü kesen banı (LF_BLOCKINONLY=1 kalıcı ban, "in" geçici ban) aşar (3); karşı yön satırıyla (tcp out 1:65535) her banı (1).
+    # Dışarı satırı tek başına, portsuz satır (CSF kural kurmaz) ve tek portluk satır tam izin değildir.
+    local pre='\((tcp|udp) (in|out) ([^)]*)\): ([0-9./]+)' c i
     REPLY=0
     case "${WL_TXT[$1]}" in csf.allow*|GLOBAL_ALLOW*|csf.tempallow*|DYNDNS*|GLOBAL_DYNDNS*) REPLY=1 ;; "$M_WL_SELF: "*) REPLY=2 ;; esac
-    [[ "${WL_TXT[$1]}" =~ $pre ]] && [ "${BASH_REMATCH[3]}" != "1:65535" ] && [ "${BASH_REMATCH[3]}" != "*" ] && REPLY=0
+    if [[ "${WL_TXT[$1]}" =~ $pre ]]; then
+        REPLY=0
+        if [ "${BASH_REMATCH[1]}" = tcp ] && [ "${BASH_REMATCH[2]}" = in ] && [[ "${BASH_REMATCH[3]}" =~ ^[01][:_]65535$ ]]; then
+            REPLY=3; c="${BASH_REMATCH[4]}"
+            for i in "${!WL_TXT[@]}"; do [[ "${WL_TXT[i]}" =~ \(tcp\ out\ [01][:_]65535\):\ (.*)$ ]] && [ "${BASH_REMATCH[1]}" = "$c" ] && { REPLY=1; break; }; done
+        fi
+    fi
     return 0
 }
 wl_ff_lines() {  # → stdout "W lo hi indis ff" (her beyaz liste kaydı; ff wl_full_idx ile aynı ölçüt), tek awk geçişi: izinli servislerle
@@ -2112,8 +2129,10 @@ wl_ff_lines() {  # → stdout "W lo hi indis ff" (her beyaz liste kaydı; ff wl_
             t = $3; ff = 0
             if (t ~ /^(csf\.allow|GLOBAL_ALLOW|csf\.tempallow|DYNDNS|GLOBAL_DYNDNS)/) ff = 1
             else if (index(t, self) == 1) ff = 2
-            if (match(t, /\((tcp|udp) (in|out) [^)]*\)/)) { p = substr(t, RSTART + 1, RLENGTH - 2); sub(/^[a-z]+ [a-z]+ /, "", p); if (p != "1:65535" && p != "*") ff = 0 }
-            print "W", $1, $2, NR - 1, ff }'
+            if (match(t, /\((tcp|udp) (in|out) [^)]*\): /)) { p = substr(t, RSTART + 1, RLENGTH - 4); c = substr(t, RSTART + RLENGTH); ff = 0
+                if (p ~ /^tcp in [01][:_]65535$/) { ff = 3; C[NR] = c } else if (p ~ /^tcp out [01][:_]65535$/) O[c] = 1 }
+            L[NR] = $1; H[NR] = $2; F[NR] = ff }
+            END { for (i = 1; i <= NR; i++) print "W", L[i], H[i], i - 1, (F[i] == 3 && (C[i] in O) ? 1 : F[i]) }'
 }
 ineff_load() {   # → INEFF[IP] = izin kaydı ("csf.allow: IP (yorum)"), INEFF_S = " IP IP … ": banı İŞLEMEYEN tekil ve geçici IP banları.
     # CSF izinleri banlardan önce uygular (LOCALINPUT: ALLOWIN → DENYIN); csf -td izin denetlemez (ölçüldü 16.33), lfd izinli IP'ye
@@ -2134,24 +2153,30 @@ ineff_load() {   # → INEFF[IP] = izin kaydı ("csf.allow: IP (yorum)"), INEFF_
             for x in ${ips24[$p]}; do [ "$x" = "$ip" ] || out+=" $x"; done; ips24[$p]="$out"
         fi
     done < <({
-        wl_ff_lines | awk '$5 >= 1 { print $1, $2, $3, $4 }'
+        wl_ff_lines | awk '$5 >= 1 { print $1, $2, $3, $4, $5 }'
         echo "#--"
-        for ip in "${!SINGLE_NOTE[@]}"; do echo "$ip"; done
-        [ -r "$CSF_VAR/csf.tempban" ] && awk -F'|' '$2 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ { print $2 }' "$CSF_VAR/csf.tempban"
+        local bio=0; [ "$(conf_val LF_BLOCKINONLY)" = 1 ] && bio=1
+        for ip in "${!SINGLE_NOTE[@]}"; do echo "$ip $(( 1 - bio ))"; done     # kalıcı tekil: giden yönü de keser (LF_BLOCKINONLY=0)
+        [ -r "$CSF_VAR/csf.tempban" ] && awk -F'|' '$2 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ { print $2, (index($4, "out") ? 1 : 0) }' "$CSF_VAR/csf.tempban"
     } | awk '
         # izin aralıkları /16 kovalarına (256 kovadan geniş olanlar ayrı listede): her IP yalnız kendi kovasıyla karşılaştırılır.
         # Önce her IP bütün aralıklarla karşılaştırılıyordu (3.000 tekil × 4.300 izinli servis aralığı ≈ 5 sn). En küçük indisli
-        # eşleşme seçilir: etiket, kayıtları sırayla tarayan sürümle aynı.
+        # eşleşme seçilir: etiket, kayıtları sırayla tarayan sürümle aynı. Yalnız gelen yönde tam izin (ff 3) yalnız adresin bütün
+        # banları gelen yönü kesiyorsa sayılır (bir banı giden yönü de kesiyorsa cevaplar düşer, ban işler; ölçüldü).
         function v4(x,  p) { split(x, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
         !S && $0 == "#--" { S = 1; next }
         !S { lo = $2 + 0; hi = $3 + 0; a = int(lo / 65536); b = int(hi / 65536)
-             if (b - a > 256) { nw++; XL[nw] = lo; XH[nw] = hi; XI[nw] = $4 + 0 }
-             else for (k = a; k <= b; k++) { c = ++BN[k]; BL[k, c] = lo; BH[k, c] = hi; BI[k, c] = $4 + 0 }
+             if (b - a > 256) { nw++; XL[nw] = lo; XH[nw] = hi; XI[nw] = $4 + 0; XF[nw] = $5 + 0 }
+             else for (k = a; k <= b; k++) { c = ++BN[k]; BL[k, c] = lo; BH[k, c] = hi; BI[k, c] = $4 + 0; BF[k, c] = $5 + 0 }
              next }
-        !($0 in D) { D[$0] = 1; v = v4($0); k = int(v / 65536); hit = -1
-             for (i = 1; i <= BN[k]; i++) if (v >= BL[k, i] && v <= BH[k, i] && (hit < 0 || BI[k, i] < hit)) hit = BI[k, i]
-             for (i = 1; i <= nw; i++) if (v >= XL[i] && v <= XH[i] && (hit < 0 || XI[i] < hit)) hit = XI[i]
-             if (hit >= 0) print $0 "|" hit }')
+        { if (!($1 in Q)) { Q[$1] = 1; ord[++nq] = $1 }; if ($2 + 0) OUT[$1] = 1 }
+        END { for (j = 1; j <= nq; j++) { ip = ord[j]; v = v4(ip); k = int(v / 65536); h = -1; h3 = -1
+                for (i = 1; i <= BN[k]; i++) if (v >= BL[k, i] && v <= BH[k, i]) {
+                    if (BF[k, i] == 3) { if (h3 < 0 || BI[k, i] < h3) h3 = BI[k, i] } else if (h < 0 || BI[k, i] < h) h = BI[k, i] }
+                for (i = 1; i <= nw; i++) if (v >= XL[i] && v <= XH[i]) {
+                    if (XF[i] == 3) { if (h3 < 0 || XI[i] < h3) h3 = XI[i] } else if (h < 0 || XI[i] < h) h = XI[i] }
+                if (h < 0 && !(ip in OUT)) h = h3
+                if (h >= 0) print ip "|" h } }')
     if [ "$rst" = 1 ]; then
         WL_LOADED=0; WL_LO=(); WL_HI=(); WL_TXT=(); WL_CM=(); RIGNORE=(); CC_LIST=""
     fi
@@ -3262,7 +3287,7 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
 }
 do_lookup() {
     local ip="$1" n host="" fwd=false txt asn="" pfx="" cc="" reg="" alloc="" asname="" a b c d i
-    local deny="" temp="" wl="" rig="" pend="" ign="" line t tip port dir to note now
+    local deny="" temp="" tdir="" wl="" rig="" pend="" ign="" line t tip port dir to note now
     if ! [[ "$ip" =~ $IPV4_RE ]] || ! cidr_range "$ip"; then
         if [ "$JSON" = 1 ]; then jstr "$(m "$M_BAD_IP" "$ip")"; echo "{\"ok\":false,\"error\":$REPLY}"; else m "$M_BAD_IP" "$ip"; echo; fi
         return 2
@@ -3327,11 +3352,28 @@ do_lookup() {
         while IFS='|' read -r t tip port dir to note; do
             cidr_range "$tip" 2>/dev/null || continue
             if (( R_LO <= n && R_HI >= n )); then
-                temp="$tip · $(m "$M_TMIN_LEFT" "$(( ($(num "$t") + $(num "$to") - now) / 60 ))") · $note"; break
+                temp="$tip · $(m "$M_TMIN_LEFT" "$(( ($(num "$t") + $(num "$to") - now) / 60 ))") · $note"; tdir="$dir"; break
             fi
         done < "$CSF_VAR/csf.tempban"
     fi
     wl_best "$n" "$n" && wl="$WL_HIT"   # satır yorumuyla: "csf.allow: IP (ofis)"; tam izin tek portluk satırdan önce
+    # gelişmiş izin satırı banla birlikte ne yapar (ölçüldü, CSF 16.33): ban gelen yönü, iki yönlüyse giden yönü de keser ve
+    # kurulmuş bağlantıların kabulü ondan sonra gelir; tek yönlü satırın açtığı bağlantının cevabı öbür yönde düşer.
+    # wle: pair = karşı yön satırı da var (aynı protokol, aralık ve port), satır o portu açar; in_ok = gelen yön satırı, ban
+    # giden yönü kesmiyor (ya da ban yok), satır o portu açar; in_x = gelen yön satırı ama ban iki yönlü, açmaz; out = yalnız
+    # sunucunun bu adrese açtığı bağlantılar için, ban onları da keser.
+    local wle=""
+    if [[ "$wl" =~ \((tcp|udp)\ (in|out)\ ([^\)]*)\):\ ([0-9./]+) ]]; then
+        local wpr="${BASH_REMATCH[1]}" wdr="${BASH_REMATCH[2]}" wpp="${BASH_REMATCH[3]}" wcd="${BASH_REMATCH[4]}" wod wi
+        [ "$wdr" = in ] && wod=out || wod=in
+        wle="$wdr"
+        for wi in "${!WL_TXT[@]}"; do [[ "${WL_TXT[wi]}" == *"($wpr $wod $wpp): $wcd" ]] && { wle=pair; break; }; done
+        if [ "$wle" = in ]; then
+            wle=in_ok
+            { [ -n "$deny" ] || [[ "$cvj" == *'"kind":"cidr"'* ]]; } && [ "$(conf_val LF_BLOCKINONLY)" != 1 ] && wle=in_x
+            [[ "$tdir" == *out* ]] && wle=in_x
+        fi
+    fi
     if [ -n "$host" ] && [ "${#RIGNORE[@]}" -gt 0 ]; then
         rig_match "$(printf '%s' "$host" | LC_ALL=C tr '[:upper:]' '[:lower:]')" "$ip" && rig="$REPLY"   # motorun beyaz liste kuralıyla aynı
     fi
@@ -3347,7 +3389,7 @@ do_lookup() {
     if [ "$JSON" = 1 ]; then
         local o="{\"ok\":true,\"ip\":\"$ip\"" k v
         if self_overlap "$n" "$n"; then o+=",\"self\":true"; else o+=",\"self\":false"; fi   # sunucunun kendi adresi: ban konamaz
-        for k in host asname pfx cc reg alloc deny temp wl rig pend ign ign_by; do
+        for k in host asname pfx cc reg alloc deny temp wl wle rig pend ign ign_by; do
             v="${!k}"; jstr "$v"; o+=",\"$k\":$REPLY"
         done
         [ -n "$ign_t" ] && o+=",\"ign_t\":$ign_t"
@@ -4766,7 +4808,7 @@ allow_atk_load() {  # SINCE_EPOCH → AA_* (IP başına: k, olay sayısı, son z
     # önce kabul etmez (yalnız gri/splash/captcha/uzak vekil kümelerini WebShield portlarına); "Imunify:" etiketli kayıtlar
     # (imunify360-agent önbelleği) yalnız etiket için.
     # Sunucunun kendi IP'si: lfd kendi adreslerini her zaman yoksayar (lfd.pl ignoreip, ilk denetim; ölçüldü 16.33) → full=2.
-    # Gelişmiş satırda port 1:65535 ya da * bütün portları açar: tam izin. Hiçbir listede olmayan "ignored" kaydının
+    # Gelişmiş satır yalnız wl_full_idx'in koşullarında tam izindir (tek yönlü satır iki yönlü banı aşmaz). Hiçbir listede olmayan "ignored" kaydının
     # kaynağı lfd'nin sırasıyla aranır (aa_src_resolve): CC_IGNORE, relay listeleri, csf.rignore.
     local since="$1" dir base f sig day0 cache rot=() cur i
     AA_IP=(); AA_K=(); AA_N=(); AA_T=(); AA_R=(); AA_W=(); AA_F=(); AA_S=(); AA_T0=()
@@ -4779,6 +4821,11 @@ allow_atk_load() {  # SINCE_EPOCH → AA_* (IP başına: k, olay sayısı, son z
     if [ "${#rot[@]}" -gt 0 ] && { [ ! -r "$cache" ] || [ "$(head -n 1 "$cache")" != "$sig" ]; }; then
         { echo "$sig"; aa_days "${rot[@]}"; } > "$cache.tmp" 2>/dev/null && mv -f "$cache.tmp" "$cache"
     fi
+    # yalnız gelen yönde tam izin (ff 3): lfd'nin banları da yalnız gelen yönü kesiyorsa işlemez — geçici ban LF_SELECT=1 ve
+    # LF_TRIGGER=0 iken "in" (öteki durumlarda "inout", lfd.pl block), kalıcı ban LF_BLOCKINONLY=1 iken; günlük satırı hangisi
+    # olduğunu söylemediği için üçü birden gerekir. Şu an CSF'te olan ban kendi yönüyle ineff_load'da (aa_ineff_rows) sayılır.
+    local f3=0
+    [ "$(conf_val LF_SELECT)" = 1 ] && [ "$(num "$(conf_val LF_TRIGGER)")" = 0 ] && [ "$(conf_val LF_BLOCKINONLY)" = 1 ] && f3=1
     while IFS='|' read -r AAx AAk AAn AAt AAw AAf AAr AAt0; do
         AA_IP+=("$AAx"); AA_K+=("$AAk"); AA_N+=("$AAn"); AA_T+=("$AAt"); AA_W+=("$AAw"); AA_F+=("$AAf"); AA_R+=("$AAr"); AA_T0+=("${AAt0:-$AAt}")
     done < <({
@@ -4786,7 +4833,7 @@ allow_atk_load() {  # SINCE_EPOCH → AA_* (IP başına: k, olay sayısı, son z
         echo "#--"
         { [ "${#rot[@]}" -gt 0 ] && tail -n +2 "$cache" 2>/dev/null; [ -r "$LFD_LOG" ] && aa_days "$LFD_LOG"; } | awk -F'|' -v d0="$day0" '$3 >= d0'
         aa_ineff_rows "$since"
-    } | awk '
+    } | awk -v f3="$f3" '
         function v4(x,  p) { split(x, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
         !S && $0 == "#--" { S = 1; FS = "|"; next }
         # beyaz liste kayıtları /16 kovalarına (256 kovadan geniş olanlar ayrı): her IP yalnız kendi kovasıyla karşılaştırılır. lfd
@@ -4796,11 +4843,12 @@ allow_atk_load() {  # SINCE_EPOCH → AA_* (IP başına: k, olay sayısı, son z
              if (b - a > 256) { nw++; XL[nw] = lo; XH[nw] = hi; XI[nw] = $4 + 0; XF[nw] = $5 + 0 }
              else for (k = a; k <= b; k++) { c = ++BN[k]; BL[k, c] = lo; BH[k, c] = hi; BI[k, c] = $4 + 0; BF[k, c] = $5 + 0 }
              next }
-        function pick(ix, fx) { if (fx == 2) { if (h2 < 0 || ix < h2) h2 = ix } else if (fx == 1) { if (h1 < 0 || ix < h1) h1 = ix }; if (h0 < 0 || ix < h0) h0 = ix }
+        # ff 3: CSF içinde duran işlemeyen ban (Z, yönüyle ineff_load seçti) ya da lfd banları yalnız gelen yönü kesiyorsa (f3) tam izin
+        function pick(ix, fx) { if (fx == 3) fx = (f3 || z) ? 1 : 0; if (fx == 2) { if (h2 < 0 || ix < h2) h2 = ix } else if (fx == 1) { if (h1 < 0 || ix < h1) h1 = ix }; if (h0 < 0 || ix < h0) h0 = ix }
         $1 == "Z" { K = $2 "|b"; ZT[K] = $3 + 0; ZR[K] = $4; next }     # CSF içindeki işlemeyen ban (aa_ineff_rows)
         { K = $1 "|" $2; N[K] += $4; if ($5 >= T[K]) { T[K] = $5; R[K] = $6 }; if (!(K in T0) || $7 + 0 < T0[K]) T0[K] = $7 + 0 }
         END { for (K in ZT) if (!(K in N)) { N[K] = 1; T[K] = ZT[K]; R[K] = ZR[K]; T0[K] = ZT[K] }   # lfd günlüğünde kaydı yoksa
-              for (K in N) { split(K, f, "|"); v = v4(f[1]); h2 = -1; h1 = -1; h0 = -1; k = int(v / 65536)
+              for (K in N) { split(K, f, "|"); v = v4(f[1]); h2 = -1; h1 = -1; h0 = -1; k = int(v / 65536); z = (K in ZT)
                 for (i = 1; i <= BN[k]; i++) if (v >= BL[k, i] && v <= BH[k, i]) pick(BI[k, i], BF[k, i])
                 for (i = 1; i <= nw; i++) if (v >= XL[i] && v <= XH[i]) pick(XI[i], XF[i])
                 if (h2 >= 0) { hit = h2; full = 2 } else if (h1 >= 0) { hit = h1; full = 1 } else { hit = h0; full = 0 }   # kendi adresi önce

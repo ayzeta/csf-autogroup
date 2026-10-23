@@ -417,6 +417,38 @@ if [ "${GERCEK:-0}" = 1 ] && command -v ip >/dev/null 2>&1 && command -v python3
     pkill -f "http.server" 2>/dev/null; ip netns del agcli 2>/dev/null; ip link del agv0 2>/dev/null
 fi
 
+# ── 3k) Gelişmiş izin satırı ve banın yönü (yalnız gerçek CSF): motorun kararı gerçek trafikle aynı mı ──
+# CSF banı gelen yöne, iki yönlüyse giden yöne de yazar; kurulmuş bağlantıların kabulü LOCALINPUT'tan sonra gelir. Tek yönlü
+# satırın açtığı bağlantının cevabı öbür yönde düşer: iki yönlü banı yalnız karşı yön satırıyla birlikte aşar.
+if [ "${GERCEK:-0}" = 1 ] && command -v ip >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+    NC=10.99.0.2; NS=10.99.0.1; PT=8390
+    ip netns del agcli 2>/dev/null; ip link del agv0 2>/dev/null; ip netns add agcli; ip link add agv0 type veth peer name agv1
+    ip link set agv1 netns agcli; ip addr add $NS/24 dev agv0; ip link set agv0 up
+    ip netns exec agcli ip addr add $NC/24 dev agv1; ip netns exec agcli ip link set agv1 up; ip netns exec agcli ip link set lo up
+    (cd /tmp && nohup python3 -m http.server --bind 0.0.0.0 $PT >/dev/null 2>&1 &)
+    tin() { [ "$(ip netns exec agcli curl -s --noproxy '*' -m 4 -o /dev/null -w '%{http_code}' http://$NS:$PT/ 2>/dev/null)" = 200 ] && echo G || echo -; }
+    wle() { run --lookup $NC --json 2>/dev/null | grep -o '"wle":"[a-z_]*"' | cut -d'"' -f4; }
+    ineff() { run --status --json 2>/dev/null | grep -o '"review":\[.*\],"ignored"' | sed 's/,{"t":/\n{"t":/g' | grep -F "\"type\":\"allow_ban\",\"cidr\":\"$NC\"" | grep -q '"full":1' && echo G || echo -; }
+    yn() { mk; addconf TCP_IN $PT; run >/dev/null 2>&1; }
+    yn; printf 'tcp|in|d=%s|s=%s # test\n' $PT $NC >> "$A"; csf -d $NC test >/dev/null 2>&1; NEEDR=1; run >/dev/null 2>&1
+    check "izin yönü · kalıcı ban + yalnız gelen satır: bağlantı kesilir" - "$(tin)"
+    check "izin yönü · kalıcı ban + yalnız gelen satır: IP kartı 'açmaz' der (in_x)" G "$([ "$(wle)" = in_x ] && echo G || echo "-:$(wle)")"
+    printf 'tcp|out|s=%s|d=%s # test\n' $PT $NC >> "$A"; NEEDR=1; run >/dev/null 2>&1
+    check "izin yönü · kalıcı ban + karşı yön satırıyla çift: bağlantı geçer" G "$(tin)"
+    check "izin yönü · çift: IP kartı 'yalnız o portu açar' der (pair)" G "$([ "$(wle)" = pair ] && echo G || echo "-:$(wle)")"
+    yn; printf 'tcp|in|d=1:65535|s=%s # test\n' $NC >> "$A"; csf -d $NC test >/dev/null 2>&1; NEEDR=1; run >/dev/null 2>&1
+    check "izin yönü · kalıcı ban + tcp|in|d=1:65535: bağlantı kesilir" - "$(tin)"
+    check "izin yönü · kalıcı ban + tcp|in|d=1:65535: 'Ban işlemiyor' denmez" - "$(ineff)"
+    yn; printf 'tcp|in|d=1:65535|s=%s # test\n' $NC >> "$A"; NEEDR=1; run >/dev/null 2>&1; csf -td $NC 3600 test >/dev/null 2>&1
+    check "izin yönü · geçici 'in' ban + tcp|in|d=1:65535: bağlantı geçer" G "$(tin)"
+    check "izin yönü · geçici 'in' ban + tcp|in|d=1:65535: 'Ban işlemiyor'" G "$(ineff)"
+    csf -tr $NC >/dev/null 2>&1; csf -td $NC 3600 -d inout test >/dev/null 2>&1
+    check "izin yönü · geçici 'inout' ban + tcp|in|d=1:65535: bağlantı kesilir" - "$(tin)"
+    check "izin yönü · geçici 'inout' ban + tcp|in|d=1:65535: 'Ban işlemiyor' denmez" - "$(ineff)"
+    csf -tr $NC >/dev/null 2>&1
+    pkill -f "^python3 -m http.server --bind 0.0.0.0 $PT" 2>/dev/null; ip netns del agcli 2>/dev/null; ip link del agv0 2>/dev/null
+fi
+
 # ── 4) Sunucunun kendi sağlayıcısı (taklit: 203.0.113.10 → AS64500) hiçbir durumda banlanmaz ──
 if [ "${GERCEK:-0}" != 1 ]; then     # taklit DNS gerekir (gerçek modda sunucu IP'si özel adres, Cymru cevap vermez)
 prov() { run --config set "$@" >/dev/null 2>&1; run --prov-apply >/dev/null 2>&1; }

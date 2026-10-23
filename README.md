@@ -138,7 +138,12 @@ settings, with no prompts. `config.env` is left untouched.
   `IGNORE_ALLOW = "0"`) but the ban does not work (*Ban not working*); with
   `IGNORE_ALLOW = "1"`, or in `csf.ignore` / `csf.rignore`, lfd does not ban it
   at all (*Ignored*; CSF refuses to ban an ignored address on its own, but a ban
-  on its block cuts it). Each row names the allow or ignore entry behind it,
+  on its block cuts it). An advanced allow line (`tcp|in|d=22|s=…`) opens one
+  direction only. A permanent ban blocks both directions (unless
+  `LF_BLOCKINONLY = "1"`), and so do lfd's temp bans unless `LF_SELECT` is on,
+  so the replies are dropped and the ban still works. The exceptions are a
+  matching line for the other direction (`tcp|out|s=22|d=…`) and a ban that
+  blocks incoming traffic only. Each row names the allow or ignore entry behind it,
   with the comment you wrote on that line (`1.2.3.4 # office`); an ignore that
   lfd took from `CC_IGNORE`, `RELAYHOSTS` or a reverse-DNS match in
   `csf.rignore` is traced the way lfd traces it. Failed logins coming from the

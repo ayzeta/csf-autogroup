@@ -4,10 +4,11 @@
 #
 #   F ADRES                 bütün portlara izin (csf.allow düz satırı, GLOBAL_ALLOW, DYNDNS, portsuz geçici izin, izinli servisler)
 #   P tcp|udp ADRES PORT    yalnız o porta izin (gelişmiş satır tcp|in|d=22|s=…, portlu geçici izin); PORT "a:b" aralık
-#                           ya da "all" (gelişmiş satırda d= yoksa o protokolün bütün portları)
 #
 # Kaynaklar CSF'in yüklediklerinin aynısı (csf.pl, CSF 16.33): csf.allow ve Include ettikleri (5 düzey), csf.gallow,
 # csf.tempdyn, csf.tempgdyn, süresi dolmamış csf.tempallow satırları; ayrıca eklentinin izinli servis dosyası.
+# Gelişmiş satır CSF'in sırasıyla okunur (csf.pl linefilter): yön alanından sonraki ilk s= / d= alanı port, sonraki adres; ilk
+# alan adresse ("tcp|in|s=IP") CSF satırı reddeder, burada da alınmaz. Gelen bağlantıya izin yalnız "d=PORT … s=ADRES" biçimi.
 # Dışarı giden (out) ve kullanıcıya bağlı (u=/g=) satırlar gelen bağlantıyı ilgilendirmez; /8'den geniş kaynak izin değil
 # port kuralıdır, alınmaz. Eklentinin "exception for" satırları da burada tek portluk izindir: banlı aralığın açık bırakılan
 # servisleri yalnız o portlarda geçer.
@@ -42,16 +43,15 @@ ag_allow_entries() {
             next }
         { sub(/#.*/, ""); gsub(/^[ \t]+|[ \t]+$/, ""); if ($0 == "" || $1 == "Include") next
           if (index($1, "|") == 0) { a = net($1); if (a != "") print "F", a; next }
-          n = split($1, f, "|"); pr = "tcp"; dir = "in"; s = ""; d = ""; u = 0
+          n = split($1, f, "|"); pr = "tcp"; dir = "in"; pk = ""; pv = ""; ak = ""; av = ""; u = 0
           for (i = 1; i <= n; i++) {
               if (f[i] == "tcp" || f[i] == "udp") pr = f[i]
               else if (f[i] == "in" || f[i] == "out") dir = f[i]
-              else if (f[i] ~ /^s=/) s = substr(f[i], 3)
-              else if (f[i] ~ /^d=/) d = substr(f[i], 3)
-              else if (f[i] ~ /^[ug]=/) u = 1 }
-          if (u || dir != "in") next
-          a = net(s); if (a == "") next
-          if (d == "") print "P", pr, a, "all"; else ports(pr, a, d) }' "${fs[@]}" | sort -u
+              else if (f[i] ~ /^[ug]=/) u = 1
+              else if (f[i] ~ /^[sd]=/) { if (pk == "") { pk = substr(f[i], 1, 1); pv = substr(f[i], 3) } else if (ak == "") { ak = substr(f[i], 1, 1); av = substr(f[i], 3) } } }
+          if (u || dir != "in" || pk != "d" || ak != "s" || pv ~ /\./) next
+          a = net(av); if (a == "") next
+          ports(pr, a, pv) }' "${fs[@]}" | sort -u
 }
 ag_port_hit() {        # PORT ("a" ya da "a:b") LİSTE ("x,y:z,…") → 0: kesişiyor
     local lo="${1%%:*}" hi="${1##*:}" x a b

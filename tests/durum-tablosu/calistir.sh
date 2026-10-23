@@ -271,9 +271,39 @@ mcheck "'*SSH login*' bildirimi (başarılı giriş) izinli saldırgan sayılmaz
 # csf.allow satırındaki yorum kaynağın yanında
 mkl aacm; printf '151.80.7.9 # ofis\n' >> "$A"; lfdb 3600 151.80.7.9
 mcheck "csf.allow yorumu satırda (wlc) ve IP listesinde (al)" "rvrow 151.80.7.9 | grep -q '\"wl\":\"csf.allow: 151.80.7.9\",\"wlc\":\"ofis\".*\"al\":\"csf.allow: 151.80.7.9 (ofis)\"'"
-# gelişmiş satırda bütün portlar (1:65535) = tam izin
+# Gelişmiş izin satırı ve banın yönü (gerçek CSF 16.33'te ölçüldü): ban gelen yönü, iki yönlüyse giden yönü de keser, kurulmuş
+# bağlantıların kabulü ondan sonra gelir → tek yönlü satır iki yönlü banı aşmaz; lfd'nin geçici banı LF_SELECT=0 iken "inout"
 mkl aawide; printf 'tcp|in|d=1:65535|s=151.80.7.9 # ofis\n' >> "$A"; lfdb 3600 151.80.7.9
-mcheck "tcp|in|d=1:65535 satırı tam izin: 'Ban işlemiyor'" "rvrow 151.80.7.9 | grep -q '\"bk\":\"b\".*\"full\":1'"
+mcheck "tcp|in|d=1:65535 tek başına: lfd'nin iki yönlü banı işler ('Ban işlemiyor' değil)" "! rvrow 151.80.7.9 | grep -q '\"full\":1'"
+mkl aawide2; printf '%s\n' 'tcp|in|d=1:65535|s=151.80.7.9 # ofis' 'tcp|out|s=1:65535|d=151.80.7.9 # ofis' >> "$A"; lfdb 3600 151.80.7.9
+mcheck "tcp|in + tcp|out 1:65535 çifti tam izin: 'Ban işlemiyor'" "rvrow 151.80.7.9 | grep -q '\"bk\":\"b\".*\"full\":1'"
+mkl aawide3; printf '%s\n' 'LF_SELECT = "1"' 'LF_TRIGGER = "0"' 'LF_BLOCKINONLY = "1"' >> "$R/etc/csf/csf.conf"; printf 'tcp|in|d=1:65535|s=151.80.7.9 # ofis\n' >> "$A"; lfdb 3600 151.80.7.9
+mcheck "tcp|in|d=1:65535, lfd banları yalnız gelen yönü keserken (LF_SELECT=1, LF_TRIGGER=0, LF_BLOCKINONLY=1): 'Ban işlemiyor'" "rvrow 151.80.7.9 | grep -q '\"bk\":\"b\".*\"full\":1'"
+mkl aaout; printf 'tcp|out|d=1:65535|d=151.80.7.9 # ofis\n' >> "$A"; lfdb 3600 151.80.7.9
+mcheck "yalnız dışarı satırı (tcp|out|d=1:65535) tam izin değil" "! rvrow 151.80.7.9 | grep -q '\"full\":1'"
+mkl aaport0; printf 'tcp|in|s=151.80.7.9 # ofis\n' >> "$A"; lfdb 3600 151.80.7.9
+mcheck "portsuz gelişmiş satır (CSF kural kurmaz) tam izin değil" "! rvrow 151.80.7.9 | grep -q '\"full\":1'"
+# CSF'te duran ban kendi yönüyle: geçici ban satırındaki yön, kalıcı tekil LF_BLOCKINONLY'ye göre
+tb1() { printf 'tcp|in|d=1:65535|s=151.80.7.9 # ofis\n' >> "$A"; printf '%s|151.80.7.9||%s|3600|lfd: (pop3d) Failed POP3 login from 151.80.7.9 (FR/France/-): 5 in the last 3600 secs\n' "$NOW" "$1" >> "$T"; }
+mkl aatin; tb1 in
+mcheck "geçici ban 'in' + tcp|in|d=1:65535: 'Ban işlemiyor' (cevaplar giden yönde serbest)" "rvrow 151.80.7.9 | grep -q '\"type\":\"allow_ban\".*\"full\":1'"
+mkl aatio; tb1 inout
+mcheck "geçici ban 'inout' + tcp|in|d=1:65535: ban işler" "! rvrow 151.80.7.9 | grep -q '\"full\":1'"
+mkl aapin; printf 'tcp|in|d=1:65535|s=151.80.7.9 # ofis\n' >> "$A"; single 151.80.7.9 pop3d
+mcheck "kalıcı tekil + tcp|in|d=1:65535 (LF_BLOCKINONLY=0): ban işler" "! rvrow 151.80.7.9 | grep -q '\"full\":1'"
+mkl aapio; printf 'LF_BLOCKINONLY = "1"\n' >> "$R/etc/csf/csf.conf"; printf 'tcp|in|d=1:65535|s=151.80.7.9 # ofis\n' >> "$A"; single 151.80.7.9 pop3d
+mcheck "kalıcı tekil + tcp|in|d=1:65535 (LF_BLOCKINONLY=1): 'Ban işlemiyor'" "rvrow 151.80.7.9 | grep -q '\"type\":\"allow_ban\".*\"full\":1'"
+# IP kartı: gelişmiş satırın banla birlikte ne yaptığı (wle)
+mk wleo; printf 'tcp|out|d=443|d=151.80.7.9 # imunify\n' >> "$A"; single 151.80.7.9 sshd
+mcheck "IP kartı: yalnız dışarı satırı → wle out" "run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"wle\":\"out\"'"
+mk wlei; printf 'tcp|in|d=22|s=151.80.7.9 # ofis\n' >> "$A"; single 151.80.7.9 sshd
+mcheck "IP kartı: gelen yön satırı + kalıcı ban (iki yönlü) → wle in_x" "run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"wle\":\"in_x\"'"
+mk wlep; printf '%s\n' 'tcp|in|d=22|s=151.80.7.9 # ofis' 'tcp|out|s=22|d=151.80.7.9 # ofis' >> "$A"; single 151.80.7.9 sshd
+mcheck "IP kartı: karşı yön satırıyla çift → wle pair" "run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"wle\":\"pair\"'"
+mk wlet; printf 'tcp|in|d=22|s=151.80.7.9 # ofis\n' >> "$A"; printf '%s|151.80.7.9||in|3600|lfd: (sshd) Failed SSH login from 151.80.7.9\n' "$NOW" >> "$T"
+mcheck "IP kartı: gelen yön satırı + geçici 'in' ban → wle in_ok" "run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"wle\":\"in_ok\"'"
+mk wletio; printf 'tcp|in|d=22|s=151.80.7.9 # ofis\n' >> "$A"; printf '%s|151.80.7.9||inout|3600|lfd: (sshd) Failed SSH login from 151.80.7.9\n' "$NOW" >> "$T"
+mcheck "IP kartı: gelen yön satırı + geçici 'inout' ban → wle in_x" "run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"wle\":\"in_x\"'"
 # Hiçbir listede olmayan yoksayma: kaynak lfd'nin sırasıyla aranır — CC_IGNORE (sahip önbellekten), csf.rignore (lfd'nin dnscache'i)
 mkl aacc; printf 'CC_IGNORE = "FR"\n' >> "$R/etc/csf/csf.conf"; printf '151.80.7|16276|FR|OVH - OVH SAS, FR|%s|151.80.0.0/16\n' "$NOW" >> "$R/var/lib/csf_autogroup/owners"; lfdi 600 151.80.7.9
 mcheck "yoksayma kaynağı CC_IGNORE (ülke, sahip önbellekten) satırda" "rvrow 151.80.7.9 | grep -q '\"wl\":\"CC_IGNORE: FR\".*\"full\":0'"

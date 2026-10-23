@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.15.19 — 2026-10-23
+
+- **Fix: one-direction allow lines no longer count as "Ban not working".**
+  A ban blocks incoming traffic, and outgoing traffic too unless
+  `LF_BLOCKINONLY = "1"`. CSF accepts replies on established connections only
+  after its ban check. So a CSF advanced allow line that opens one direction
+  only (`tcp|in|d=…|s=IP`, or a `tcp|out|…` line on its own) lets nothing
+  through while the address is banned: the replies are dropped. Before,
+  `tcp|in|d=1:65535|s=IP` (and an advanced line without a port) counted as a
+  full allow, so the address's bans were marked *Ban not working* and left out
+  of the counts. Now it counts as a full allow only together with the line for
+  the other direction (`tcp|out|s=1:65535|d=IP`), or against a ban that blocks
+  incoming traffic only: a temp ban written `in` (lfd does this with
+  `LF_SELECT` on), or a permanent ban with `LF_BLOCKINONLY = "1"`.
+- **Advanced allow lines are read in CSF's field order.** The first `s=` / `d=`
+  field after the direction is the port and the next one is the address. CSF
+  rejects a line whose first field is an address (`tcp|in|s=IP`), so the
+  plugin does not count it as an allow any more. That includes the
+  rented-server list and the ban guard, which used to pass such an address on
+  every port.
+- **The IP card says what a single-direction allow line does under the current
+  ban.** With an incoming-only line, if the ban blocks both directions, the
+  card says the line opens nothing. With an outgoing line (such as the ones
+  Imunify360 adds for its own servers), it says a ban on that address cuts the
+  server's connections to it too. "Opens only that port" is shown only when
+  that is true.
+
 ## 1.15.18 — 2026-10-23
 
 - **Faster suspicious-network check in a run.** The number of different /24s
