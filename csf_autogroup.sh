@@ -1809,7 +1809,7 @@ wl_load() {      # FILE LABEL [DEPTH] — IP, CIDR, gelişmiş satır (tcp|in|d=
 }
 wl_line() {      # ETİKET DERİNLİK SATIR → wl_load'ın awk'ta doğrudan çözmediği satır: Include, gelişmiş satır, hostname, çok IP
     local label="$1" depth="$2" line="$3" tok rest mt ip
-    pc "wl_line (karmaşık satır)"
+    pc "wl_line (karmaşık satır)"; pa "wl_line · öncesi (eval)"
     line="${line%$'\r'}"
     # eklentinin kendi port istisnası (banlı aralıkta seçilen servisler açık) korunan kayıt değil. Yalnız o atlanır:
     # izinli servisler ("# csf_autogroup: service google-common", csf_autogroup.services.allow Include'u) CSF'te gerçek
@@ -1833,9 +1833,12 @@ wl_line() {      # ETİKET DERİNLİK SATIR → wl_load'ın awk'ta doğrudan ç�
     # Gelişmiş satır yalnız bir portu açar (tcp|in|d=2083|s=IP): tek IP / dar aralık bilinen bir müşteri
     # sayılır (blok banı onu da keserdi), "herkese" açan geniş satır (s=0.0.0.0/0) ise beyaz liste değildir
     if [[ "$tok" == *"|"* ]]; then
+        pa "wl_line · yorum+servis ayrıştırma"
         adv_parse "$tok" || return
+        pa "wl_line · adv_parse"
         adv_wide "$ADV_CIDR" && return
         wl_add "$ADV_CIDR" "$label ($ADV_PROTO $ADV_DIR ${ADV_PORTS:-*}): $ADV_CIDR" "$cm"
+        pa "wl_line · adv_wide+wl_add"
         return
     fi
     while [[ "$rest" =~ ([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(/[0-9]{1,2})?) ]]; do
@@ -2281,24 +2284,37 @@ loghist_build() {
 declare -A DAYEP
 PROF_T=0
 declare -A PROF_A=() PROF_N=() PROF_C=()
+PROF_CLK="${PROF_CLK:-}"      # tanı saati (ortamdan zorlanabilir): epoch = EPOCHREALTIME (bash 5, µs), uptime = /proc/uptime (10 ms; bash 4.4'te de alt süreçsiz), date
+prof_now() {     # → PROF_NOW (µs). Döngü içi işaretler alt süreç açmasın: sunucuda date başına ~1 ms işaretin kendisini ölçüyordu
+    if [ -z "$PROF_CLK" ]; then
+        if [ -n "${EPOCHREALTIME:-}" ]; then PROF_CLK=epoch; elif [ -r /proc/uptime ]; then PROF_CLK=uptime; else PROF_CLK=date; fi
+    fi
+    local u _r
+    case "$PROF_CLK" in
+        epoch)  u="${EPOCHREALTIME/[.,]/}"; PROF_NOW=$(( 10#$u )) ;;
+        uptime) read -r u _r < /proc/uptime; u="${u/./}"; PROF_NOW=$(( 10#$u * 10000 )) ;;
+        *)      u=$(date +%s%N); PROF_NOW=$(( u / 1000 )) ;;
+    esac
+}
 pa() {     # tanı: AG_PROF=1 → bir önceki işaretten beri geçen süre bu etikete eklenir (bölüm içi, döngüde toplanır; prof_dump yazar)
     [ -n "${AG_PROF:-}" ] || return 0
-    local n; n=$(date +%s%N); n=$(( n / 1000000 ))
-    [ "${PROF_T:-0}" -gt 0 ] && { PROF_A[$1]=$(( ${PROF_A[$1]:-0} + n - PROF_T )); PROF_N[$1]=$(( ${PROF_N[$1]:-0} + 1 )); }
-    PROF_T=$n
+    prof_now
+    [ "${PROF_T:-0}" -gt 0 ] && { PROF_A[$1]=$(( ${PROF_A[$1]:-0} + PROF_NOW - PROF_T )); PROF_N[$1]=$(( ${PROF_N[$1]:-0} + 1 )); }
+    PROF_T=$PROF_NOW
 }
 pc() { [ -n "${AG_PROF:-}" ] && PROF_C[$1]=$(( ${PROF_C[$1]:-0} + ${2:-1} )); return 0; }   # tanı: yalnız sayaç (süre ölçmez, alt süreç yok)
 prof_dump() {    # tanı: pa toplamları (çoktan aza) ve pc sayaçları; bölüm satırları ("PROF … bölüm") pa'dan sonraki kalanı gösterir
     [ -n "${AG_PROF:-}" ] || return 0
     local k
-    { for k in "${!PROF_A[@]}"; do printf 'PROF %6d ms  · %s (%d kez)\n' "${PROF_A[$k]}" "$k" "${PROF_N[$k]}"; done | sort -k2,2nr
+    { echo "PROF  saat: $PROF_CLK"
+      for k in "${!PROF_A[@]}"; do printf 'PROF %6d ms  · %s (%d kez)\n' $(( PROF_A[$k] / 1000 )) "$k" "${PROF_N[$k]}"; done | sort -k2,2nr
       for k in "${!PROF_C[@]}"; do printf 'PROF  sayı %6d  # %s\n' "${PROF_C[$k]}" "$k"; done | sort -k5; } >&2
 }
 prof() {   # tanı: AG_PROF=1 → durum bölümlerinin süresi (ms, bir önceki işaretten beri) stderr'e
     [ -n "${AG_PROF:-}" ] || return 0
-    local n; n=$(date +%s%N); n=$(( n / 1000000 ))
-    [ "${PROF_T:-0}" -gt 0 ] && printf 'PROF %6d ms  %s\n' $(( n - PROF_T )) "$1" >&2
-    PROF_T=$n
+    prof_now
+    [ "${PROF_T:-0}" -gt 0 ] && printf 'PROF %6d ms  %s\n' $(( (PROF_NOW - PROF_T) / 1000 )) "$1" >&2
+    PROF_T=$PROF_NOW
 }
 day_epoch() {    # YYYY-MM-DD → REPLY (epoch), aynı gün için tek date çağrısı
     [ -n "${DAYEP[$1]}" ] || DAYEP[$1]=$(date -d "$1" +%s 2>/dev/null || echo 0)
@@ -2364,7 +2380,9 @@ do_status() {
     for gi in "${!g_tok[@]}"; do
         added="${g_ep[gi]:-0}"; [[ "$added" =~ ^[0-9]+$ ]] && [ "$added" -gt 86400 ] || added=0
         tok="${g_tok[gi]}"; kind="${g_kind[gi]}"; dnd="${g_dnd[gi]}"
+        pa "gj · başı"
         REPLY=""; cidr_range "$tok" && under_of "$R_LO" "$R_HI" "$tok"
+        pa "gj · cidr+under_of"
         local gu="$REPLY" grn=0
         local grip=""
         if [ "$kind" = manual ]; then
@@ -2374,7 +2392,13 @@ do_status() {
                 grip=$(grep -oE '^[0-9][0-9./]+' "$REPLY" | head -n 6 | paste -sd, -)   # pencerede gösterilecek ilk adresler
             fi
         fi
-        groups+=("{\"cidr\":\"$tok\",\"kind\":\"$kind\",\"dnd\":$dnd,${HIT[$tok]:+\"hit\":${HIT[$tok]},}\"n\":${g_n[gi]},\"added\":$added,\"ttl\":0${gu:+,\"under\":\"$gu\"}${PCOV[$tok]:+,\"pcov\":\"${PCOV[$tok]}\"}$([ "$grn" -gt 0 ] && echo ",\"restore\":$grn,\"rips\":\"$grip\"")$([ -n "${EXC_S[$tok]+x}" ] && echo ",\"open\":\"${EXC_S[$tok]}\",\"open_extra\":\"${EXC_X[$tok]}\"")}")
+        pa "gj · restore"
+        # ek alanlar alt kabuksuz (önce grup başına iki $( … && echo …): her biri bir alt süreç)
+        local gx=""
+        [ "$grn" -gt 0 ] && gx+=",\"restore\":$grn,\"rips\":\"$grip\""
+        [ -n "${EXC_S[$tok]+x}" ] && gx+=",\"open\":\"${EXC_S[$tok]}\",\"open_extra\":\"${EXC_X[$tok]}\""
+        groups+=("{\"cidr\":\"$tok\",\"kind\":\"$kind\",\"dnd\":$dnd,${HIT[$tok]:+\"hit\":${HIT[$tok]},}\"n\":${g_n[gi]},\"added\":$added,\"ttl\":0${gu:+,\"under\":\"$gu\"}${PCOV[$tok]:+,\"pcov\":\"${PCOV[$tok]}\"}$gx}")
+        pa "gj · json satırı"
         [ "$added" -gt 0 ] && ghist+="$added $kind $tok"$'\n'
         [ "$JSON" = 1 ] || gtext+=("$(printf '%-18s %-9s %s' "$tok" "$kind" "$([ "$dnd" = true ] && echo 'do not delete')")")
     done
@@ -2410,12 +2434,15 @@ do_status() {
     while read -r c u; do
         pc "pending sayaç satırı"
         [[ "$c" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ && "$u" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || continue
-        pc "pending blok"
+        pc "pending blok"; pa "pend · okuma+regex"
         day_epoch "$u"; age=$(( (now - REPLY) / 86400 )); left=$(( SAYAC_RETENTION_DAYS - age ))
+        pa "pend · day_epoch"
         ttl="${TG_TTL[$c.0/24]:-0}"; [ "$ttl" -lt 0 ] && ttl=0
         REPLY=""; cidr_range "$c.0/24" && under_of "$R_LO" "$R_HI" "$c.0/24"
+        pa "pend · cidr+under_of"; pc "pend under_of kayıt (WD)" "${#WD_LO[@]}"
         pending+=("{\"prefix\":\"$c\",\"since\":\"$u\",\"days_left\":$left,\"temp_ttl\":$ttl${REPLY:+,\"under\":\"$REPLY\"}}")
         [ "$JSON" = 1 ] || ptext+=("$(printf '%-18s %s · %s' "$c.0/24" "$u" "$(m "$M_S_DAYSLEFT" "$left")")")
+        pa "pend · json"
     done < "$SAYAC_FILE"
 
     prof pending
@@ -5034,17 +5061,21 @@ prov_cover() {   # stdin "ip|sebep|asn" → 0: her IP CSF'te banlı bir sağlay�
     # bunu zaten biliyordu; uyarı kararı bilmiyor, ülkesi banlı ağ Kontrol edilecekler'de kalıyordu)
     ccd=",$(conf_val CC_DENY | tr -d ' ' | tr '[:lower:]' '[:upper:]'),"; ccp=",$(conf_val CC_DENY_PORTS | tr -d ' ' | tr '[:lower:]' '[:upper:]'),"
     PC_ASN=""
+    pa "pcov · başı"
     local -a pcl=(); mapfile -t pcl; cloud_prefill $(printf '%s\n' "${pcl[@]}" | cut -d'|' -f1)
+    pa "pcov · cloud_prefill"; pc "pcov IP" "${#pcl[@]}"
     for ip in "${pcl[@]}"; do
         IFS='|' read -r ip r a <<< "$ip"
         [ -n "$ip" ] || continue
         [ -n "$a" ] || a="${OWN_A[${ip%.*}]}"
         cls_of "$r"; k="$REPLY"
+        pa "pcov · cls_of"
         # LFD PERMBLOCK (repeat): lfd IP'yi belirli sürede belirli sayıda geçici banladıktan sonra kalıcıya almış (LF_PERMBLOCK).
         # Asıl saldırı önceki geçici banlarda: servis lfd günlüğünden. Bulunamazsa IP sayılmadan geçilir — zaten tek başına
         # kalıcı ve tam banlı (yalnız PERMBLOCK varsa n=0 → kapsanmıyor, uyarı kalır). Önce PERMBLOCK "servisi bilinmiyor"
         # sayılıyor, web'i kapalı ağ (kiralık sunucu listesinde, web saldırıları + bir PERMBLOCK) Kontrol edilecekler'de kalıyordu.
         if [ "$k" = repeat ]; then perm_cls "$ip"; [ -n "$REPLY" ] || continue; k="$REPLY"; fi
+        pa "pcov · perm_cls"
         cc="${OWN_C[${ip%.*}]}"
         if [[ "$cc" =~ ^[A-Z]{2}$ ]] && { [[ "$ccd" == *",$cc,"* ]] || { [[ "$ccp" == *",$cc,"* ]] && pc_ports "$k" "$tcp"; }; }; then
             n=$((n + 1)); [[ " $PC_ASN " == *" CC_DENY $cc "* ]] || PC_ASN+="${PC_ASN:+ }CC_DENY $cc"; continue
@@ -5053,8 +5084,9 @@ prov_cover() {   # stdin "ip|sebep|asn" → 0: her IP CSF'te banlı bir sağlay�
             n=$((n + 1)); [[ " $PC_ASN " == *" AS$a "* ]] || PC_ASN+="${PC_ASN:+ }AS$a"; continue
         fi
         # sağlayıcı banı yoksa bulut listesi (kendi port listesiyle)
-        cloud_has "$ip" && pc_ports "$k" ",${CLOUD_TCP// /}," || return 1
+        cloud_has "$ip" && pc_ports "$k" ",${CLOUD_TCP// /}," || { pa "pcov · kapsama"; return 1; }
         cloud_label "$REPLY"; n=$((n + 1)); [[ " $PC_ASN " == *" $REPLY "* ]] || PC_ASN+="${PC_ASN:+, }$REPLY"
+        pa "pcov · kapsama"
     done
     [ "$n" -gt 0 ]
 }
@@ -5115,13 +5147,17 @@ prov_near() {    # stdin "ip|sebep|asn" → 0: her IP banlı bir sağlayıcıda 
     local IFS=$' \t\n' ip r a k n=0 tcp ct lab pl
     tcp=",$(conf_val CC_DENY_PORTS_TCP | tr -d ' '),"; ct=",${CLOUD_TCP// /},"
     PN_SRC=""; PN_SVC=""
+    pa "pnear · başı"
     local -a pnl=(); mapfile -t pnl; cloud_prefill $(printf '%s\n' "${pnl[@]}" | cut -d'|' -f1)
+    pa "pnear · cloud_prefill"
     for ip in "${pnl[@]}"; do
         IFS='|' read -r ip r a <<< "$ip"
         [ -n "$ip" ] || continue
         [ -n "$a" ] || a="${OWN_A[${ip%.*}]}"
         cls_of "$r"; k="$REPLY"
+        pa "pnear · cls_of"
         if [ "$k" = repeat ]; then perm_cls "$ip"; [ -n "$REPLY" ] && k="$REPLY"; fi     # PERMBLOCK: önceki geçici banın servisi
+        pa "pnear · perm_cls"
         if [ -n "$a" ] && [ -n "${ASB[$a]}" ]; then
             n=$((n + 1)); [ "${ASB[$a]}" = all ] && continue
             lab="AS$a"; pl="$tcp"
@@ -5131,6 +5167,7 @@ prov_near() {    # stdin "ip|sebep|asn" → 0: her IP banlı bir sağlayıcıda 
         # sağlayıcının port listesi bu servisi kapatmıyorsa kiralık liste kapatıyor olabilir (ikisi birden geçerli)
         if [ "$pl" = "$tcp" ] && ! pc_ports "$k" "$pl" && cloud_has "$ip" && pc_ports "$k" "$ct"; then continue; fi
         if ! pc_ports "$k" "$pl"; then case "$k" in other|repeat|scan) ;; *) [[ ",$PN_SVC," == *",$k,"* ]] || PN_SVC+="${PN_SVC:+,}$k" ;; esac; fi
+        pa "pnear · kapsama"
     done
     [ "$n" -gt 0 ] && [ -n "$PN_SVC" ]
 }
@@ -5184,8 +5221,10 @@ asn_top() {      # [N] [evidence|blocks] → ASN_TOP satırları: "ASN|KURUM|CC|
     if [ "$CLOUD_ON" = 1 ] && qf=$(mktemp); then
         { for c in "${!SINGLE_NOTE[@]}"; do ip2int "$c"; echo "$c $REPLY $REPLY"; done
           for i in "${!DC_TXT[@]}"; do echo "${DC_TXT[i]} ${DC_LO[i]} ${DC_HI[i]}"; done; } > "$qf"
+        pa "asn · bulut sorgu dosyası"
         while read -r k src; do CCOV[$k]="$src"; done < <(cloud_cover "$qf")
         rm -f "$qf"
+        pa "asn · cloud_cover"
         # tekil ban ancak saldırdığı servisin portları bulut listesinde kapalıysa kapsanmış sayılır (SSH saldırısı web listesiyle kapanmaz)
         local -A CLS_OK=() cl
         for c in "${!SINGLE_NOTE[@]}"; do
@@ -5791,7 +5830,10 @@ fi
 prof "turn kalıcı liste sınırı"
 # ── Temp deny limit ─────────────────────────────────────────────────────────
 temp_limit=$(grep "^DENY_TEMP_IP_LIMIT" "$CSF_CONF" | cut -d'=' -f2 | tr -d ' "')
-temp_current=$("$CSF_BIN" -t 2>/dev/null 9>&- | grep -c "^DENY" || true)
+# csf -t (Perl) turda bir kez: aşağıda geçici banlar okunurken aynı çıktı kullanılır (iki çağrı sunucuda her biri ~1 sn ölçüldü;
+# aradaki adımlar geçici listeye yazmaz, geçici blok banları ondan sonra konur)
+TEMP_LIST=$("$CSF_BIN" -t 2>/dev/null 9>&-)
+temp_current=$(grep -c "^DENY" <<< "$TEMP_LIST" || true)
 if [ -n "$temp_limit" ] && [ "$temp_limit" -gt 0 ] 2>/dev/null; then
     temp_percent=$((temp_current * 100 / temp_limit))
     logr "$(m "$M_TEMP_USAGE" "$temp_current" "$temp_limit" "$temp_percent")"
@@ -5899,8 +5941,7 @@ warn16=0
 # IPv6 satırları (ör. "2001:db8::1") IPv4 sayılmasın diye adres tam eşleşmeli.
 declare -A temp_count24 temp_ips24 TSEEN TNOTE
 TC_LO=(); TC_HI=(); temp_order=(); temp_alive=()
-TEMP_LIST=$("$CSF_BIN" -t 2>/dev/null 9>&-)
-while read -r kind addr _; do
+while read -r kind addr _; do      # TEMP_LIST: geçici liste sınırı denetiminde okunan csf -t çıktısı
     [ "$kind" = "DENY" ] || continue
     if [[ "$addr" =~ $IPV4_RE ]]; then
         [ -z "${TSEEN[$addr]+x}" ] && { TSEEN[$addr]=1; temp_order+=("$addr"); }

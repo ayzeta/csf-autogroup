@@ -7,6 +7,11 @@
   part: each allow file read and loaded separately, the review list step by
   step, the provider rankings, the owner cache, and each section of a run,
   with counts (lines, rows, entries). Without `AG_PROF` nothing changes.
+  Timing inside loops no longer starts a process per mark: it uses bash's
+  `EPOCHREALTIME` where available, otherwise `/proc/uptime`.
+- **A run reads CSF's temp list once.** `csf -t` (about a second on a busy
+  server) ran twice per run; the second read reuses the first.
+- The *Active range bans* rows are built without a subshell per row.
 
 ## 1.15.11 — 2026-10-23
 
