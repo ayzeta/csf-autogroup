@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.15.15 — 2026-10-23
+
+- **A run no longer starts `csf -t`.** The temp list is read from CSF's own
+  file (`csf.tempban`) in the same form `csf -t` prints (one line per port of
+  a multi-port ban, expired entries left out). `csf -t` took about a second
+  per run on a busy server; reading the file takes a few milliseconds. Both
+  gave the same list for single, port, multi-port, outgoing, two-way, range
+  and IPv6 temp bans on CSF 16.33. `csf -t` is still used if the file can't be
+  read.
+- **Fix:** `AG_PROF` printed an error instead of part of its summary when a
+  label contained an apostrophe.
+
 ## 1.15.14 — 2026-10-23
 
 - **Faster status and runs, third round** (from timings taken inside each part

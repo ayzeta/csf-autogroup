@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.14"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.15"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -2332,7 +2332,7 @@ prof_dump() {    # tanı: pa toplamları (çoktan aza) ve pc sayaçları; bölü
     [ -n "${AG_PROF:-}" ] || return 0
     local k
     { echo "PROF  saat: $PROF_CLK"
-      for k in "${!PROF_A[@]}"; do printf 'PROF %6d ms  · %s (%d kez)\n' $(( PROF_A[$k] / 1000 )) "$k" "${PROF_N[$k]}"; done | sort -k2,2nr
+      local v; for k in "${!PROF_A[@]}"; do v="${PROF_A[$k]}"; printf 'PROF %6d ms  · %s (%d kez)\n' $(( v / 1000 )) "$k" "${PROF_N[$k]}"; done | sort -k2,2nr   # etiket aritmetiğe girmez (kesme işareti indisi bozuyordu)
       for k in "${!PROF_C[@]}"; do printf 'PROF  sayı %6d  # %s\n' "${PROF_C[$k]}" "$k"; done | sort -k5; } >&2
 }
 prof() {   # tanı: AG_PROF=1 → durum bölümlerinin süresi (ms, bir önceki işaretten beri) stderr'e
@@ -3919,7 +3919,7 @@ cloud_pot() {    # → REPLY = JSON nesnesi {"gcp":12,…}: olay kaydındaki ve 
       grep -oE '^[0-9]{1,3}(\.[0-9]{1,3}){3}([[:space:]]|$)' "$DENY_FILE" 2>/dev/null | tr -d ' \t'
       [ -r "$CSF_VAR/csf.tempban" ] && awk -F'|' '$2 ~ /^[0-9.]+$/ { print $2 }' "$CSF_VAR/csf.tempban"
     } | sort -u | awk -F. 'NF == 4 { printf "%.0f\n", (($1 * 256 + $2) * 256 + $3) * 256 + $4 }' | sort -n > "$qf"
-    pa "cpot sorgu IP'leri"; [ -n "${AG_PROF:-}" ] && pc "cpot sorgu IP" "$(wc -l < "$qf")"
+    pa "cpot sorgu IP listesi"; [ -n "${AG_PROF:-}" ] && pc "cpot sorgu IP" "$(wc -l < "$qf")"
     if [ -s "$qf" ]; then
         for x in $CLOUD_CATALOG $(for f in $CLOUD_ACTIVE; do [[ "$f" == x-* ]] && echo "$f"; done); do
             f="$CLOUD_DIR/$x.txt"; [ -r "$f" ] || f="$CLOUD_DIR/probe/$x.txt"; [ -r "$f" ] || continue
@@ -5891,9 +5891,18 @@ fi
 prof "turn kalıcı liste sınırı"
 # ── Temp deny limit ─────────────────────────────────────────────────────────
 temp_limit=$(grep "^DENY_TEMP_IP_LIMIT" "$CSF_CONF" | cut -d'=' -f2 | tr -d ' "')
-# csf -t (Perl) turda bir kez: aşağıda geçici banlar okunurken aynı çıktı kullanılır (iki çağrı sunucuda her biri ~1 sn ölçüldü;
-# aradaki adımlar geçici listeye yazmaz, geçici blok banları ondan sonra konur)
-TEMP_LIST=$("$CSF_BIN" -t 2>/dev/null 9>&-)
+# Geçici liste turda bir kez okunur; aşağıda geçici banlar okunurken aynı çıktı kullanılır (aradaki adımlar geçici listeye yazmaz,
+# geçici blok banları ondan sonra konur). CSF'in kendi dosyasından (csf.tempban: zaman|adres|port|yön|süre|yorum), csf -t'nin
+# biçiminde: "DENY adres", çok portlu ban port başına bir satır (csf -t gibi; doluluk bu satırlarla sayılır). Süresi dolmuş satır
+# (lfd silmemişse) alınmaz. csf -t (Perl) sunucuda her çağrıda ~1,1 sn ölçüldü; gerçek CSF 16.33'te tek IP, port, çok port,
+# çıkış, iki yön, aralık ve IPv6 banlarında ikisi aynı listeyi verdi (2026-10-23). Dosya okunamıyorsa csf -t.
+if [ -r "$CSF_VAR/csf.tempban" ]; then
+    TEMP_LIST=$(awk -F'|' -v now="$(date +%s)" '$2 != "" {
+        if ($1 ~ /^[0-9]+$/ && $5 ~ /^[0-9]+$/ && $5 + 0 > 0 && $1 + $5 <= now + 0) next
+        k = split($3, p, ","); if (k < 1) k = 1; for (i = 1; i <= k; i++) print "DENY", $2 }' "$CSF_VAR/csf.tempban")
+else
+    TEMP_LIST=$("$CSF_BIN" -t 2>/dev/null 9>&-)
+fi
 temp_current=$(grep -c "^DENY" <<< "$TEMP_LIST" || true)
 if [ -n "$temp_limit" ] && [ "$temp_limit" -gt 0 ] 2>/dev/null; then
     temp_percent=$((temp_current * 100 / temp_limit))

@@ -259,7 +259,7 @@ mcheck "pencereden (7 gün) eski işlemeyen ban satır açmaz" "[ -z \"\$(rvrow 
 # bloğunu terk edip tura düştü, tur csf.deny'yi ikinci kez okuyup her tekili iki kez saydı ve 2 tekilli /24'ü banladı
 mk profst; for x in 1 2; do single 151.80.7.$x sshd; done; cp "$D" "$W/profst.deny"
 PJ=$(env SIM_ROOT="$R" PATH="$W/bin:/usr/bin:/bin" AG_BY=root AG_PROF=1 PROF_CLK=uptime bash "$R/app/csf_autogroup.sh" --status --json 2>"$W/profst.err")
-mcheck "AG_PROF=1 (/proc/uptime saati) ile durum çıktısı eksiksiz, hata yok, tura düşmez (csf.deny aynı, blok banı yok)" "[[ \"\$PJ\" == '{\"ok\":true'*'}' ]] && ! grep -qi 'hata\|error' '$W/profst.err' && grep -q 'PROF  saat: uptime' '$W/profst.err' && cmp -s '$D' '$W/profst.deny'"
+mcheck "AG_PROF=1 (/proc/uptime saati) ile durum çıktısı eksiksiz, hata yok, tura düşmez (csf.deny aynı, blok banı yok)" "[[ \"\$PJ\" == '{\"ok\":true'*'}' ]] && ! grep -qiE 'hata|error|subscript|syntax|sözdizimi' '$W/profst.err' && grep -q 'PROF  saat: uptime' '$W/profst.err' && cmp -s '$D' '$W/profst.deny'"
 mcheck "aynı veride AG_PROF=1 ile deneme turu da hatasız (date ve epoch saatleri)" "( for c in date epoch uptime; do env SIM_ROOT='$R' PATH='$W/bin:/usr/bin:/bin' AG_BY=root AG_PROF=1 PROF_CLK=\$c bash '$R/app/csf_autogroup.sh' --dry-run 2>&1 >/dev/null | grep -qi 'sözdizimi\|syntax' && exit 1; done; exit 0 )"
 # PERMBLOCK: lfd'nin nedeni (kaç geçici ban, hangi sürede) kesilmez, okunur metne çevrilir
 mk permwhy; printf 'WARN16_151.80 %s\n' "$(date -d '-3 days' +%F)" >> "$C"; for x in 7.1 7.2 8.1 8.2; do single 151.80.$x sshd; done
