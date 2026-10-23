@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.15.16 — 2026-10-23
+
+- `AG_PROF` also times the start of a run's block grouping (provider bans,
+  repeat-ban services, and each step before the provider check). Without
+  `AG_PROF` nothing changes.
+
 ## 1.15.15 — 2026-10-23
 
 - **A run no longer starts `csf -t`.** The temp list is read from CSF's own

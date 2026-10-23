@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.15"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.16"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -4709,14 +4709,19 @@ part_covers() {  # IP SERVİS → 0: IP'yi kapsayan eklenti kısmi banı (csf.de
 open_count() {   # NOT_DİZİSİ_ADI IP… → REPLY = servisi açık kalan (kapalı bir katmanca kapsanmayan) tekil sayısı
     local -n NT="$1"; shift
     local ip k o=0
+    pa "oc · başı"
     for ip in "$@"; do
         k=$(awk -v r="${NT[$ip]}" "$AWK_CLS"' BEGIN { print cls(r) }')
+        pa "oc · servis sınıfı (awk)"
         if [ "$k" = repeat ]; then perm_cls "$ip"; [ -n "$REPLY" ] && k="$REPLY"; fi
-        part_covers "$ip" "$k" && continue
+        pa "oc · perm_cls"
+        part_covers "$ip" "$k" && { pa "oc · part_covers"; continue; }
+        pa "oc · part_covers"
         if cover_any; then
             # sağlayıcı / ülke kapsaması sahibi bilmeli: yeni saldırganın sahibi karar anında sorulur (önbellekteyse sorgu yok;
             # yoksa sahip ancak bandan sonra soruluyordu, sağlayıcı banı web'i kapatsa da /24 banlanıyordu — gerçek CSF'te ölçüldü)
-            [ -n "${OWN_L[${ip%.*}]+x}" ] || owner_lookup "$ip"
+            [ -n "${OWN_L[${ip%.*}]+x}" ] || { owner_lookup "$ip"; pc "oc sahip sorgusu (DNS)"; }
+            pa "oc · cover_any+sahip"
             prov_cover <<< "$ip|${NT[$ip]}|" && continue
         fi
         o=$((o + 1))
@@ -5936,7 +5941,9 @@ pa "turn günlük işler"; [ "$DRY" = 1 ] || { svc_health; cloud_health; }   # i
 prof "turn denetim+zorlama"
 # ── /24 grouping (permanent): auto-ban + drop singles ───────────────────────
 asn_banned            # open_count sağlayıcı banının kapattığı servisleri bilsin (yoksa web'i kapalı tekiller açık sayılır)
+pa "turn asn_banned"
 perm_cls_preload      # PERMBLOCK tekillerinin servisi: durum ekranıyla aynı kaynak (bütün lfd arşivi + önbellek), tek tarama
+pa "turn perm_cls_preload"
 added24=0; added24_body=""
 for prefix in $(printf '%s\n' "${!count24[@]}" | sort -V); do
     n="${count24[$prefix]}"
