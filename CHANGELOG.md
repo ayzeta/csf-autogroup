@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.15.14 — 2026-10-23
+
+- **Faster status and runs, third round** (from timings taken inside each part
+  on a real server; output unchanged):
+  - advanced allow lines (`tcp|in|d=22|s=…`) are read in the same one pass as
+    plain address lines instead of one at a time;
+  - the rented-server lists are sorted once and kept until they change, and
+    lookups in them use a binary search; the review list no longer looks up
+    the same addresses in them twice;
+  - the *Watched* blocks and the Imunify360 ranking are built in one pass.
+- **Fix — HTTP 500 on the first page load after an update.** While cPanel's
+  service reloads its configuration, WHM's page header cache can be missing for
+  a few seconds and cPanel's own header code throws ("User does not exist in
+  cache_keys"). The page now waits briefly and tries the header once more;
+  if it still fails, the plugin opens without the WHM frame instead of an error
+  page (the frame is back on the next load).
+
 ## 1.15.13 — 2026-10-23
 
 - **Fix — a diagnostic status run could turn into a real run.** In 1.15.12,

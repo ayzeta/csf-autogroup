@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.13"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.14"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1802,6 +1802,22 @@ wl_load() {      # FILE LABEL [DEPTH] — IP, CIDR, gelişmiş satır (tcp|in|d=
               v = ((o[1] * 256 + o[2]) * 256 + o[3]) * 256 + o[4]; size = 2 ^ (32 - bits); lo = v - v % size
               printf "WL_LO+=(%.0f);WL_HI+=(%.0f);WL_TXT+=(%s);WL_CM+=(%s)\n", lo, lo + size - 1, q(lab (svn != "" ? " (" svn ")" : "") ": " tok), q(cm)
               next }
+          # gelişmiş satır (tcp|in|d=22|s=IP): adv_parse + adv_wide + wl_add ile aynı kurallar (sunucuda 196 satır bash yolunda
+          # ~0,6 sn ölçüldü). Son CIDR alanı adres; s= / d= değerleri port; protokol ve yön küçük harf değilse "?"
+          if (index(tok, "|")) {
+              nf = split(tok, f, "|"); pr = f[1]; dr = f[2]; ports = ""; cid = ""
+              for (i = 3; i <= nf; i++) { kv = f[i]; v = kv; e = index(kv, "="); if (e) v = substr(kv, e + 1)
+                  if (v ~ /^[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?(\/[0-9][0-9]?)?$/) cid = v
+                  else if (kv ~ /^[sd]=/) ports = ports (ports != "" ? "," : "") v }
+              if (pr !~ /^[a-z]+$/) pr = "?"; if (dr !~ /^[a-z]+$/) dr = "?"; if (ports !~ /^[0-9,:_-]*$/) ports = ""
+              if (cid == "") next
+              ip = cid; bits = 32; k = index(cid, "/"); if (k) { bits = substr(cid, k + 1) + 0; ip = substr(cid, 1, k - 1) }
+              if (k && bits < 8) next                          # adv_wide: herkese açan geniş satır beyaz liste değil
+              if (bits < 1 || bits > 32) next
+              split(ip, o, "."); if (o[1] + 0 > 255 || o[2] + 0 > 255 || o[3] + 0 > 255 || o[4] + 0 > 255) next
+              v = ((o[1] * 256 + o[2]) * 256 + o[3]) * 256 + o[4]; size = 2 ^ (32 - bits); lo = v - v % size
+              printf "WL_LO+=(%.0f);WL_HI+=(%.0f);WL_TXT+=(%s);WL_CM+=(%s)\n", lo, lo + size - 1, q(lab " (" pr " " dr " " (ports != "" ? ports : "*") "): " cid), q(cm)
+              next }
           printf "wl_line %s %d %s\n", q(lab), dep, q($0) }' "$file")"
     pa "wl_awk ${file##*/}"; [ -n "${AG_PROF:-}" ] && pc "wl_satır ${file##*/}" "$(wc -l < "$file")"
     eval "$wls"
@@ -2439,20 +2455,26 @@ do_status() {
 
     prof groups_json
     # Terfi bekleyenler: sayaçtaki "a.b.c tarih" kayıtları
-    local pending=() ptext=() age left ttl
-    while read -r c u; do
-        pc "pending sayaç satırı"
-        [[ "$c" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ && "$u" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || continue
-        pc "pending blok"; pa "pend · okuma+regex"
-        day_epoch "$u"; age=$(( (now - REPLY) / 86400 )); left=$(( SAYAC_RETENTION_DAYS - age ))
-        pa "pend · day_epoch"
+    local pending=() ptext=() age left ttl gu
+    # Sayaç satırları tek awk geçişinde: kalan gün (day_epoch gibi yerel gece yarısı; geçersiz tarih 0 sayılır) ve kapsayan ilk
+    # geniş ban (under_of gibi WD sırasıyla). Önce blok başına bash'te tarih çevirme + bütün geniş banlarla döngü: sunucuda 44
+    # blok × 83 geniş ban ~0,3 sn ölçüldü.
+    while IFS=' ' read -r c u left gu; do
+        pc "pending blok"
         ttl="${TG_TTL[$c.0/24]:-0}"; [ "$ttl" -lt 0 ] && ttl=0
-        REPLY=""; cidr_range "$c.0/24" && under_of "$R_LO" "$R_HI" "$c.0/24"
-        pa "pend · cidr+under_of"; pc "pend under_of kayıt (WD)" "${#WD_LO[@]}"
-        pending+=("{\"prefix\":\"$c\",\"since\":\"$u\",\"days_left\":$left,\"temp_ttl\":$ttl${REPLY:+,\"under\":\"$REPLY\"}}")
+        [ "$gu" = "-" ] && gu=""
+        pending+=("{\"prefix\":\"$c\",\"since\":\"$u\",\"days_left\":$left,\"temp_ttl\":$ttl${gu:+,\"under\":\"$gu\"}}")
         [ "$JSON" = 1 ] || ptext+=("$(printf '%-18s %s · %s' "$c.0/24" "$u" "$(m "$M_S_DAYSLEFT" "$left")")")
-        pa "pend · json"
-    done < "$SAYAC_FILE"
+    done < <( { for gi in "${!WD_LO[@]}"; do echo "W ${WD_LO[gi]} ${WD_HI[gi]} ${WD_TXT[gi]}"; done; echo "#--"; cat "$SAYAC_FILE" 2>/dev/null; } |
+        awk -v now="$now" -v ret="$SAYAC_RETENTION_DAYS" '
+            !S && $0 == "#--" { S = 1; next }
+            !S { n++; WL[n] = $2 + 0; WH[n] = $3 + 0; WT[n] = $4; next }
+            $1 ~ /^[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?$/ && $2 ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/ && NF == 2 {
+                split($2, d, "-"); ep = mktime(d[1] " " d[2] " " d[3] " 0 0 0"); if (ep < 0 || strftime("%Y-%m-%d", ep) != $2) ep = 0
+                age = int((now - ep) / 86400); g = "-"; split($1, o, ".")
+                if (o[1] + 0 <= 255 && o[2] + 0 <= 255 && o[3] + 0 <= 255) { lo = ((o[1] * 256 + o[2]) * 256 + o[3]) * 256
+                    for (i = 1; i <= n; i++) if (WL[i] <= lo && WH[i] >= lo + 255) { g = WT[i]; break } }
+                print $1, $2, ret - age, g }')
 
     prof pending
     # Kontrol edilecekler: son REVIEW_DAYS gündeki /16 uyarıları ve beyaz liste atlamaları,
@@ -2480,7 +2502,7 @@ do_status() {
             ign_until "$c" && continue
             cidr_range "$c" && perm_covers "$R_LO" "$R_HI" && { pa "rv_ev ign+perm_covers"; continue; }
             pa "rv_ev ign+perm_covers"
-            { cover_any; } && [[ "$line" == *'"ips":[{'* ]] && ev_ipsrc "$line" | prov_cover && { pa "rv_ev prov_cover"; continue; }
+            { cover_any; } && [[ "$line" == *'"ips":[{'* ]] && prov_cover < <(ev_ipsrc "$line") && { pa "rv_ev prov_cover"; continue; }   # boru değil: alt kabukta CLOUD_MEMO kaybolurdu
             pa "rv_ev prov_cover"
             if { cover_any; } && [[ "$line" == *'"ips":[{'* ]] && prov_near < <(ev_ipsrc "$line"); then
                 jstr "$PN_SRC"; line="${line%\}},\"pnear\":$REPLY,\"pnsvc\":\"$PN_SVC\"}"
@@ -3897,6 +3919,7 @@ cloud_pot() {    # → REPLY = JSON nesnesi {"gcp":12,…}: olay kaydındaki ve 
       grep -oE '^[0-9]{1,3}(\.[0-9]{1,3}){3}([[:space:]]|$)' "$DENY_FILE" 2>/dev/null | tr -d ' \t'
       [ -r "$CSF_VAR/csf.tempban" ] && awk -F'|' '$2 ~ /^[0-9.]+$/ { print $2 }' "$CSF_VAR/csf.tempban"
     } | sort -u | awk -F. 'NF == 4 { printf "%.0f\n", (($1 * 256 + $2) * 256 + $3) * 256 + $4 }' | sort -n > "$qf"
+    pa "cpot sorgu IP'leri"; [ -n "${AG_PROF:-}" ] && pc "cpot sorgu IP" "$(wc -l < "$qf")"
     if [ -s "$qf" ]; then
         for x in $CLOUD_CATALOG $(for f in $CLOUD_ACTIVE; do [[ "$f" == x-* ]] && echo "$f"; done); do
             f="$CLOUD_DIR/$x.txt"; [ -r "$f" ] || f="$CLOUD_DIR/probe/$x.txt"; [ -r "$f" ] || continue
@@ -3909,6 +3932,7 @@ cloud_pot() {    # → REPLY = JSON nesnesi {"gcp":12,…}: olay kaydındaki ve 
             out+="${out:+,}\"$x\":$(num "$c")"
         done
     fi
+    pa "cpot liste başına hesap"
     rm -f "$qf"; REPLY="{$out}"
     { echo "$sig"; echo "$REPLY"; } > "$ck.tmp.$$" 2>/dev/null && mv -f "$ck.tmp.$$" "$ck" || rm -f "$ck.tmp.$$"
 }
@@ -3942,24 +3966,48 @@ prov_cloudpct() { # ASNNN … → PCP[ASNNN] = "yüzde kaynak": CSF'in o sağlay
                   p = int(cov * 100 / tot); if (p > 100) p = 100; print q, p, best } }')
 }
 declare -A CLOUD_MEMO=() CLSR=()
+cloud_ranges() {  # → CR_MERGED ("lo hi kaynak", başlangıca göre sıralı) ve CR_BYSRC ("sıra lo hi kaynak": etkin listeler sırasıyla,
+    # her listede başlangıca göre): etkin kiralık sunucu listelerinin aralıkları. Etkin listeler ve dosyaları değişmedikçe yeniden
+    # kurulmaz: her durum isteğinde bütün listeleri okuyup sıralamak sunucuda cloud_cover'da ~270 ms ölçüldü.
+    local IFS=$' \t\n' x dir sig files=() i=0 t
+    [ "${CR_OK:-}" = "$CLOUD_ACTIVE" ] && return 0          # bu süreçte denetlendi (imza için stat + cksum her çağrıda gerekmez)
+    dir="$(dirname "$SAYAC_FILE")"; CR_MERGED="$dir/cloud.merged"; CR_BYSRC="$dir/cloud.bysrc"
+    for x in $CLOUD_ACTIVE; do [ -r "$CLOUD_DIR/$x.txt" ] && files+=("$x"); done
+    sig="$CLOUD_ACTIVE|$(for x in "${files[@]}"; do stat -c '%n %s %Y' "$CLOUD_DIR/$x.txt"; done | cksum)"
+    [ -r "$CR_MERGED" ] && [ -r "$CR_BYSRC" ] && [ "$(cat "$dir/cloud.sig" 2>/dev/null)" = "$sig" ] && { CR_OK="$CLOUD_ACTIVE"; return 0; }
+    t="$dir/cloud.tmp.$$"
+    for x in "${files[@]}"; do
+        i=$((i + 1))
+        awk -F'[./]' -v s="$x" -v n="$i" 'NF >= 4 { b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%d %.0f %.0f %s\n", n, lo, lo + 2 ^ (32 - b) - 1, s }' "$CLOUD_DIR/$x.txt"
+    done > "$t" 2>/dev/null || { rm -f "$t"; return 1; }
+    # cloud_cover'ın önceki sıralamasıyla aynı komut (eşitlikte satır karşılaştırması): seçilen kaynak etiketi değişmesin
+    cut -d' ' -f2- "$t" | sort -n -k1,1 > "$CR_MERGED.tmp.$$" && LC_ALL=C sort -k1,1n -k2,2n "$t" > "$CR_BYSRC.tmp.$$" &&
+        mv -f "$CR_MERGED.tmp.$$" "$CR_MERGED" && mv -f "$CR_BYSRC.tmp.$$" "$CR_BYSRC" && echo "$sig" > "$dir/cloud.sig"
+    rm -f "$t" "$CR_MERGED.tmp.$$" "$CR_BYSRC.tmp.$$"
+    [ -r "$CR_MERGED" ] && [ -r "$CR_BYSRC" ] && CR_OK="$CLOUD_ACTIVE"
+}
 cloud_prefill() { # IP … → CLOUD_MEMO[ip] = kaynak adı ya da "-" (bütün etkin listeler tek awk geçişinde; IP başına dosya taraması yok)
     local IFS=$' \t\n' x ip want=() files=()
     [ "$CLOUD_ON" = 1 ] || return 0
     for ip in "$@"; do [ -n "${CLOUD_MEMO[$ip]+x}" ] || want+=("$ip"); done
     [ "${#want[@]}" -gt 0 ] || return 0
-    for x in $CLOUD_ACTIVE; do [ -r "$CLOUD_DIR/$x.txt" ] && files+=("$CLOUD_DIR/$x.txt"); done
+    cloud_ranges || return 0
     # CSF'e yüklenmiş küme varsa (sunucu IP'leri ve izinli adresler nomatch) kümede olmayan IP listede sayılmaz
     local set=0; command -v ipset >/dev/null 2>&1 && ipset list -n ag_cloud >/dev/null 2>&1 && set=1
     while read -r ip x; do
         if [ "$x" != "-" ] && [ "$set" = 1 ] && ! ipset test ag_cloud "$ip" >/dev/null 2>&1; then x="-"; fi
         CLOUD_MEMO[$ip]="$x"
-    done < <(printf '%s\n' "${want[@]}" | awk -v nf="${#files[@]}" '
+    # her liste kendi içinde başlangıca göre sıralı (CR_BYSRC), listeler etkin sıradaki gibi: IP başına liste sırasıyla ikili arama,
+    # ilk kapsayan liste (önce her IP her liste satırıyla karşılaştırılıyordu: sunucuda çağrı başına ~190 ms)
+    done < <(printf '%s\n' "${want[@]}" | awk -v bf="$CR_BYSRC" '
         function v4(a,  p) { split(a, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
-        FILENAME == "-" { Q[++q] = $1; V[q] = v4($1); next }
-        { split($0, f, /[.\/]/); if (f[4] == "") next; lo = ((f[1] * 256 + f[2]) * 256 + f[3]) * 256 + f[4]; b = (f[5] == "" ? 32 : f[5] + 0); hi = lo + 2 ^ (32 - b) - 1
-          src = FILENAME; sub(/^.*\//, "", src); sub(/\.txt$/, "", src)
-          for (i = 1; i <= q; i++) if (!(i in H) && V[i] >= lo && V[i] <= hi) H[i] = src }
-        END { for (i = 1; i <= q; i++) print Q[i], ((i in H) ? H[i] : "-") }' - "${files[@]}")
+        BEGIN { while ((getline l < bf) > 0) { split(l, x, " "); k = x[1] + 0; c = ++N[k]; L[k, c] = x[2] + 0; h = x[3] + 0
+                    PM[k, c] = (c == 1 || h > PM[k, c - 1]) ? h : PM[k, c - 1]; NM[k] = x[4]; if (k > ns) ns = k } }
+        { v = v4($1); src = "-"
+          for (k = 1; k <= ns; k++) { a = 1; b = N[k]; j = 0
+              while (a <= b) { m = int((a + b) / 2); if (L[k, m] <= v) { j = m; a = m + 1 } else b = m - 1 }
+              if (j && PM[k, j] >= v) { src = NM[k]; break } }
+          print $1, src }')
 }
 cls_of() {       # SEBEP → REPLY = servis; rakamları atılmış sebep metnine göre akılda (IP ve tarih farkı türü değiştirmez)
     local k="${1//[0-9]/}"
@@ -5192,17 +5240,13 @@ ev_ipsrc() {     # OLAY_SATIRI → stdout "ip|sebep|asn" (olaydaki IP listesinde
 cloud_cover() {  # DOSYA ("anahtar lo hi" satırları) → stdout "anahtar kaynak": etkin bir bulut listesinin içinde kalanlar
     local IFS=$' \t\n' x rf
     [ "$CLOUD_ON" = 1 ] && [ -n "${CLOUD_ACTIVE// /}" ] && [ -s "$1" ] || return 0
-    rf=$(mktemp) || return 0
-    for x in $CLOUD_ACTIVE; do
-        [ -r "$CLOUD_DIR/$x.txt" ] && awk -F'[./]' -v s="$x" 'NF >= 4 { b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%.0f %.0f %s\n", lo, lo + 2 ^ (32 - b) - 1, s }' "$CLOUD_DIR/$x.txt"
-    done | sort -n -k1,1 > "$rf"
+    cloud_ranges || return 0; rf="$CR_MERGED"     # önbellekteki sıralı aralıklar (her çağrıda yeniden okuma + sıralama yok)
     # aralıklar başlangıca göre sıralı; i'ye kadarki en büyük bitiş ≥ sorgunun bitişi ise sorgu bir aralığın içindedir
     awk -v rf="$rf" 'BEGIN { while ((getline l < rf) > 0) { split(l, x, " "); n++; L[n] = x[1] + 0; h = x[2] + 0
                              if (n == 1 || h > PM[n - 1]) { PM[n] = h; PS[n] = x[3] } else { PM[n] = PM[n - 1]; PS[n] = PS[n - 1] } } }
         { lo = $2 + 0; hi = $3 + 0; a = 1; b = n; k = 0
           while (a <= b) { c = int((a + b) / 2); if (L[c] <= lo) { k = c; a = c + 1 } else b = c - 1 }
           if (k && PM[k] >= hi) print $1, PS[k] }' "$1"
-    rm -f "$rf"
 }
 declare -A CLB_S=()   # bütün banları bulut listesinde kalan sağlayıcılar → kaynak (asn_top doldurur)
 declare -A AWHY=()    # sağlayıcı → en sık ban sebebi (tekil ban notlarından; asn_top doldurur)
@@ -5363,9 +5407,14 @@ imunify_top() {  # [N] → IM_TOP satırları "ASN|KURUM|CC|IP sayısı|SEBEP:n,
     asn_banned
     # tek akış: sahipler "önek|ASN|ülke|ad" (önbellekten yüklenenler), "#--" ayracı, Imunify listesi "ip|sebep" (+ #total, #t)
     pa "im önce"; pc "im sahip önbelleği" "${#OWN_A[@]}"
-    IM_TOP=$( { for p in "${!OWN_A[@]}"; do [ -n "${OWN_A[$p]}" ] && printf '%s|%s|%s|%s\n' "$p" "${OWN_A[$p]}" "${OWN_C[$p]}" "${OWN_N[$p]//|/ }"; done
+    # sahipler owners_load'un süzgeciyle doğrudan dosyadan (geçerli, süresi dolmamış), ardından bu süreçte yeni sorulanlar (OWN_NEW,
+    # dosyaya tur yazar): sonuncusu geçerli, ASN'si boş dönen kayıt öncekini siler — bellekteki OWN_* ile aynı sonuç. Önce 2.400
+    # kayıt bash döngüsüyle yeniden yazdırılıyordu (sunucuda ~0,15 sn)
+    local omin=$(( $(date +%s) - OWNER_TTL_DAYS * 86400 ))
+    IM_TOP=$( { [ -r "$OWNERS_FILE" ] && awk -F'|' -v min="$omin" '$1 ~ /^[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?$/ && $5 ~ /^[0-9]+$/ && $5 + 0 >= min + 0 { print $1 "|" $2 "|" $3 "|" $4 }' "$OWNERS_FILE"
+               for p in "${!OWN_NEW[@]}"; do printf '%s|%s|%s|%s\n' "$p" "${OWN_A[$p]}" "${OWN_C[$p]}" "${OWN_N[$p]//|/ }"; done
                echo '#--'; cat "$IMUNIFY_FILE"; } | awk -F'|' -v ban=" ${ASB_ORD}" '
-        !L { if ($0 == "#--") L = 1; else if ($2 != "") { A[$1] = $2; C[$1] = $3; M[$1] = $4 }; next }   # ayraca kadar sahipler
+        !L { if ($0 == "#--") L = 1; else if ($2 != "") { A[$1] = $2; C[$1] = $3; M[$1] = $4 } else delete A[$1]; next }   # ayraca kadar sahipler
         $1 == "#total" { print "#total|" $2; next }
         $1 == "#t"     { print "#t|" $2; next }
         { p = $1; sub(/\.[0-9]+$/, "", p); if (!(p in A)) next
@@ -5872,7 +5921,7 @@ pa "turn csf.deny okuma"; [ "$DRY" = 1 ] || orphans_clean       # eklenti dış�
 pa "turn artık temizliği"; [ "$DRY" = 1 ] || limit_watch         # CSF sınır dolunca sildiyse: izlemeye al, bildir
 pa "turn sınır izleme"; [ "$DRY" = 1 ] || proto_fix           # eski kısmi ban / istisnalara eksik UDP 443 (HTTP/3)
 pa "turn UDP 443"; [ "$DRY" = 1 ] || { svc_enforce 0; asn_enforce; cloud_enforce 0; cloud_on_calc; hits_update; guard_update; }   # izinli servisler, sağlayıcı banı, bulut listeleri: istenen durum CSF'te mi
-pa "turn servis/sağlayıcı/bulut zorlama"; [ "$DRY" = 1 ] || daily_tasks         # günde bir: servis izin listeleri, CSF'in ASN verisi
+pa "turn servis/sağlayıcı/bulut zorlama"; [ "$DRY" = 1 ] || daily_tasks; CR_OK=""   # günde bir: servis izin listeleri, CSF'in ASN verisi; kiralık listeler yenilenmiş olabilir: aralık önbelleği yeniden denetlensin
 pa "turn günlük işler"; [ "$DRY" = 1 ] || { svc_health; cloud_health; }   # indirilemeyen izinli servis / bulut listesi: bildirim
 
 prof "turn denetim+zorlama"

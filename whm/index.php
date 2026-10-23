@@ -32,8 +32,23 @@ $whmShell = '/usr/local/cpanel/php/WHM.php';
 $useWhm   = is_readable($whmShell);
 if ($useWhm) {
     require_once $whmShell;
-    WHM::header('CSF Auto-Group', 0, 0);
-} else {
+    // cpsrvd yeniden yüklenirken (ör. eklenti güncellemesi) WHM başlık önbelleği birkaç saniye eksik olabilir: WHM::header
+    // "User does not exist in cache_keys" fırlatıyor, sayfa 500 veriyordu (cPanel error_log, 2026-10-23). Önce kısa bekleyip
+    // bir kez daha denenir; yine olmazsa sayfa WHM çerçevesi olmadan açılır (sonraki yenilemede çerçeve döner).
+    $useWhm = false;
+    for ($try = 0; $try < 2 && !$useWhm; $try++) {
+        if ($try) usleep(1500000);
+        ob_start();
+        try {
+            WHM::header('CSF Auto-Group', 0, 0);
+            $useWhm = true;
+            ob_end_flush();
+        } catch (Throwable $e) {
+            ob_end_clean();
+        }
+    }
+}
+if (!$useWhm) {
     echo '<!doctype html><html><head><meta charset="utf-8">'
        . '<meta name="viewport" content="width=device-width, initial-scale=1">'
        . '<title>CSF Auto-Group</title></head><body>';
