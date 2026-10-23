@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.12"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.13"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1564,7 +1564,7 @@ owners_load() {  # sahip önbelleği → OWN_A/C/N/T/P/L/S (geçerli ve süresi 
             k = $1; l = ""; o = ""
             if ($2 != "") { l = "AS" $2 " " ($4 != "" ? $4 : "?"); if ($4 == "" && $3 != "") l = "AS" $2 ", " $3; o = "AS" $2 ($3 != "" ? " " $3 : "") }
             printf "OWN_A[%s]=%s;OWN_C[%s]=%s;OWN_N[%s]=%s;OWN_T[%s]=%s;OWN_P[%s]=%s;OWN_L[%s]=%s;OWN_S[%s]=%s\n", k, q($2), k, q($3), k, q($4), k, q($5), k, q($6), k, q(l), k, q(o) }' "$OWNERS_FILE")"
-    pa "own_awk"; pc "own_satır" "$(wc -l < "$OWNERS_FILE")"
+    pa "own_awk"; [ -n "${AG_PROF:-}" ] && pc "own_satır" "$(wc -l < "$OWNERS_FILE")"
     eval "$ows"
     pa "own_eval"
 }
@@ -1803,7 +1803,7 @@ wl_load() {      # FILE LABEL [DEPTH] — IP, CIDR, gelişmiş satır (tcp|in|d=
               printf "WL_LO+=(%.0f);WL_HI+=(%.0f);WL_TXT+=(%s);WL_CM+=(%s)\n", lo, lo + size - 1, q(lab (svn != "" ? " (" svn ")" : "") ": " tok), q(cm)
               next }
           printf "wl_line %s %d %s\n", q(lab), dep, q($0) }' "$file")"
-    pa "wl_awk ${file##*/}"; pc "wl_satır ${file##*/}" "$(wc -l < "$file")"
+    pa "wl_awk ${file##*/}"; [ -n "${AG_PROF:-}" ] && pc "wl_satır ${file##*/}" "$(wc -l < "$file")"
     eval "$wls"
     pa "wl_eval ${file##*/}"
 }
@@ -2047,6 +2047,14 @@ parse_deny() {   # FILE MAIN(1|0) [DEPTH]
     # DC_*'a girmez, Include satırı yerinde (sıra korunur) özyinelemeli okunur (en çok 5 düzey). Değerler kaçışlı ("\ $ `).
     local depth="${3:-0}"
     [ -r "$1" ] || return
+    if [ "$2" = 1 ] && [ "$depth" = 0 ]; then
+        # ana okuma ikinci kez yapılırsa önceki sonuç silinir, üst üste eklenmez (count24 ikiye katlanır, 2 IP "4 tekil"
+        # sayılıp /24 banlanırdı — 2026-10-23'te yarıda kalan durum çıktısının ardından çalışan turda oldu)
+        if [ -n "${PD_DONE:-}" ]; then
+            DENY_IP=(); SINGLE_NOTE=(); count24=(); ips24=(); DLINE=(); DC_LO=(); DC_HI=(); DC_TXT=(); AGG=(); MANB=()
+        fi
+        PD_DONE=1
+    fi
     eval "$(LC_ALL=C awk -v main="$2" -v dep="$depth" '
         function q(x) { gsub(/[\\"$`]/, "\\\\&", x); return "\"" x "\"" }
         { l = $0; sub(/\r$/, "", l)
@@ -2291,10 +2299,11 @@ prof_now() {     # → PROF_NOW (µs). Döngü içi işaretler alt süreç açma
     fi
     local u _r
     case "$PROF_CLK" in
-        epoch)  u="${EPOCHREALTIME/[.,]/}"; PROF_NOW=$(( 10#$u )) ;;
-        uptime) read -r u _r < /proc/uptime; u="${u/./}"; PROF_NOW=$(( 10#$u * 10000 )) ;;
-        *)      u=$(date +%s%N); PROF_NOW=$(( u / 1000 )) ;;
+        epoch)  u="${EPOCHREALTIME/[.,]/}" ;;
+        uptime) IFS=' ' read -r u _r < /proc/uptime; u="${u/./}0000" ;;   # durum çıktısı IFS=, ile çalışır: ayırıcı açıkça boşluk
+        *)      u=$(date +%s%N); u="${u%???}" ;;
     esac
+    [[ "$u" =~ ^[0-9]+$ ]] && PROF_NOW=$(( 10#$u )) || PROF_NOW=${PROF_T:-0}   # beklenmeyen değer: ölçüm atlanır, hata çıkmaz
 }
 pa() {     # tanı: AG_PROF=1 → bir önceki işaretten beri geçen süre bu etikete eklenir (bölüm içi, döngüde toplanır; prof_dump yazar)
     [ -n "${AG_PROF:-}" ] || return 0
@@ -5787,6 +5796,9 @@ case "$MODE" in
             else printf '%s\n\n%s\n' "$DG_SUBJ" "$DG_BODY"; fi
             exit 0 ;;
 esac
+# Buraya yalnız tur (MODE=run) gelir. Bir mod içinde bash genişletme hatası olursa (ör. $(( )) sözdizimi) bash bütün case
+# bloğunu terk eder, "exit" çalışmaz ve akış tura düşerdi: 2026-10-23'te --status bu yüzden gerçek bir tur çalıştırdı.
+[ "$MODE" = run ] || { echo "csf_autogroup: '$MODE' modu yarıda kaldı (beklenmeyen hata); tur çalıştırılmadı" >&2; exit 3; }
 
 # Tek seferde tek çalışma: cron turu uzarsa ikinci kopya aynı bloğu tekrar eklemesin.
 take_lock || { log "$M_LOCKED"; exit 0; }

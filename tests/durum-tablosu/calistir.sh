@@ -255,6 +255,12 @@ mkl izboth; izgec; lfdb 600 151.80.7.9
 mcheck "lfd günlüğünde de kaydı varsa satır bir kez, sayı lfd'den (CSF'teki ban ikinci kez sayılmaz)" "rvrow 151.80.7.9 | grep -q '\"bk\":\"b\",\"cnt\":1,'"
 mkl izold; printf '151.80.7.9 # musteri\n' >> "$A"; single 151.80.7.9 pop3d "$(LC_ALL=C date -d '-9 days' '+%a %b %d %H:%M:%S %Y')"
 mcheck "pencereden (7 gün) eski işlemeyen ban satır açmaz" "[ -z \"\$(rvrow 151.80.7.9)\" ]"
+# 2026-10-23 olayı: AG_PROF=1 ile durum çıktısında ölçüm saati (/proc/uptime) IFS=, yüzünden sözdizimi hatası verdi, bash case
+# bloğunu terk edip tura düştü, tur csf.deny'yi ikinci kez okuyup her tekili iki kez saydı ve 2 tekilli /24'ü banladı
+mk profst; for x in 1 2; do single 151.80.7.$x sshd; done; cp "$D" "$W/profst.deny"
+PJ=$(env SIM_ROOT="$R" PATH="$W/bin:/usr/bin:/bin" AG_BY=root AG_PROF=1 PROF_CLK=uptime bash "$R/app/csf_autogroup.sh" --status --json 2>"$W/profst.err")
+mcheck "AG_PROF=1 (/proc/uptime saati) ile durum çıktısı eksiksiz, hata yok, tura düşmez (csf.deny aynı, blok banı yok)" "[[ \"\$PJ\" == '{\"ok\":true'*'}' ]] && ! grep -qi 'hata\|error' '$W/profst.err' && grep -q 'PROF  saat: uptime' '$W/profst.err' && cmp -s '$D' '$W/profst.deny'"
+mcheck "aynı veride AG_PROF=1 ile deneme turu da hatasız (date ve epoch saatleri)" "( for c in date epoch uptime; do env SIM_ROOT='$R' PATH='$W/bin:/usr/bin:/bin' AG_BY=root AG_PROF=1 PROF_CLK=\$c bash '$R/app/csf_autogroup.sh' --dry-run 2>&1 >/dev/null | grep -qi 'sözdizimi\|syntax' && exit 1; done; exit 0 )"
 # PERMBLOCK: lfd'nin nedeni (kaç geçici ban, hangi sürede) kesilmez, okunur metne çevrilir
 mk permwhy; printf 'WARN16_151.80 %s\n' "$(date -d '-3 days' +%F)" >> "$C"; for x in 7.1 7.2 8.1 8.2; do single 151.80.$x sshd; done
 printf '%s\n' "151.80.9.1 # lfd: (PERMBLOCK) 151.80.9.1 (FR/France/-) has had more than 3 temp blocks in the last 86400 secs - $DT" >> "$D"

@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.15.13 — 2026-10-23
+
+- **Fix — a diagnostic status run could turn into a real run.** In 1.15.12,
+  `AG_PROF=1 … --status` read `/proc/uptime` with the status output's field
+  separator and hit a shell arithmetic error. Bash then left the whole mode
+  switch instead of only the function, skipped its `exit`, and went on with a
+  normal run. That run read `csf.deny` a second time on top of the first, so
+  every single ban counted twice and blocks with two banned addresses reached
+  a threshold of three. Normal runs and the panel were not affected (the
+  timing code only runs with `AG_PROF`). Now:
+  - the timer reads `/proc/uptime` independently of the field separator and
+    skips a value it cannot read instead of failing;
+  - a mode that stops on an unexpected error exits instead of falling through
+    to a run;
+  - reading `csf.deny` a second time in one process starts over instead of
+    adding to the first read, so an address is never counted twice.
+  If you ran `AG_PROF=1 … --status --json` on 1.15.12 and got a block-ban
+  email listing each address twice, those bans came from this; remove them
+  (with *restore the removed entries*) from *Active range bans*.
+
 ## 1.15.12 — 2026-10-23
 
 - **Finer timing for diagnosis.** With `AG_PROF=1` the status and a run
