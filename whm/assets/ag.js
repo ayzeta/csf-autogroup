@@ -31,6 +31,10 @@
   var STALE = false;            // işlem bitti, yeni durum gelene kadar ekran eski: eylemler bekletilir
   var WORK_MSG = '', WORK_SUB = '';   // STALE === 'work' iken ortadaki kutu: başlık, ne beklendiği
   var pollTimer = null, wasRunning = false, busy = false, CONN = null, LAST_OK = 0, HIDDEN_DUE = false;
+  // BACK: sekmeye / sayfaya eski veriyle dönüldü (tarayıcı gizli sekmeyi uyutur; veri bir saatlik olabilir). Yeni durum gelene
+  // kadar Son tur / Tur süresi / Sıradaki eski veriden hesaplanmaz, "güncelleniyor…" yazar: önce eski verinin yaşı
+  // ("1 saat önce") gerçek gibi görünüyordu, yeni veri ancak ~15 sn sonra "14 dk önce" diyordu
+  var BACK = false;
 
   /* ── Simgeler (çizgi, 24px ızgara) ─────────────────────────────── */
   function svg(p) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>'; }
@@ -546,9 +550,9 @@
     }
     return '<section class="ag-band st-' + st + '"><div class="ag-band-s"><span class="ag-pulse"><i></i></span><div><b>' +
       t(run ? 'sb_run' : paused ? 'sb_paused' : fwBad ? 'sb_fw' : late ? 'sb_late' : 'sb_ok') + '</b><span>' + esc(sub) + '</span>' + healthChips(HL, late) + '</div></div>' +
-      m(t('sb_last'), lr ? esc(rel(lr.t)) : '—', '', 'ag-last', t('sb_last_h') + ' ' + t('sb_fetched', new Date(LAST_OK * 1000).toLocaleTimeString(loc()))) +
-      m(t('sb_dur'), ds.length ? esc(sec(ds[ds.length - 1])) : '—', ds.length > 1 ? esc(t('sb_avg', sec(avg))) : '') +
-      m(t('sb_next'), run ? t('sb_now') : (nextIn() || '—'), '', 'ag-next') +
+      m(t('sb_last'), BACK ? backTxt() : lr ? esc(rel(lr.t)) : '—', '', 'ag-last', t('sb_last_h') + ' ' + t('sb_fetched', new Date(LAST_OK * 1000).toLocaleTimeString(loc()))) +
+      m(t('sb_dur'), BACK ? '…' : ds.length ? esc(sec(ds[ds.length - 1])) : '—', !BACK && ds.length > 1 ? esc(t('sb_avg', sec(avg))) : '', 'ag-dur') +
+      m(t('sb_next'), BACK ? '…' : run ? t('sb_now') : (nextIn() || '—'), '', 'ag-next') +
       (L.length > 1 ? '<div class="ag-band-g"><small>' + t('sb_spark', L.length) + '</small><div class="ag-spark">' + spark + '</div></div>' : '<div></div>') +
       '</section>';
   }
@@ -2133,11 +2137,21 @@
   }
 
   /* ── Durum / yoklama ───────────────────────────────────────────── */
-  function refresh(light) {       // light: sekmeye / sayfaya dönüşte; eski ekran kalır, Son tur kutusu 'güncelleniyor…' der
-    if (light) { var lb = document.getElementById('ag-last'); if (lb && !lb.nextElementSibling) lb.insertAdjacentHTML('afterend', '<span>' + esc(t('sb_updating')) + '</span>'); }
+  function backTxt() { return '<span class="ag-spin ag-spin-sm"></span> <span class="ag-back-t">' + esc(t('sb_updating')) + '</span>'; }
+  function goBack() {             // eski veriyle dönüş: sayıları kaldır, eylemleri beklet (ekran yeniden çizilmez: açık form kalır)
+    BACK = true;
+    var lb = document.getElementById('ag-last'); if (lb) lb.innerHTML = backTxt();
+    ['ag-dur', 'ag-next'].forEach(function (id) {
+      var e = document.getElementById(id); if (!e) return;
+      e.textContent = '…'; if (e.nextElementSibling) e.nextElementSibling.textContent = '';
+    });
+    var wr = $app.querySelector('.ag-wrap'); if (wr) wr.classList.add('ag-stale');
+  }
+  function refresh(light) {       // light: sekmeye / sayfaya dönüşte; veri eskiyse sayılar yeni durum gelene kadar gösterilmez
+    if (light && LAST_OK && nowSec() - LAST_OK > 70) goBack();
     return api('status').then(function (d) {
       if (!d || d.ok === false) { throw new Error((d && (d.message || d.error)) || 'status'); }
-      S = d; if (STALE !== 'work') STALE = false; LANG = d.lang === 'tr' ? 'tr' : 'en'; try { localStorage.setItem('ag-lang', LANG); } catch (e) {} CLOCK = d.now - Date.now() / 1000; LAST_OK = d.now; setConn(null);
+      S = d; BACK = false; if (STALE !== 'work') STALE = false; LANG = d.lang === 'tr' ? 'tr' : 'en'; try { localStorage.setItem('ag-lang', LANG); } catch (e) {} CLOCK = d.now - Date.now() / 1000; LAST_OK = d.now; setConn(null);
       if (SEEN0 === null) { SEEN0 = d.last_seen || 0; setTimeout(function () { api('seen').catch(function () {}); }, 1500); }
       document.documentElement.lang = LANG;
       if (wasRunning && !d.running) toast(t('t_done'), 'ok');
@@ -2152,6 +2166,7 @@
       }
       evLoad().then(function (n) { if (n && !busy && !(cfgTab() && CFG && changedKeys().length)) render(); });
     }).catch(function (e) {
+      if (BACK) { BACK = false; render(); }   // yenilenemedi: bağlantı uyarısı son verinin yaşını söyler
       if (STALE) { STALE = false; render(); }
       if (!S) $app.innerHTML = '<div class="ag-wrap">' + empty('alert', String(e.message || e)) + '</div>';
       else if (CONN !== 'session') setConn('net');
@@ -2160,7 +2175,7 @@
   }
   var DUE_HIT = false;
   setInterval(function () {
-    if (document.hidden || !S) return;
+    if (document.hidden || !S || BACK) return;
     var el = document.getElementById('ag-next'); if (el && !S.running) el.textContent = nextIn() || '—';
     var left = nextLeft();                                  // cron tiki: 60 sn'lik yoklamayı beklemeden 3 sn sonra sor, run olayı gelene kadar 5 sn'de bir sürer
     if (left === 0 && !DUE_HIT) { DUE_HIT = true; schedule(3000); } else if (left > 5) DUE_HIT = false;

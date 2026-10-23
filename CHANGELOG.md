@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.15.9 — 2026-10-23
+
+- **Fix — old numbers after coming back to the tab.** Browsers put a hidden
+  tab to sleep, so on return the page still held data from when it was left.
+  *Last run* then showed that data's age ("1 hour ago") until the new status
+  arrived and said "14 min ago". When the data is more than a minute old,
+  *Last run*, *Run time* and *Next* now show "updating…" until the new status
+  arrives, and actions wait for it.
+
 ## 1.15.8 — 2026-10-22
 
 - **Short command: `csf-autogroup`.** The installer adds

@@ -57,6 +57,8 @@
 .ag-boot-t { max-width: 420px; font-size: 13px; color: var(--ag-text-3); line-height: 1.45; }
 .ag-spin { width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid var(--ag-line); border-top-color: var(--ag-accent); animation: ag-rot .7s linear infinite; display: inline-block; }
 .ag-spin-sm { width: 14px; height: 14px; border-width: 2px; vertical-align: -2px; }
+/* sekmeye eski veriyle dönüş: Son tur kutusunda sayı yerine (yeni durum gelene kadar) */
+.ag-back-t { font-size: 13px; font-weight: 500; color: var(--ag-text-3); white-space: nowrap; }
 @keyframes ag-rot { to { transform: rotate(360deg); } }
 /* işlem bitti, yeni durum bekleniyor: eylem düğmeleri bekletilir (eski duruma göre tıklanmasın) */
 .ag-sync { position: sticky; top: 8px; z-index: 30; display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%; margin: 0 auto 12px;

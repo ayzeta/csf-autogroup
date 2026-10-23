@@ -109,7 +109,8 @@ settings, with no prompts. `config.env` is left untouched.
   it took, a countdown to the next run and the durations of the last 36 runs,
   plus three markers: **CSF** (rules loaded, not disabled, not in testing mode),
   **LFD** (running) and **Cron** (runs on time). Turns red when any of them has
-  a problem.
+  a problem. Coming back to a tab that was hidden for a while, the run times
+  show *updating…* until the new status arrives, never the old numbers.
 - **Period** — 7 or 30 days, for the summary cards and the activity chart
   together.
 - **Summary cards** — active block bans, items to review, and how full CSF's
