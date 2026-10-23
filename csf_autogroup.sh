@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.9"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.10"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1552,19 +1552,17 @@ owner_lookup() { # IP → OWN_LONG ("AS60729 ARTIKEL10, DE"), OWN_SHORT ("AS6072
 # Önbellek satırı: "a.b.c|ASN|CC|KURUM|zaman". Sorgulanıp bilgi çıkmayan blok da (boş ASN) saklanır,
 # her turda boşuna yeniden sorulmasın. OWNER_TTL_DAYS'ten eski kayıt okunmaz, yeniden sorulur.
 declare -A OWN_N OWN_T OWN_NEW OWN_P      # OWN_P: /24'ün sahibinin duyurduğu aralık (Team Cymru)
-owners_load() {
-    local p asn cc name t min
+owners_load() {  # sahip önbelleği → OWN_A/C/N/T/P/L/S (geçerli ve süresi dolmamış satırlar). Satırlar awk'ta süzülüp atamaya çevrilir,
+    # tek eval ile yüklenir: banlı tekillerin her /24'ü bir satır, binlerce satırda satır başına bash read + düzenli ifade durum
+    # çıktısını ~1 sn uzatıyordu. Değerler çift tırnak içinde, \ " $ ` kaçışlı.
     [ -r "$OWNERS_FILE" ] || return 0
-    min=$(( $(date +%s) - OWNER_TTL_DAYS * 86400 ))
-    while IFS='|' read -r p asn cc name t pf; do
-        [[ "$p" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || continue
-        [[ "$t" =~ ^[0-9]+$ ]] && [ "$t" -ge "$min" ] || continue
-        OWN_A[$p]="$asn"; OWN_C[$p]="$cc"; OWN_N[$p]="$name"; OWN_T[$p]="$t"; OWN_P[$p]="$pf"
-        if [ -n "$asn" ]; then
-            OWN_L[$p]="AS$asn ${name:-?}"; [ -z "$name" ] && [ -n "$cc" ] && OWN_L[$p]="AS$asn, $cc"
-            OWN_S[$p]="AS$asn${cc:+ $cc}"
-        else OWN_L[$p]=""; OWN_S[$p]=""; fi
-    done < "$OWNERS_FILE"
+    local min=$(( $(date +%s) - OWNER_TTL_DAYS * 86400 ))
+    eval "$(LC_ALL=C awk -F'|' -v min="$min" '
+        function q(x) { gsub(/[\\"$`]/, "\\\\&", x); return "\"" x "\"" }
+        $1 ~ /^[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?$/ && $5 ~ /^[0-9]+$/ && $5 + 0 >= min + 0 {
+            k = $1; l = ""; o = ""
+            if ($2 != "") { l = "AS" $2 " " ($4 != "" ? $4 : "?"); if ($4 == "" && $3 != "") l = "AS" $2 ", " $3; o = "AS" $2 ($3 != "" ? " " $3 : "") }
+            printf "OWN_A[%s]=%s;OWN_C[%s]=%s;OWN_N[%s]=%s;OWN_T[%s]=%s;OWN_P[%s]=%s;OWN_L[%s]=%s;OWN_S[%s]=%s\n", k, q($2), k, q($3), k, q($4), k, q($5), k, q($6), k, q(l), k, q(o) }' "$OWNERS_FILE")"
 }
 owners_save() {  # yalnız yeni sorgu olduysa; atomik
     local p now tmp
@@ -1775,48 +1773,72 @@ wl_add() {       # CIDR LABEL [YORUM] — yorum: dosyadaki satırın # sonrası 
     WL_LO+=("$R_LO"); WL_HI+=("$R_HI"); WL_TXT+=("$2"); WL_CM+=("${3:-}")
 }
 wl_load() {      # FILE LABEL [DEPTH] — IP, CIDR, gelişmiş satır (tcp|in|d=22|s=IP), Include
-    local file="$1" label="$2" depth="${3:-0}" line tok rest mt ip
+    # Dosya awk'ta bir kez okunur ve atama betiğine çevrilir, bash onu tek eval ile çalıştırır. Düz "IP[/n] [# yorum]" satırları
+    # (izinli servis listelerinde binlerce) doğrudan WL_* ataması olur; Include, gelişmiş satır, hostname ve birden çok IP'li
+    # satırlar sırası korunarak wl_line'a gider. Satır başına bash döngüsü 4.000 satırlık listede ~0,7 sn sürüyordu (her durum
+    # yenilemesinde). Kurallar wl_line ile aynı: yorum (80 karakter, eklentinin / CSF'in işaretleri değil), servis adı, aralık
+    # hizalama, geçersiz IP / maske atlanır. Değerler kaçışlı ("\ $ `).
+    local file="$1" label="$2" depth="${3:-0}"
     [ -r "$file" ] || return
-    while IFS= read -r line || [ -n "$line" ]; do
-        line="${line%$'\r'}"
-        # eklentinin kendi port istisnası (banlı aralıkta seçilen servisler açık) korunan kayıt değil. Yalnız o atlanır:
-        # izinli servisler ("# csf_autogroup: service google-common", csf_autogroup.services.allow Include'u) CSF'te gerçek
-        # izindir — önce "csf_autogroup" geçen her satır atlanıyor, Googlebot vb. beyaz liste sayılmıyordu.
-        [[ "$line" == *"csf_autogroup: exception"* ]] && continue
-        local svn=""; [[ "$line" =~ csf_autogroup:\ service\ ([A-Za-z0-9_-]+) ]] && svn=" (${BASH_REMATCH[1]})"
-        # satır yorumu (kullanıcının "# ofis" gibi notu) kaynağın yanında gösterilir; eklentinin ve CSF'in kendi işaretleri değil
-        local cm=""
-        if [[ "$line" == *"#"* ]]; then
-            cm="${line#*#}"; cm="${cm#"${cm%%[![:space:]]*}"}"; cm="${cm%"${cm##*[![:space:]]}"}"
-            case "$cm" in *csf_autogroup:*|"do not delete"*|"") cm="" ;; esac
-            cm="${cm:0:80}"
-        fi
-        line="${line%%#*}"; line="${line#"${line%%[![:space:]]*}"}"
-        [ -z "$line" ] && continue
-        if [[ "$line" =~ ^Include[[:space:]]+([^[:space:]]+) ]]; then
-            # Include edilen dosyanın adı etikete eklenir: kayıt ana dosyada görünmez (ör. "csf.allow → imunify360.txt")
-            [ "$depth" -lt 5 ] && wl_load "${BASH_REMATCH[1]}" "$label → ${BASH_REMATCH[1]##*/}" $((depth + 1)); continue
-        fi
-        tok="${line%%[[:space:]]*}"; rest="$tok"; mt=0
-        # Gelişmiş satır yalnız bir portu açar (tcp|in|d=2083|s=IP): tek IP / dar aralık bilinen bir müşteri
-        # sayılır (blok banı onu da keserdi), "herkese" açan geniş satır (s=0.0.0.0/0) ise beyaz liste değildir
-        if [[ "$tok" == *"|"* ]]; then
-            adv_parse "$tok" || continue
-            adv_wide "$ADV_CIDR" && continue
-            wl_add "$ADV_CIDR" "$label ($ADV_PROTO $ADV_DIR ${ADV_PORTS:-*}): $ADV_CIDR" "$cm"
-            continue
-        fi
-        while [[ "$rest" =~ ([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(/[0-9]{1,2})?) ]]; do
-            ip="${BASH_REMATCH[1]}"          # wl_add içindeki regex BASH_REMATCH'i ezer
-            rest="${rest#*"$ip"}"
-            wl_add "$ip" "$label$svn: $ip" "$cm"; mt=1
-        done
-        # csf.allow'da hostname olabilir → çöz
-        if [ "$mt" = 0 ] && [[ "$label" == csf.allow* ]] && [[ "$tok" =~ ^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$ ]] && [[ "$tok" =~ [A-Za-z] ]]; then
-            resolve_a "$tok"
-            for ip in $REPLY; do wl_add "$ip" "$label: $tok ($ip)" "$cm"; done
-        fi
-    done < "$file"
+    eval "$(awk -v lab="$label" -v dep="$depth" '
+        function q(x) { gsub(/[\\"$`]/, "\\\\&", x); return "\"" x "\"" }
+        { l = $0; sub(/\r$/, "", l)
+          if (index(l, "csf_autogroup: exception")) next
+          svn = ""; if (match(l, /csf_autogroup: service [A-Za-z0-9_-]+/)) svn = substr(l, RSTART + 23, RLENGTH - 23)
+          cm = ""; k = index(l, "#")
+          if (k) { cm = substr(l, k + 1); gsub(/^[ \t]+|[ \t]+$/, "", cm); if (cm ~ /csf_autogroup:/ || cm ~ /^do not delete/) cm = ""
+                   cm = substr(cm, 1, 80); r = substr(l, 1, k - 1) } else r = l
+          sub(/^[ \t]+/, "", r); if (r == "") next
+          tok = r; sub(/[ \t].*$/, "", tok)
+          if (tok ~ /^[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?(\/[0-9][0-9]?)?$/) {
+              ip = tok; bits = 32; k = index(tok, "/"); if (k) { bits = substr(tok, k + 1) + 0; ip = substr(tok, 1, k - 1) }
+              if (bits < 1 || bits > 32) next
+              split(ip, o, "."); if (o[1] + 0 > 255 || o[2] + 0 > 255 || o[3] + 0 > 255 || o[4] + 0 > 255) next
+              v = ((o[1] * 256 + o[2]) * 256 + o[3]) * 256 + o[4]; size = 2 ^ (32 - bits); lo = v - v % size
+              printf "WL_LO+=(%.0f);WL_HI+=(%.0f);WL_TXT+=(%s);WL_CM+=(%s)\n", lo, lo + size - 1, q(lab (svn != "" ? " (" svn ")" : "") ": " tok), q(cm)
+              next }
+          printf "wl_line %s %d %s\n", q(lab), dep, q($0) }' "$file")"
+}
+wl_line() {      # ETİKET DERİNLİK SATIR → wl_load'ın awk'ta doğrudan çözmediği satır: Include, gelişmiş satır, hostname, çok IP
+    local label="$1" depth="$2" line="$3" tok rest mt ip
+    line="${line%$'\r'}"
+    # eklentinin kendi port istisnası (banlı aralıkta seçilen servisler açık) korunan kayıt değil. Yalnız o atlanır:
+    # izinli servisler ("# csf_autogroup: service google-common", csf_autogroup.services.allow Include'u) CSF'te gerçek
+    # izindir — önce "csf_autogroup" geçen her satır atlanıyor, Googlebot vb. beyaz liste sayılmıyordu.
+    [[ "$line" == *"csf_autogroup: exception"* ]] && return
+    local svn=""; [[ "$line" =~ csf_autogroup:\ service\ ([A-Za-z0-9_-]+) ]] && svn=" (${BASH_REMATCH[1]})"
+    # satır yorumu (kullanıcının "# ofis" gibi notu) kaynağın yanında gösterilir; eklentinin ve CSF'in kendi işaretleri değil
+    local cm=""
+    if [[ "$line" == *"#"* ]]; then
+        cm="${line#*#}"; cm="${cm#"${cm%%[![:space:]]*}"}"; cm="${cm%"${cm##*[![:space:]]}"}"
+        case "$cm" in *csf_autogroup:*|"do not delete"*|"") cm="" ;; esac
+        cm="${cm:0:80}"
+    fi
+    line="${line%%#*}"; line="${line#"${line%%[![:space:]]*}"}"
+    [ -z "$line" ] && return
+    if [[ "$line" =~ ^Include[[:space:]]+([^[:space:]]+) ]]; then
+        # Include edilen dosyanın adı etikete eklenir: kayıt ana dosyada görünmez (ör. "csf.allow → imunify360.txt")
+        [ "$depth" -lt 5 ] && wl_load "${BASH_REMATCH[1]}" "$label → ${BASH_REMATCH[1]##*/}" $((depth + 1)); return
+    fi
+    tok="${line%%[[:space:]]*}"; rest="$tok"; mt=0
+    # Gelişmiş satır yalnız bir portu açar (tcp|in|d=2083|s=IP): tek IP / dar aralık bilinen bir müşteri
+    # sayılır (blok banı onu da keserdi), "herkese" açan geniş satır (s=0.0.0.0/0) ise beyaz liste değildir
+    if [[ "$tok" == *"|"* ]]; then
+        adv_parse "$tok" || return
+        adv_wide "$ADV_CIDR" && return
+        wl_add "$ADV_CIDR" "$label ($ADV_PROTO $ADV_DIR ${ADV_PORTS:-*}): $ADV_CIDR" "$cm"
+        return
+    fi
+    while [[ "$rest" =~ ([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(/[0-9]{1,2})?) ]]; do
+        ip="${BASH_REMATCH[1]}"          # wl_add içindeki regex BASH_REMATCH'i ezer
+        rest="${rest#*"$ip"}"
+        wl_add "$ip" "$label$svn: $ip" "$cm"; mt=1
+    done
+    # csf.allow'da hostname olabilir → çöz
+    if [ "$mt" = 0 ] && [[ "$label" == csf.allow* ]] && [[ "$tok" =~ ^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$ ]] && [[ "$tok" =~ [A-Za-z] ]]; then
+        resolve_a "$tok"
+        for ip in $REPLY; do wl_add "$ip" "$label: $tok ($ip)" "$cm"; done
+    fi
 }
 rig_match() {    # HOST(küçük harf) IP → 0: bir csf.rignore kaydıyla eşleşti ve ileri yönde doğrulandı (REPLY = kayıt),
     # 1: eşleşmedi, 2: eşleşti ama ileri sorgu cevapsız. lfd ile aynı eşleme (lfd.pl ignoreip): noktalı kayıt SONA bağlı
@@ -1996,28 +2018,36 @@ wl_report() {    # CIDR COUNT PREFIX24 "IPS" KIND — günde bir kez maile ekle
 declare -A DENY_IP SINGLE_NOTE count24 ips24 DLINE IN_TNOTE   # DLINE: ana csf.deny'de adres → satır (bir okumada)
 DC_LO=(); DC_HI=(); DC_TXT=(); AGG=(); MANB=()   # MANB: elle konan tam banlar · AGG: CSF Auto-Group'un kendi eklediği bloklar (diğer CIDR'ler değil)
 parse_deny() {   # FILE MAIN(1|0) [DEPTH]
-    local line tok p depth="${3:-0}"
+    # csf.deny awk'ta bir kez okunur ve atama betiğine çevrilir, bash onu tek eval ile çalıştırır: satır başına bash düzenli
+    # ifadeleri 3.000 satırlık listede ~0,8 sn sürüyordu (durum çıktısının her yenilemesinde). Kurallar önceki döngüyle aynı:
+    # ilk sütun IP ya da CIDR (CIDR4_RE), ana dosyada ilk görülen satır DLINE'a ve tekil notu SINGLE_NOTE'a, geçersiz aralık
+    # DC_*'a girmez, Include satırı yerinde (sıra korunur) özyinelemeli okunur (en çok 5 düzey). Değerler kaçışlı ("\ $ `).
+    local depth="${3:-0}"
     [ -r "$1" ] || return
-    while IFS= read -r line || [ -n "$line" ]; do
-        line="${line%$'\r'}"
-        if [[ "$line" =~ ^Include[[:space:]]+([^[:space:]]+) ]]; then
-            [ "$depth" -lt 5 ] && parse_deny "${BASH_REMATCH[1]}" 0 $((depth + 1)); continue
-        fi
-        tok="${line%%[[:space:]]*}"
-        [[ "$tok" =~ $CIDR4_RE ]] || continue
-        [ "$2" = 1 ] && [ -z "${DLINE[$tok]+x}" ] && DLINE[$tok]="$line"
-        if [[ "$tok" == */* ]]; then
-            cidr_range "$tok" && { DC_LO+=("$R_LO"); DC_HI+=("$R_HI"); DC_TXT+=("$tok"); }
-            if [ "$2" = 1 ]; then case "$line" in *Auto-grouped*) AGG+=("$tok") ;; *csf_autogroup:*) AGG+=("$tok"); MANB+=("$tok") ;; esac; fi
-        else
-            DENY_IP[$tok]=1
-            if [ "$2" = 1 ] && [ -z "${SINGLE_NOTE[$tok]+x}" ]; then
-                SINGLE_NOTE[$tok]="${line#"$tok"}"; p="${tok%.*}"
-                count24[$p]=$((${count24[$p]:-0} + 1)); ips24[$p]+=" $tok"
-            fi
-        fi
-    done < "$1"
-    [ "$2" = 1 ] && [ "$depth" = 0 ] && ineff_load
+    eval "$(LC_ALL=C awk -v main="$2" -v dep="$depth" '
+        function q(x) { gsub(/[\\"$`]/, "\\\\&", x); return "\"" x "\"" }
+        { l = $0; sub(/\r$/, "", l)
+          if (l ~ /^Include[ \t]+[^ \t]/) {
+              if (dep < 5) { f = l; sub(/^Include[ \t]+/, "", f); sub(/[ \t].*$/, "", f); printf "parse_deny %s 0 %d\n", q(f), dep + 1 }
+              next }
+          tok = l; sub(/[ \t].*$/, "", tok)
+          if (tok !~ /^[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?(\/[0-9][0-9]?)?$/) next
+          if (main == 1 && !(tok in DL)) { DL[tok] = 1; printf "DLINE[%s]=%s\n", tok, q(l) }
+          k = index(tok, "/")
+          if (k) {
+              ip = substr(tok, 1, k - 1); bits = substr(tok, k + 1) + 0; split(ip, o, ".")
+              if (bits >= 1 && bits <= 32 && o[1] + 0 <= 255 && o[2] + 0 <= 255 && o[3] + 0 <= 255 && o[4] + 0 <= 255) {
+                  v = ((o[1] * 256 + o[2]) * 256 + o[3]) * 256 + o[4]; size = 2 ^ (32 - bits); lo = v - v % size
+                  printf "DC_LO+=(%.0f);DC_HI+=(%.0f);DC_TXT+=(%s)\n", lo, lo + size - 1, tok }
+              if (main == 1) { if (index(l, "Auto-grouped")) printf "AGG+=(%s)\n", tok; else if (index(l, "csf_autogroup:")) printf "AGG+=(%s);MANB+=(%s)\n", tok, tok }
+          } else {
+              printf "DENY_IP[%s]=1\n", tok
+              if (main == 1 && !(tok in SN)) {
+                  SN[tok] = 1; printf "SINGLE_NOTE[%s]=%s\n", tok, q(substr(l, length(tok) + 1))
+                  p = tok; sub(/\.[0-9]+$/, "", p); C[p]++; IPS[p] = IPS[p] " " tok; if (!(p in PO)) { PO[p] = ++np; PL[np] = p } }
+          } }
+        END { for (i = 1; i <= np; i++) { p = PL[i]; printf "count24[%s]=$(( ${count24[%s]:-0} + %d ));ips24[%s]+=%s\n", p, p, C[p], p, q(IPS[p]) } }' "$1")"
+    [ "$2" = 1 ] && [ "$depth" = 0 ] && { prof deny_read; ineff_load; }
 }
 wl_full_idx() {  # İZİN_İNDİSİ → REPLY = 1 bütün portlara izin (csf.allow ve Include'ları, GLOBAL_ALLOW, geçici izin, dyndns),
     # 2 sunucunun kendi IP'si, 0 değil (tek portluk gelişmiş satır, csf.ignore, rignore…). allow_atk_load ve ineff_load aynı ölçüt.
@@ -2027,6 +2057,17 @@ wl_full_idx() {  # İZİN_İNDİSİ → REPLY = 1 bütün portlara izin (csf.all
     [[ "${WL_TXT[$1]}" =~ $pre ]] && [ "${BASH_REMATCH[3]}" != "1:65535" ] && [ "${BASH_REMATCH[3]}" != "*" ] && REPLY=0
     return 0
 }
+wl_ff_lines() {  # → stdout "W lo hi indis ff" (her beyaz liste kaydı; ff wl_full_idx ile aynı ölçüt), tek awk geçişi: izinli servislerle
+    # binlerce kayıt olur, kayıt başına bash'te wl_full_idx çağırmak durum çıktısını saniyelerce uzatıyordu (ölçüldü 4.300 kayıt)
+    [ "${#WL_LO[@]}" -gt 0 ] || return 0
+    paste <(printf '%s\n' "${WL_LO[@]}") <(printf '%s\n' "${WL_HI[@]}") <(printf '%s\n' "${WL_TXT[@]//$'\t'/ }") |
+        LC_ALL=C awk -F'\t' -v self="$M_WL_SELF: " '{
+            t = $3; ff = 0
+            if (t ~ /^(csf\.allow|GLOBAL_ALLOW|csf\.tempallow|DYNDNS|GLOBAL_DYNDNS)/) ff = 1
+            else if (index(t, self) == 1) ff = 2
+            if (match(t, /\((tcp|udp) (in|out) [^)]*\)/)) { p = substr(t, RSTART + 1, RLENGTH - 2); sub(/^[a-z]+ [a-z]+ /, "", p); if (p != "1:65535" && p != "*") ff = 0 }
+            print "W", $1, $2, NR - 1, ff }'
+}
 ineff_load() {   # → INEFF[IP] = izin kaydı ("csf.allow: IP (yorum)"), INEFF_S = " IP IP … ": banı İŞLEMEYEN tekil ve geçici IP banları.
     # CSF izinleri banlardan önce uygular (LOCALINPUT: ALLOWIN → DENYIN); csf -td izin denetlemez (ölçüldü 16.33), lfd izinli IP'ye
     # de geçici ban yazar. Bütün portlara izin verilen IP'nin banı hiçbir sayıma girmez: blok eşiği, şüpheli ağ, Kontrol edilecekler,
@@ -2035,7 +2076,7 @@ ineff_load() {   # → INEFF[IP] = izin kaydı ("csf.allow: IP (yorum)"), INEFF_
     # "İçinde şu an") gerçek satırları göstermeyi sürdürür.
     declare -gA INEFF=(); INEFF_S=" "
     local i ip p x out was="$WL_LOADED" rst=0
-    [ "$WL_LOADED" = 1 ] || load_whitelist
+    [ "$WL_LOADED" = 1 ] || load_whitelist; prof wl_load
     # liste burada yüklendiyse iş bitince bırakılır: tur sonra izinleri değiştirebilir (izinli servisler, sağlayıcı istisnası),
     # sonraki kararlar (blok banı beyaz liste denetimi) güncel listeyi yeniden okusun
     [ "$was" = 1 ] || [ "${INEFF_RESET:-0}" != 1 ] || rst=1    # yalnız tur (izinleri sonradan değiştirebilir); panel bırakmaz
@@ -2046,15 +2087,24 @@ ineff_load() {   # → INEFF[IP] = izin kaydı ("csf.allow: IP (yorum)"), INEFF_
             for x in ${ips24[$p]}; do [ "$x" = "$ip" ] || out+=" $x"; done; ips24[$p]="$out"
         fi
     done < <({
-        for i in "${!WL_LO[@]}"; do wl_full_idx "$i"; [ "$REPLY" -ge 1 ] && printf 'W %s %s %s\n' "${WL_LO[i]}" "${WL_HI[i]}" "$i"; done
+        wl_ff_lines | awk '$5 >= 1 { print $1, $2, $3, $4 }'
         echo "#--"
         for ip in "${!SINGLE_NOTE[@]}"; do echo "$ip"; done
         [ -r "$CSF_VAR/csf.tempban" ] && awk -F'|' '$2 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ { print $2 }' "$CSF_VAR/csf.tempban"
     } | awk '
+        # izin aralıkları /16 kovalarına (256 kovadan geniş olanlar ayrı listede): her IP yalnız kendi kovasıyla karşılaştırılır.
+        # Önce her IP bütün aralıklarla karşılaştırılıyordu (3.000 tekil × 4.300 izinli servis aralığı ≈ 5 sn). En küçük indisli
+        # eşleşme seçilir: etiket, kayıtları sırayla tarayan sürümle aynı.
         function v4(x,  p) { split(x, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
         !S && $0 == "#--" { S = 1; next }
-        !S { n++; L[n] = $2 + 0; H[n] = $3 + 0; I[n] = $4; next }
-        !($0 in D) { D[$0] = 1; v = v4($0); for (i = 1; i <= n; i++) if (v >= L[i] && v <= H[i]) { print $0 "|" I[i]; break } }')
+        !S { lo = $2 + 0; hi = $3 + 0; a = int(lo / 65536); b = int(hi / 65536)
+             if (b - a > 256) { nw++; XL[nw] = lo; XH[nw] = hi; XI[nw] = $4 + 0 }
+             else for (k = a; k <= b; k++) { c = ++BN[k]; BL[k, c] = lo; BH[k, c] = hi; BI[k, c] = $4 + 0 }
+             next }
+        !($0 in D) { D[$0] = 1; v = v4($0); k = int(v / 65536); hit = -1
+             for (i = 1; i <= BN[k]; i++) if (v >= BL[k, i] && v <= BH[k, i] && (hit < 0 || BI[k, i] < hit)) hit = BI[k, i]
+             for (i = 1; i <= nw; i++) if (v >= XL[i] && v <= XH[i] && (hit < 0 || XI[i] < hit)) hit = XI[i]
+             if (hit >= 0) print $0 "|" hit }')
     if [ "$rst" = 1 ]; then
         WL_LOADED=0; WL_LO=(); WL_HI=(); WL_TXT=(); WL_CM=(); RIGNORE=(); CC_LIST=""
     fi
@@ -2091,31 +2141,42 @@ svc_names() {    # "web,ssh" → REPLY = "Web, SSH" (panelin servis adlarıyla; 
     for k in ${1//,/ }; do v="M_SVCN_$k"; out+="${out:+, }${!v:-$k}"; done
     REPLY="$out"
 }
+IGN_LD=""        # yoksayma dosyası bellekte: süreç başına bir kez okunur, Yoksay / Yoksaymayı kaldır yazınca sıfırlanır
+ign_load() {     # → IGN_C / IGN_U / IGN_B / IGN_S (satırlar sırayla), IGN_OK[hedef] = süresi dolmamış ilk satırın indisi
+    # ign_until her çağrıda dosyayı baştan okuyordu; durum çıktısı onu her /24 için çağırıyor (binlerce dosya açma)
+    [ -n "$IGN_LD" ] && return 0
+    IGN_LD=1; IGN_C=(); IGN_U=(); IGN_B=(); IGN_S=(); declare -gA IGN_OK=()
+    [ -r "$IGNORE_FILE" ] || return 0
+    local c u b s i=0
+    while IFS=' ' read -r c u b s _; do        # durum çıktısı IFS=, ile çağırır
+        [ -n "$c" ] || continue
+        IGN_C[i]="$c"; IGN_U[i]="$u"; IGN_B[i]="$b"; IGN_S[i]="$s"
+        [[ ! "$u" < "$TODAY" ]] && [ -z "${IGN_OK[$c]+x}" ] && IGN_OK[$c]=$i
+        i=$((i + 1))
+    done < "$IGNORE_FILE"
+}
 ign_covers() {   # IP → 0 = IP'nin kendisi ya da onu içine alan bir aralık yoksayılmış, süresi dolmamış (IGN_HIT = kayıt)
-    local c u n
+    local i c n
     IGN_HIT=""
-    [ -r "$IGNORE_FILE" ] || return 1
+    ign_load
     ip2int "$1"; n=$REPLY
-    while IFS=' ' read -r c u _; do
-        [[ "$u" < "$TODAY" ]] && continue
+    for i in "${!IGN_C[@]}"; do
+        c="${IGN_C[i]}"; [[ "${IGN_U[i]}" < "$TODAY" ]] && continue
         if [[ "$c" == */* ]]; then cidr_range "$c" && (( R_LO <= n && R_HI >= n )) || continue
         else [ "$c" = "$1" ] || continue; fi
         IGN_HIT="$c"; return 0
-    done < "$IGNORE_FILE"
+    done
     return 1
 }
 ign_until() {    # CIDR → 0 = süresi dolmamış bir yoksayma var (IGN_UNTIL; IGN_UNTIL_TXT panel/mail metni için;
     # IGN_BY yoksayan, IGN_T yoksayma zamanı — satırın 4. alanı, eski satırda boş: ign_since doldurur)
-    local c u b s
+    local i
     IGN_UNTIL=""; IGN_UNTIL_TXT=""; IGN_BY=""; IGN_T=""
-    [ -r "$IGNORE_FILE" ] || return 1
-    while IFS=' ' read -r c u b s _; do         # durum çıktısı IFS=, ile çağırır
-        [ "$c" = "$1" ] || continue
-        if [[ ! "$u" < "$TODAY" ]]; then
-            IGN_UNTIL="$u"; ign_txt "$u"; IGN_UNTIL_TXT="$REPLY"; IGN_BY="$b"; [[ "$s" =~ ^[0-9]+$ ]] && IGN_T="$s"; return 0
-        fi
-    done < "$IGNORE_FILE"
-    return 1
+    ign_load
+    [ -n "${IGN_OK[$1]+x}" ] || return 1
+    i="${IGN_OK[$1]}"
+    IGN_UNTIL="${IGN_U[i]}"; ign_txt "$IGN_UNTIL"; IGN_UNTIL_TXT="$REPLY"; IGN_BY="${IGN_B[i]}"; [[ "${IGN_S[i]}" =~ ^[0-9]+$ ]] && IGN_T="${IGN_S[i]}"
+    return 0
 }
 ign_since() {    # CIDR → IGN_T boşsa (1.15.3 öncesi satır) olay kaydındaki son "yoksayıldı" olayının zamanı
     [ -n "$IGN_T" ] && return 0
@@ -2324,8 +2385,9 @@ do_status() {
     # blok başına en yenisi; yoksayılanlar ve o arada banlanmış olanlar düşülür.
     local review=() rtext=() t ty pbe
     local -A seen=() W16D=()
-    owners_load; asn_banned                        # sağlayıcı banının kapattıkları listede tutulmaz
-    prof owners_asnbanned
+    owners_load; prof owners_load
+    asn_banned                                     # sağlayıcı banının kapattıkları listede tutulmaz
+    prof asn_banned
     # tekrar eden şüpheli ağ: kontrol süresi içinde kaç ayrı günde işaretlendi (sayaçtaki günlük kayıtlar)
     if [ -r "$SAYAC_FILE" ]; then
         while read -r k u; do [ -n "$k" ] && W16D[$k]="$u"; done < <(awk -v s="$(date -d "$REVIEW_DAYS days ago" +%Y-%m-%d)" '
@@ -2358,7 +2420,7 @@ do_status() {
             fi
             review+=("$line")
             rtext+=("$(printf '%-18s %s · %s' "$c" "$ty" "$(date -d "@$t" '+%d.%m %H:%M')")")
-        done < <(tac "$EVENTS_FILE")
+        done < <(tac "$EVENTS_FILE" | LC_ALL=C grep -E '"type":"(warn16|warn16t|skip_wl)"')   # yalnız bu türler: her satırı bash'te gezmek pahalı
     fi
     prof review_events
     # Olay kaydı başlamadan önceki uyarılar ve atlamalar sayaçta tarihiyle duruyor (IP ayrıntısı yok)
@@ -2433,6 +2495,7 @@ do_status() {
     # saldırıyorsa: karar o kayıt hakkında), /24 (izinli + izinsiz tekil, blok eşiği: "Atlandı" satırı), /16 (şüpheli ağ ölçütü),
     # kalanlar tek IP. /24 ve /16 satırları normal uyarılarla aynı tür (aynı öneri ve düğmeler), içinde "aa" = izinli saldırgan sayısı.
     allow_atk_load $(( now - REVIEW_DAYS * 86400 ))
+    prof rv_aa_load
     cls_map < <(for aai in "${!AA_IP[@]}"; do printf 'aa%s|%s\n' "$aai" "${AA_R[aai]}"; done)
     local -A AAG=() AAU=() RS24=() RS16=() RSI=()
     local aai aaw aac aaj aap aaq aal aalc="" aat aan aak aax
@@ -2515,15 +2578,17 @@ do_status() {
     # Öteki satırlar gibi Kontrol edilecekler penceresine bağlı: yalnız kısmi bandan sonra VE son REVIEW_DAYS içinde konan
     # tekiller sayılır; o sürede yeni ihlal gelmezse satır düşer (önce bandan sonraki bütün tekiller sayılıyordu, csf.deny'de
     # duran eski tekiller yüzünden satır hiç düşmeyebiliyordu). Aktif banlar'daki "bandan sonra" bilgisi bütün geçmişi tutar.
-    local rvwin=$(( now - REVIEW_DAYS * 86400 )) pao pws pjs
+    prof rv_aa_rows
+    local rvwin=$(( now - REVIEW_DAYS * 86400 )) pao pws pjs pso=""
+    # bütün tekiller (kalıcı + geçici) bir kez: her kısmi ban için binlerce satırı bash'te yeniden üretmek pahalıydı
+    [ "${#PSINCE[@]}" -gt 0 ] && pso=$(for x in "${!SINGLE_NOTE[@]}"; do printf '%s|%s\n' "$x" "${SINGLE_NOTE[$x]}"; done
+        [ -r "$CSF_VAR/csf.tempban" ] && awk -F'|' '$2 !~ /\// { print $2 "|" $6 "|e:" $1 }' "$CSF_VAR/csf.tempban")
     for aac in "${!PSINCE[@]}"; do
         [ -n "${seen[$aac]}" ] && continue
         pao=0; [ -n "${PB_D[$aac]}" ] && pao=$(LC_ALL=C date -d "${PB_D[$aac]}" +%s 2>/dev/null || echo 0)
         pws=$(( pao > rvwin ? pao : rvwin ))
         cidr_range "$aac" || continue
-        attack_json "$R_LO" "$R_HI" "$pws" "${PB_S[$aac]}" < <(
-            for x in "${!SINGLE_NOTE[@]}"; do printf '%s|%s\n' "$x" "${SINGLE_NOTE[$x]}"; done
-            [ -r "$CSF_VAR/csf.tempban" ] && awk -F'|' '$2 !~ /\// { print $2 "|" $6 "|e:" $1 }' "$CSF_VAR/csf.tempban")
+        attack_json "$R_LO" "$R_HI" "$pws" "${PB_S[$aac]}" <<< "$pso"
         pjs="$REPLY"
         aan=$(grep -oE ':[0-9]+' <<< "$pjs" | tr -d ':' | awk '{ s += $1 } END { print s + 0 }')
         aat=$THRESHOLD_16; [ "${aac#*/}" -ge 24 ] && aat=$THRESHOLD_24
@@ -3729,9 +3794,14 @@ cloud_probe() {  # seçili olmayan hazır listeleri indir (CSF'e yazılmaz): pan
     return 0
 }
 cloud_pot() {    # → REPLY = JSON nesnesi {"gcp":12,…}: olay kaydındaki ve şu an banlı saldırgan IP'lerden kaç tanesi o listede
-    local IFS=$' \t\n' qf x f c out=""
+    # Girdileri (olay kaydı, csf.deny, geçici liste, liste dosyaları) değişmedikçe önbellekten: olay kaydının tamamı ve her liste
+    # için ayrı sıralama her panel yenilemesinde yapılıyordu; olay kaydı yalnız turda / işlemde değişir
+    local IFS=$' \t\n' qf x f c out="" ck sig
     REPLY="{}"
     [ -d "$CLOUD_DIR" ] || return 0
+    ck="$(dirname "$SAYAC_FILE")/cloudpot.cache"
+    sig=$(stat -c '%n %s %Y' "$EVENTS_FILE" "$DENY_FILE" "$CSF_VAR/csf.tempban" "$CLOUD_DIR"/*.txt "$CLOUD_DIR"/probe/*.txt 2>/dev/null | cksum)
+    if [ -r "$ck" ] && [ "$(head -n 1 "$ck")" = "$sig" ]; then REPLY=$(sed -n 2p "$ck"); [ -n "$REPLY" ] || REPLY="{}"; return 0; fi
     qf=$(mktemp) || return 0
     { grep -ohE '"ip":"[0-9.]+"' "$EVENTS_FILE" 2>/dev/null | cut -d'"' -f4
       grep -oE '^[0-9]{1,3}(\.[0-9]{1,3}){3}([[:space:]]|$)' "$DENY_FILE" 2>/dev/null | tr -d ' \t'
@@ -3750,6 +3820,7 @@ cloud_pot() {    # → REPLY = JSON nesnesi {"gcp":12,…}: olay kaydındaki ve 
         done
     fi
     rm -f "$qf"; REPLY="{$out}"
+    { echo "$sig"; echo "$REPLY"; } > "$ck.tmp.$$" 2>/dev/null && mv -f "$ck.tmp.$$" "$ck" || rm -f "$ck.tmp.$$"
 }
 declare -A PCP=()
 prov_cloudpct() { # ASNNN … → PCP[ASNNN] = "yüzde kaynak": CSF'in o sağlayıcı için yüklediği adreslerin yüzde kaçı etkin kiralık sunucu listelerinde
@@ -4000,16 +4071,31 @@ prov_json() {    # → REPLY = durum JSON'u: izinli servisler (kaynak başına s
             jstr "$n"; s+="${s:+,}{\"n\":$REPLY,\"c\":$(num "$c"),\"t\":$(num "$t"),\"f\":$(num "$f")"; jstr "$e"; s+=",\"e\":$REPLY}"
         done < "$cache/status"
     fi
+    prof prov_svc
     local -A SN=(); local pl=() al
     al=$(list_plus "$ASN_LIST" "$ASN_ALL" | tr ',' ' ')
     for a in $al; do asn_setn "$a"; SN[$a]="$REPLY"; [ "$CLOUD_ON" = 1 ] && [ "$REPLY" -gt 0 ] 2>/dev/null && pl+=("$a"); done
-    prov_cloudpct "${pl[@]}"                 # bütün sağlayıcılar tek geçişte
+    prof prov_sets
+    # kiralık liste yüzdesi (bütün listeler + her sağlayıcı kümesinin dökümü, sıralama): yalnız etkin listeler, sağlayıcılar, küme
+    # boyutları ya da liste dosyaları değişince yeniden hesaplanır; panel her 60 sn'de bir soruyor
+    local pck psig q x
+    pck="$(dirname "$SAYAC_FILE")/cloudpct.cache"
+    psig=$( { echo "$CLOUD_ACTIVE|${pl[*]}"; for a in "${pl[@]}"; do echo "$a ${SN[$a]}"; done
+              stat -c '%n %s %Y' "$CLOUD_DIR"/*.txt 2>/dev/null; } | cksum)
+    if [ -r "$pck" ] && [ "$(head -n 1 "$pck")" = "$psig" ]; then
+        PCP=(); while read -r q x; do [ -n "$q" ] && PCP[$q]="$x"; done < <(tail -n +2 "$pck")
+    else
+        prov_cloudpct "${pl[@]}"             # bütün sağlayıcılar tek geçişte
+        { echo "$psig"; for q in "${!PCP[@]}"; do echo "$q ${PCP[$q]}"; done; } > "$pck.tmp.$$" 2>/dev/null && mv -f "$pck.tmp.$$" "$pck" || rm -f "$pck.tmp.$$"
+    fi
+    prof prov_cloudpct
     for a in $al; do
         c="${SN[$a]}"
         local clp="" cls=""
         [ -n "${PCP[$a]}" ] && read -r clp cls <<< "${PCP[$a]}"
         asn_name "$a"; jstr "$REPLY"; sets+="${sets:+,}{\"a\":\"$a\",\"n\":$c,\"d\":$REPLY,\"cl\":$(num "$clp"),\"cls\":\"$cls\"}"     # n -1: ipset yok, bilinmiyor
     done
+    prof prov_names
     [ -e "$geo" ] && gt=$(stat -c %Y "$geo" 2>/dev/null || echo 0)
     local catj="" ck
     for ck in $SVC_CATALOG; do svc_urls "$ck"; jstr "$REPLY"; catj+="${catj:+,}\"$ck\":$REPLY"; done   # kaynak → "ad|adres ad|adres"
@@ -4025,7 +4111,9 @@ prov_json() {    # → REPLY = durum JSON'u: izinli servisler (kaynak başına s
     for cx in $CLOUD_CATALOG; do cloud_urls "$cx"; ccat+="${ccat:+,}\"$cx\":\"$REPLY\""; done
     command -v ipset >/dev/null 2>&1 && cn=$(ipset list -t ag_cloud 2>/dev/null | awk -F': ' '/^Number of entries/ { print $2 }')
     [[ "$cn" =~ ^-?[0-9]+$ ]] || cn=0
+    prof prov_cloudlist
     local cpot; cloud_pot; cpot="$REPLY"
+    prof prov_cloudpot
     jstr "$CLOUD_EXTRA"; o+=",\"cloud\":{\"extra\":$REPLY,\"pot\":$cpot,\"on\":$([ "$CLOUD_BAN" = 1 ] && echo true || echo false),\"sources\":\"$CLOUD_SOURCES\",\"tcp\":\"$CLOUD_TCP\",\"udp\":\"$CLOUD_UDP\",\"urls\":\"$CLOUD_URLS\",\"src\":[$cs],\"cat\":{$ccat},\"n\":$cn}"
     jstr "${ASN_MSG:-}"                     # yukarıdaki döngüler REPLY'yi ezdi: sağlayıcı banı iletisi burada hazırlanır
     o+=",\"asn\":{\"on\":$([ "$ASN_BAN" = 1 ] && echo true || echo false),\"list\":\"$ASN_LIST\",\"all\":\"$ASN_ALL\",\"mode\":\"$ASN_MODE\",\"tcp\":\"$ASN_TCP\",\"udp\":\"$ASN_UDP\",\"state\":\"${ASN_STATE:-}\",\"msg\":$REPLY,\"sets\":[$sets],\"geo_t\":$(num "$gt"),\"ipset\":$([ "$(conf_val LF_IPSET)" = 0 ] && echo false || echo true)}}"
@@ -4397,7 +4485,7 @@ do_action() {    # NAME TARGET [DAYS]
             [ -r "$IGNORE_FILE" ] && keep=$(awk -v c="$t" '$1 != c' "$IGNORE_FILE")
             if [ "$name" = unignore ]; then
                 ign_until "$t" || { act_out 1 "$(m "$M_A_NOTIGN" "$t")"; return; }
-                printf '%s\n' "$keep" | sed '/^$/d' > "$IGNORE_FILE"
+                printf '%s\n' "$keep" | sed '/^$/d' > "$IGNORE_FILE"; IGN_LD=""
                 log "$(m "$M_A_LOG" "$AG_BY" "$(m "$M_A_UNIGNORED" "$t")")"
                 ev manual_unignore "$t" "by=\"$AG_BY\""
                 act_out 0 "$(m "$M_A_UNIGNORED" "$t")"; return
@@ -4407,7 +4495,7 @@ do_action() {    # NAME TARGET [DAYS]
             # satır: "hedef bitiş kim başlangıç(epoch)"; süre değiştirilince ilk yoksayma zamanı korunur
             local isince=""; [ -r "$IGNORE_FILE" ] && isince=$(awk -v c="$t" '$1 == c && $4 ~ /^[0-9]+$/ { print $4; exit }' "$IGNORE_FILE")
             [ -n "$isince" ] || isince=$(date +%s)
-            { printf '%s\n' "$keep" | sed '/^$/d'; echo "$t $until $AG_BY $isince"; } > "$IGNORE_FILE"
+            { printf '%s\n' "$keep" | sed '/^$/d'; echo "$t $until $AG_BY $isince"; } > "$IGNORE_FILE"; IGN_LD=""
             local itxt; if [ "$days" = 0 ]; then itxt=$(m "$M_A_IGNORED_F" "$t"); else itxt=$(m "$M_A_IGNORED" "$t" "$until"); fi
             log "$(m "$M_A_LOG" "$AG_BY" "$itxt")"
             ev manual_ignore "$t" "by=\"$AG_BY\"" "until=\"$until\""
@@ -4551,9 +4639,7 @@ allow_atk_load() {  # SINCE_EPOCH → AA_* (IP başına: k, olay sayısı, son z
     while IFS='|' read -r AAx AAk AAn AAt AAw AAf AAr AAt0; do
         AA_IP+=("$AAx"); AA_K+=("$AAk"); AA_N+=("$AAn"); AA_T+=("$AAt"); AA_W+=("$AAw"); AA_F+=("$AAf"); AA_R+=("$AAr"); AA_T0+=("${AAt0:-$AAt}")
     done < <({
-        for f in "${!WL_LO[@]}"; do
-            wl_full_idx "$f"; printf 'W %s %s %s %s\n' "${WL_LO[f]}" "${WL_HI[f]}" "$f" "$REPLY"
-        done
+        wl_ff_lines
         echo "#--"
         { [ "${#rot[@]}" -gt 0 ] && tail -n +2 "$cache" 2>/dev/null; [ -r "$LFD_LOG" ] && aa_days "$LFD_LOG"; } | awk -F'|' -v d0="$day0" '$3 >= d0'
         aa_ineff_rows "$since"

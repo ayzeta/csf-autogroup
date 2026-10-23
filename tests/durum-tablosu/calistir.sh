@@ -123,7 +123,7 @@ mcheck "açık servis: tur Geçmiş'e bir olay yazar (web kısmi banından sonra
 mkl aaevd; lfdb 3600 151.80.7.9; quiet
 mcheck "izinsiz IP'nin banı işliyor: Geçmiş'e izinli ihlal olayı yazılmaz" "! grep -q '\"type\":\"allow_viol\"' '$R/var/lib/csf_autogroup/events.jsonl'"
 # e-posta sınıfları (IE_*): tur bildirimi kapalıyken blok banı mail yazmaz; liste doluyor uyarısı aynı turda yine gider, ban bölümü girmez
-mkm() { mk "$1"; sed -i 's/^ALERT_MAIL=$/ALERT_MAIL=root@test.invalid/' "$R/app/config.env"; printf '%s\n' "SENDMAIL_BIN=$W/bin/sendmail" "DIGEST=0" "IE_RUN=$2" >> "$R/app/config.env"; }
+mkm() { mk "$1"; sed -i 's/^ALERT_MAIL=$/ALERT_MAIL=root@test.invalid/' "$R/app/config.env"; printf '%s\n' "SENDMAIL_BIN=$W/bin/sendmail" "DIGEST=0" "IE_RUN=$2" "LFD_LOG=$R/lfd.log" >> "$R/app/config.env"; : > "$R/lfd.log"; }   # boş lfd günlüğü: makinenin gerçek lfd.log'u maile karışmasın
 mtext() { awk '/^Content-Type: text\/plain/ { f = 1 } f && /^--/ { exit } f && !/^Content-/ && NF' "$R/mails/01.eml" | base64 -d 2>/dev/null; }   # ilk mailin düz metni
 mkm mailcat1 1; for x in 1 2 3; do single 151.80.7.$x sshd; done; quiet
 mcheck "IE_RUN=1: blok banı yazan tur bir e-posta gönderir, blok içinde" "[ \$(grep -c sendmail '$R/mail_calls.log') = 1 ] && mtext | grep -q '151.80.7.0/24'"

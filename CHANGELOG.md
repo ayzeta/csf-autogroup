@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.15.10 — 2026-10-23
+
+- **Faster status with large allow lists.** With allowed services on, the
+  allow list has thousands of ranges. 1.15.7's check for bans on allowed
+  addresses compared every ban with every range one by one and judged each
+  entry separately, which made every page refresh several seconds slower.
+  Ranges are now grouped by network, the allow list's plain address lines
+  are read in one pass, and the status is faster than before 1.15.7.
+- **Faster status overall.** `csf.deny`, the allow lists and the owner cache
+  are each read in one pass instead of line by line; the ignore list is read
+  once per request instead of once per block checked; the review list looks
+  only at the event kinds it shows; the open-service check builds the list of
+  single bans once instead of once per partial ban; and the rented-server
+  figures in the Providers tab are recalculated only when their inputs
+  change. On a test set of 3,000 single bans, 4,300 allowed-service ranges,
+  3,000 owner entries and a week of events the status went from about 11 s
+  to about 4 s. `AG_PROF=1` now breaks down the slowest parts further.
+
 ## 1.15.9 — 2026-10-23
 
 - **Fix — old numbers after coming back to the tab.** Browsers put a hidden
