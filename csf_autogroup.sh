@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.20"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.21"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -2061,7 +2061,7 @@ wl_report() {    # CIDR COUNT PREFIX24 "IPS" KIND — günde bir kez maile ekle
 # Tekiller yalnızca ana dosyadan gruplanır (csf -dr Include dosyalarına dokunmaz);
 # kapsama kontrolü Include dosyalarındaki CIDR'leri de görür. Aynı IP'nin tekrar
 # eden satırları (LF_REPEATBLOCK) tek IP sayılır.
-declare -A DENY_IP SINGLE_NOTE count24 ips24 DLINE IN_TNOTE   # DLINE: ana csf.deny'de adres → satır (bir okumada)
+declare -A DENY_IP SINGLE_NOTE count24 ips24 DLINE IN_TNOTE IN_TEND   # DLINE: ana csf.deny'de adres → satır (bir okumada); IN_TEND geçici banın bitişi
 DC_LO=(); DC_HI=(); DC_TXT=(); AGG=(); MANB=()   # MANB: elle konan tam banlar · AGG: CSF Auto-Group'un kendi eklediği bloklar (diğer CIDR'ler değil)
 parse_deny() {   # FILE MAIN(1|0) [DEPTH]
     # csf.deny awk'ta bir kez okunur ve atama betiğine çevrilir, bash onu tek eval ile çalıştırır: satır başına bash düzenli
@@ -3051,7 +3051,7 @@ inside_scan() {  # CIDR
     local -A seen=() pf=()
     cidr_range "$1" || return 1
     lo=$R_LO; hi=$R_HI
-    IN_COVER=""; IN_BLK=(); IN_OTH=(); IN_SGL=(); IN_SGLD=(); IN_TMP=(); IN_WATCH=(); IN_EVJ=(); IN_EVN=0; IN_PFX=(); IN_PORT=(); IN_OWNP=(); IN_PSVC=""; IN_PEXTRA=""; IN_TNOTE=()
+    IN_COVER=""; IN_BLK=(); IN_OTH=(); IN_SGL=(); IN_SGLD=(); IN_TMP=(); IN_WATCH=(); IN_EVJ=(); IN_EVN=0; IN_PFX=(); IN_PORT=(); IN_OWNP=(); IN_PSVC=""; IN_PEXTRA=""; IN_TNOTE=(); IN_TEND=()
     local cw=-1    # kapsayanlardan en genişi kazanır (kendi /24 banı + onu kapsayan /16 varken sonuç dosya sırasına bağlıydı)
     for i in "${!DC_LO[@]}"; do
         if (( DC_LO[i] <= lo && DC_HI[i] >= hi )); then
@@ -3075,7 +3075,7 @@ inside_scan() {  # CIDR
             [ -n "$tip" ] && [ -z "${seen[$tip]}" ] || continue
             cidr_range "$tip" 2>/dev/null || continue
             (( R_LO >= lo && R_HI <= hi )) || continue
-            seen[$tip]=1; IN_TMP+=("$tip"); IN_TNOTE[$tip]="$note"
+            seen[$tip]=1; IN_TMP+=("$tip"); IN_TNOTE[$tip]="$note"; IN_TEND[$tip]=$(( $(num "$t") + $(num "$to") ))
             x="${tip%/*}"; pf[${x%.*}]=1
             if [[ "$tip" != */* ]] && [ -z "${SINGLE_NOTE[$tip]+x}" ]; then short_reason "$note" "$tip"; inside_ev "$tip" "$REPLY"; fi
         done < "$CSF_VAR/csf.tempban"
@@ -3262,6 +3262,16 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
             if [ "$sv" = repeat ]; then perm_cls "$sx"; sv="${REPLY:-repeat}"; fi
             short_reason "${SINGLE_NOTE[$sx]}" "$sx"; jstr "$REPLY"; sk="$REPLY"
             sj+="${sj:+,}{\"ip\":\"$sx\",\"why\":$sk,\"svc\":\"$sv\",\"dnd\":$(is_dnd "${SINGLE_NOTE[$sx]}" && echo true || echo false)}"
+        done
+        # geçici tek IP banları da listede (kalan süreyle): kart "1 geçici ban" diyor, Kontrol edilecekler satırı da o IP'yi
+        # gösteriyordu, kartın listesinde yoktu
+        local snow; snow=$(date +%s)
+        for sx in "${IN_TMP[@]}"; do
+            [[ "$sx" == */* ]] && continue; [ -n "${SINGLE_NOTE[$sx]+x}" ] && continue
+            sn=$((sn + 1)); [ "$sn" -le 40 ] || break
+            sv=$(awk -v r="${IN_TNOTE[$sx]}" "$AWK_CLS"' BEGIN { print cls(r) }')
+            short_reason "${IN_TNOTE[$sx]}" "$sx"; jstr "$REPLY"; sk="$REPLY"
+            sj+="${sj:+,}{\"ip\":\"$sx\",\"why\":$sk,\"svc\":\"$sv\",\"dnd\":false,\"temp\":$(( ${IN_TEND[$sx]:-0} > snow ? ${IN_TEND[$sx]:-0} - snow : 0 ))}"
         done
         o+=",\"sgl\":[$sj]"
         local ownf=false opn="" rcn=0

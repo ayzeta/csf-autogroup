@@ -393,6 +393,8 @@ mcheck "aralığa tıklamak aralık kartını açar" "grep -qF 'if (RANGE_RE.tes
 # aralık kartı /16–/24 dışındaki önekleri de tarar (CSF'teki /26 ya da /12 banına tıklanınca kart o aralığı anlatır)
 mk insany; single 151.80.7.9 sshd; single 151.80.7.100 sshd; printf '%s\n' "151.80.7.0/26 # Manually denied - $DT" >> "$D"
 mcheck "aralık kartı · /26: kendi banı kapsar, içindeki 1 tekil sayılır" "run --inside 151.80.7.0/26 --json 2>/dev/null | grep -q '\"cover\":\"151.80.7.0/26\".*\"singles\":1,'"
+mk insatmp; single 151.80.7.9 sshd; printf '%s|151.80.7.20||inout|3600|lfd: (pop3d) Failed POP3 login from 151.80.7.20 (FR/France/-): 5 in the last 3600 secs\n' "$NOW" >> "$T"
+mcheck "aralık kartı · geçici tek IP banı da listede, kalan süreyle (kart '1 geçici ban' diyor)" "run --inside 151.80.7.0/24 --json 2>/dev/null | grep -q '\"sgl\":\[{\"ip\":\"151.80.7.9\"[^]]*{\"ip\":\"151.80.7.20\",\"why\":\"[^\"]*\",\"svc\":\"sync\",\"dnd\":false,\"temp\":[0-9]*}\]'"
 mcheck "aralık kartı · /12 geçerli cevap (içinde tekil yok)" "run --inside 151.0.0.0/12 --json 2>/dev/null | grep -q '\"singles\":0,'"
 mcheck "aralık kartı · hizasız aralık reddedilir" "run --inside 151.80.7.5/26 --json 2>/dev/null | grep -q 'bad_input'"
 

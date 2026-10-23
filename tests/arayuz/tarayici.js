@@ -184,6 +184,12 @@ async function layoutChecks(page, label, width) {
     // kartın Kontrol edilecekler satırı Yoksay (yoksayılmamışsa) ya da Yoksaymayı kaldır sunmalı
     const cardIgn = await page.evaluate(() => !!document.querySelector('.ag-drawer [data-act="ignore"], .ag-drawer [data-act="unignore"]'));
     check(`IP kartında Yoksay / kaldır var: ${r.cidr}`, cardIgn);
+    // kart sayfa gövdesinde (eklentinin alanı dışında): düğme tıklanınca işlem çalışmalı (önce hiçbir şey olmuyordu)
+    if (cardIgn) {
+      await page.click('.ag-drawer [data-act="ignore"], .ag-drawer [data-act="unignore"]'); await page.waitForTimeout(700);
+      check(`IP kartındaki Yoksay / kaldır tıklanınca pencere açılır: ${r.cidr}`, await page.$('.ag-modal') !== null);
+      await page.keyboard.press('Escape'); await page.waitForTimeout(400);   // onaylamadan kapat
+    }
     await page.keyboard.press('Escape');   // üst katmanı (IP kartı) kapatır
     await page.waitForFunction(() => !document.querySelector('.ag-drawer'), null, { timeout: 5000 }).catch(function () {});
     await page.waitForTimeout(300);

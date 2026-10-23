@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.15.21 — 2026-10-24
+
+- **The range card tells the same story as the review list.** Its *Review*
+  section used to say only "Flagged as … The top of this card says what to
+  do." It now shows what the list row shows: how many IPs and on which
+  services, how many blocks, permanent and temp, the narrower range
+  suggestion, the repeat badge and the date it drops off the list. It also
+  offers the row's ban buttons for the narrower block or range, and
+  *Ignore*. Both use the same code, so they always agree.
+- **The range card lists temp bans too.** The list of single bans inside a
+  range left temp bans out, although the card counted them ("1 temp ban"). They
+  are now listed, with the time left. IPs that are on the review row but not
+  banned any more are listed under the review section; an IP shows up in only
+  one of the two lists.
+- **Fix: buttons inside the IP and range cards did nothing.** *Ignore* /
+  *Stop ignoring* on the IP card (and now the range card's buttons) did not
+  react to clicks, because the cards sit outside the area the click handler
+  watched.
+- **IPs in the cards' tables look clickable.** They open the IP card, but they
+  looked like plain text and broke across two lines. They are now link-coloured
+  like the review list's IPs, underline on hover, and stay on one line.
+
 ## 1.15.20 — 2026-10-23
 
 - **Fix: two allow lines count as a pair only when they match the way CSF

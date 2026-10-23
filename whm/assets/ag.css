@@ -1234,3 +1234,6 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
   .ag-prow-nm { grid-column: 1 / -1; }
   .ag-prow-st { white-space: normal; }
 }
+/* kart tablolarındaki IP'ler tıklanınca IP kartını açar: Kontrol edilecekler listesindeki IP'lerle aynı görünüm, bölünmeden */
+.ag-im-t td[data-ip] { color: var(--ag-accent); cursor: pointer; white-space: nowrap; }
+.ag-im-t td[data-ip]:hover { text-decoration: underline; }
