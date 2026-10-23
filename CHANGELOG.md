@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.15.18 — 2026-10-23
+
+- **Faster suspicious-network check in a run.** The number of different /24s
+  in a /16 is now counted only for networks that reach the /16 threshold, and
+  without starting extra programs. Before, it was counted for every /16 with
+  a single in it (four programs each), which took most of a second per run
+  when many networks had singles. The result is the same.
+
 ## 1.15.17 — 2026-10-23
 
 - `AG_PROF` also times a run's suspicious-network section step by step, with

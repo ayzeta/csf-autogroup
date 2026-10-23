@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.17"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.18"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -6116,9 +6116,15 @@ pa "t16 · /16 sayımı"
 warn16=0; warn_body=""; temp_warn16=0
 asn_banned
 pa "t16 · asn_banned"
+declare -A SN16=()
 for prefix in $(printf '%s\n' "${!count16[@]}" | sort -V); do
     pc "t16 /16 öneki"
-    subnet_count=$(echo "${seen_subnets[$prefix]}" | tr ' ' '\n' | sort -u | grep -c '\.')
+    # farklı /24 sayısı yalnız eşiği aşan ağda ve alt süreçsiz (önce her önek için echo | tr | sort | grep: sunucuda 109 önekte
+    # ~0,9 sn ölçüldü, yalnız biri eşiği aşıyordu)
+    subnet_count=0
+    if [ "${count16[$prefix]}" -ge "$THRESHOLD_16" ]; then
+        SN16=(); for sx in ${seen_subnets[$prefix]}; do SN16[$sx]=1; done; subnet_count=${#SN16[@]}
+    fi
     pa "t16 · alt ağ sayımı (önek başına)"
     if [ "${count16[$prefix]}" -ge "$THRESHOLD_16" ] && [ "$subnet_count" -ge 2 ]; then
         pc "t16 eşiği aşan /16"
@@ -6136,7 +6142,7 @@ for prefix in $(printf '%s\n' "${!count16[@]}" | sort -V); do
                 count16[$prefix]=$((count16[$prefix] + 1))
                 if [ -n "${SINGLE_NOTE[$ip]+x}" ]; then np=$((np + 1)); else nt=$((nt + 1)); fi
             done
-            subnet_count=$(for ip in $REPLY; do echo "${ip%.*}"; done | sort -u | grep -c '\.')
+            SN16=(); for ip in $REPLY; do SN16[${ip%.*}]=1; done; subnet_count=${#SN16[@]}   # alt süreçsiz
             if [ "${count16[$prefix]}" -lt "$THRESHOLD_16" ] || [ "$subnet_count" -lt 2 ]; then
                 logr "$(m "$M_PSKIP16" "$prefix" "${count16[$prefix]}")"; continue
             fi
