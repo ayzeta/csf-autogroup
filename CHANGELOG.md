@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.15.17 — 2026-10-23
+
+- `AG_PROF` also times a run's suspicious-network section step by step, with
+  how many /16 networks it looked at and how many reached the threshold.
+  Without `AG_PROF` nothing changes.
+
 ## 1.15.16 — 2026-10-23
 
 - `AG_PROF` also times the start of a run's block grouping (provider bans,

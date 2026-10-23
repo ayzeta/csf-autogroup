@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.16"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.17"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -6112,11 +6112,16 @@ for ip in "${!SINGLE_NOTE[@]}" "${temp_alive[@]}"; do
     count16[$prefix16]=$((${count16[$prefix16]:-0} + 1)); seen_subnets[$prefix16]+=" $prefix24"; ips16[$prefix16]+=" $ip"
     if [ -n "${SINGLE_NOTE[$ip]+x}" ]; then perm16[$prefix16]=$((${perm16[$prefix16]:-0} + 1)); else tmp16[$prefix16]=$((${tmp16[$prefix16]:-0} + 1)); fi
 done
+pa "t16 · /16 sayımı"
 warn16=0; warn_body=""; temp_warn16=0
 asn_banned
+pa "t16 · asn_banned"
 for prefix in $(printf '%s\n' "${!count16[@]}" | sort -V); do
+    pc "t16 /16 öneki"
     subnet_count=$(echo "${seen_subnets[$prefix]}" | tr ' ' '\n' | sort -u | grep -c '\.')
+    pa "t16 · alt ağ sayımı (önek başına)"
     if [ "${count16[$prefix]}" -ge "$THRESHOLD_16" ] && [ "$subnet_count" -ge 2 ]; then
+        pc "t16 eşiği aşan /16"
         ip2int "$prefix.0.0"; lo=$REPLY
         if perm_covers "$lo" $((lo + 65535)); then logr "$(m "$M_TSKIP16" "$prefix")"; continue; fi
         if ign_until "$prefix.0.0/16"; then logr "$(m "$M_IGN16" "$prefix" "$IGN_UNTIL_TXT")"; continue; fi
@@ -6147,6 +6152,7 @@ for prefix in $(printf '%s\n' "${!count16[@]}" | sort -V); do
         fi
         # geniş bir katman (sağlayıcı / kiralık liste / ülke) saldırılan servisleri kapatıyorsa uyarı yok — kısmi ban varsa yalnız
         # bandan sonraki IP'lerle (uyarıya yazılan ve Kontrol edilecekler'in yeniden karar verdiği küme)
+        pa "t16 · eşik sonrası denetimler"
         if cover_any; then
             pcl=""; for ip in ${ips16[$prefix]}; do pcl+="$ip|${SINGLE_NOTE[$ip]:-${TNOTE[$ip]}}|"$'\n'; done
             prov_cover <<< "$pcl" && { logr "$(m "$M_PROV16" "$prefix" "$PC_ASN")"; continue; }
