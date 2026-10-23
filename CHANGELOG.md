@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.15.20 — 2026-10-23
+
+- **Fix: two allow lines count as a pair only when they match the way CSF
+  does.** A line that opens a port for incoming traffic (`tcp|in|d=22|s=IP`)
+  needs an outgoing line with the same port as the *source* port
+  (`tcp|out|s=22|d=IP`) to work while the address is banned. An outgoing line
+  with the same port as the destination (`tcp|out|d=22|d=IP`) is not a pair,
+  and with it the connection is still cut. The IP card used to say "opens only
+  that port" for such a line too. Allow entries now show the port field as
+  CSF writes it (`tcp in d=22`).
+- **Columns line up.** The two columns under the summary cards now share the
+  cards' columns: on *Providers* the left column takes two of the three cards'
+  width and the right column one, and on the *Overview* the last summary card
+  is as wide as the right column.
+- **Fix: badges in the review list's status column were cut off.** The column
+  is wider, and a badge that still does not fit (some English labels) wraps to
+  a second line instead of being clipped.
+- **Narrow layout fixes.** In a provider row on the *Providers* tab, the AS
+  number no longer runs over the text next to it in a narrow card: the name
+  moves to its own line. A card title's count stays next to the title. On a
+  phone, the time in a *History* row comes right after the text instead of
+  ending up alone on its own line.
+- **Update banner:** when the version number has not changed (a change to
+  tests or docs only), the banner shows the commit next to it
+  (`v1.15.19 (318cba4) → v1.15.19 (13f33f2)`) instead of the same number twice.
+
 ## 1.15.19 — 2026-10-23
 
 - **Fix: one-direction allow lines no longer count as "Ban not working".**

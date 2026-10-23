@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.19"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.20"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -935,7 +935,7 @@ adv_parse() {
     local s="${1%%#*}" k v f=()
     s="${s//[[:space:]]/}"
     [[ "$s" == *"|"* ]] || return 1
-    ADV_PROTO=""; ADV_DIR=""; ADV_PORTS=""; ADV_CIDR=""
+    ADV_PROTO=""; ADV_DIR=""; ADV_PORTS=""; ADV_CIDR=""; ADV_PT=""
     IFS='|' read -ra f <<< "$s"
     ADV_PROTO="${f[0]}"; ADV_DIR="${f[1]}"
     # CSF'in okuma sırası (csf.pl linefilter, 16.33): yön alanından sonraki ilk s= / d= alanı PORT, sonraki s= / d= alanı adres.
@@ -944,7 +944,7 @@ adv_parse() {
     for k in "${f[@]:2}"; do
         [[ "$k" == [sd]=* ]] || continue
         v="${k#*=}"
-        if [ "$pf" = 0 ]; then [[ "$v" =~ $CIDR4_RE ]] && return 1; ADV_PORTS="$v"; pf=1
+        if [ "$pf" = 0 ]; then [[ "$v" =~ $CIDR4_RE ]] && return 1; ADV_PORTS="$v"; ADV_PT="${k:0:1}"; pf=1
         elif [[ "$v" =~ $CIDR4_RE ]]; then ADV_CIDR="$v"; break; fi
     done
     [[ "$ADV_PROTO" =~ ^[a-z]+$ ]] || ADV_PROTO="?"
@@ -1813,9 +1813,9 @@ wl_load() {      # FILE LABEL [DEPTH] — IP, CIDR, gelişmiş satır (tcp|in|d=
               nf = split(tok, f, "|"); pr = f[1]; dr = f[2]; ports = ""; cid = ""; pf = 0; bad = 0
               for (i = 3; i <= nf; i++) { kv = f[i]; if (kv !~ /^[sd]=/) continue; v = substr(kv, 3)
                   isip = (v ~ /^[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?(\/[0-9][0-9]?)?$/)
-                  if (!pf) { if (isip) { bad = 1; break }; ports = v; pf = 1 }
+                  if (!pf) { if (isip) { bad = 1; break }; ports = v; pt = substr(kv, 1, 1); pf = 1 }
                   else if (isip) { cid = v; break } }
-              if (bad) next
+              if (bad || !pf) next
               if (pr !~ /^[a-z]+$/) pr = "?"; if (dr !~ /^[a-z]+$/) dr = "?"; if (ports !~ /^[0-9,:_-]*$/) ports = ""
               if (cid == "") next
               ip = cid; bits = 32; k = index(cid, "/"); if (k) { bits = substr(cid, k + 1) + 0; ip = substr(cid, 1, k - 1) }
@@ -1823,7 +1823,7 @@ wl_load() {      # FILE LABEL [DEPTH] — IP, CIDR, gelişmiş satır (tcp|in|d=
               if (bits < 1 || bits > 32) next
               split(ip, o, "."); if (o[1] + 0 > 255 || o[2] + 0 > 255 || o[3] + 0 > 255 || o[4] + 0 > 255) next
               v = ((o[1] * 256 + o[2]) * 256 + o[3]) * 256 + o[4]; size = 2 ^ (32 - bits); lo = v - v % size
-              printf "WL_LO+=(%.0f);WL_HI+=(%.0f);WL_TXT+=(%s);WL_CM+=(%s)\n", lo, lo + size - 1, q(lab " (" pr " " dr " " (ports != "" ? ports : "*") "): " cid), q(cm)
+              printf "WL_LO+=(%.0f);WL_HI+=(%.0f);WL_TXT+=(%s);WL_CM+=(%s)\n", lo, lo + size - 1, q(lab " (" pr " " dr " " pt "=" ports "): " cid), q(cm)
               next }
           printf "wl_line %s %d %s\n", q(lab), dep, q($0) }' "$file")"
     pa "wl_awk ${file##*/}"; [ -n "${AG_PROF:-}" ] && pc "wl_satır ${file##*/}" "$(wc -l < "$file")"
@@ -1860,7 +1860,7 @@ wl_line() {      # ETİKET DERİNLİK SATIR → wl_load'ın awk'ta doğrudan ç�
         adv_parse "$tok" || return
         pa "wl_line · adv_parse"
         adv_wide "$ADV_CIDR" && return
-        wl_add "$ADV_CIDR" "$label ($ADV_PROTO $ADV_DIR ${ADV_PORTS:-*}): $ADV_CIDR" "$cm"
+        wl_add "$ADV_CIDR" "$label ($ADV_PROTO $ADV_DIR $ADV_PT=$ADV_PORTS): $ADV_CIDR" "$cm"
         pa "wl_line · adv_wide+wl_add"
         return
     fi
@@ -2109,14 +2109,14 @@ wl_full_idx() {  # İZİN_İNDİSİ → REPLY = 1 bütün portlara izin (csf.all
     # sonra gelir. Tek yönlü satırın açtığı bağlantının cevabı öbür yönde banla düşer: yalnız "tcp|in|d=1:65535|s=IP" yalnız gelen
     # yönü kesen banı (LF_BLOCKINONLY=1 kalıcı ban, "in" geçici ban) aşar (3); karşı yön satırıyla (tcp out 1:65535) her banı (1).
     # Dışarı satırı tek başına, portsuz satır (CSF kural kurmaz) ve tek portluk satır tam izin değildir.
-    local pre='\((tcp|udp) (in|out) ([^)]*)\): ([0-9./]+)' c i
+    local pre='\((tcp|udp) (in|out) [sd]=([^)]*)\): ([0-9./]+)' c i
     REPLY=0
     case "${WL_TXT[$1]}" in csf.allow*|GLOBAL_ALLOW*|csf.tempallow*|DYNDNS*|GLOBAL_DYNDNS*) REPLY=1 ;; "$M_WL_SELF: "*) REPLY=2 ;; esac
     if [[ "${WL_TXT[$1]}" =~ $pre ]]; then
         REPLY=0
         if [ "${BASH_REMATCH[1]}" = tcp ] && [ "${BASH_REMATCH[2]}" = in ] && [[ "${BASH_REMATCH[3]}" =~ ^[01][:_]65535$ ]]; then
             REPLY=3; c="${BASH_REMATCH[4]}"
-            for i in "${!WL_TXT[@]}"; do [[ "${WL_TXT[i]}" =~ \(tcp\ out\ [01][:_]65535\):\ (.*)$ ]] && [ "${BASH_REMATCH[1]}" = "$c" ] && { REPLY=1; break; }; done
+            for i in "${!WL_TXT[@]}"; do [[ "${WL_TXT[i]}" =~ \(tcp\ out\ [sd]=[01][:_]65535\):\ (.*)$ ]] && [ "${BASH_REMATCH[1]}" = "$c" ] && { REPLY=1; break; }; done
         fi
     fi
     return 0
@@ -2130,7 +2130,7 @@ wl_ff_lines() {  # → stdout "W lo hi indis ff" (her beyaz liste kaydı; ff wl_
             if (t ~ /^(csf\.allow|GLOBAL_ALLOW|csf\.tempallow|DYNDNS|GLOBAL_DYNDNS)/) ff = 1
             else if (index(t, self) == 1) ff = 2
             if (match(t, /\((tcp|udp) (in|out) [^)]*\): /)) { p = substr(t, RSTART + 1, RLENGTH - 4); c = substr(t, RSTART + RLENGTH); ff = 0
-                if (p ~ /^tcp in [01][:_]65535$/) { ff = 3; C[NR] = c } else if (p ~ /^tcp out [01][:_]65535$/) O[c] = 1 }
+                if (p ~ /^tcp in [sd]=[01][:_]65535$/) { ff = 3; C[NR] = c } else if (p ~ /^tcp out [sd]=[01][:_]65535$/) O[c] = 1 }
             L[NR] = $1; H[NR] = $2; F[NR] = ff }
             END { for (i = 1; i <= NR; i++) print "W", L[i], H[i], i - 1, (F[i] == 3 && (C[i] in O) ? 1 : F[i]) }'
 }
@@ -3359,15 +3359,20 @@ do_lookup() {
     wl_best "$n" "$n" && wl="$WL_HIT"   # satır yorumuyla: "csf.allow: IP (ofis)"; tam izin tek portluk satırdan önce
     # gelişmiş izin satırı banla birlikte ne yapar (ölçüldü, CSF 16.33): ban gelen yönü, iki yönlüyse giden yönü de keser ve
     # kurulmuş bağlantıların kabulü ondan sonra gelir; tek yönlü satırın açtığı bağlantının cevabı öbür yönde düşer.
-    # wle: pair = karşı yön satırı da var (aynı protokol, aralık ve port), satır o portu açar; in_ok = gelen yön satırı, ban
+    # wle: pair = karşı yön satırı da var (aynı protokol, aralık ve port; port alanı karşı türde: gelen d=P ↔ giden s=P, gelen
+    # s=P ↔ giden d=P; bütün portlarda tür fark etmez), satır o portu açar; in_ok = gelen yön satırı, ban
     # giden yönü kesmiyor (ya da ban yok), satır o portu açar; in_x = gelen yön satırı ama ban iki yönlü, açmaz; out = yalnız
     # sunucunun bu adrese açtığı bağlantılar için, ban onları da keser.
     local wle=""
-    if [[ "$wl" =~ \((tcp|udp)\ (in|out)\ ([^\)]*)\):\ ([0-9./]+) ]]; then
-        local wpr="${BASH_REMATCH[1]}" wdr="${BASH_REMATCH[2]}" wpp="${BASH_REMATCH[3]}" wcd="${BASH_REMATCH[4]}" wod wi
+    if [[ "$wl" =~ \((tcp|udp)\ (in|out)\ ([sd])=([^\)]*)\):\ ([0-9./]+) ]]; then
+        local wpr="${BASH_REMATCH[1]}" wdr="${BASH_REMATCH[2]}" wpt="${BASH_REMATCH[3]}" wpp="${BASH_REMATCH[4]}" wcd="${BASH_REMATCH[5]}" wod wot wi
         [ "$wdr" = in ] && wod=out || wod=in
+        [ "$wpt" = d ] && wot=s || wot=d
         wle="$wdr"
-        for wi in "${!WL_TXT[@]}"; do [[ "${WL_TXT[wi]}" == *"($wpr $wod $wpp): $wcd" ]] && { wle=pair; break; }; done
+        for wi in "${!WL_TXT[@]}"; do
+            [[ "${WL_TXT[wi]}" == *"($wpr $wod $wot=$wpp): $wcd" ]] && { wle=pair; break; }
+            [[ "$wpp" =~ ^[01][:_]65535$ ]] && [[ "${WL_TXT[wi]}" =~ \($wpr\ $wod\ [sd]=[01][:_]65535\):\ (.*)$ ]] && [ "${BASH_REMATCH[1]}" = "$wcd" ] && { wle=pair; break; }
+        done
         if [ "$wle" = in ]; then
             wle=in_ok
             { [ -n "$deny" ] || [[ "$cvj" == *'"kind":"cidr"'* ]]; } && [ "$(conf_val LF_BLOCKINONLY)" != 1 ] && wle=in_x

@@ -300,7 +300,9 @@ mk wlei; printf 'tcp|in|d=22|s=151.80.7.9 # ofis\n' >> "$A"; single 151.80.7.9 s
 mcheck "IP kartı: gelen yön satırı + kalıcı ban (iki yönlü) → wle in_x" "run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"wle\":\"in_x\"'"
 mk wlep; printf '%s\n' 'tcp|in|d=22|s=151.80.7.9 # ofis' 'tcp|out|s=22|d=151.80.7.9 # ofis' >> "$A"; single 151.80.7.9 sshd
 mcheck "IP kartı: karşı yön satırıyla çift → wle pair" "run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"wle\":\"pair\"'"
-mk wlet; printf 'tcp|in|d=22|s=151.80.7.9 # ofis\n' >> "$A"; printf '%s|151.80.7.9||in|3600|lfd: (sshd) Failed SSH login from 151.80.7.9\n' "$NOW" >> "$T"
+mk wlepx; printf '%s\n' 'tcp|in|d=22|s=151.80.7.9 # ofis' 'tcp|out|d=22|d=151.80.7.9 # ofis' >> "$A"; single 151.80.7.9 sshd
+mcheck "IP kartı: aynı türde port (in d=22 + out d=22) çift değil → wle in_x (gerçek CSF'te bağlantı kesiliyor)" "run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"wle\":\"in_x\"'"
+mk wlet;printf 'tcp|in|d=22|s=151.80.7.9 # ofis\n' >> "$A"; printf '%s|151.80.7.9||in|3600|lfd: (sshd) Failed SSH login from 151.80.7.9\n' "$NOW" >> "$T"
 mcheck "IP kartı: gelen yön satırı + geçici 'in' ban → wle in_ok" "run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"wle\":\"in_ok\"'"
 mk wletio; printf 'tcp|in|d=22|s=151.80.7.9 # ofis\n' >> "$A"; printf '%s|151.80.7.9||inout|3600|lfd: (sshd) Failed SSH login from 151.80.7.9\n' "$NOW" >> "$T"
 mcheck "IP kartı: gelen yön satırı + geçici 'inout' ban → wle in_x" "run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"wle\":\"in_x\"'"

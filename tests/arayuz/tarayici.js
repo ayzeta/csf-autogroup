@@ -77,12 +77,16 @@ async function layoutChecks(page, label, width) {
         check('1280: Geçmiş satırlarında zaman sütunu ve tarih metni aynı hizada, her satırda menü hücresi', r === null || (r.spread <= 1 && r.textSpread <= 1 && r.noMenu === 0), r ? JSON.stringify(r) : 'olay yok, atlandı');
       }
       if (width === 390 && tab === 'history') {
-        // Geçmiş satırı: zaman ayrıntı metninin içinde (başlıktaki gizli), ⋯ üst satırın sağında, satır en çok 100 px
-        const r = await page.evaluate(() => { const e = document.querySelector('.ag-ev'); if (!e) return null;
-          const b = e.querySelector('.ag-ev-b'), d = e.querySelector('.ag-ev-d'), t = e.querySelector('.ag-ev-t .ag-ev-time'), t2 = e.querySelector('.ag-ev-tm2'), m = e.querySelector('.ag-ev-m');
+        // Geçmiş satırı: zaman ayrıntı metninin içinde (başlıktaki gizli), ⋯ üst satırın sağında; zaman hiçbir satırda tek başına
+        // bir satır başında kalmaz (önünde metin olur; rozetler arada kalıp saati alta itiyordu); durum rozetsiz satır en çok 100 px
+        const r = await page.evaluate(() => { const L = Array.from(document.querySelectorAll('.ag-ev')); if (!L.length) return null;
+          const e = L[0], b = e.querySelector('.ag-ev-b'), d = e.querySelector('.ag-ev-d'), t = e.querySelector('.ag-ev-t .ag-ev-time'), t2 = e.querySelector('.ag-ev-tm2'), m = e.querySelector('.ag-ev-m');
+          const alone = L.filter(x => { const dd = x.querySelector('.ag-ev-d'), tt = x.querySelector('.ag-ev-tm2'); if (!dd || !tt || !dd.textContent.replace(tt.textContent, '').trim()) return false;
+            return tt.getBoundingClientRect().left - dd.getBoundingClientRect().left < 8; }).length;
+          const tall = L.filter(x => !x.querySelector('.ag-ev-st') && x.getBoundingClientRect().height > 100).map(x => Math.round(x.getBoundingClientRect().height));
           return { ok: !!(d && t2) && d.contains(t2) && t2.getBoundingClientRect().height > 0 && (!t || t.getBoundingClientRect().height === 0),
-            menuTop: m ? Math.round(m.getBoundingClientRect().top - b.getBoundingClientRect().top) : 0, h: Math.round(e.getBoundingClientRect().height) }; });
-        check('390: Geçmiş satırında zaman ayrıntıda, menü üstte, satır ≤ 100 px', r === null || (r.ok && r.menuTop <= 6 && r.h <= 100), r ? JSON.stringify(r) : 'olay yok, atlandı');
+            menuTop: m ? Math.round(m.getBoundingClientRect().top - b.getBoundingClientRect().top) : 0, alone, tall }; });
+        check('390: Geçmiş satırında zaman ayrıntıda ve tek başına kalmıyor, menü üstte, rozetsiz satır ≤ 100 px', r === null || (r.ok && r.menuTop <= 6 && r.alone === 0 && r.tall.length === 0), r ? JSON.stringify(r) : 'olay yok, atlandı');
       }
     }
   }
@@ -101,7 +105,8 @@ async function layoutChecks(page, label, width) {
   }
   // Ayarlar: sayı kutusunun + / − düğmesi bir adım atar (kaydedilmez; geri alınır)
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.click('.ag-tabs [data-tab="settings"]'); await page.waitForTimeout(900);
+  await page.click('.ag-tabs [data-tab="settings"]');
+  await page.waitForSelector('.ag-setnav [data-s]', { timeout: 20000 }).catch(function () {}); await page.waitForTimeout(300);
   {
     // Ayarlar ilk açılışta menünün ilk bölümüyle (Genel) gelir; öncelik sırası menüdeki sırayla aynı
     const first = await page.$$eval('.ag-setnav [data-s]', L => ({ f: L[0] && L[0].getAttribute('data-s'), on: (L.filter(b => b.classList.contains('on'))[0] || {}).getAttribute ? L.filter(b => b.classList.contains('on'))[0].getAttribute('data-s') : null }));
@@ -135,11 +140,11 @@ async function layoutChecks(page, label, width) {
     } else check('Ayarlar: sayı kutusu var', false, '#ag-f-THRESHOLD_24 yok');
   }
   {
-    // Bildirim: olay × kanal tablosu — 4 olay × 2 kanal; hücre tıklanınca kaydet çubuğu çıkar, geri tıklanınca taslak temiz; telefonda sığar
+    // Bildirim: olay × kanal tablosu — 5 olay (1.15.4: Kontrol edilecekler bulguları) × 2 kanal; hücre tıklanınca kaydet çubuğu çıkar, geri tıklanınca taslak temiz; telefonda sığar
     const nav = await page.$('.ag-setnav [data-s="notify"]'); if (nav) { await nav.click(); await page.waitForTimeout(500); }
     const cells = await page.$$('.ag-evm .ag-chk');
-    check('Bildirim: olay × kanal tablosu 8 hücre', cells.length === 8, String(cells.length));
-    if (cells.length === 8) {
+    check('Bildirim: olay × kanal tablosu 10 hücre', cells.length === 10, String(cells.length));
+    if (cells.length === 10) {
       const sel = '.ag-evm .ag-chk[data-k="IE_RUN"]';
       const p0 = await page.getAttribute(sel, 'aria-pressed');
       await page.click(sel); await page.waitForTimeout(300);
@@ -171,7 +176,9 @@ async function layoutChecks(page, label, width) {
     const before = errs.length;
     const el = await page.$(`.ag-item[data-row="${r.cidr}"] .ag-cidr`);
     if (!el) continue;
-    await el.click(); await page.waitForTimeout(1800);
+    await el.click();
+    await page.waitForFunction(() => { const d = document.querySelector('.ag-drawer'); return d && d.innerText.length > 40 && !d.querySelector('.ag-spin'); }, null, { timeout: 20000 }).catch(function () {});
+    await page.waitForTimeout(300);
     const txt = await page.evaluate(() => { const d = document.querySelector('.ag-drawer'); return d ? d.innerText : ''; });
     check(`IP kartı açılıyor: ${r.cidr}`, errs.length === before && txt.length > 40, errs.slice(before).join(' | '));
     // kartın Kontrol edilecekler satırı Yoksay (yoksayılmamışsa) ya da Yoksaymayı kaldır sunmalı

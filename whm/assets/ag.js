@@ -557,6 +557,8 @@
       '</section>';
   }
 
+  // sürüm numarası aynıysa (yalnız test / belge değişikliği, VERSION artmadı) commit kısa adıyla: "v1.15.19 (318cba4)"
+  function updV(v, c) { return UPD.current === UPD.latest && c ? v + ' (' + c + ')' : v; }
   function banner() {
     if (!UPD || !UPD.ok || UPD.uptodate) return '';
     var blocked = UPD.dirty ? t('upd_dirty') : (UPD.diverged ? t('upd_diverged') : '');
@@ -564,7 +566,7 @@
       return '<li><code>' + esc(c.hash) + '</code>' + esc(c.subject) + '</li>';
     }).join('') + '</ul>' : '';
     return '<div class="ag-banner">' + IC.download +
-      '<div class="ag-grow">' + t('upd_avail', esc(UPD.current), esc(UPD.latest)) + ' · ' + t('upd_commits', (UPD.commits || []).length) +
+      '<div class="ag-grow">' + t('upd_avail', esc(updV(UPD.current, UPD.current_commit)), esc(updV(UPD.latest, UPD.latest_commit))) + ' · ' + t('upd_commits', (UPD.commits || []).length) +
       (blocked ? '<div class="ag-sub" style="color:#92400e">' + esc(blocked) + '</div>' : '') + '</div>' +
       '<button class="ag-btn ag-btn-sm" data-act="commits">' + (UI.commits ? t('upd_hide') : t('upd_show')) + '</button>' +
       (blocked ? '' : '<button class="ag-btn ag-btn-sm ag-btn-primary" data-act="update">' + t('upd_apply') + '</button>') +
@@ -1082,7 +1084,9 @@
     if (rm.length) o.push(t('pv_ev_del', rm.join(', ')));
     return o.length ? o : null;
   }
-  function evDetail(e, noteHtml) {
+  // tmHtml: telefonda görünen saat (.ag-ev-tm2) metnin hemen ardından, rozetlerden önce — önce rozetler arada kalıyor,
+  // saat tek başına bir satıra düşüyordu
+  function evDetail(e, noteHtml, tmHtml) {
     var d = [];
     if (e.type === 'add24' || e.type === 'promote' || e.type === 'temp24') {
       d.push(t('n_ip', num(e.n)));
@@ -1113,8 +1117,9 @@
     var fromLog = e.src === 'log';                         // olay kaydından önceki iş: rozet + açıklama
     if (e.until) d.push(e.until >= '9999' ? t('ign_forever_l') : t('until', dayStr(e.until)));   // panelin tarih biçimiyle
     if (e.type === 'expire' && e.age != null) d.push(t('exp_age', num(e.age)));
-    return esc(d.join(' · ')) + (noteHtml || '') + (fromLog ? ' <span class="ag-pill ag-pill-n ag-pill-xs" title="' + esc(t('from_log_h')) + '">' + esc(t('from_log')) + '</span>' : '') + (e.dnd && (e.type === 'add24' || e.type === 'promote' || e.type === 'temp24') ? ' <span class="ag-pill ag-pill-n ag-pill-xs" title="' + esc(t('dnd_h')) + '">' + esc(t('dnd_s')) + '</span>' : '') +
-      (owner ? '<div class="ag-ev-o">' + esc(owner) + '</div>' : '');
+    var dt = esc(d.join(' · ')), tmA = dt ? (tmHtml || '') : '', tmZ = dt ? '' : (tmHtml || '');   // metin yoksa saat eskisi gibi sonda
+    return dt + tmA + (noteHtml || '') + (fromLog ? ' <span class="ag-pill ag-pill-n ag-pill-xs" title="' + esc(t('from_log_h')) + '">' + esc(t('from_log')) + '</span>' : '') + (e.dnd && (e.type === 'add24' || e.type === 'promote' || e.type === 'temp24') ? ' <span class="ag-pill ag-pill-n ag-pill-xs" title="' + esc(t('dnd_h')) + '">' + esc(t('dnd_s')) + '</span>' : '') +
+      (owner ? '<div class="ag-ev-o">' + esc(owner) + '</div>' : '') + tmZ;
   }
   var EV_ICON = {
     add24: ['ban', 'd-ban'], manual_ban: ['ban', 'd-ban'], manual_change: ['sliders', 'n'], promote: ['lock', 'd-prom'], temp24: ['clock', 'd-temp'], warn16: ['alert', 'd-warn'], warn16t: ['alert', 'd-warn'],
@@ -1167,8 +1172,8 @@
         '<div class="ag-ev-ic ' + ic[1] + '">' + IC[ic[0]] + '</div><div class="ag-ev-b"><div class="ag-ev-t"><span class="ag-ev-n">' + esc(t('ev_grp_n', num(g.length))) + '</span>' +
         '<span class="ag-pill ' + evCls(e) + '"' + evTitle(e.type) + '>' + esc(t('ev_' + e.type)) + '</span>' +
         '<span class="ag-ev-time" title="' + esc(new Date(e.t * 1000).toLocaleString(loc())) + '">' + stamp(e.t) + '<span class="ag-chev">' + (open ? '−' : '+') + '</span></span></div>' +
-        '<div class="ag-ev-d"><span class="ag-mono">' + esc(cs.slice(0, 3).join(', ')) + '</span>' + (cs.length > 3 ? ' +' + num(cs.length - 3) : '') + ' · ' + evDetail(e) +
-        '<span class="ag-ev-tm2" title="' + esc(new Date(e.t * 1000).toLocaleString(loc())) + '">' + stamp(e.t) + '<span class="ag-chev">' + (open ? '−' : '+') + '</span></span></div></div>' +
+        '<div class="ag-ev-d"><span class="ag-mono">' + esc(cs.slice(0, 3).join(', ')) + '</span>' + (cs.length > 3 ? ' +' + num(cs.length - 3) : '') + ' · ' + evDetail(e, '',
+        '<span class="ag-ev-tm2" title="' + esc(new Date(e.t * 1000).toLocaleString(loc())) + '">' + stamp(e.t) + '<span class="ag-chev">' + (open ? '−' : '+') + '</span></span>') + '</div></div>' +
         '<div class="ag-ev-m"><span class="ag-ev-m0"></span></div></div>' +
         (open ? '<div class="ag-grp-l">' + g.map(function (x) { return x.cidr ? '<span class="ag-cidr" data-ip="' + esc(ipOf(x)) + '">' + esc(x.cidr) + '</span>' : ''; }).join('') + '</div>' : '') + '</div>';
     }
@@ -1192,7 +1197,7 @@
         // adres de IP kartını açsın (diğer tablolar gibi): tek IP kendisi, blok/ağ için ilk kayıtlı IP ya da ağın .1'i
         (e.cidr ? '<span class="ag-cidr" data-ip="' + esc(e.ips && e.ips[0] && e.ips[0].ip ? e.ips[0].ip
           : /\//.test(e.cidr) && !/\/32$/.test(e.cidr) ? String(e.cidr).replace(/\/\d+$/, '').replace(/\.0$/, '.1') : String(e.cidr).replace(/\/32$/, '')) + '">' + esc(e.cidr) + '</span>' : '') + '<span class="ag-pill ' + evCls(e) + '"' + evTitle(e.type) + '>' + esc(t('ev_' + e.type)) + '</span>' + tm + '</div>' +
-        '<div class="ag-ev-d">' + evDetail(e, note ? ' <span class="ag-pill ag-pill-n ag-pill-xs ag-ev-st" title="' + esc(t('st_tip')) + '">' + esc(note) + '</span>' : '') + tm2 + '</div></div>' +
+        '<div class="ag-ev-d">' + evDetail(e, note ? ' <span class="ag-pill ag-pill-n ag-pill-xs ag-ev-st" title="' + esc(t('st_tip')) + '">' + esc(note) + '</span>' : '', tm2) + '</div></div>' +
         '<div class="ag-ev-m">' + (mitems ? menu('hm:' + key, mitems) : '<span class="ag-ev-m0"></span>') + '</div></div>' +   // menüsüz satırda yer tutucu: zaman sütunu kaymasın
         (open ? ipTable(e.ips, e.total) : '') + '</div>';
     }
@@ -2945,7 +2950,7 @@
     },
     update: function () {
       if (!UPD) return;
-      modal({ icon: 'download', tone: 'acc', title: t('m_upd_t', esc(UPD.latest)), html: '<p>' + t('m_upd_b') + '</p>', okText: t('upd_apply') }).then(function (m) {
+      modal({ icon: 'download', tone: 'acc', title: t('m_upd_t', esc(updV(UPD.latest, UPD.latest_commit))), html: '<p>' + t('m_upd_b') + '</p>', okText: t('upd_apply') }).then(function (m) {
         if (!m.ok) return;
         api('update_apply', { confirm: UPD.latest_commit }).then(function (r) {
           if (!r.ok) { toast(r.error === 'busy' ? t('upd_busy') : tErr(r.message || r.error || '?'), 'bad'); return; }

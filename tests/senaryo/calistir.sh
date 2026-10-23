@@ -433,6 +433,10 @@ if [ "${GERCEK:-0}" = 1 ] && command -v ip >/dev/null 2>&1 && command -v python3
     yn; printf 'tcp|in|d=%s|s=%s # test\n' $PT $NC >> "$A"; csf -d $NC test >/dev/null 2>&1; NEEDR=1; run >/dev/null 2>&1
     check "izin yönü · kalıcı ban + yalnız gelen satır: bağlantı kesilir" - "$(tin)"
     check "izin yönü · kalıcı ban + yalnız gelen satır: IP kartı 'açmaz' der (in_x)" G "$([ "$(wle)" = in_x ] && echo G || echo "-:$(wle)")"
+    printf 'tcp|out|d=%s|d=%s # test\n' $PT $NC >> "$A"; NEEDR=1; run >/dev/null 2>&1
+    check "izin yönü · gelen d=P + giden d=P (aynı tür, çift değil): bağlantı kesilir" - "$(tin)"
+    check "izin yönü · aynı türde iki satır: IP kartı 'açmaz' der (in_x)" G "$([ "$(wle)" = in_x ] && echo G || echo "-:$(wle)")"
+    sed -i "/^tcp|out|d=$PT|d=$NC # test/d" "$A"
     printf 'tcp|out|s=%s|d=%s # test\n' $PT $NC >> "$A"; NEEDR=1; run >/dev/null 2>&1
     check "izin yönü · kalıcı ban + karşı yön satırıyla çift: bağlantı geçer" G "$(tin)"
     check "izin yönü · çift: IP kartı 'yalnız o portu açar' der (pair)" G "$([ "$(wle)" = pair ] && echo G || echo "-:$(wle)")"
