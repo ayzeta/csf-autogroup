@@ -673,7 +673,10 @@ written to the system.
 lines, 6,000 Imunify360 entries, banned providers with 3,000 ranges each) and
 lists the slow parts; `SINIR=15` makes it fail above 15 seconds. Run it on
 Linux for realistic times. On a server, `AG_PROF=1 csf_autogroup.sh --status
---json >/dev/null` prints the same breakdown for real data.
+--json >/dev/null` prints the same breakdown for real data, and
+`AG_PROF=1 csf-autogroup dry-run 2>&1 >/dev/null | grep PROF` does the same
+for a run that changes nothing. Lines with `·` are parts inside a section
+(summed over loops), `sayı` lines are counts.
 
 `bash tests/ayar-tutarliligi/calistir.sh` builds a sample value for every
 setting the panel can send (from the engine's own source lists and default

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.15.12 — 2026-10-23
+
+- **Finer timing for diagnosis.** With `AG_PROF=1` the status and a run
+  (also `csf-autogroup dry-run`) now print where the time goes inside each
+  part: each allow file read and loaded separately, the review list step by
+  step, the provider rankings, the owner cache, and each section of a run,
+  with counts (lines, rows, entries). Without `AG_PROF` nothing changes.
+
 ## 1.15.11 — 2026-10-23
 
 - **Faster status, second round** (from a real server's `AG_PROF` profile):

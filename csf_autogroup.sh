@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.11"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.12"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1556,13 +1556,17 @@ owners_load() {  # sahip önbelleği → OWN_A/C/N/T/P/L/S (geçerli ve süresi 
     # tek eval ile yüklenir: banlı tekillerin her /24'ü bir satır, binlerce satırda satır başına bash read + düzenli ifade durum
     # çıktısını ~1 sn uzatıyordu. Değerler çift tırnak içinde, \ " $ ` kaçışlı.
     [ -r "$OWNERS_FILE" ] || return 0
-    local min=$(( $(date +%s) - OWNER_TTL_DAYS * 86400 ))
-    eval "$(LC_ALL=C awk -F'|' -v min="$min" '
+    local min=$(( $(date +%s) - OWNER_TTL_DAYS * 86400 )) ows
+    pa "own_önce"
+    ows="$(LC_ALL=C awk -F'|' -v min="$min" '
         function q(x) { gsub(/[\\"$`]/, "\\\\&", x); return "\"" x "\"" }
         $1 ~ /^[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?$/ && $5 ~ /^[0-9]+$/ && $5 + 0 >= min + 0 {
             k = $1; l = ""; o = ""
             if ($2 != "") { l = "AS" $2 " " ($4 != "" ? $4 : "?"); if ($4 == "" && $3 != "") l = "AS" $2 ", " $3; o = "AS" $2 ($3 != "" ? " " $3 : "") }
             printf "OWN_A[%s]=%s;OWN_C[%s]=%s;OWN_N[%s]=%s;OWN_T[%s]=%s;OWN_P[%s]=%s;OWN_L[%s]=%s;OWN_S[%s]=%s\n", k, q($2), k, q($3), k, q($4), k, q($5), k, q($6), k, q(l), k, q(o) }' "$OWNERS_FILE")"
+    pa "own_awk"; pc "own_satır" "$(wc -l < "$OWNERS_FILE")"
+    eval "$ows"
+    pa "own_eval"
 }
 owners_save() {  # yalnız yeni sorgu olduysa; atomik
     local p now tmp
@@ -1778,9 +1782,10 @@ wl_load() {      # FILE LABEL [DEPTH] — IP, CIDR, gelişmiş satır (tcp|in|d=
     # satırlar sırası korunarak wl_line'a gider. Satır başına bash döngüsü 4.000 satırlık listede ~0,7 sn sürüyordu (her durum
     # yenilemesinde). Kurallar wl_line ile aynı: yorum (80 karakter, eklentinin / CSF'in işaretleri değil), servis adı, aralık
     # hizalama, geçersiz IP / maske atlanır. Değerler kaçışlı ("\ $ `).
-    local file="$1" label="$2" depth="${3:-0}"
+    local file="$1" label="$2" depth="${3:-0}" wls
     [ -r "$file" ] || return
-    eval "$(awk -v lab="$label" -v dep="$depth" '
+    pa "wl_önce"
+    wls="$(awk -v lab="$label" -v dep="$depth" '
         function q(x) { gsub(/[\\"$`]/, "\\\\&", x); return "\"" x "\"" }
         { l = $0; sub(/\r$/, "", l)
           if (index(l, "csf_autogroup: exception")) next
@@ -1798,9 +1803,13 @@ wl_load() {      # FILE LABEL [DEPTH] — IP, CIDR, gelişmiş satır (tcp|in|d=
               printf "WL_LO+=(%.0f);WL_HI+=(%.0f);WL_TXT+=(%s);WL_CM+=(%s)\n", lo, lo + size - 1, q(lab (svn != "" ? " (" svn ")" : "") ": " tok), q(cm)
               next }
           printf "wl_line %s %d %s\n", q(lab), dep, q($0) }' "$file")"
+    pa "wl_awk ${file##*/}"; pc "wl_satır ${file##*/}" "$(wc -l < "$file")"
+    eval "$wls"
+    pa "wl_eval ${file##*/}"
 }
 wl_line() {      # ETİKET DERİNLİK SATIR → wl_load'ın awk'ta doğrudan çözmediği satır: Include, gelişmiş satır, hostname, çok IP
     local label="$1" depth="$2" line="$3" tok rest mt ip
+    pc "wl_line (karmaşık satır)"
     line="${line%$'\r'}"
     # eklentinin kendi port istisnası (banlı aralıkta seçilen servisler açık) korunan kayıt değil. Yalnız o atlanır:
     # izinli servisler ("# csf_autogroup: service google-common", csf_autogroup.services.allow Include'u) CSF'te gerçek
@@ -1879,6 +1888,7 @@ load_whitelist() {
     wl_load "$CSF_VAR/csf.tempallow"  "csf.tempallow"
     # Imunify360'ın yerel beyaz listesi (elle eklenenler ve Imunify'ın doğruladığı arama motoru botları).
     # Önbellekten okunur (imunify_refresh, IMUNIFY_REFRESH_MIN dakikada bir); süresi dolan kayıt sayılmaz.
+    pa "wl_dosyalar"
     # Satırlar awk'ta süzülüp atamaya çevrilir, tek eval (arama motoru botlarıyla binlerce satır; satır başına bash read +
     # cidr_range yavaştı). Kurallar wl_add ile aynı: geçersiz IP / maske atlanır, aralık hizalanır.
     if [ -r "$IMUNIFY_WL_FILE" ]; then
@@ -1894,13 +1904,17 @@ load_whitelist() {
                 cm = $3; for (j = 4; j <= NF; j++) cm = cm "|" $j
                 printf "WL_LO+=(%.0f);WL_HI+=(%.0f);WL_TXT+=(%s);WL_CM+=(\"\")\n", lo, lo + size - 1, q("Imunify: " $1 (cm != "" ? " (" cm ")" : "")) }' "$IMUNIFY_WL_FILE")"
     fi
+    pa "wl_imunify"
     # Sunucunun kendi IP'leri: CSF yalnızca IP'nin kendisini korur, içinde bulunduğu /24'ü değil.
     for ip in $( { ip -4 -o addr show 2>/dev/null | awk '{print $4}'; hostname -I 2>/dev/null | tr ' ' '\n'; } | sed 's#/.*##' | grep -E "$IPV4_RE" | sort -u); do
         case "$ip" in 127.*) continue;; esac
         wl_add "$ip" "$M_WL_SELF: $ip"
     done
+    pa "wl_self"
     rignore_load "$CSF_DIR/csf.rignore"
+    pa "wl_rignore"
     CC_LIST=$( { conf_val CC_IGNORE | sed 's/^/CC_IGNORE=/'; conf_val CC_ALLOW | sed 's/^/CC_ALLOW=/'; } | grep -v '=$' | LC_ALL=C tr '[:lower:]' '[:upper:]')
+    pa "wl_cclist"; pc "wl_kayıt (toplam)" "${#WL_LO[@]}"
     [ -n "$WL_LOGGED" ] || logr "$(m "$M_WL_LOADED" "${#WL_LO[@]}" "${#RIGNORE[@]}")"; WL_LOGGED=1   # ineff_load ikinci kez yükletebilir
 }
 wl_overlap() {   # LO HI → WL_HIT = çakışan beyaz liste kaydı, satır yorumuyla ("csf.allow: IP (ofis)"); WL_HIT_CM yorum
@@ -2266,10 +2280,24 @@ loghist_build() {
 # ── --status ────────────────────────────────────────────────────────────────
 declare -A DAYEP
 PROF_T=0
+declare -A PROF_A=() PROF_N=() PROF_C=()
+pa() {     # tanı: AG_PROF=1 → bir önceki işaretten beri geçen süre bu etikete eklenir (bölüm içi, döngüde toplanır; prof_dump yazar)
+    [ -n "${AG_PROF:-}" ] || return 0
+    local n; n=$(date +%s%N); n=$(( n / 1000000 ))
+    [ "${PROF_T:-0}" -gt 0 ] && { PROF_A[$1]=$(( ${PROF_A[$1]:-0} + n - PROF_T )); PROF_N[$1]=$(( ${PROF_N[$1]:-0} + 1 )); }
+    PROF_T=$n
+}
+pc() { [ -n "${AG_PROF:-}" ] && PROF_C[$1]=$(( ${PROF_C[$1]:-0} + ${2:-1} )); return 0; }   # tanı: yalnız sayaç (süre ölçmez, alt süreç yok)
+prof_dump() {    # tanı: pa toplamları (çoktan aza) ve pc sayaçları; bölüm satırları ("PROF … bölüm") pa'dan sonraki kalanı gösterir
+    [ -n "${AG_PROF:-}" ] || return 0
+    local k
+    { for k in "${!PROF_A[@]}"; do printf 'PROF %6d ms  · %s (%d kez)\n' "${PROF_A[$k]}" "$k" "${PROF_N[$k]}"; done | sort -k2,2nr
+      for k in "${!PROF_C[@]}"; do printf 'PROF  sayı %6d  # %s\n' "${PROF_C[$k]}" "$k"; done | sort -k5; } >&2
+}
 prof() {   # tanı: AG_PROF=1 → durum bölümlerinin süresi (ms, bir önceki işaretten beri) stderr'e
     [ -n "${AG_PROF:-}" ] || return 0
     local n; n=$(date +%s%N); n=$(( n / 1000000 ))
-    [ "$PROF_T" -gt 0 ] && printf 'PROF %6d ms  %s\n' $(( n - PROF_T )) "$1" >&2
+    [ "${PROF_T:-0}" -gt 0 ] && printf 'PROF %6d ms  %s\n' $(( n - PROF_T )) "$1" >&2
     PROF_T=$n
 }
 day_epoch() {    # YYYY-MM-DD → REPLY (epoch), aynı gün için tek date çağrısı
@@ -2350,6 +2378,7 @@ do_status() {
         [ "$added" -gt 0 ] && ghist+="$added $kind $tok"$'\n'
         [ "$JSON" = 1 ] || gtext+=("$(printf '%-18s %-9s %s' "$tok" "$kind" "$([ "$dnd" = true ] && echo 'do not delete')")")
     done
+    pa "gj grup satırları"; pc "gj grup" "${#g_tok[@]}"; pc "gj kısmi ban" "${#PB_P[@]}"
     local -A PSINCE=()
     for c in "${!PB_P[@]}"; do
         local pa=0 pp
@@ -2366,6 +2395,7 @@ do_status() {
         groups+=("{\"cidr\":\"$c\",\"since\":$psince,\"kind\":\"partial\",\"dnd\":false,\"n\":0,\"added\":${pa:-0},\"ttl\":0,\"svc\":\"${PB_S[$c]}\",\"extra\":\"${PB_X[$c]}\",\"ports\":\"$pp\"${REPLY:+,\"under\":\"$REPLY\"}${PCOV[$c]:+,\"pcov\":\"${PCOV[$c]}\"}}")
         [ "$JSON" = 1 ] || gtext+=("$(printf '%-18s %-9s %s' "$c" "partial" "tcp $pp")")
     done
+    pa "gj kısmi banlar"
     for c in "${!TG_TTL[@]}"; do
         [ "${TG_TTL[$c]}" -gt 0 ] || continue
         n=0; [[ "${TG_NOTE[$c]}" =~ $re_n ]] && n="${BASH_REMATCH[1]}"
@@ -2378,7 +2408,9 @@ do_status() {
     # Terfi bekleyenler: sayaçtaki "a.b.c tarih" kayıtları
     local pending=() ptext=() age left ttl
     while read -r c u; do
+        pc "pending sayaç satırı"
         [[ "$c" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ && "$u" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || continue
+        pc "pending blok"
         day_epoch "$u"; age=$(( (now - REPLY) / 86400 )); left=$(( SAYAC_RETENTION_DAYS - age ))
         ttl="${TG_TTL[$c.0/24]:-0}"; [ "$ttl" -lt 0 ] && ttl=0
         REPLY=""; cidr_range "$c.0/24" && under_of "$R_LO" "$R_HI" "$c.0/24"
@@ -2406,13 +2438,18 @@ do_status() {
             [ "$t" -lt $(( now - REVIEW_DAYS * 86400 )) ] && break
             [[ "$line" =~ \"type\":\"(warn16|warn16t|skip_wl)\" ]] || continue; ty="${BASH_REMATCH[1]}"
             [[ "$line" =~ \"cidr\":\"([0-9./]+)\" ]] || continue; c="${BASH_REMATCH[1]}"
+            pc "rv_ev satır"; pa "rv_ev okuma"
             [ -n "${seen[$c]}" ] && continue; seen[$c]=1
+            pc "rv_ev benzersiz"
             ign_until "$c" && continue
-            cidr_range "$c" && perm_covers "$R_LO" "$R_HI" && continue
-            { cover_any; } && [[ "$line" == *'"ips":[{'* ]] && ev_ipsrc "$line" | prov_cover && continue
+            cidr_range "$c" && perm_covers "$R_LO" "$R_HI" && { pa "rv_ev ign+perm_covers"; continue; }
+            pa "rv_ev ign+perm_covers"
+            { cover_any; } && [[ "$line" == *'"ips":[{'* ]] && ev_ipsrc "$line" | prov_cover && { pa "rv_ev prov_cover"; continue; }
+            pa "rv_ev prov_cover"
             if { cover_any; } && [[ "$line" == *'"ips":[{'* ]] && prov_near < <(ev_ipsrc "$line"); then
                 jstr "$PN_SRC"; line="${line%\}},\"pnear\":$REPLY,\"pnsvc\":\"$PN_SVC\"}"
             fi
+            pa "rv_ev prov_near"
             # aynı aralığa uyarıdan SONRA kısmi ban konduysa uyarı ele alınmıştır; bandan sonra gelen yeni uyarı görünür
             if [ -n "${PB_D[$c]}" ]; then
                 pbe=$(LC_ALL=C date -d "${PB_D[$c]}" +%s 2>/dev/null || echo 0)
@@ -2424,8 +2461,10 @@ do_status() {
             if [[ "$ty" == warn16* ]] && cidr_range "$c" && part_note "$R_LO" "$R_HI"; then
                 line="${line%\}},\"partial\":\"${REPLY%%|*}\",\"partial_svc\":\"${REPLY#*|}\"}"
             fi
+            pa "rv_ev pb+part"
             review+=("$line")
             rtext+=("$(printf '%-18s %s · %s' "$c" "$ty" "$(date -d "@$t" '+%d.%m %H:%M')")")
+            pa "rv_ev rtext"
         done < <(LC_ALL=C grep -E '"type":"(warn16|warn16t|skip_wl)"' "$EVENTS_FILE" | tac)   # yalnız bu türler, önce süzülür sonra ters çevrilir
     fi
     prof review_events
@@ -2843,9 +2882,10 @@ do_status() {
             [ -n "${ACCTM[$ax]}" ] && [ -z "${AQ[$ax]}" ] && { AQ[$ax]=1; aj+="${aj:+,}\"$ax\":${ACCTM[$ax]}"; }
         done
         printf '"accts":{%s},' "$aj"
+        pa "dist accts"
         printf '"groups":[%s],"pending":[%s],"review":[%s],"ignored":[%s],"events":[%s]}\n' \
             "${groups[*]}" "${pending[*]}" "${review[*]}" "${ignored[*]}" "${recent[*]}"
-        prof dist_end
+        prof dist_end; prof_dump
         return 0
     fi
 
@@ -3813,7 +3853,9 @@ cloud_pot() {    # → REPLY = JSON nesnesi {"gcp":12,…}: olay kaydındaki ve 
     [ -d "$CLOUD_DIR" ] || return 0
     ck="$(dirname "$SAYAC_FILE")/cloudpot.cache"
     sig=$(stat -c '%n %s %Y' "$EVENTS_FILE" "$DENY_FILE" "$CSF_VAR/csf.tempban" "$CLOUD_DIR"/*.txt "$CLOUD_DIR"/probe/*.txt 2>/dev/null | cksum)
-    if [ -r "$ck" ] && [ "$(head -n 1 "$ck")" = "$sig" ]; then REPLY=$(sed -n 2p "$ck"); [ -n "$REPLY" ] || REPLY="{}"; return 0; fi
+    pa "cpot imza"
+    if [ -r "$ck" ] && [ "$(head -n 1 "$ck")" = "$sig" ]; then REPLY=$(sed -n 2p "$ck"); [ -n "$REPLY" ] || REPLY="{}"; pc "cpot önbellekten"; return 0; fi
+    pc "cpot yeniden hesap"
     qf=$(mktemp) || return 0
     { grep -ohE '"ip":"[0-9.]+"' "$EVENTS_FILE" 2>/dev/null | cut -d'"' -f4
       grep -oE '^[0-9]{1,3}(\.[0-9]{1,3}){3}([[:space:]]|$)' "$DENY_FILE" 2>/dev/null | tr -d ' \t'
@@ -5128,13 +5170,16 @@ asn_top() {      # [N] [evidence|blocks] → ASN_TOP satırları: "ASN|KURUM|CC|
     asn_banned
     # tekillerin saldırdığı servis bir kez (PERMBLOCK: lfd günlüğündeki önceki geçici ban; hepsi tek taramada)
     while read -r c k; do SCL[$c]="$k"; [ "$k" = repeat ] && rp+=("$c"); done < <(for c in "${!SINGLE_NOTE[@]}"; do printf '%s|%s\n' "$c" "${SINGLE_NOTE[$c]}"; done | awk -F'|' "$AWK_CLS"'{ print $1, cls($2) }')
+    pa "asn servis sınıfı"; pc "asn tekil" "${#SINGLE_NOTE[@]}"
     perm_cls_load "${rp[@]}"
     for c in "${rp[@]}"; do [ -n "${PERM_CLS[$c]}" ] && SCL[$c]="${PERM_CLS[$c]}"; done
+    pa "asn PERMBLOCK servisi"
     ptl=",$(conf_val CC_DENY_PORTS_TCP | tr -d ' '),"
     while read -r c k; do SEP[$c]="$k"; done < <(for c in "${!SINGLE_NOTE[@]}"; do printf '%s|%s\n' "$c" "${SINGLE_NOTE[$c]}"; done |
         awk -F'|' '{ n = split($2, a, /[ \t]+/); if (n < 5 || a[n] !~ /^[0-9]{4}$/ || a[n-1] !~ /^[0-9]{2}:[0-9]{2}:[0-9]{2}$/) next
                    m = index("JanFebMarAprMayJunJulAugSepOctNovDec", a[n-3]); if (!m) next
                    split(a[n-1], h, ":"); e = mktime(a[n] " " ((m + 2) / 3) " " a[n-2] " " h[1] " " h[2] " " h[3]); if (e > 0) print $1, e }')
+    pa "asn son saldırı zamanı"
     # bulut listesinin kapsadığı tekiller ve bloklar sayılmaz (saldırdıkları sunucular zaten kapalı); ayrıca sayılır
     if [ "$CLOUD_ON" = 1 ] && qf=$(mktemp); then
         { for c in "${!SINGLE_NOTE[@]}"; do ip2int "$c"; echo "$c $REPLY $REPLY"; done
@@ -5150,6 +5195,7 @@ asn_top() {      # [N] [evidence|blocks] → ASN_TOP satırları: "ASN|KURUM|CC|
             [ "${CLS_OK[$cl]}" = 1 ] || unset "CCOV[$c]"
         done
     fi
+    pa "asn bulut kapsaması"
     for c in "${AGG[@]}"; do IS_AG[$c]=1; done
     for c in "${MANB[@]}"; do IS_M[$c]=1; done                   # elle banlar: listede görünür, kanıt ağırlığı almaz
     for c in $(conf_val CC_DENY | LC_ALL=C tr '[:lower:],' '[:upper:] '); do DEN[$c]=1; done
@@ -5170,11 +5216,13 @@ asn_top() {      # [N] [evidence|blocks] → ASN_TOP satırları: "ASN|KURUM|CC|
         [ -n "${IS_M[${DC_TXT[i]}]}" ] && M[$a]=$(( ${M[$a]:-0} + 1 ))
         NM[$a]="${OWN_N[$p]}"; CC[$a]="${OWN_C[$p]}"
     done
+    pa "asn sayım döngüleri"
     # en sık ban sebebi: lfd notunun "(sshd) Failed SSH login" / "(mod_security) … (id:2008) triggered" kısmı (panel ModSecurity mesajını ekler)
     AWHY=()
     while IFS='|' read -r a k; do AWHY[$a]="$k"; done < <(for c in "${!SINGLE_NOTE[@]}"; do p="${c%.*}"; [ -n "${OWN_A[$p]}" ] && printf '%s|%s\n' "${OWN_A[$p]}" "${SINGLE_NOTE[$c]}"; done |
         awk -F'|' '{ r = $2; sub(/^[^:]*lfd[^:]*: */, "", r); sub(/^lfd - */, "", r); sub(/ (from|by) [0-9].*$/, "", r); gsub(/[|"\\]/, " ", r); if (r == "") next
                      C[$1, r]++; if (C[$1, r] > B[$1]) { B[$1] = C[$1, r]; W[$1] = r } } END { for (a in W) print a "|" substr(W[a], 1, 120) }')
+    pa "asn en sık sebep"
     # bütün banları bulut listesinde kalan sağlayıcı sıralamaya girmez, "banlı" satırında listeyle görünür
     CLB_A=(); CLB_S=()
     for a in "${!CV[@]}"; do
@@ -5266,6 +5314,7 @@ imunify_top() {  # [N] → IM_TOP satırları "ASN|KURUM|CC|IP sayısı|SEBEP:n,
     [ -r "$IMUNIFY_FILE" ] || return 1
     asn_banned
     # tek akış: sahipler "önek|ASN|ülke|ad" (önbellekten yüklenenler), "#--" ayracı, Imunify listesi "ip|sebep" (+ #total, #t)
+    pa "im önce"; pc "im sahip önbelleği" "${#OWN_A[@]}"
     IM_TOP=$( { for p in "${!OWN_A[@]}"; do [ -n "${OWN_A[$p]}" ] && printf '%s|%s|%s|%s\n' "$p" "${OWN_A[$p]}" "${OWN_C[$p]}" "${OWN_N[$p]//|/ }"; done
                echo '#--'; cat "$IMUNIFY_FILE"; } | awk -F'|' -v ban=" ${ASB_ORD}" '
         !L { if ($0 == "#--") L = 1; else if ($2 != "") { A[$1] = $2; C[$1] = $3; M[$1] = $4 }; next }   # ayraca kadar sahipler
@@ -5281,6 +5330,7 @@ imunify_top() {  # [N] → IM_TOP satırları "ASN|KURUM|CC|IP sayısı|SEBEP:n,
                       rr[j + 1] = x }
                   o = ""; for (i = 1; i <= k && i <= 3; i++) o = o (i > 1 ? "," : "") rr[i] ":" RC[a, rr[i]]
                   print CN[a] "|" a "|" NM[a] "|" CC[a] "|" CN[a] "|" o } }')
+    pa "im sahip+liste awk"
     while IFS='|' read -r k v; do
         case "$k" in "#total") IM_TOTAL=$(num "$v") ;; "#t") IM_T=$(num "$v") ;; "#known") IM_KNOWN=$(num "$v") ;; esac
     done < <(printf '%s\n' "$IM_TOP" | grep '^#')
@@ -5704,6 +5754,7 @@ take_lock || { log "$M_LOCKED"; exit 0; }
 [ "$DRY" = 1 ] && log "$M_DRY_ON"
 [ ${#SETS[@]} -gt 0 ] && log "$(m "$M_DRY_OVR" "${SETS[*]}")"
 RUN_T0=$(date +%s)
+prof start
 panel_init
 owners_load
 RUN_MODE=1
@@ -5715,6 +5766,7 @@ if [ "$ENABLED" = 0 ]; then
     exit 0
 fi
 
+prof "turn başlangıç"
 # ── Permanent deny limit ────────────────────────────────────────────────────
 limit=$(grep "^DENY_IP_LIMIT" "$CSF_CONF" | cut -d'=' -f2 | tr -d ' "')
 current_count=$(deny_count)          # CSF'in kendi sayımıyla aynı (do not delete satırları sınıra girmez)
@@ -5736,6 +5788,7 @@ else
     log "$(m "$M_NOLIMIT" "DENY_IP_LIMIT")"; doluluk_satiri=""
 fi
 
+prof "turn kalıcı liste sınırı"
 # ── Temp deny limit ─────────────────────────────────────────────────────────
 temp_limit=$(grep "^DENY_TEMP_IP_LIMIT" "$CSF_CONF" | cut -d'=' -f2 | tr -d ' "')
 temp_current=$("$CSF_BIN" -t 2>/dev/null 9>&- | grep -c "^DENY" || true)
@@ -5758,15 +5811,17 @@ else
 fi
 
 # ── Read csf.deny: singles (grouping) + CIDRs (coverage) ────────────────────
+prof "turn geçici liste sınırı"
 INEFF_RESET=1         # ineff_load beyaz listeyi bıraksın: tur izinleri değiştirebilir (izinli servisler, sağlayıcı istisnası)
 parse_deny "$DENY_FILE" 1
-[ "$DRY" = 1 ] || orphans_clean       # eklenti dışından kaldırılmış elle banların artıkları
-[ "$DRY" = 1 ] || limit_watch         # CSF sınır dolunca sildiyse: izlemeye al, bildir
-[ "$DRY" = 1 ] || proto_fix           # eski kısmi ban / istisnalara eksik UDP 443 (HTTP/3)
-[ "$DRY" = 1 ] || { svc_enforce 0; asn_enforce; cloud_enforce 0; cloud_on_calc; hits_update; guard_update; }   # izinli servisler, sağlayıcı banı, bulut listeleri: istenen durum CSF'te mi
-[ "$DRY" = 1 ] || daily_tasks         # günde bir: servis izin listeleri, CSF'in ASN verisi
-[ "$DRY" = 1 ] || { svc_health; cloud_health; }   # indirilemeyen izinli servis / bulut listesi: bildirim
+pa "turn csf.deny okuma"; [ "$DRY" = 1 ] || orphans_clean       # eklenti dışından kaldırılmış elle banların artıkları
+pa "turn artık temizliği"; [ "$DRY" = 1 ] || limit_watch         # CSF sınır dolunca sildiyse: izlemeye al, bildir
+pa "turn sınır izleme"; [ "$DRY" = 1 ] || proto_fix           # eski kısmi ban / istisnalara eksik UDP 443 (HTTP/3)
+pa "turn UDP 443"; [ "$DRY" = 1 ] || { svc_enforce 0; asn_enforce; cloud_enforce 0; cloud_on_calc; hits_update; guard_update; }   # izinli servisler, sağlayıcı banı, bulut listeleri: istenen durum CSF'te mi
+pa "turn servis/sağlayıcı/bulut zorlama"; [ "$DRY" = 1 ] || daily_tasks         # günde bir: servis izin listeleri, CSF'in ASN verisi
+pa "turn günlük işler"; [ "$DRY" = 1 ] || { svc_health; cloud_health; }   # indirilemeyen izinli servis / bulut listesi: bildirim
 
+prof "turn denetim+zorlama"
 # ── /24 grouping (permanent): auto-ban + drop singles ───────────────────────
 asn_banned            # open_count sağlayıcı banının kapattığı servisleri bilsin (yoksa web'i kapalı tekiller açık sayılır)
 perm_cls_preload      # PERMBLOCK tekillerinin servisi: durum ekranıyla aynı kaynak (bütün lfd arşivi + önbellek), tek tarama
@@ -5836,6 +5891,7 @@ if [ "$added24" -gt 0 ]; then
 fi
 logr "$(m "$M_24_DONE" "$added24")"
 
+prof "turn /24 kalıcı gruplama"
 # ── /16: şüpheli ağ uyarısı geçici banlar okunduktan sonra, kalıcı ve geçici tekiller birlikte (aşağıda) ─
 warn16=0
 # ── Read temp bans + clear singles already covered permanently ──────────────
@@ -5870,6 +5926,7 @@ for ip in "${temp_order[@]}"; do
     temp_alive+=("$ip")
 done
 
+prof "turn geçici okuma"
 # ── Temp /24 grouping ───────────────────────────────────────────────────────
 temp_added24=0; temp_added24_body=""; temp_perm_added24=0; temp_perm_added24_body=""
 for prefix in $(printf '%s\n' "${!temp_count24[@]}" | sort -V); do
@@ -5923,6 +5980,7 @@ if [ "$temp_perm_added24" -gt 0 ]; then
 fi
 logr "$(m "$M_T24_DONE" "$temp_added24" "$temp_perm_added24")"
 
+prof "turn /24 geçici gruplama"
 # ── /16: şüpheli ağ, kalıcı ve geçici tekiller birlikte; yalnız uyarı, günde bir kez ──────────────
 # Aynı ağdan gelen saldırı, LFD'nin onu hangi listeye koyduğuna bakılmadan görülsün: bir IP bir kez sayılır
 # (iki listede birden varsa kalıcı sayılır). Bu turda banlanan bloklar (kalıcı ya da geçici) sayılmaz.
@@ -6011,6 +6069,7 @@ if [ "$warn16" -gt 0 ]; then
 fi
 logr "$(m "$M_16_DONE" "$warn16")"
 
+prof "turn /16 şüpheli ağ"
 # ── Kontrol edilecekler'in kalıcı kaydı: izinli IP'den ihlal (IP başına günde bir), açık servis (aralık başına günde bir) ──
 # Olay Geçmiş'e yazılır; aynı gün ilk kez görülenler bildirime de girer — kendi sınıfı: e-posta IE_REVIEW, Slack IC_REVIEW
 # (1.15.3; önce tur bildirimleriyle birlikte IE_RUN / IC_RUN'du, ayrı açılıp kapatılamıyordu)
@@ -6019,17 +6078,20 @@ part_open_events
 [ "${#AV_MAIL[@]}" -gt 0 ] && mail_add "$(m "$M_AVIOL_SUBJ" "${#AV_MAIL[@]}")" "$M_AVIOL_BODY$NL$NL$(printf '%s\n' "${AV_MAIL[@]}")" "" IE_REVIEW
 [ "${#PO_MAIL[@]}" -gt 0 ] && mail_add "$(m "$M_POPEN_SUBJ" "${#PO_MAIL[@]}")" "$M_POPEN_BODY$NL$NL$(printf '%s\n' "${PO_MAIL[@]}")" "" IE_REVIEW
 
+prof "turn izinli ihlal+açık servis"
 # ── Whitelist skips: one email per run (each block once per day) ────────────
 if [ "$wl_skipped" -gt 0 ]; then
     mail_add "$(m "$M_MAILWL_SUBJ" "$wl_skipped")" "$(printf '%b' "$(m "$M_MAILWL_BODY")")$NL$NL$wl_skip_body"
 fi
 
+prof "turn atlananlar"
 # ── Eski blok banları (Ayarlar → Saklama; varsayılan kapalı) ────────────────
 if [ "$BLOCK_EXPIRE_AUTO" = 1 ]; then
     expire_blocks cron
     [ "$EXP_N" -gt 0 ] && mail_add "$(m "$M_EXP_SUBJ" "$EXP_N")" "$(m "$M_EXP_BODY" "$BLOCK_EXPIRE_DAYS")$NL$NL$EXP_BODY"
 fi
 
+prof "turn eski banlar"
 # ── Güvenlik duvarı sağlığı: sorun varsa günde bir kez bildirilir ───────────
 health_check
 h_msgs=()
@@ -6048,11 +6110,13 @@ fi
 h_all=""; for hm in "${h_msgs[@]}"; do h_all+="${h_all:+, }$hm"; done
 ic_track IC_FIREWALL Firewall "$([ ${#h_msgs[@]} -gt 0 ] && echo 1 || echo 0)" "$(m "$M_IC_FW" "$h_all")" "$M_H_BODY $h_all" "$M_IC_FW_OK"
 
+prof "turn sağlık"
 # ── Bu turun bildirimleri: tek mail ─────────────────────────────────────────
 mail_flush
 # kuyrukta yalnız Slack'e seçili sınıfların parçaları var (mail_flush IC_* denetler): hangi sınıftan olursa olsun boşaltılır
 slack_on && slack_queue_flush
 
+prof "turn bildirim"
 # ── Counter retention + log rotation ────────────────────────────────────────
 if [ "$DRY" != 1 ] && [ -f "$SAYAC_FILE" ]; then
     cutoff=$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')
@@ -6088,6 +6152,7 @@ ENRICH=1
 if command -v flock >/dev/null 2>&1; then exec 8>"$LOCK_FILE.enrich"; flock -n 8 || ENRICH=0; fi
 if [ "$ENRICH" = 1 ]; then
 # Adım süreleri günlüğe: tur uzun sürdüğünde nerede geçtiği görünsün
+prof "turn sayaç+günlük"
 st=$(date +%s); backfill_owners
 [ "$BF_N" -gt 0 ] && logr "$(m "$M_STEP_OWN" "$BF_N" "$(( $(date +%s) - st ))")"
 st=$(date +%s); imunify_refresh
@@ -6098,6 +6163,7 @@ case "$IM_R" in
 esac
 st=$(date +%s); backfill_imunify
 [ "$BF_N" -gt 0 ] && logr "$(m "$M_STEP_IMOWN" "$BF_N" "$(( $(date +%s) - st ))")"
+prof "turn sahip/Imunify zenginleştirme"
 owners_save
 own_blocks_save                       # eklentinin işaretsiz otomatik blok banları: sonraki tur CSF sınırının sildiklerini bulur
 fi
@@ -6111,3 +6177,4 @@ if [ "$EVENTFUL" = 0 ] && [ "$DRY" != 1 ] && [ "$LOG_MODE" = tee ]; then
 else
     logr "$(m "$M_END_T" "$RUN_DUR")"
 fi
+prof "turn son"; prof_dump
