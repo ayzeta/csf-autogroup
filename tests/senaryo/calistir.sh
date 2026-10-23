@@ -446,6 +446,17 @@ if [ "${GERCEK:-0}" = 1 ] && command -v ip >/dev/null 2>&1 && command -v python3
     check "izin yönü · geçici 'inout' ban + tcp|in|d=1:65535: bağlantı kesilir" - "$(tin)"
     check "izin yönü · geçici 'inout' ban + tcp|in|d=1:65535: 'Ban işlemiyor' denmez" - "$(ineff)"
     csf -tr $NC >/dev/null 2>&1
+    # dışarı satırı (Imunify'ın kendi sunucuları için yazdığı tcp|out|d=443|d=IP gibi): sunucunun istemcinin 443'üne bağlantısı
+    ip netns exec agcli bash -c "cd /tmp && (nohup python3 -m http.server --bind 0.0.0.0 443 >/dev/null 2>&1 &)"
+    timeout 3 bash -c 'until ip netns exec agcli ss -ltn | grep -q ":443 "; do :; done'
+    tout() { [ "$(curl -s --noproxy '*' -m 4 -o /dev/null -w '%{http_code}' http://$NC:443/ 2>/dev/null)" = 200 ] && echo G || echo -; }
+    yn; printf 'tcp|out|d=443|d=%s # test\n' $NC >> "$A"; csf -d $NC test >/dev/null 2>&1; NEEDR=1; run >/dev/null 2>&1
+    check "izin yönü · kalıcı ban + yalnız dışarı satırı: sunucunun bu adrese bağlantısı kesilir" - "$(tout)"
+    check "izin yönü · yalnız dışarı satırı: IP kartı 'ban bu bağlantıları da keser' der (out)" G "$([ "$(wle)" = out ] && echo G || echo "-:$(wle)")"
+    printf 'tcp|in|s=443|s=%s # test\n' $NC >> "$A"; NEEDR=1; run >/dev/null 2>&1
+    check "izin yönü · kalıcı ban + dışarı satırı karşı yönüyle çift: sunucunun bağlantısı geçer" G "$(tout)"
+    check "izin yönü · dışarı çifti: IP kartı 'yalnız o portu açar' der (pair)" G "$([ "$(wle)" = pair ] && echo G || echo "-:$(wle)")"
+    ip netns exec agcli pkill -f '^python3 -m http.server --bind 0.0.0.0 443' 2>/dev/null
     pkill -f "^python3 -m http.server --bind 0.0.0.0 $PT" 2>/dev/null; ip netns del agcli 2>/dev/null; ip link del agv0 2>/dev/null
 fi
 
