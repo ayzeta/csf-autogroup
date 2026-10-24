@@ -107,6 +107,12 @@ rvrow() { run --status --json 2>/dev/null | grep -o '"review":\[.*\],"ignored"' 
 mkl() { mk "$1"; echo "LFD_LOG=$R/lfd.log" >> "$R/app/config.env"; : > "$R/lfd.log"; }
 mkl aab;  printf '151.80.7.9 # müşteri\n' >> "$A"; lfdb 3600 151.80.7.9
 mcheck "izinli IP lfd'de banlandı → 'Ban işlemiyor' (tam izin)" "rvrow 151.80.7.9 | grep -q '\"type\":\"allow_ban\".*\"bk\":\"b\".*\"full\":1'"
+# satır, panelin yazdığı düşme anında düşer (son kayıt + REVIEW_DAYS, saatiyle): motor kayıtları gün gün topluyor, pencerenin
+# ilk gününü bütünüyle tuttuğu için satır bir gün geç düşüyordu (kullanıcı: "24 Eki'de düşer" yazıyor, 24 Eki'de duruyor)
+mkl aadrop1; printf '151.80.7.9 # müşteri\n' >> "$A"; lfdi $(( 7 * 86400 + 3600 )) 151.80.7.9
+mcheck "izinli IP satırı: son kayıt 7 gün + 1 saat önce → listeden düşmüş (panelin düşme tarihiyle aynı)" "[ -z \"\$(rvrow 151.80.7.9)\" ]"
+mkl aadrop2; printf '151.80.7.9 # müşteri\n' >> "$A"; lfdi $(( 7 * 86400 - 3600 )) 151.80.7.9
+mcheck "izinli IP satırı: son kayıt 7 gün − 1 saat önce → hâlâ listede" "[ -n \"\$(rvrow 151.80.7.9)\" ]"
 mkl aai;  printf '151.80.7.9 # müşteri\n' >> "$A"; for x in 1 2 3; do lfdi $(( 600 * x )) 151.80.7.9; done
 mcheck "IGNORE_ALLOW açıkken izinli IP yoksayıldı → 'lfd yoksaydı', 3 kez, tam izin" "rvrow 151.80.7.9 | grep -q '\"bk\":\"i\",\"cnt\":3,\"full\":1'"
 rvt() { local r a b; r=$(rvrow "$1"); a="${r#*\"t\":}"; a="${a%%,*}"; b="${r#*\"ips\":[}"; b="${b#*\"t\":}"; b="${b%%,*}"; echo $((b - a)); }   # IP'nin son kaydı − satırın zamanı (saniye)

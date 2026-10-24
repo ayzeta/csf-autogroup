@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.15.22 — 2026-10-24
+
+- **Fix: review rows dropped off a day later than they said.** A row says it
+  will drop off on its last record's date plus *Time on the list*. For
+  allowed, ignored and server-IP rows (read from lfd's log) and for older
+  suspicious-network and skipped rows (from the counter), the plugin kept the
+  whole first day of the window, so the row stayed until the next midnight.
+  Now it drops off at the time it shows.
+
 ## 1.15.21 — 2026-10-24
 
 - **The range card tells the same story as the review list.** Its *Review*

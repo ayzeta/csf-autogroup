@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.21"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.22"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -2565,6 +2565,7 @@ do_status() {
         while read -r k u; do
             [[ "$u" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || continue
             [[ "$u" < "$rsince" ]] && continue
+            day_epoch "$u"; [ "$REPLY" -lt $(( now - REVIEW_DAYS * 86400 )) ] && continue   # düşme anı panelle aynı: satır zamanı + REVIEW_DAYS
             case "$k" in
                 WARN16_*)      ty=warn16;  c="${k#WARN16_}.0.0/16" ;;
                 WARN_TEMP16_*) ty=warn16t; c="${k#WARN_TEMP16_}.0.0/16" ;;
@@ -4846,7 +4847,7 @@ allow_atk_load() {  # SINCE_EPOCH → AA_* (IP başına: k, olay sayısı, son z
     done < <({
         wl_ff_lines
         echo "#--"
-        { [ "${#rot[@]}" -gt 0 ] && tail -n +2 "$cache" 2>/dev/null; [ -r "$LFD_LOG" ] && aa_days "$LFD_LOG"; } | awk -F'|' -v d0="$day0" '$3 >= d0'
+        { [ "${#rot[@]}" -gt 0 ] && tail -n +2 "$cache" 2>/dev/null; [ -r "$LFD_LOG" ] && aa_days "$LFD_LOG"; } | awk -F'|' -v d0="$day0" -v s="$since" '$3 > d0 || ($3 == d0 && $5 + 0 >= s)'
         aa_ineff_rows "$since"
     } | awk -v f3="$f3" '
         function v4(x,  p) { split(x, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
