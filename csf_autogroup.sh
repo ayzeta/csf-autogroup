@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.23"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.24"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1018,6 +1018,18 @@ jstr() {         # dizgi → REPLY = JSON dizgisi (tırnaklı, kaçışlı)
     s="${s//\\/\\\\}"; s="${s//\"/\\\"}"; s="${s//[[:cntrl:]]/ }"
     REPLY="\"$s\""
 }
+ev_ips_of() {    # CIDR → REPLY = olay kaydında o aralığın son IP listesi (JSON dizisi "[…]", yoksa boş). Ban kaldırılırken
+    # kaldırma olayına kopyalanır: asıl ban kaydı, ban artık durmadığı için saklama süresinde silinir; "neden banlanmıştı"
+    # sorusunun cevabı kaldırma kaydında kalsın. JSON dizgileri içindeki köşeli parantez ve kaçışlar sayılmaz.
+    REPLY=""
+    [ -r "$EVENTS_FILE" ] || return 0
+    REPLY=$(grep -F "\"cidr\":\"$1\"" "$EVENTS_FILE" 2>/dev/null | grep -F '"ips":[{' | tail -n 1 | awk '{
+        i = index($0, "\"ips\":["); if (!i) exit
+        s = substr($0, i); d = 0; q = 0; e = 0
+        for (j = 7; j <= length(s); j++) { c = substr(s, j, 1)
+            if (q) { if (e) e = 0; else if (c == "\\") e = 1; else if (c == "\"") q = 0; continue }
+            if (c == "\"") q = 1; else if (c == "[") d++; else if (c == "]") { d--; if (d == 0) { print substr(s, 7, j - 6); exit } } } }')
+}
 ev() {           # TYPE CIDR [anahtar=HAZIR_JSON ...]
     [ "$DRY" = 1 ] && return 0
     local line kv ts
@@ -1453,7 +1465,8 @@ expire_blocks() { # KİM → BLOCK_EXPIRE_DAYS'ten eski blok banlarını kaldır
         if perm_remove "$tok"; then
             log "$(m "$M_EXP_LOG" "$tok" "$age")"
             EXP_N=$((EXP_N + 1)); EXP_BODY+="$(m "$M_EXP_LINE" "$tok" "$age")$NL"
-            jstr "$1"; ev expire "$tok" "age=$age" "by=$REPLY"
+            jstr "$1"; local eby="$REPLY"; ev_ips_of "$tok"
+            ev expire "$tok" "age=$age" "by=$eby" ${REPLY:+"ips=$REPLY"}
         else
             log "$(m "$M_EXP_FAIL" "$tok")"
         fi
@@ -1685,17 +1698,19 @@ ip_line() {      # IP NOTE WITH_OWNER(0|1) → REPLY = "   - IP  hostname  [ASN 
     REPLY="$out"
 }
 ip_lines() {     # "IP IP ..." KIND(perm|temp|mix) WITH_OWNER → REPLY; tekrarsız, sıralı, ilk 40, fazlası "(+N)"
-    local all ip n=0 total out="" note js=""
+    # Olay kaydına (IPS_J) 256 IP'ye kadar yazılır: banın / uyarının dayandığı IP'ler sonradan kartta tek tek görünsün (tekiller
+    # blok banı konunca csf.deny'den silinir, başka kaynağı kalmaz). 40'tan sonrakilerde sahip sorgusu yok: IP ve sebep.
+    local all ip n=0 total out="" note js="" jw
     all=$(printf '%s\n' $1 | grep -E "$IPV4_RE" | sort -Vu)
     total=$(printf '%s\n' "$all" | grep -c .)
     for ip in $all; do
-        [ "$n" -ge 40 ] && break; n=$((n + 1))
+        [ "$n" -ge 256 ] && break; n=$((n + 1))
         case "$2" in temp) note="${TNOTE[$ip]}" ;; mix) note="${SINGLE_NOTE[$ip]:-${TNOTE[$ip]}}" ;; *) note="${SINGLE_NOTE[$ip]}" ;; esac
-        ip_line "$ip" "$note" "$3"; out+="$REPLY$NL"
-        js+="${js:+,}$IPJ"
+        if [ "$n" -le 40 ]; then ip_line "$ip" "$note" "$3"; out+="$REPLY$NL"; js+="${js:+,}$IPJ"
+        else short_reason "$note" "$ip"; jstr "$REPLY"; jw="$REPLY"; js+="${js:+,}{\"ip\":\"$ip\",\"why\":$jw}"; fi
     done
     [ "$total" -gt 40 ] && out+="   (+$((total - 40)))$NL"
-    IPS_J="[$js]"; IPS_TOTAL="$total"   # olay kaydı için: ilk 40 IP'nin JSON'u + toplam
+    IPS_J="[$js]"; IPS_TOTAL="$total"   # olay kaydı için: 256 IP'ye kadar JSON + toplam
     REPLY="$out"
 }
 owner_line() {   # "IP IP ..." → REPLY = ilk IP'nin /24'ü için "   Sahibi: ..." satırı (bilgi yoksa boş)
@@ -2899,8 +2914,10 @@ do_status() {
         printf '"usage":{"perm":[%s,%s],"temp":[%s,%s]},' "$(num "$pc")" "$limit" "$(num "$tc")" "$tlimit"
         printf '"last_run":%s,' "${last:-null}"
         jstr "$cronm"; printf '"cron_min":%s,"runs":%s,' "$REPLY" "$runsj"
-        printf '"cron_interval":%s,"daily":{"start":%s,%s},"owners":{%s},"asn_top":[%s],"blocks_top":[%s],"imunify":%s,' \
-            "$(cron_interval "$cronm")" "$dstart" "$daily" "${owners[*]}" "${tops[*]}" "${btops[*]}" "$imj"
+        # ev_start: olay kaydının ilk satırının zamanı — panel, kaydı olmayan eski ban / izleme için "kayıt şu tarihte başladı" der
+        local evs; evs=$(head -c 200 "$EVENTS_FILE" 2>/dev/null | sed -n '1s/^{"t":\([0-9]*\).*/\1/p')
+        printf '"cron_interval":%s,"ev_start":%s,"daily":{"start":%s,%s},"owners":{%s},"asn_top":[%s],"blocks_top":[%s],"imunify":%s,' \
+            "$(cron_interval "$cronm")" "$(num "$evs")" "$dstart" "$daily" "${owners[*]}" "${tops[*]}" "${btops[*]}" "$imj"
         # sıralamalardan çıkarılan, CSF'te banlı sağlayıcılar (panel listenin altında gösterir)
         prof header
         local bj="" ba bn
@@ -3182,7 +3199,7 @@ inside_attacks() { # CIDR → REPLY = {"ssh":12,"web":3,…}: aralıktaki IP'ler
 }
 inside_ev() {    # IP SEBEP → IN_EVJ'ye ekle
     IN_EVN=$((IN_EVN + 1))
-    [ "$IN_EVN" -le 40 ] || return 0
+    [ "$IN_EVN" -le 256 ] || return 0   # olay kaydında 256'ya kadar (kaldırılanların hepsi geri yükleme kopyasında)
     local jw w="${2:-$M_H_NOREASON}"
     is_dnd "$w" && w=$(printf '%s' "$w" | sed -E 's/[[:space:]]*-?[[:space:]]*[Dd][Oo][[:space:]]+[Nn][Oo][Tt][[:space:]]+[Dd][Ee][Ll][Ee][Tt][Ee][[:space:]]*//')
     jstr "${w:-$M_H_NOREASON}"; jw="$REPLY"
@@ -3799,7 +3816,7 @@ limit_watch() {
     for c in "${gone[@]}"; do
         p="${c%.0/24}"
         grep -qE "^${p//./\\.} " "$SAYAC_FILE" 2>/dev/null || cnt_add "$p $TODAY"
-        log "$(m "$M_LIM_GONE" "$c")"; ev limit_gone "$c" "limit=$(num "$lim")"
+        log "$(m "$M_LIM_GONE" "$c")"; ev_ips_of "$c"; ev limit_gone "$c" "limit=$(num "$lim")" ${REPLY:+"ips=$REPLY"}
         body+="  $c$NL"
     done
     mail_add "$(m "$M_LIM_SUBJ" "${#gone[@]}")" "$(m "$M_LIM_BODY" "${lim:-?}")$NL$NL$body" bad IE_LISTFULL
@@ -4670,7 +4687,7 @@ do_action() {    # NAME TARGET [DAYS]
                 act_out 1 "$(m "$M_A_NOTFOUND" "$t")"; return
             fi
             log "$(m "$M_A_LOG" "$AG_BY" "$(m "$M_A_UNBANNED" "$t")")"
-            ev manual_unban "$t" "by=\"$AG_BY\"" "restored=$UB_RN"
+            ev_ips_of "$t"; ev manual_unban "$t" "by=\"$AG_BY\"" "restored=$UB_RN" ${REPLY:+"ips=$REPLY"}
             if [ "$UB_RN" -gt 0 ]; then act_out 0 "$(m "$M_A_RESTORED" "$(m "$M_A_UNBANNED" "$t")" "$UB_RN")"
             else act_out 0 "$(m "$M_A_UNBANNED" "$t")"; fi ;;
         expire)
@@ -6113,7 +6130,8 @@ for ip in "${temp_order[@]}"; do
     ip2int "$ip"; n=$REPLY
     if [ -n "${DENY_IP[$ip]+x}" ] || perm_covers "$n" "$n"; then
         csf_run -tr "$ip"; log "$(m "$M_TCLEAN" "$ip")"
-        ev clean_temp "$ip"; continue
+        short_reason "${TNOTE[$ip]}" "$ip"; jstr "$REPLY"
+        ev clean_temp "$ip" "why=$REPLY"; continue
     fi
     temp_covers "$n" "$n" && continue
     [ -n "${INEFF[$ip]+x}" ] && continue     # izinli IP'nin geçici banı işlemez: blok ve şüpheli ağ sayımına girmez
@@ -6347,13 +6365,21 @@ fi
 # Satır başında zaman yoksa (bozuk satır) dokunulmaz.
 if [ "$DRY" != 1 ] && [ -f "$EVENTS_FILE" ]; then
     ev_now=$(date +%s)
-    if awk -v cr=$(( ev_now - (RUN_DAYS + 1) * 86400 )) -v co=$(( ev_now - (EVENTS_DAYS + 1) * 86400 )) '
-           match($0, /^\{"t":[0-9]+/) { t = substr($0, 6, RLENGTH - 5) + 0; if (t < (index($0, "\"type\":\"run\"") ? cr : co)) { f = 1; exit } }
-           END { exit !f }' "$EVENTS_FILE"; then
-        awk -v cr=$(( ev_now - RUN_DAYS * 86400 )) -v co=$(( ev_now - EVENTS_DAYS * 86400 )) '
-            match($0, /^\{"t":[0-9]+/) { t = substr($0, 6, RLENGTH - 5) + 0; if (t < (index($0, "\"type\":\"run\"") ? cr : co)) next }
-            { print }' "$EVENTS_FILE" > "${EVENTS_FILE}.tmp" && mv "${EVENTS_FILE}.tmp" "$EVENTS_FILE"
+    # duran banlar ve izlemeler: csf.deny'deki aralıklar (gelişmiş satırın s= aralığı dahil), geçici aralık banları, izlenen /24'ler
+    ev_keep=$(mktemp) || ev_keep=/dev/null
+    { awk '{ l = $0; sub(/[ \t]*#.*/, "", l); n = split(l, f, "|"); for (i = 1; i <= n; i++) { x = f[i]; sub(/^[sd]=/, "", x); if (x ~ /^[0-9.]+\/[0-9]+$/) print x } }' "$DENY_FILE" 2>/dev/null
+      awk -F'|' '$2 ~ /\// { print $2 }' "$CSF_VAR/csf.tempban" 2>/dev/null
+      awk '$1 ~ /^[0-9]+\.[0-9]+\.[0-9]+$/ { print $1 ".0/24" }' "$SAYAC_FILE" 2>/dev/null; } > "$ev_keep"
+    EV_TRIM='FILENAME == ARGV[1] { K[$0] = 1; next }
+        { old = 0 }
+        match($0, /^\{"t":[0-9]+/) { t = substr($0, 6, RLENGTH - 5) + 0; old = t < (index($0, "\"type\":\"run\"") ? cr : co)
+            if (old && match($0, /"cidr":"[0-9.\/]+"/) && (substr($0, RSTART + 8, RLENGTH - 9) in K)) old = 0 }'
+    if awk -v cr=$(( ev_now - (RUN_DAYS + 1) * 86400 )) -v co=$(( ev_now - (EVENTS_DAYS + 1) * 86400 )) "$EV_TRIM"'
+           old { f = 1; exit } END { exit !f }' "$ev_keep" "$EVENTS_FILE"; then
+        awk -v cr=$(( ev_now - RUN_DAYS * 86400 )) -v co=$(( ev_now - EVENTS_DAYS * 86400 )) "$EV_TRIM"'
+            !old { print }' "$ev_keep" "$EVENTS_FILE" > "${EVENTS_FILE}.tmp" && mv "${EVENTS_FILE}.tmp" "$EVENTS_FILE"
     fi
+    [ "$ev_keep" = /dev/null ] || rm -f "$ev_keep"
 fi
 digest_maybe
 

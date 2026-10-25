@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.15.24 — 2026-10-25
+
+- **What a ban rests on stays visible.** When the plugin replaces single bans
+  with a block ban, or removes bans for another reason, the IPs and their
+  reasons stay in the event log and on the cards.
+  - The range card lists a block ban's IPs one by one, with service and
+    reason, not only "4 IPs · Repeat ban". The same goes for a watched
+    block's temp block ban.
+  - A watched block's card says since when it is watched, how long is left
+    and what makes it permanent.
+  - Events behind a ban or a watch that is still in place are kept past the
+    *History kept for* period.
+  - Removing a ban (old block ban expired, *Remove*, or CSF's list limit)
+    copies the IPs it rested on into the removal record, so the reason stays
+    readable after the ban is gone.
+  - A temp ban removed because a permanent ban already covers it keeps its
+    reason in the record.
+  - Bans and suspicious-network warnings record up to 256 IPs (was 40; the
+    mail still lists the first 40).
+- **No "no recorded violations" for bans the log never saw.** For a ban or
+  watch set before the event log started, the cards say so and give the date
+  the log started, instead of "No recorded violations from this range".
+- **Fix: the same IP counted twice.** Events written during the 1.15.12
+  incident list some IPs twice (a block shown as "4 IPs" had 2). The panel
+  counts each IP once.
+
 ## 1.15.23 — 2026-10-25
 
 - **Record keeping is set in days, not lines** (*Settings → Server → Record

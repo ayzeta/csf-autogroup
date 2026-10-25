@@ -408,13 +408,31 @@ mcheck "aralık kartı · hizasız aralık reddedilir" "run --inside 151.80.7.5/
 # tur kayıtları 31 gün; günlük (logrotate yoksa) 30 gün
 evl() { printf '{"t":%s,"type":"%s","cidr":"151.80.%s.0/24"}\n' "$(( NOW - $1 * 86400 ))" "$2" "$3" >> "$R/var/lib/csf_autogroup/events.jsonl"; }
 mk keep; evl 200 add24 1; evl 100 add24 2; evl 33 run 3; evl 10 run 4; evl 1 add24 5
-printf '[%s] eski satır\n[%s] yeni satır\n' "$(date -d '40 days ago' '+%Y-%m-%d %H:%M:%S')" "$(date -d '2 days ago' '+%Y-%m-%d %H:%M:%S')" > "$R/autogroup.log"
+printf '[%s] TEST-ESKI-SATIR\n[%s] TEST-YENI-SATIR\n' "$(date -d '40 days ago' '+%Y-%m-%d %H:%M:%S')" "$(date -d '2 days ago' '+%Y-%m-%d %H:%M:%S')" > "$R/autogroup.log"
 echo "LOGROTATE_CONF=$R/yok" >> "$R/app/config.env"; quiet
 EVF="$R/var/lib/csf_autogroup/events.jsonl"
 mcheck "saklama · 180 günden eski olay silinir, 100 günlük kalır" "! grep -q '151.80.1.0' '$EVF' && grep -q '151.80.2.0' '$EVF' && grep -q '151.80.5.0' '$EVF'"
 mcheck "saklama · 31 günden eski tur kaydı silinir, 10 günlük kalır" "! grep -q '151.80.3.0' '$EVF' && grep -q '151.80.4.0' '$EVF'"
-mcheck "saklama · logrotate yokken günlükte 30 günden eski satır silinir" "! grep -q 'eski satır' '$R/autogroup.log' && grep -q 'yeni satır' '$R/autogroup.log'"
+mcheck "saklama · logrotate yokken günlükte 30 günden eski satır silinir" "! grep -q 'TEST-ESKI-SATIR' '$R/autogroup.log' && grep -q 'TEST-YENI-SATIR' '$R/autogroup.log'"
 mcheck "saklama · ayar ekranı olay kaydının kapsamını verir (sayı, en eski)" "run --config get --json 2>/dev/null | grep -q '\"ev\":{\"n\":[0-9]*,\"oldest\":[0-9]*,\"runs\":[0-9]*,\"runs_oldest\":[0-9]*' && run --config get --json 2>/dev/null | grep -q '\"EVENTS_DAYS\":\"180\",\"RUN_DAYS\":\"31\"'"
+# banı ya da izlemesi duran aralığın kaydı süreden bağımsız kalır (eski blok banları 365 güne kadar durur; dayandığı IP'ler
+# kartta görünsün), duranı olmayanın kaydı silinir
+mk keep3; evl 200 add24 7; evl 200 add24 8; evl 200 temp24 9
+printf '151.80.7.0/24 # Auto-grouped /24: 3 kalıcı tekil nedeniyle kalıcı banlandı - %s\n' "$DT" >> "$D"; printf '151.80.9 %s\n' "$(date +%F)" >> "$C"; quiet
+mcheck "saklama · duran blok banının ve izlenen bloğun 200 günlük kaydı kalır, duranı olmayanınki silinir" "grep -q '151.80.7.0' '$R/var/lib/csf_autogroup/events.jsonl' && grep -q '151.80.9.0' '$R/var/lib/csf_autogroup/events.jsonl' && ! grep -q '151.80.8.0' '$R/var/lib/csf_autogroup/events.jsonl'"
+mcheck "saklama · durum çıktısı olay kaydının başlangıcını verir (kaydı olmayan eski ban için)" "run --status --json 2>/dev/null | grep -q '\"ev_start\":[1-9][0-9]*,'"
+# kaldırılan banın sebebi kayıtta: kalıcı banın kapsadığı geçici ban temizlenirken
+mk tclean; single 151.80.7.9 sshd; printf '%s|151.80.7.9||in|3600|lfd: (pop3d) Failed POP3 login from 151.80.7.9 (FR/France/-): 5 in the last 3600 secs\n' "$NOW" >> "$T"; quiet
+mcheck "kayıt · kalıcı banın kapsadığı geçici ban temizlenince sebebi de kayda girer" "grep '\"type\":\"clean_temp\"' '$R/var/lib/csf_autogroup/events.jsonl' | grep -q '\"why\":\"(pop3d) Failed POP3 login'"
+# 40'tan fazla IP'li şüpheli ağ: kayıt hepsini tutar (mail ilk 40'ı yazar); 23 blok × 2 tekil (blok eşiği 3'ün altında)
+mk w16big; for b in $(seq 10 32); do single "151.80.$b.1" sshd; single "151.80.$b.2" sshd; done; quiet
+mcheck "kayıt · 46 IP'li şüpheli ağ uyarısında 46 IP de kayıtta (önce ilk 40)" "[ \$(grep '\"type\":\"warn16\"' '$R/var/lib/csf_autogroup/events.jsonl' | head -n 1 | grep -o '\"ip\":\"' | wc -l) = 46 ]"
+# eski blok banı kendiliğinden kaldırılınca kaldırma kaydı banın IP'lerini taşır (asıl ban kaydı saklama süresinde silinir);
+# sebepte köşeli parantez, tırnak ve kaçış olsa da satır geçerli JSON
+mk expips; printf '{"t":%s,"type":"add24","cidr":"151.80.7.0/24","n":2,"ips":[{"ip":"151.80.7.1","why":"(sshd) Failed [LF_SSHD] \\"x\\" ]["},{"ip":"151.80.7.2","why":"b"}],"total":2}\n' "$(( NOW - 400 * 86400 ))" > "$R/var/lib/csf_autogroup/events.jsonl"
+printf '151.80.7.0/24 # Auto-grouped /24: 2 kalıcı tekil nedeniyle kalıcı banlandı - %s\n' "$(LC_ALL=C date -d '400 days ago' '+%a %b %d %H:%M:%S %Y')" >> "$D"
+echo "BLOCK_EXPIRE_AUTO=1" >> "$R/app/config.env"; quiet
+mcheck "kayıt · eski blok banı kaldırılınca kaldırma kaydı banın IP'lerini taşır, satır geçerli JSON" "grep '\"type\":\"expire\"' '$R/var/lib/csf_autogroup/events.jsonl' | grep -q '\"ips\":\[{\"ip\":\"151.80.7.1\".*{\"ip\":\"151.80.7.2\",\"why\":\"b\"}\]' && grep '\"type\":\"expire\"' '$R/var/lib/csf_autogroup/events.jsonl' | node -e 'let s=\"\";process.stdin.on(\"data\",d=>s+=d).on(\"end\",()=>{JSON.parse(s.trim());})'"
 mk keep2; evl 175 add24 1; evl 20 run 2; quiet
 mcheck "saklama · süresi dolmamış kayıt varken dosya yeniden yazılmaz (yalnız tur satırı eklenir)" "grep -q '151.80.1.0' '$R/var/lib/csf_autogroup/events.jsonl' && grep -q '151.80.2.0' '$R/var/lib/csf_autogroup/events.jsonl'"
 
