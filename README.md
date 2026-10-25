@@ -314,7 +314,9 @@ its own:
 
 - **General** — running / paused, how often the cron run starts (every 5 / 10
   / 15 / 30 minutes or hourly), and the language of the log, the mails and
-  the panel.
+  the panel. More frequent runs ban a block that crosses a threshold sooner
+  (at most one run later); every run, even a quiet one, adds a summary line to
+  the log and a run record to History.
 - **Ban rules** — block ban (`/24`): permanent singles needed, the count that
   makes it *kept* (`do not delete`) and the temp block ban; suspicious network
   (`/16`, permanent and temp single bans counted together); the watch period
@@ -362,11 +364,14 @@ its own:
   each list is), a **Server requirements** card listing the tools CSF
   Auto-Group uses (CSF, cron, mail, dig/host, logrotate, flock, timeout, git,
   Imunify360, ModSecurity hit log, sqlite3) and what happens when one is
-  missing, and the log file: rotated by the system's logrotate
-  (`/etc/logrotate.d/csf_autogroup`, written from these settings; default
-  1 MB, 5 compressed archives); where logrotate is missing, a log line limit
-  is used instead. A run where nothing happened leaves a single line in the
-  log.
+  missing, **Record keeping**: how many days History (bans, warnings, manual
+  actions, setting changes; default 180) and the run records (default 31, at
+  least 31: the summary cards compare with 30 days ago) are kept, with how many
+  there are now and how far back they go; and the log file: rotated by the
+  system's logrotate (`/etc/logrotate.d/csf_autogroup`, written from these
+  settings; default 1 MB, 5 compressed archives); where logrotate is missing,
+  lines older than a number of days (default 30) are removed instead. A run
+  where nothing happened leaves a single line in the log.
 
 *Try before saving* runs a dry run with the unsaved thresholds. Saving writes
 `config.env` (previous file kept as `config.env.bak`), updates the crontab and

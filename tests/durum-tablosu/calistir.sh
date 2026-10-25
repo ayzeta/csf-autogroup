@@ -404,6 +404,20 @@ mcheck "aralık kartı · geçici tek IP banı da listede, kalan süreyle (kart 
 mcheck "aralık kartı · /12 geçerli cevap (içinde tekil yok)" "run --inside 151.0.0.0/12 --json 2>/dev/null | grep -q '\"singles\":0,'"
 mcheck "aralık kartı · hizasız aralık reddedilir" "run --inside 151.80.7.5/26 --json 2>/dev/null | grep -q 'bad_input'"
 
+# Kayıt saklama gün olarak (önce satır sayısıyla: tur sıklığı değişince kapsadığı süre de değişiyordu). Varsayılan: olaylar 180,
+# tur kayıtları 31 gün; günlük (logrotate yoksa) 30 gün
+evl() { printf '{"t":%s,"type":"%s","cidr":"151.80.%s.0/24"}\n' "$(( NOW - $1 * 86400 ))" "$2" "$3" >> "$R/var/lib/csf_autogroup/events.jsonl"; }
+mk keep; evl 200 add24 1; evl 100 add24 2; evl 33 run 3; evl 10 run 4; evl 1 add24 5
+printf '[%s] eski satır\n[%s] yeni satır\n' "$(date -d '40 days ago' '+%Y-%m-%d %H:%M:%S')" "$(date -d '2 days ago' '+%Y-%m-%d %H:%M:%S')" > "$R/autogroup.log"
+echo "LOGROTATE_CONF=$R/yok" >> "$R/app/config.env"; quiet
+EVF="$R/var/lib/csf_autogroup/events.jsonl"
+mcheck "saklama · 180 günden eski olay silinir, 100 günlük kalır" "! grep -q '151.80.1.0' '$EVF' && grep -q '151.80.2.0' '$EVF' && grep -q '151.80.5.0' '$EVF'"
+mcheck "saklama · 31 günden eski tur kaydı silinir, 10 günlük kalır" "! grep -q '151.80.3.0' '$EVF' && grep -q '151.80.4.0' '$EVF'"
+mcheck "saklama · logrotate yokken günlükte 30 günden eski satır silinir" "! grep -q 'eski satır' '$R/autogroup.log' && grep -q 'yeni satır' '$R/autogroup.log'"
+mcheck "saklama · ayar ekranı olay kaydının kapsamını verir (sayı, en eski)" "run --config get --json 2>/dev/null | grep -q '\"ev\":{\"n\":[0-9]*,\"oldest\":[0-9]*,\"runs\":[0-9]*,\"runs_oldest\":[0-9]*' && run --config get --json 2>/dev/null | grep -q '\"EVENTS_DAYS\":\"180\",\"RUN_DAYS\":\"31\"'"
+mk keep2; evl 175 add24 1; evl 20 run 2; quiet
+mcheck "saklama · süresi dolmamış kayıt varken dosya yeniden yazılmaz (yalnız tur satırı eklenir)" "grep -q '151.80.1.0' '$R/var/lib/csf_autogroup/events.jsonl' && grep -q '151.80.2.0' '$R/var/lib/csf_autogroup/events.jsonl'"
+
 node "$(wp "$H/render.js")" "$(wp "$REPO/whm/assets/ag.js")" "$(wp "$W/out")" "$@"; RC=$?
 printf '\nMotor kuralları\n%s' "$ML"
 [ "$MF" -gt 0 ] && { echo "$MF motor kuralı ihlali"; exit 1; }

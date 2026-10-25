@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.15.23 — 2026-10-25
+
+- **Record keeping is set in days, not lines** (*Settings → Server → Record
+  keeping*). History (bans, warnings, manual actions, setting changes) is kept
+  for 180 days and run records for 31 days. Before, they were kept by count
+  (5,000 events, 1,000 runs), so how far back they reached depended on the run
+  frequency. At a 15-minute run the 1,000 runs covered about 10 days: the
+  summary cards' comparison with 30 days ago and the weekly summary's run
+  count came up short. Run records are kept for at least 31 days. The card
+  shows how many records there are now and how far back they go. The file is
+  rewritten at most once a day, not on every run.
+- **Log fallback in days too.** Where logrotate is missing, log lines older
+  than 30 days are removed (*Settings → Server → Log file*), instead of keeping
+  the last 5,000 lines. `LOG_MAX_LINES` is replaced by `LOG_KEEP_DAYS`.
+- **The run frequency setting explains the trade-off.** More frequent runs ban
+  a block that crosses a threshold sooner (at most one run later). Every run,
+  even a quiet one, adds a summary line to the log and a run record to
+  History.
+
 ## 1.15.22 — 2026-10-24
 
 - **Fix: review rows dropped off a day later than they said.** A row says it

@@ -85,7 +85,7 @@ printf '%s\n%s\n' "$EXISTING" "$CRON_LINE" | crontab -
 
 # ── Log rotation (logrotate varsa) ──────────────────────────────────
 # Günlük LOG_ROTATE_MB'ı geçince döndürülür, son LOG_ROTATE_KEEP arşiv sıkıştırılmış saklanır. Betik bu dosyayı görünce
-# kendi satır sınırıyla kesmeyi bırakır; logrotate yoksa LOG_MAX_LINES kullanılır.
+# kendi kırpmasını bırakır; logrotate yoksa LOG_KEEP_DAYS günden eski satırları siler.
 ROTATE="skipped (logrotate not found)"
 if [ -d /etc/logrotate.d ] && command -v logrotate >/dev/null 2>&1; then
     # boyut ve arşiv sayısı config.env'den (Ayarlar sekmesi): dosyayı betiğin kendisi yazar

@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.22"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.23"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -84,7 +84,7 @@ THRESHOLD_TEMP_24="${THRESHOLD_TEMP_24:-3}"
 THRESHOLD_TEMP_16="${THRESHOLD_TEMP_16:-5}"
 LOOKUP="${LOOKUP:-1}"                            # 1 = hostname/owner lookups in emails
 LOOKUP_TIMEOUT="${LOOKUP_TIMEOUT:-2}"            # seconds per DNS query
-LOG_MAX_LINES="${LOG_MAX_LINES:-5000}"         # yalnız logrotate yoksa (yedek yöntem)
+LOG_KEEP_DAYS="${LOG_KEEP_DAYS:-30}"           # yalnız logrotate yoksa (yedek yöntem): bu kadar günden eski satırlar silinir
 LOG_ROTATE_MB="${LOG_ROTATE_MB:-1}"             # logrotate: günlük bu boyutu geçince döndürülür
 LOG_ROTATE_KEEP="${LOG_ROTATE_KEEP:-5}"         # logrotate: saklanan sıkıştırılmış arşiv sayısı
 BLOCK_EXPIRE_DAYS="${BLOCK_EXPIRE_DAYS:-365}"   # bu süreden eski blok banları "eski" sayılır
@@ -98,8 +98,12 @@ SVC_REFRESH_DAYS="${SVC_REFRESH_DAYS:-1}"     # izinli servis listeleri bu kadar
 SVC_FAIL_DAYS="${SVC_FAIL_DAYS:-3}"           # bir izinli servis listesi bu kadar gün indirilemezse bildirilir
 GEO_REFRESH_DAYS="${GEO_REFRESH_DAYS:-25}"    # CSF'in ASN verisi (ip2asn) bundan eskiyse lfd'ye yeniden indirtilir
 EVENTS_FILE="${EVENTS_FILE:-$(dirname "$SAYAC_FILE")/events.jsonl}"   # WHM eklentisi / --status okur
-EVENTS_MAX="${EVENTS_MAX:-5000}"   # banlar/uyarılar/elle işlemler; tur kayıtları ayrıca son RUNS_MAX
-RUNS_MAX="${RUNS_MAX:-1000}"
+# Olay kaydının saklama süresi (gün): banlar, uyarılar, elle işlemler ve ayar değişiklikleri EVENTS_DAYS, tur kayıtları RUN_DAYS.
+# Önce satır sayısıyla tutuluyordu (5000 olay, 1000 tur): tur sıklığı değişince kapsadığı süre de değişiyordu (30 dakikada
+# 1000 tur ~21 gün, 15 dakikada ~10 gün) ve 30 günlük karşılaştırma ile haftalık özetin tur sayımı eksik kalıyordu.
+# RUN_DAYS en az 31: özet kartlarının 30 gün önceyle karşılaştırması tur kayıtlarından okunur.
+EVENTS_DAYS="${EVENTS_DAYS:-180}"
+RUN_DAYS="${RUN_DAYS:-31}"
 IGNORE_FILE="${IGNORE_FILE:-$(dirname "$SAYAC_FILE")/ignored}"       # "yoksay" denen /16 ve /24'ler
 REVIEW_DAYS="${REVIEW_DAYS:-7}"                                        # "kontrol edilecekler" kaç gün geriye bakar
 PLUGIN_DIR="${PLUGIN_DIR:-/usr/local/cpanel/whostmgr/docroot/cgi/csf_autogroup}"   # eklenti kurulu mu?
@@ -290,7 +294,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_CC_NOLOOKUP="UYARI: CC_IGNORE/CC_ALLOW veya csf.rignore tanımlı ama DNS sorgusu yapılamıyor (LOOKUP=0 ya da dig/host yok); bu kontroller atlandı"
   M_LOOKUP_OFF="UYARI: DNS sorguları art arda zaman aşımına uğradı, bu turda kapatıldı"
   M_CLEANCNT="Sayaç temizliği yapıldı (%s günden eski kayıtlar silindi)"
-  M_LOGTRIM="Günlük %s satırda tutuldu (önceki: %s satır)"
+  M_LOGTRIM="Günlükten %s günden eski satırlar silindi (%s satır)"
   M_MAIL_PERMFULL_SUBJ="kalıcı liste %%%s dolu"
   M_MAIL_PERMFULL_BODY="CSF'in kalıcı ban listesi (csf.deny) dolmak üzere. Dolunca CSF en eski banları kendisi siler; silinmez (do not delete) işareti olmayan blok banları da gidebilir. Eski banları kaldırın ya da DENY_IP_LIMIT'i yükseltin."
   M_MAIL_TEMPFULL_SUBJ="geçici liste %%%s dolu"
@@ -543,7 +547,7 @@ else
   M_CC_NOLOOKUP="WARNING: CC_IGNORE/CC_ALLOW or csf.rignore is set but DNS lookups are unavailable (LOOKUP=0 or no dig/host); those checks were skipped"
   M_LOOKUP_OFF="WARNING: DNS lookups timed out repeatedly, disabled for this run"
   M_CLEANCNT="Counter cleaned (records older than %s days removed)"
-  M_LOGTRIM="Log trimmed to %s lines (was: %s lines)"
+  M_LOGTRIM="Log lines older than %s days removed (%s lines)"
   M_MAIL_PERMFULL_SUBJ="permanent list %s%% full"
   M_MAIL_PERMFULL_BODY="CSF's permanent ban list (csf.deny) is almost full. When it is full, CSF removes the oldest bans itself; block bans without do not delete can go too. Remove old bans or raise DENY_IP_LIMIT."
   M_MAIL_TEMPFULL_SUBJ="temp list %s%% full"
@@ -734,7 +738,7 @@ log() {
 }
 # Rutin satırlar (başladı, doluluk, "turu bitti: 0", adım süreleri): ekrana her zaman yazılır; dosyaya
 # yalnız turda bir şey olduysa. Hiçbir şey olmayan tur dosyaya tek özet satırı bırakır — yoksa günlük
-# her turda ~11 satır büyür, satır sınırı dolar ve gerçek işler birkaç günde silinirdi.
+# her turda ~11 satır büyür ve gerçek işler logrotate arşivlerinden çabuk düşerdi.
 RUN_MODE=0; EVENTFUL=0; RBUF=()
 log_flush() {    # biriken rutin satırları dosyaya yaz; bundan sonra tur "olaylı" sayılır
     [ "$RUN_MODE" = 1 ] && [ "$EVENTFUL" = 0 ] || return 0
@@ -761,7 +765,7 @@ mail() {
 
 # ── Settings: validation (panel + --config set + --dry-run --set) ──────────
 # Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
-CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST IC_REVIEW IE_REVIEW THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_MAX_LINES LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_URLS CLOUD_EXTRA ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS OWNER_TTL_DAYS IMUNIFY_REFRESH_MIN BLOCK_ACTIVE_DAYS"
+CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST IC_REVIEW IE_REVIEW THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_KEEP_DAYS EVENTS_DAYS RUN_DAYS LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_URLS CLOUD_EXTRA ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS OWNER_TTL_DAYS IMUNIFY_REFRESH_MIN BLOCK_ACTIVE_DAYS"
 PROV_KEYS="SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_URLS CLOUD_EXTRA ENABLED"
 SVC_CATALOG="google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake microsoft365"
 CLOUD_CATALOG="gcp aws azure oracle digitalocean linode vultr"
@@ -797,7 +801,9 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
         LOOKUP_TIMEOUT) lo=1; hi=10 ;;
         SAYAC_RETENTION_DAYS) lo=7; hi=730 ;;
         REVIEW_DAYS) lo=1; hi=90 ;;
-        LOG_MAX_LINES) lo=500; hi=100000 ;;
+        LOG_KEEP_DAYS) lo=1; hi=365 ;;
+        EVENTS_DAYS) lo=30; hi=730 ;;
+        RUN_DAYS) lo=31; hi=365 ;;
         LOG_ROTATE_MB) lo=1; hi=100 ;;
         LOG_ROTATE_KEEP) lo=1; hi=52 ;;
         BLOCK_EXPIRE_DAYS) lo=30; hi=3650 ;;
@@ -5784,14 +5790,22 @@ do_config() {
                 o="{\"ok\":true,\"values\":{"
                 i=0
                 for k in $CFG_KEYS; do jstr "$(cfg_value "$k")"; o+="$([ $i -gt 0 ] && echo ,)\"$k\":$REPLY"; i=1; done
-                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"whm\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"NOTIFY\":\"all\",\"IC_FIREWALL\":\"1\",\"IC_LISTFULL\":\"1\",\"IC_RUN\":\"1\",\"IC_DIGEST\":\"1\",\"IE_FIREWALL\":\"1\",\"IE_LISTFULL\":\"1\",\"IE_RUN\":\"1\",\"IE_DIGEST\":\"1\",\"IC_REVIEW\":\"1\",\"IE_REVIEW\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_MAX_LINES\":\"5000\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"BLOCK_EXPIRE_DAYS\":\"365\",\"BLOCK_ACTIVE_DAYS\":\"30\",\"OWNER_TTL_DAYS\":\"30\",\"IMUNIFY_REFRESH_MIN\":\"60\",\"CLOUD_REFRESH_DAYS\":\"1\",\"CLOUD_FAIL_DAYS\":\"3\",\"SVC_REFRESH_DAYS\":\"1\",\"SVC_FAIL_DAYS\":\"3\",\"GEO_REFRESH_DAYS\":\"25\",\"BLOCK_EXPIRE_AUTO\":\"0\",\"CRON_MIN\":\"*/10\"}"
+                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"whm\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"NOTIFY\":\"all\",\"IC_FIREWALL\":\"1\",\"IC_LISTFULL\":\"1\",\"IC_RUN\":\"1\",\"IC_DIGEST\":\"1\",\"IE_FIREWALL\":\"1\",\"IE_LISTFULL\":\"1\",\"IE_RUN\":\"1\",\"IE_DIGEST\":\"1\",\"IC_REVIEW\":\"1\",\"IE_REVIEW\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_KEEP_DAYS\":\"30\",\"EVENTS_DAYS\":\"180\",\"RUN_DAYS\":\"31\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"BLOCK_EXPIRE_DAYS\":\"365\",\"BLOCK_ACTIVE_DAYS\":\"30\",\"OWNER_TTL_DAYS\":\"30\",\"IMUNIFY_REFRESH_MIN\":\"60\",\"CLOUD_REFRESH_DAYS\":\"1\",\"CLOUD_FAIL_DAYS\":\"3\",\"SVC_REFRESH_DAYS\":\"1\",\"SVC_FAIL_DAYS\":\"3\",\"GEO_REFRESH_DAYS\":\"25\",\"BLOCK_EXPIRE_AUTO\":\"0\",\"CRON_MIN\":\"*/10\"}"
                 ALERT_MAIL=whm mail_to; jstr "$REPLY"; o+=",\"whm_contact\":$REPLY"
                 slack_url; o+=",\"slack\":$([ -n "$REPLY" ] && echo true || echo false)"
                 o+=",\"csf\":{\"deny_limit\":$(num "$(conf_val DENY_IP_LIMIT)"),\"temp_limit\":$(num "$(conf_val DENY_TEMP_IP_LIMIT)")}"
-                local lb=0 la=0 ll=0
-                [ -f "$LOG_FILE" ] && { lb=$(wc -c < "$LOG_FILE"); ll=$(wc -l < "$LOG_FILE"); }
+                local lb=0 la=0 ll=0 lo=0 eo en en0 er er0
+                [ -f "$LOG_FILE" ] && { lb=$(wc -c < "$LOG_FILE"); ll=$(wc -l < "$LOG_FILE")
+                    lo=$(sed -n 's/^\[\([0-9]\{4\}-[0-9][0-9]-[0-9][0-9] [0-9:]\{8\}\)\].*/\1/p' "$LOG_FILE" | head -n 1)
+                    [ -n "$lo" ] && lo=$(date -d "$lo" +%s 2>/dev/null); }
                 la=$(ls -1 "$LOG_FILE".[0-9]* 2>/dev/null | grep -c .)
-                o+=",\"log\":{\"rotate\":$([ -f "$LOGROTATE_CONF" ] && echo true || echo false),\"bytes\":$(num "$lb"),\"lines\":$(num "$ll"),\"archives\":$(num "$la")}"
+                o+=",\"log\":{\"rotate\":$([ -f "$LOGROTATE_CONF" ] && echo true || echo false),\"bytes\":$(num "$lb"),\"lines\":$(num "$ll"),\"oldest\":$(num "$lo"),\"archives\":$(num "$la")}"
+                # olay kaydı: kaç olay / tur, en eskisi ne zaman (Ayarlar → Sunucu → Kayıt saklama)
+                eo=$(awk 'match($0, /^\{"t":[0-9]+/) { t = substr($0, 6, RLENGTH - 5) + 0
+                         if (index($0, "\"type\":\"run\"")) { r++; if (!r0 || t < r0) r0 = t } else { n++; if (!n0 || t < n0) n0 = t } }
+                         END { printf "%d %d %d %d", n, n0, r, r0 }' "$EVENTS_FILE" 2>/dev/null)
+                read -r en en0 er er0 <<< "${eo:-0 0 0 0}"
+                o+=",\"ev\":{\"n\":$(num "$en"),\"oldest\":$(num "$en0"),\"runs\":$(num "$er"),\"runs_oldest\":$(num "$er0"),\"bytes\":$(num "$(stat -c %s "$EVENTS_FILE" 2>/dev/null)")}"
                 # Sunucu gereksinimleri (Ayarlar sekmesindeki kart): ok | missing | warn
                 local dp="" dk ds
                 for dk in csf crontab mail dns logrotate flock timeout git imunify modsec sqlite3; do
@@ -6318,22 +6332,27 @@ if [ "$DRY" != 1 ] && [ -f "$SAYAC_FILE" ]; then
     logr "$(m "$M_CLEANCNT" "$SAYAC_RETENTION_DAYS")"
 fi
 # Günlüğü sistemin logrotate'i döndürüyorsa (1 MB, 5 sıkıştırılmış arşiv) burada kesilmez; logrotate
-# yoksa eski yöntem: son LOG_MAX_LINES satır tutulur.
+# yoksa yedek yöntem: LOG_KEEP_DAYS günden eski satırlar silinir (tarihsiz satır kendinden önceki tarihli satırla gider).
 if [ "$DRY" != 1 ] && [ -f "$LOG_FILE" ] && [ ! -f "$LOGROTATE_CONF" ]; then
-    line_count=$(wc -l < "$LOG_FILE")
-    if [ "$line_count" -gt "$LOG_MAX_LINES" ]; then
-        tail -"$LOG_MAX_LINES" "$LOG_FILE" > "${LOG_FILE}.tmp" && mv "${LOG_FILE}.tmp" "$LOG_FILE"
-        logr "$(m "$M_LOGTRIM" "$LOG_MAX_LINES" "$line_count")"
+    lcut=$(date -d "$LOG_KEEP_DAYS days ago" '+%Y-%m-%d')
+    lfirst=$(sed -n 's/^\[\([0-9]\{4\}-[0-9][0-9]-[0-9][0-9]\) .*/\1/p' "$LOG_FILE" | head -n 1)
+    if [ -n "$lfirst" ] && [[ "$lfirst" < "$lcut" ]]; then
+        lbefore=$(wc -l < "$LOG_FILE")
+        awk -v c="$lcut" '/^\[[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] / { k = (substr($0, 2, 10) >= c) } k' "$LOG_FILE" > "${LOG_FILE}.tmp" && mv "${LOG_FILE}.tmp" "$LOG_FILE"
+        logr "$(m "$M_LOGTRIM" "$LOG_KEEP_DAYS" "$(( lbefore - $(wc -l < "$LOG_FILE") ))")"
     fi
 fi
-# Olay kaydı: tur kayıtları (her turda bir) ve gerçek işler ayrı sınırlanır — yoksa sessiz turlar
-# banları ve uyarıları birkaç ayda kayıttan iterdi.
+# Olay kaydı: tur kayıtları RUN_DAYS, öteki olaylar EVENTS_DAYS gün tutulur (ayrı: sessiz turlar banları kayıttan itmesin).
+# Dosya her turda yeniden yazılmaz: yalnız süresinden bir günden fazla eskiyen satır varsa kırpılır (en çok günde bir).
+# Satır başında zaman yoksa (bozuk satır) dokunulmaz.
 if [ "$DRY" != 1 ] && [ -f "$EVENTS_FILE" ]; then
-    read -r ev_r ev_o < <(awk '/"type":"run"/ { r++; next } { o++ } END { print r + 0, o + 0 }' "$EVENTS_FILE")
-    if [ "$ev_r" -gt $(( RUNS_MAX + 100 )) ] || [ "$ev_o" -gt "$EVENTS_MAX" ]; then
-        awk -v r="$ev_r" -v o="$ev_o" -v kr="$RUNS_MAX" -v ko="$EVENTS_MAX" '
-            /"type":"run"/ { if (++ri > r - kr) print; next }
-            { if (++oi > o - ko) print }' "$EVENTS_FILE" > "${EVENTS_FILE}.tmp" && mv "${EVENTS_FILE}.tmp" "$EVENTS_FILE"
+    ev_now=$(date +%s)
+    if awk -v cr=$(( ev_now - (RUN_DAYS + 1) * 86400 )) -v co=$(( ev_now - (EVENTS_DAYS + 1) * 86400 )) '
+           match($0, /^\{"t":[0-9]+/) { t = substr($0, 6, RLENGTH - 5) + 0; if (t < (index($0, "\"type\":\"run\"") ? cr : co)) { f = 1; exit } }
+           END { exit !f }' "$EVENTS_FILE"; then
+        awk -v cr=$(( ev_now - RUN_DAYS * 86400 )) -v co=$(( ev_now - EVENTS_DAYS * 86400 )) '
+            match($0, /^\{"t":[0-9]+/) { t = substr($0, 6, RLENGTH - 5) + 0; if (t < (index($0, "\"type\":\"run\"") ? cr : co)) next }
+            { print }' "$EVENTS_FILE" > "${EVENTS_FILE}.tmp" && mv "${EVENTS_FILE}.tmp" "$EVENTS_FILE"
     fi
 fi
 digest_maybe
