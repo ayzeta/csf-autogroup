@@ -200,7 +200,9 @@ settings, with no prompts. `config.env` is left untouched.
   `CC_DENY_PORTS` when its country or ASN is listed there. Also which list
   whitelists it (port-only `csf.allow` rules are shown with their ports), with
   links to bgp.he.net and AbuseIPDB, and buttons to ban its `/24` or `/16`.
-  Recently viewed IPs stay one click away.
+  Recently viewed IPs stay one click away. A range (`1.2.3.0/24`) opens the
+  range card instead: what bans and watches cover it, the services attacked
+  from it (click a count for its IPs and their reasons) and the bans inside it.
 - **Inside a wider ban** — a block inside a banned `/16` (or any wider range) is
   tagged *inside /16* in Active range bans and Watched, and listed under
   *Bans no longer needed* in the Providers tab.

@@ -1237,3 +1237,7 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 /* kart tablolarındaki IP'ler tıklanınca IP kartını açar: Kontrol edilecekler listesindeki IP'lerle aynı görünüm, bölünmeden */
 .ag-im-t td[data-ip] { color: var(--ag-accent); cursor: pointer; white-space: nowrap; }
 .ag-im-t td[data-ip]:hover { text-decoration: underline; }
+/* aralık kartı · ihlal edilen servisler: sayı tıklanınca o servisin IP'leri (IP tıklanınca IP kartı) */
+.ag-rg-ips td { padding-top: 2px; padding-bottom: 8px; font-size: 12.5px; line-height: 1.6; }
+.ag-rg-ips [data-ip] { color: var(--ag-accent); cursor: pointer; white-space: nowrap; }
+.ag-rg-ips [data-ip]:hover { text-decoration: underline; }

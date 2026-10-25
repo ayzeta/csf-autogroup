@@ -433,6 +433,12 @@ mk expips; printf '{"t":%s,"type":"add24","cidr":"151.80.7.0/24","n":2,"ips":[{"
 printf '151.80.7.0/24 # Auto-grouped /24: 2 kalıcı tekil nedeniyle kalıcı banlandı - %s\n' "$(LC_ALL=C date -d '400 days ago' '+%a %b %d %H:%M:%S %Y')" >> "$D"
 echo "BLOCK_EXPIRE_AUTO=1" >> "$R/app/config.env"; quiet
 mcheck "kayıt · eski blok banı kaldırılınca kaldırma kaydı banın IP'lerini taşır, satır geçerli JSON" "grep '\"type\":\"expire\"' '$R/var/lib/csf_autogroup/events.jsonl' | grep -q '\"ips\":\[{\"ip\":\"151.80.7.1\".*{\"ip\":\"151.80.7.2\",\"why\":\"b\"}\]' && grep '\"type\":\"expire\"' '$R/var/lib/csf_autogroup/events.jsonl' | node -e 'let s=\"\";process.stdin.on(\"data\",d=>s+=d).on(\"end\",()=>{JSON.parse(s.trim());})'"
+# PERMBLOCK'un servisi: tur geçici banın servisini önbelleğe yazar (lfd günlüğü dönse de kalıcıya alınınca bilinsin); aralık
+# kartı servis tablosu aynı yoldan sayar ve servis başına IP listesini verir (sayı tıklanınca)
+mk pbcache; printf '%s|151.80.7.30||in|3600|lfd: (sshd) Failed SSH login from 151.80.7.30 (FR/France/-): 5 in the last 3600 secs\n' "$NOW" >> "$T"; quiet
+mcheck "PERMBLOCK servisi · tur geçici banın servisini önbelleğe yazar" "grep -qx '151.80.7.30 ssh' '$R/var/lib/csf_autogroup/perm_cls'"
+: > "$T"; printf '%s\n' "151.80.7.30 # lfd: (PERMBLOCK) 151.80.7.30 (FR/France/-) has had more than 3 temp blocks in the last 259200 secs - $DT" >> "$D"
+mcheck "PERMBLOCK servisi · aralık kartı önbellekteki servisle sayar ve IP listesini verir (tekrar banlanan değil)" "run --inside 151.80.7.0/24 --json 2>/dev/null | grep -q '\"attacks\":{\"ssh\":1},\"attack_ips\":{\"ssh\":\[{\"ip\":\"151.80.7.30\",\"why\":\"Tekrar ban (PERMBLOCK)'"
 mk keep2; evl 175 add24 1; evl 20 run 2; quiet
 mcheck "saklama · süresi dolmamış kayıt varken dosya yeniden yazılmaz (yalnız tur satırı eklenir)" "grep -q '151.80.1.0' '$R/var/lib/csf_autogroup/events.jsonl' && grep -q '151.80.2.0' '$R/var/lib/csf_autogroup/events.jsonl'"
 

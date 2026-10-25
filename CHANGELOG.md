@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.15.25 — 2026-10-25
+
+- **On the range card, click a service's IP count to see its IPs.** The
+  count in *Violated services* opens the IPs of that service, with reasons,
+  right under the row (an IP opens its IP card). The separate "IPs behind the
+  ban" list from 1.15.24 is gone.
+- **Repeat bans get their service.** When lfd makes an IP permanent
+  (PERMBLOCK), its log line does not say which service was attacked. The
+  plugin looked for the earlier temp bans in lfd's log, which may have
+  rotated by then, and showed "service unknown". Every run now records the
+  service of the temp bans it sees, so the service is known when the IP is
+  made permanent later. The range card's service table resolves it the same
+  way as its list of single bans: before, the table said "repeat ban" while
+  the list named the service.
+- **Look up a range.** *Look up an IP* also takes a range (`1.2.3.0/24`) and
+  opens the range card; on phones the keyboard has "/".
+- **The single-ban count of a block ban matches its IPs.** For bans written
+  during the 1.15.12 incident, the count from the `csf.deny` comment ("4
+  singles") is replaced by the number of distinct IPs in the record (2).
+
 ## 1.15.24 — 2026-10-25
 
 - **What a ban rests on stays visible.** When the plugin replaces single bans

@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.24"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.25"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -3177,13 +3177,21 @@ attack_json() {  # LO HI [SONRA_EPOCH ATLANACAK_SERVİSLER] < "ip|sebep[|e:epoch
     [ -n "$REPLY" ] || REPLY="{}"
 }
 inside_attacks() { # CIDR → REPLY = {"ssh":12,"web":3,…}: aralıktaki IP'lerin ban sebeplerinden servis başına saldıran IP
-    # sayısı. Kaynaklar: kalıcı listedeki tekiller, geçici banlar, içteki banların olay kaydındaki IP sebepleri.
-    local c="$1" ip x want="" lo hi
+    # sayısı; IN_ATKIPS = {"ssh":[{"ip","why"},…],…} (kartta sayı tıklanınca o servisin IP'leri). Kaynaklar: kalıcı listedeki
+    # tekiller, geçici banlar, içteki banların olay kaydındaki IP sebepleri. Her IP bir kez, izinli IP'nin işlemeyen banı yok;
+    # PERMBLOCK'un servisi tekil listesiyle aynı yoldan (perm_cls: önbellek + lfd günlükleri).
+    local c="$1" ip x want="" lo hi k why
+    IN_ATKIPS="{}"
     cidr_range "$c" || { REPLY="{}"; return; }
     lo=$R_LO; hi=$R_HI
     for x in "${IN_BLK[@]}" "${IN_OTH[@]}" "${IN_OWNP[@]}" "$c"; do want+=" $x"; done
     for x in "${IN_WATCH[@]}"; do want+=" $x.0/24"; done
-    attack_json "$lo" "$hi" < <(
+    local -a AL=() rp=()
+    mapfile -t AL < <(awk -F'|' -v lo="$lo" -v hi="$hi" -v ex="$INEFF_S" "$AWK_CLS"'
+        function ipn(a,  p) { split(a, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
+        $1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && !($1 in S) && !index(ex, " " $1 " ") {
+            v = ipn($1); if (v < lo || v > hi) next
+            S[$1] = 1; print $1 "|" cls($2) "|" $2 }' < <(
         for ip in "${IN_SGL[@]}" "${IN_SGLD[@]}"; do printf '%s|%s\n' "$ip" "${SINGLE_NOTE[$ip]}"; done
         for ip in "${!IN_TNOTE[@]}"; do [[ "$ip" == */* ]] || printf '%s|%s\n' "$ip" "${IN_TNOTE[$ip]}"; done
         # içteki ban ve izleme kayıtlarının son IP listesi (o bloklar banlanırken silinen tekillerin sebepleri burada)
@@ -3195,7 +3203,20 @@ inside_attacks() { # CIDR → REPLY = {"ssh":12,"web":3,…}: aralıktaki IP'ler
                         e = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
                         ip = e; sub(/^"ip":"/, "", ip); sub(/".*/, "", ip)
                         why = ""; if (match(e, /"why":"[^"]*"/)) why = substr(e, RSTART + 7, RLENGTH - 8)
-                        print ip "|" why } } }' "$EVENTS_FILE")
+                        print ip "|" why } } }' "$EVENTS_FILE"))
+    for x in "${AL[@]}"; do IFS='|' read -r ip k _ <<< "$x"; [ "$k" = repeat ] && rp+=("$ip"); done
+    [ ${#rp[@]} -gt 0 ] && perm_cls_load "${rp[@]}"
+    local -A CN=() CJ=()
+    for x in "${AL[@]}"; do
+        IFS='|' read -r ip k why <<< "$x"
+        [ "$k" = repeat ] && [ -n "${PERM_CLS[$ip]}" ] && k="${PERM_CLS[$ip]}"
+        CN[$k]=$(( ${CN[$k]:-0} + 1 ))
+        [ "${CN[$k]}" -le 256 ] || continue
+        short_reason "$why" "$ip"; jstr "$REPLY"; CJ[$k]+="${CJ[$k]:+,}{\"ip\":\"$ip\",\"why\":$REPLY}"
+    done
+    REPLY=""; IN_ATKIPS=""
+    for k in "${!CN[@]}"; do REPLY+="${REPLY:+,}\"$k\":${CN[$k]}"; IN_ATKIPS+="${IN_ATKIPS:+,}\"$k\":[${CJ[$k]}]"; done
+    REPLY="{$REPLY}"; IN_ATKIPS="{$IN_ATKIPS}"
 }
 inside_ev() {    # IP SEBEP → IN_EVJ'ye ekle
     IN_EVN=$((IN_EVN + 1))
@@ -3274,7 +3295,7 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
         jarr "${IN_OWNP[@]}"; o+=",\"own_partial\":$REPLY,\"partial_svc\":\"$IN_PSVC\",\"partial_extra\":\"$IN_PEXTRA\""
         ssh_ports; o+=",\"ssh\":\"$REPLY\""
         ftp_passive; o+=",\"ftp_pasv\":\"$REPLY\""
-        inside_attacks "$c"; o+=",\"attacks\":$REPLY"
+        inside_attacks "$c"; o+=",\"attacks\":$REPLY,\"attack_ips\":$IN_ATKIPS"
         o+=",\"ccport\":\"$IN_CCP\",\"ccp_tcp\":\"$(conf_val CC_DENY_PORTS_TCP | tr -d ' ')\",\"ccp_udp\":\"$(conf_val CC_DENY_PORTS_UDP | tr -d ' ')\""
         # aralık kartı: tekiller (ip, sebep, servis), en çok 40; PERMBLOCK'un servisi lfd günlüğünden
         local sj="" sx sn=0 sv sk; local -a spb=()
@@ -5183,9 +5204,12 @@ perm_cls_load() { # IP … → PERM_CLS'i önbellekten, yoksa lfd günlüklerini
                   if (r != "") print ip "|" r } }')
     rm -f "$pf"
     # önbellek: istenen IP'lerin bilinen servisleri (eski kayıtlar korunur, 20.000 satırla sınırlı)
-    [ "$DRY" = 1 ] && return 0
-    tmp="$PERM_CACHE.tmp.$$"
-    { [ -r "$PERM_CACHE" ] && cat "$PERM_CACHE"; for ip in "$@"; do [ -n "${PERM_CLS[$ip]}" ] && echo "$ip ${PERM_CLS[$ip]}"; done; } |
+    for ip in "$@"; do [ -n "${PERM_CLS[$ip]}" ] && echo "$ip ${PERM_CLS[$ip]}"; done | perm_cache_merge
+}
+perm_cache_merge() { # stdin "IP servis" → PERM_CACHE'e (aynı IP'nin yenisi kazanır; 20.000 satır)
+    [ "$DRY" = 1 ] && { cat > /dev/null; return 0; }
+    local tmp="$PERM_CACHE.tmp.$$"
+    { [ -r "$PERM_CACHE" ] && cat "$PERM_CACHE"; cat; } |
         awk '$1 ~ /^[0-9.]+$/ && $2 != "" { v[$1] = $2; if (!($1 in o)) o[$1] = ++n } END { for (i in v) print o[i], i, v[i] }' | sort -n | tail -n 20000 | cut -d' ' -f2- > "$tmp" 2>/dev/null &&
         mv -f "$tmp" "$PERM_CACHE" 2>/dev/null || rm -f "$tmp"
 }
@@ -6125,6 +6149,10 @@ if [ -r "$CSF_VAR/csf.tempban" ]; then   # zaman|ip|port|yön|süre|yorum
     while IFS='|' read -r _ tip _ _ _ tnote; do
         [ -n "$tip" ] && [ -z "${TNOTE[$tip]+x}" ] && TNOTE[$tip]="$tnote"
     done < "$CSF_VAR/csf.tempban"
+    # geçici banın servisi önbelleğe: lfd IP'yi sonradan kalıcıya alınca (PERMBLOCK) satırı servisi söylemez; önce yalnız lfd
+    # günlüğünden aranıyordu, günlük o zamana kadar döndüyse "servis bilinmiyor" kalıyordu
+    awk -F'|' '$2 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ { print $2 "|" $6 }' "$CSF_VAR/csf.tempban" |
+        awk -F'|' "$AWK_CLS"'{ k = cls($2); if (k != "repeat" && k != "other" && k != "scan") print $1, k }' | perm_cache_merge
 fi
 for ip in "${temp_order[@]}"; do
     ip2int "$ip"; n=$REPLY
