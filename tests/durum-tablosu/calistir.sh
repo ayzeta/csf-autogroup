@@ -439,6 +439,18 @@ mk pbcache; printf '%s|151.80.7.30||in|3600|lfd: (sshd) Failed SSH login from 15
 mcheck "PERMBLOCK servisi · tur geçici banın servisini önbelleğe yazar" "grep -qx '151.80.7.30 ssh' '$R/var/lib/csf_autogroup/perm_cls'"
 : > "$T"; printf '%s\n' "151.80.7.30 # lfd: (PERMBLOCK) 151.80.7.30 (FR/France/-) has had more than 3 temp blocks in the last 259200 secs - $DT" >> "$D"
 mcheck "PERMBLOCK servisi · aralık kartı önbellekteki servisle sayar ve IP listesini verir (tekrar banlanan değil)" "run --inside 151.80.7.0/24 --json 2>/dev/null | grep -q '\"attacks\":{\"ssh\":1},\"attack_ips\":{\"ssh\":\[{\"ip\":\"151.80.7.30\",\"why\":\"Tekrar ban (PERMBLOCK)'"
+# elle blok banı kaldırma: banın yerini aldığı tekiller olay kaydından geri yüklenir (seçilirse); geri yüklenenler bloğu yeniden
+# banlatmaz (yalnız kaldırmadan sonraki tekiller sayılır)
+ubev() { printf '{"t":%s,"type":"add24","cidr":"151.80.7.0/24","n":3,"ips":[{"ip":"151.80.7.1","why":"(sshd) Failed SSH login"},{"ip":"151.80.7.2","why":"(sshd) Failed SSH login"},{"ip":"151.80.7.3","why":"Tekrar ban (PERMBLOCK): son 72 saat"}],"total":3}\n' "$(( NOW - 86400 ))" > "$R/var/lib/csf_autogroup/events.jsonl"
+         printf '151.80.7.0/24 # Auto-grouped /24: 3 kalıcı tekil nedeniyle kalıcı banlandı - %s\n' "$DT" >> "$D"; }
+mk ubrs; ubev; quiet --action unban 151.80.7.0/24 --restore
+mcheck "kaldırma · geri yükle seçiliyken banın 3 tekili geri gelir (sebep ve notla), blok kalkar" "[ \$(grep -c 'kaldırılınca geri yüklendi' '$D') = 3 ] && grep -q '^151.80.7.3 # lfd: Tekrar ban (PERMBLOCK)' '$D' && ! grep -q '^151.80.7.0/24' '$D'"
+quiet
+mcheck "kaldırma · geri yüklenen tekiller sonraki turda bloğu yeniden banlatmaz" "! grep -q '^151.80.7.0/24' '$D'"
+NDT=$(LC_ALL=C date -d "+2 min" "+%a %b %d %H:%M:%S %Y"); single 151.80.7.4 sshd "$NDT"; single 151.80.7.5 sshd "$NDT"; single 151.80.7.6 sshd "$NDT"; quiet
+mcheck "kaldırma · kaldırmadan sonra 3 yeni tekil gelince blok yeniden banlanır" "grep -q '^151.80.7.0/24' '$D'"
+mk ubno; ubev; quiet --action unban 151.80.7.0/24
+mcheck "kaldırma · geri yükle seçili değilse tekil geri gelmez" "! grep -q 'kaldırılınca geri yüklendi' '$D' && ! grep -q '^151.80.7.0/24' '$D'"
 mk keep2; evl 175 add24 1; evl 20 run 2; quiet
 mcheck "saklama · süresi dolmamış kayıt varken dosya yeniden yazılmaz (yalnız tur satırı eklenir)" "grep -q '151.80.1.0' '$R/var/lib/csf_autogroup/events.jsonl' && grep -q '151.80.2.0' '$R/var/lib/csf_autogroup/events.jsonl'"
 

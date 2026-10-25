@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.25"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.26"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -340,6 +340,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_A_NOREC="%s izlenmiyor"
   M_A_UNBANNED="%s kaldırıldı"
   M_A_RESTORED="%s · %s kayıt geri yüklendi"
+  M_RESTORED_NOTE="%s kaldırılınca geri yüklendi"
   M_A_PCOMMENT="elle /%s kısmi ban (%s)"
   M_A_PBANNED="%s: seçilen servisler kapatıldı (port %s)"
   M_A_PREMOVED="%s kısmi banı kaldırıldı"
@@ -593,6 +594,7 @@ else
   M_A_NOREC="%s is not watched"
   M_A_UNBANNED="%s removed"
   M_A_RESTORED="%s · %s entries restored"
+  M_RESTORED_NOTE="restored when %s was removed"
   M_A_PCOMMENT="manual /%s partial ban (%s)"
   M_A_PBANNED="%s: selected services blocked (ports %s)"
   M_A_PREMOVED="%s partial ban removed"
@@ -2122,7 +2124,7 @@ parse_deny() {   # FILE MAIN(1|0) [DEPTH]
                   p = tok; sub(/\.[0-9]+$/, "", p); C[p]++; IPS[p] = IPS[p] " " tok; if (!(p in PO)) { PO[p] = ++np; PL[np] = p } }
           } }
         END { for (i = 1; i <= np; i++) { p = PL[i]; printf "count24[%s]=$(( ${count24[%s]:-0} + %d ));ips24[%s]+=%s\n", p, p, C[p], p, q(IPS[p]) } }' "$1")"
-    [ "$2" = 1 ] && [ "$depth" = 0 ] && { prof deny_read; ineff_load; }
+    [ "$2" = 1 ] && [ "$depth" = 0 ] && { prof deny_read; ineff_load; unban_after_load; }
 }
 wl_full_idx() {  # İZİN_İNDİSİ → REPLY = 1 bütün portlara izin (csf.allow ve Include'ları, GLOBAL_ALLOW, geçici izin, dyndns),
     # 2 sunucunun kendi IP'si, 3 yalnız gelen yönü kesen bana karşı tam izin, 0 değil. allow_atk_load ve ineff_load aynı ölçüt.
@@ -2154,6 +2156,17 @@ wl_ff_lines() {  # → stdout "W lo hi indis ff" (her beyaz liste kaydı; ff wl_
                 if (p ~ /^tcp in [sd]=[01][:_]65535$/) { ff = 3; C[NR] = c } else if (p ~ /^tcp out [sd]=[01][:_]65535$/) O[c] = 1 }
             L[NR] = $1; H[NR] = $2; F[NR] = ff }
             END { for (i = 1; i <= NR; i++) print "W", L[i], H[i], i - 1, (F[i] == 3 && (C[i] in O) ? 1 : F[i]) }'
+}
+unban_after_load() {   # elle kaldırılmış blok banları: o blokta yalnız kaldırmadan SONRA banlanan tekiller sayılır (count24 /
+    # ips24). Kaldırırken banın tekilleri geri yüklenince (ya da önceden duranlar) bir sonraki tur bloğu yeniden banlamasın;
+    # bloktan yeni ban gelirse eşik yeniden işler. Kısmi bandan sonraki /16 sayımıyla aynı kural (ips_after).
+    [ -r "$EVENTS_FILE" ] || return 0
+    local c ue p IFS=$' \t\n'   # durum çıktısı IFS=, ile çağırır: ips24 boşluklarla bölünsün
+    while IFS=' ' read -r c ue; do
+        p="${c%.0/24}"; [ -n "${ips24[$p]+x}" ] || continue
+        ips_after "$ue" ${ips24[$p]}
+        ips24[$p]="$REPLY"; count24[$p]=$(wc -w <<< "$REPLY")
+    done < <(grep -F '"type":"manual_unban"' "$EVENTS_FILE" | sed -n 's/^{"t":\([0-9]*\),.*"cidr":"\([0-9.]*\.0\/24\)".*/\2 \1/p' | awk '{ L[$1] = $2 } END { for (c in L) print c, L[c] }')
 }
 ineff_load() {   # → INEFF[IP] = izin kaydı ("csf.allow: IP (yorum)"), INEFF_S = " IP IP … ": banı İŞLEMEYEN tekil ve geçici IP banları.
     # CSF izinleri banlardan önce uygular (LOCALINPUT: ALLOWIN → DENYIN); csf -td izin denetlemez (ölçüldü 16.33), lfd izinli IP'ye
@@ -3728,6 +3741,35 @@ unban_full_core() { # CIDR → tam banı kaldır; RESTORE=1 ise kapsananları ge
                     dl+="$rl"$'\n' ;;
             esac
         done < "$rf"
+    fi
+    # otomatik blok banı (kopya dosyası yok): banın yerini aldığı tekil banlar olay kaydından geri yüklenir — lfd'den ban almış
+    # IP'ler blok kalkınca tamamen açılıp deneme haklarını baştan kazanmasın. Atlananlar: şu an banlı, başka bir aralık banının
+    # kapsadığı, izin listesindeki (ban zaten işlemez) IP. Satır lfd biçiminde: "IP # lfd: sebep - not - tarih"
+    if [ "$RESTORE" = 1 ] && [ ! -s "$rf" ]; then
+        ev_ips_of "$t"
+        if [ -n "$REPLY" ]; then
+            local rip rwhy rdt rv; local -A RH=()
+            while read -r k _; do [ -n "$k" ] && RH[$k]=1; done < "$DENY_FILE"
+            [ "$WL_LOADED" = 1 ] || load_whitelist
+            rdt=$(LC_ALL=C date '+%a %b %e %H:%M:%S %Y')
+            while IFS=$'\t' read -r rip rwhy; do
+                [ -n "$rip" ] && [ -z "${RH[$rip]}" ] || continue
+                ip2int "$rip"; rv=$REPLY
+                wl_overlap "$rv" "$rv" && continue
+                RH[$rip]=1; dl+="$rip # lfd: ${rwhy:-$M_H_NOREASON} - $(m "$M_RESTORED_NOTE" "$t") - $rdt"$'\n'; n=$((n + 1))
+            done < <(printf '%s\n' "$REPLY" | awk -v t="$t" -v df="$DENY_FILE" '
+                function ipn(a,  p) { split(a, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
+                BEGIN { while ((getline l < df) > 0) { sub(/[ \t#].*/, "", l)       # csf.deny aralıkları (kaldırılan hariç)
+                            if (l ~ /^[0-9.]+\/[0-9]+$/ && l != t) { split(l, c, "/"); b = c[2] + 0; lo = ipn(c[1]); sz = 2 ^ (32 - b); lo -= lo % sz; n++; LO[n] = lo; HI[n] = lo + sz - 1 } } }
+                { s = $0
+                  while (match(s, /\{"ip":"[0-9.]+"[^}]*\}/)) {
+                      e = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
+                      ip = e; sub(/^\{"ip":"/, "", ip); sub(/".*/, "", ip)
+                      w = ""; if (match(e, /"why":"([^"\\]|\\.)*"/)) { w = substr(e, RSTART + 7, RLENGTH - 8); gsub(/\\"/, "\"", w); gsub(/\\\\/, "\\", w) }
+                      if (ip in S) continue; S[ip] = 1
+                      v = ipn(ip); cov = 0; for (i = 1; i <= n; i++) if (v >= LO[i] && v <= HI[i]) { cov = 1; break }
+                      if (!cov) print ip "\t" w } }')
+        fi
     fi
     tokf=$(mktemp) || { UB_ERR="$(m "$M_A_UNBANFAIL" "$t" "mktemp")"; return 1; }
     printf '%s\n' "$t" > "$tokf"

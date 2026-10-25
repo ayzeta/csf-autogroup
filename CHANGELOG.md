@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.15.26 — 2026-10-26
+
+- **Removing a block ban can restore the single bans it replaced.** When an
+  automatic block ban is removed by hand, the confirm dialog offers to put
+  back the single bans it rests on, with their reasons. The option is on by
+  default and lists each IP. Before, those IPs were fully unblocked with the
+  block, and lfd started counting them from zero. Restored singles go back to
+  the permanent list with their original reason and a note. They do not get
+  the block banned again: after a manual removal, only bans that come later
+  count towards that block's threshold. IPs already banned, covered by another
+  range ban, or in the allow list are not restored. The *Remove covered bans*
+  action on the Providers tab offers the same option. Bans set before the
+  event log say there is nothing to restore.
+- **Shorter notes on allowed, ignored and server-IP rows** in *Needs review*.
+  Each row now has one line for the source ("Ignored by: csf.rignore ·
+  …"), one for the last record and one for the drop-off date. What to do
+  about it moved to the status badge's tooltip.
+- **Fix: the "Marked" column header was cut off** in *Needs review*. The
+  column is wider.
+
 ## 1.15.25 — 2026-10-25
 
 - **On the range card, click a service's IP count to see its IPs.** The

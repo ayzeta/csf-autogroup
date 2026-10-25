@@ -385,7 +385,7 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-thead.ag-tr-p .ag-th { cursor: default; }
 .ag-thead.ag-tr-p .ag-th:hover { color: var(--ag-text-3); }
 /* kontrol edilecekler: ağ · durum · neden · sahip · işaretlendi · öneri düğmesi · menü */
-.ag-thead.ag-tr-r, .ag-tr.ag-tr-r { grid-template-columns: 150px 120px minmax(0, 1fr) minmax(0, 1.2fr) 92px 140px 36px; }
+.ag-thead.ag-tr-r, .ag-tr.ag-tr-r { grid-template-columns: 150px 120px minmax(0, 1fr) minmax(0, 1.2fr) 100px 140px 36px; }   /* İşaretlendi başlığı 98 px (ölçüldü) */
 .ag-tr.ag-tr-r { padding-top: 9px; padding-bottom: 4px; min-height: 40px; }
 .ag-tr-r .ag-td-why { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* satırın notları: Durum sütunu hizasından başlar (18 + 150 + 12 px), satırla aynı zemin */
@@ -408,7 +408,7 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-tr-r .ag-td-main { display: flex; align-items: center; gap: 6px; min-width: 0; }
 /* dar kart (sağ sütunun yanında): sahip sütunu kalkar, not satırının başına geçer */
 @container agtbl (max-width: 860px) {
-  .ag-thead.ag-tr-r, .ag-tr.ag-tr-r { grid-template-columns: 140px 120px minmax(0, 1fr) 84px 136px 32px; gap: 10px; }
+  .ag-thead.ag-tr-r, .ag-tr.ag-tr-r { grid-template-columns: 140px 120px minmax(0, 1fr) 100px 124px 32px; gap: 10px; }
   .ag-tr-r .ag-td-own { display: none; }
   .ag-tr-note { padding-left: 168px; }
   .ag-own-n { display: flex; align-items: center; gap: 6px; color: var(--ag-text-2); margin-bottom: 2px; }
@@ -1241,3 +1241,7 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-rg-ips td { padding-top: 2px; padding-bottom: 8px; font-size: 12.5px; line-height: 1.6; }
 .ag-rg-ips [data-ip] { color: var(--ag-accent); cursor: pointer; white-space: nowrap; }
 .ag-rg-ips [data-ip]:hover { text-decoration: underline; }
+/* kaldırma penceresi: geri yüklenecek tekiller, IP ve sebep tek satırda (sığmayan sebep … ile, tamamı ipucunda) */
+.ag-clean > div { min-width: 0; }
+.ag-clean .ag-rs-l { display: block; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ag-clean .ag-rs-l span { display: inline; margin: 0; color: var(--ag-text-2); }

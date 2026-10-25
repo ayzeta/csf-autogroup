@@ -254,6 +254,15 @@ they would have expired anyway. The removed IPs and their ban reasons also stay
 with the new ban (**⋯ → IPs**). A range containing one of this server's own IPs
 can't be banned at all.
 
+Removing an **automatic** block ban works the same way: **Restore the N single
+bans this ban rests on** (on by default) puts the single bans it replaced back
+in the permanent list, with their original reasons, so those IPs are not fully
+unblocked with the block. Restored singles do not get the block banned again;
+after a manual removal only later bans count towards that block's threshold.
+IPs already banned, covered by another range ban or in the allow list are
+skipped. Old block bans removed automatically are not restored, since that
+removal is there to free space in the list.
+
 **What to block** — the same window lets you choose:
 
 - **Everything** — the range is cut in both directions (a normal CSF ban).
