@@ -53,7 +53,7 @@ if [ -z "${SIM_ROOT:-}" ]; then case ":$PATH:" in *:/usr/sbin:*) ;; *) PATH="${P
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.29"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.30"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -4572,9 +4572,9 @@ daily_tasks() {  # günde bir kez, turun içinde (ayrı cron satırı gerekmez):
     grep -qF "DAILY_TASKS $TODAY" "$SAYAC_FILE" 2>/dev/null && return 0
     # günün anahtarı işler BİTİNCE yazılır: tur yarıda kesilirse sonraki tur kalanını yapar (her işin kendi zaman damgası var)
     # listeler kendi yenileme aralıklarıyla (Sağlayıcılar → kartlardaki "Yenileme"); son deneme zamanı .refreshed'de
-    local cref="$CLOUD_DIR/.refreshed" sref="$(dirname "$SAYAC_FILE")/services/.refreshed"
+    local cref="$CLOUD_DIR/.refreshed" sref="$(dirname "$SAYAC_FILE")/services/.refreshed" miss=0
     if [ "$SVC_ALLOW" = 1 ] && refresh_due "$sref" "$SVC_REFRESH_DAYS"; then svc_enforce 1; mkdir -p "$(dirname "$sref")"; date +%s > "$sref"; fi
-    if [ "$CLOUD_BAN" = 1 ] && refresh_due "$cref" "$CLOUD_REFRESH_DAYS"; then cloud_enforce 1 && { cloud_probe; date +%s > "$cref"; }; fi
+    if [ "$CLOUD_BAN" = 1 ] && refresh_due "$cref" "$CLOUD_REFRESH_DAYS"; then if cloud_enforce 1; then cloud_probe; date +%s > "$cref"; else miss=1; fi; fi
     # CDN arkasındaki siteler: istekleri güvenlik duvarına CDN'den gelir, ziyaretçinin IP'si görünmez (Etkisini ölç ve ban-leak ayırır)
     [ -r "$SELF_DIR/tools/cdn-sites.sh" ] && OUT="$CDN_FILE" LOG_FILE="$LOG_FILE" timeout 600 bash "$SELF_DIR/tools/cdn-sites.sh" --if-older 1 >/dev/null 2>&1
     asn=$( { conf_val CC_DENY; echo ","; conf_val CC_DENY_PORTS; } | tr ',' '\n' | grep -iE '^AS[0-9]+$' | paste -sd, -)
@@ -4596,7 +4596,7 @@ daily_tasks() {  # günde bir kez, turun içinde (ayrı cron satırı gerekmez):
             log "$(m "$M_ASN_REFRESH_FAIL" "$age")"
         fi
     fi
-    cnt_add "DAILY_TASKS $TODAY"
+    [ "$miss" = 1 ] || cnt_add "DAILY_TASKS $TODAY"   # yenileme çalışamadıysa gün kapanmaz: sonraki tur yeniden dener
     return 0
 }
 part_note() {    # LO HI → REPLY = "CIDR|svc" (aralıktaki ilk kısmi ban) ya da boş

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.15.30 — 2026-10-27
+
+- **Fix: a failed rented-server list refresh waited a day.** The daily jobs
+  were marked done for the day even when the list refresh that was due could
+  not run, so the next try came the next day. Now the day stays open and the
+  next run tries again.
+
 ## 1.15.29 — 2026-10-27
 
 - **"Ignore" is renamed "Mute".** Hiding a *Needs review* row (and its

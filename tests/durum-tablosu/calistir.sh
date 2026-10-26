@@ -457,6 +457,12 @@ mcheck "kaldırma · geri yükle seçili değilse tekil geri gelmez" "! grep -q 
 mk keep2; evl 175 add24 1; evl 20 run 2; quiet
 mcheck "saklama · süresi dolmamış kayıt varken dosya yeniden yazılmaz (yalnız tur satırı eklenir)" "grep -q '151.80.1.0' '$R/var/lib/csf_autogroup/events.jsonl' && grep -q '151.80.2.0' '$R/var/lib/csf_autogroup/events.jsonl'"
 
+# günlük işler: kiralık sunucu yenilemesinin sırası geldi ama çalışamadı (taklit kökte ipset yok) → gün kapanmaz, sonraki tur
+# yeniden dener; kiralık sunucu banı kapalıyken gün kapanır (önce başarısız yenileme de "yapıldı" sayılıyor, bir gün bekletiyordu)
+mk daily; printf '%s\n' "CLOUD_BAN=1" "CLOUD_SOURCES=aws" >> "$R/app/config.env"; quiet
+mcheck "günlük işler: kiralık sunucu yenilemesi çalışamazsa gün kapanmaz ve .refreshed yazılmaz" "! grep -q '^DAILY_TASKS ' '$C' && [ ! -e '$R/var/lib/csf_autogroup/cloud/.refreshed' ]"
+mk daily0; quiet
+mcheck "günlük işler: kiralık sunucu banı kapalıyken gün kapanır" "grep -q '^DAILY_TASKS ' '$C'"
 node "$(wp "$H/render.js")" "$(wp "$REPO/whm/assets/ag.js")" "$(wp "$W/out")" "$@"; RC=$?
 printf '\nMotor kuralları\n%s' "$ML"
 [ "$MF" -gt 0 ] && { echo "$MF motor kuralı ihlali"; exit 1; }
