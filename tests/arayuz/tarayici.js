@@ -224,11 +224,11 @@ async function layoutChecks(page, label, width) {
     await kartKurallari(page, r.cidr);
     // kartın Kontrol edilecekler satırı Yoksay (yoksayılmamışsa) ya da Yoksaymayı kaldır sunmalı
     const cardIgn = await page.evaluate(() => !!document.querySelector('.ag-drawer [data-act="ignore"], .ag-drawer [data-act="unignore"]'));
-    check(`IP kartında Yoksay / kaldır var: ${r.cidr}`, cardIgn);
+    check(`IP kartında Sustur / kaldır var: ${r.cidr}`, cardIgn);
     // kart sayfa gövdesinde (eklentinin alanı dışında): düğme tıklanınca işlem çalışmalı (önce hiçbir şey olmuyordu)
     if (cardIgn) {
       await page.click('.ag-drawer [data-act="ignore"], .ag-drawer [data-act="unignore"]'); await page.waitForTimeout(700);
-      check(`IP kartındaki Yoksay / kaldır tıklanınca pencere açılır: ${r.cidr}`, await page.$('.ag-modal') !== null);
+      check(`IP kartındaki Sustur / kaldır tıklanınca pencere açılır: ${r.cidr}`, await page.$('.ag-modal') !== null);
       await page.keyboard.press('Escape'); await page.waitForTimeout(400);   // onaylamadan kapat
     }
     await page.keyboard.press('Escape');   // üst katmanı (IP kartı) kapatır
@@ -238,7 +238,7 @@ async function layoutChecks(page, label, width) {
     if (mb) {
       await mb.click(); await page.waitForTimeout(400);
       const acts = await page.evaluate(c => Array.from(document.querySelectorAll(`.ag-item[data-row="${c}"] .ag-menu [data-act]`)).map(b => b.getAttribute('data-act')), r.cidr);
-      check(`menüde Yoksay var: ${r.cidr}`, acts.includes('ignore'), acts.join(','));
+      check(`menüde Sustur var: ${r.cidr}`, acts.includes('ignore'), acts.join(','));
       await page.keyboard.press('Escape'); await page.waitForTimeout(300);
     }
   }
@@ -247,12 +247,12 @@ async function layoutChecks(page, label, width) {
     const c = rows[0].cidr;
     await page.click(`.ag-item[data-row="${c}"] [data-act="menu"]`); await page.waitForTimeout(400);
     await page.click(`.ag-item[data-row="${c}"] .ag-menu [data-act="ignore"]`); await page.waitForTimeout(600);
-    check('Yoksay penceresi açıldı', await page.$('.ag-modal [data-m="ok"]') !== null);
+    check('Sustur penceresi açıldı', await page.$('.ag-modal [data-m="ok"]') !== null);
     await page.click('.ag-modal [data-m="ok"]');
     await page.waitForFunction(c => !document.querySelector(`.ag-item[data-row="${c}"] .ag-tr-r`) && document.querySelector(`[data-act="menu"][data-key="im:${c}"]`), c, { timeout: 30000 }).catch(function () {});
     const gone = await page.$(`.ag-item[data-row="${c}"] .ag-tr-r`) === null;
     const listed = await page.$(`[data-act="menu"][data-key="im:${c}"]`) !== null;
-    check(`Yoksay: ${c} listeden düştü ve Yoksayılanlar'da`, gone && listed, `düştü=${gone} listede=${listed}`);
+    check(`Sustur: ${c} listeden düştü ve Susturulanlar'da`, gone && listed, `düştü=${gone} listede=${listed}`);
     // Yoksayılanlar satırının ⋯ menüsü: Süreyi değiştir ve Yoksaymayı kaldır, görünür (kartın / görünümün dışına taşmadan)
     const untilOf = () => page.evaluate(c => { const r = document.querySelector(`.ag-item[data-row="${c}"] .ag-td-until`); return r ? r.textContent : ''; }, c);
     const openIm = async () => { await page.click(`[data-act="menu"][data-key="im:${c}"]`); await page.waitForTimeout(400); };
@@ -261,7 +261,7 @@ async function layoutChecks(page, label, width) {
       const vis = await page.evaluate(() => { const b = document.querySelector('.ag-menu [data-act="unignore"]'); if (!b) return 'yok';
         const r = b.getBoundingClientRect(); return r.width > 0 && r.right <= window.innerWidth + 1 && r.left >= -1 ? 'ok' : `menü ${Math.round(r.left)}–${Math.round(r.right)}`; });
       const acts = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-menu [data-act]')).map(b => b.getAttribute('data-act')));
-      check('Yoksayılanlar menüsü: Süreyi değiştir + Yoksaymayı kaldır, görünür', vis === 'ok' && acts.includes('ignore') && acts.includes('unignore'), vis + ' ' + acts.join(','));
+      check('Susturulanlar menüsü: Süreyi değiştir + Susturmayı bitir, görünür', vis === 'ok' && acts.includes('ignore') && acts.includes('unignore'), vis + ' ' + acts.join(','));
       // Süreyi değiştir: 30 gün → 7 gün; bitiş tarihi değişmeli
       const before7 = await untilOf();
       await page.click(`.ag-menu [data-act="ignore"][data-c="${c}"]`); await page.waitForTimeout(600);
@@ -274,7 +274,7 @@ async function layoutChecks(page, label, width) {
       await page.click(`.ag-menu [data-act="unignore"][data-c="${c}"]`); await page.waitForTimeout(600);
       const ok = await page.$('.ag-modal [data-m="ok"]'); if (ok) await ok.click();
       await page.waitForFunction(c => document.querySelector(`.ag-item[data-row="${c}"] .ag-tr-r`), c, { timeout: 30000 }).catch(function () {});
-      check(`Yoksaymayı kaldır: ${c} geri geldi`, await page.$(`.ag-item[data-row="${c}"] .ag-tr-r`) !== null);
+      check(`Susturmayı bitir: ${c} geri geldi`, await page.$(`.ag-item[data-row="${c}"] .ag-tr-r`) !== null);
     }
   }
   // İzlenenler: satır menüsünde "İzlemeyi yeniden başlat" ve kalan süre yenilenir (izlenen blok yoksa atlanır)

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.15.29 — 2026-10-27
+
+- **"Ignore" is renamed "Mute".** Hiding a *Needs review* row (and its
+  emails) was called *Ignore*, the same word CSF uses for csf.ignore and
+  IGNORE_ALLOW, so "Ignored" could mean either. The plugin's action is now
+  *Mute* (*Muted* list, *Unmute*, History "Muted / Unmuted"); "ignored" in the
+  panel, mails and log now only means CSF / lfd ignoring an address. Settings,
+  files and existing mutes are unchanged.
+- **Fix: the rented-server list refresh was marked done when it was skipped.**
+  When the refresh could not run (no `ipset` in cron's path, before 1.15.28),
+  it was still marked done for the day, so the lists were not downloaded and
+  the next try waited another day. It is now marked only when it ran.
+
 ## 1.15.28 — 2026-10-27
 
 - **Fix: cron runs skipped the firewall upkeep.** cron starts the plugin with

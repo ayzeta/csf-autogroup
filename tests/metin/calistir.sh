@@ -44,6 +44,11 @@ done
 tr_end=$(grep -n "^    en: {" "$JS" | head -n 1 | cut -d: -f1)
 hits=$(head -n "${tr_end:-1}" "$JS" | grep -oE "[a-z_0-9]+: '([^'\\\\]|\\\\.)*'" | grep -i "do not delete" | grep -vi "silinmez")
 if [ -n "$hits" ]; then bad=$((bad + 1)); echo "  ✗ «do not delete» Türkçe metinde «silinmez» açıklaması olmadan:"; printf '%s\n' "$hits" | cut -c1-140 | sed 's/^/      /'; fi
+# eklentinin susturma işlemi "yoksay / ignore" demez: o sözcük yalnız CSF / lfd anlamında (csf.ignore, IGNORE_ALLOW, lfd durumları)
+SUS='s_review_h|s_ignored|s_ignored_h|ev_manual_ignore|ev_manual_unignore|st_ign|st_ign_f|w_ignore|w_unignore|ignore|unignore|ign_who|ign_forever_l|m_ignore_t|m_ignore_b|m_ignchg_t|m_ignchg_b|l_ign|ic_review_w|col_until|col_by'
+hits=$( { grep -oE "(^|[^a-z_0-9])($SUS): '([^'\\\\]|\\\\.)*'" "$JS"; grep -oE '^ *(M_IGN16|M_A_IGNORED|M_A_IGNORED_F|M_A_UNIGNORED|M_A_NOTIGN|M_S_IGNORED|M_L_IGN)="[^"]*"' "$SH"; } |
+  sed "s/^[^:=]*[:=] *//" | grep -iE "oksay|ignor")
+if [ -n "$hits" ]; then bad=$((bad + 1)); echo "  ✗ eklentinin susturma metninde «yoksay / ignore» (CSF'in anlamıyla karışır):"; printf '%s\n' "$hits" | cut -c1-140 | sed 's/^/      /'; fi
 wp() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi; }
 node "$(wp "$H/sozluk.js")" "$(wp "$JS")" || bad=$((bad + 1))     # her durum rozeti Terimler'de açıklanmış mı
 if [ "$bad" -eq 0 ]; then echo "Terim tutarlılığı: eski ad kalmadı"; exit 0; fi

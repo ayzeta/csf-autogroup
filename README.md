@@ -160,7 +160,7 @@ settings, with no prompts. `config.env` is left untouched.
   (counting the violations of the last 7 days after the ban).
   Every row says when it drops off the list by itself if nothing new comes:
   7 days (the *Days kept in the list* setting) after its last attempt, warning
-  or violation. To silence a row before that, use Ignore.
+  or violation. To silence a row before that, use Mute.
 - **Active range bans** — a sortable, paged table with each block's owner,
   searchable by CIDR, AS number or organisation. Filters show their counts.
   Blocks that became permanent on a second violation are tagged *repeat
@@ -190,7 +190,7 @@ settings, with no prompts. `config.env` is left untouched.
   networks show the services hit and suggest a single block when most
   singles sit in one.
 - **History actions** — every row has a **⋯** menu with what can be done with
-  that item *now* (ban, change, remove, ignore, show in Overview, IP card), and
+  that item *now* (ban, change, remove, mute, show in Overview, IP card), and
   the newest row of each item says its current state ("banned now", "in To
   review", "no longer banned").
 - **Look up an IP** — hostname (forward-confirmed), owner, announced prefix,
@@ -202,7 +202,7 @@ settings, with no prompts. `config.env` is left untouched.
   links to bgp.he.net and AbuseIPDB, and buttons to ban its `/24` or `/16`.
   Recently viewed IPs stay one click away. A range (`1.2.3.0/24`) opens the
   range card instead: the result and every action (ban, narrower range,
-  remove, ignore) at the top, then one table of the IPs in the range (current
+  remove, mute) at the top, then one table of the IPs in the range (current
   singles, temp bans, offenders, and the IPs a ban or watch rests on) with
   their state now (permanent, temp with time left, not banned) and reason.
 - **Inside a wider ban** — a block inside a banned `/16` (or any wider range) is
@@ -311,7 +311,7 @@ full one.
 | Restart watch | start a watched `/24`'s watch period again from today (**⋯** in Watched and the IP card) |
 | Remove | lift a block ban (`do not delete` blocks too; `csf.deny` is backed up first) |
 | Remove old ones | on the *Old* filter: remove every block ban older than the old-block limit |
-| Ignore | hide an item from review for 7/30/90 days or indefinitely (its emails, Slack messages and History records stop too, also for addresses inside an ignored range), from a To review row's **⋯** or the IP card; *Ignored* and the IP card show who ignored it and when; change the duration or undo under *Ignored*, undo from the IP card too |
+| Mute | hide an item from review for 7/30/90 days or indefinitely (its emails, Slack messages and History records stop too, also for addresses inside a muted range), from a Needs review row's **⋯** or the IP card; *Muted* and the IP card show who muted it and when; change the duration or unmute under *Muted*, unmute from the IP card too. Muting does not touch bans or lfd; "ignore" in the panel only ever means CSF's own ignore (csf.ignore, IGNORE_ALLOW) |
 | IPs | a block's IPs and ban reasons, as recorded in the event log |
 | Dry run | show what a run would do; changes nothing, sends nothing |
 | Run now | run immediately instead of waiting for cron |
@@ -353,7 +353,7 @@ its own:
   or off. Run notices are the bans, suspicious networks and skips; the
   allowed-IP violation and open-service records are the allowed / ignored /
   server-IP and open-service rows of *Needs review*, sent once per IP or
-  range per day and never for what you ignored. Both go by email at the end
+  range per day and never for what you muted. Both go by email at the end
   of the run and on Slack collected into at most one message per hour;
   firewall and list problems go right away. The email address comes from WHM's Basic WebHost
   Manager Setup (or any address you type); the Slack address is the one set
@@ -735,7 +735,7 @@ api.php, the real engine and the real CSF files, without WHM) in PHP's
 built-in server and drives them with a headless Chromium (Playwright): every
 tab at 1280 and 390 px with no horizontal overflow, no clipped badge and no
 element past the right edge; the glossary; the IP card and the menu of every
-Needs review row; and the Ignore → Ignored list → Stop ignoring flow end to
+Needs review row; and the Mute → Muted list → Unmute flow end to
 end. `GORUNTU=1` keeps screenshots in `tests/arayuz/cikti/`. Root, php, node
 and the playwright module are needed; run it on the test VM or container, not
 on a server.

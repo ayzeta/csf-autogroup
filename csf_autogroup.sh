@@ -53,7 +53,7 @@ if [ -z "${SIM_ROOT:-}" ]; then case ":$PATH:" in *:/usr/sbin:*) ;; *) PATH="${P
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.28"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.29"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -324,7 +324,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_PANEL_GEN="Panel: %s → Eklentiler → CSF Auto-Group"
   M_DRY_ON="KURU ÇALIŞTIRMA — hiçbir şey değiştirilmeyecek, mail gönderilmeyecek"
   M_DRY_MAIL="[gönderilmeyecek mail] Kime: %s — Konu: %s"
-  M_IGN16="ATLANDI şüpheli ağ: %s.0.0/16 yoksayılıyor (%s tarihine kadar)"
+  M_IGN16="ATLANDI şüpheli ağ: %s.0.0/16 susturuldu (%s tarihine kadar)"
   M_BUSY="Başka bir çalışma sürüyor, biraz sonra tekrar deneyin"
   M_BAD_TARGET="Geçersiz hedef: %s"
   M_BAD_IP="Geçersiz IPv4 adresi: %s"
@@ -392,18 +392,18 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_FIX_UDP="%s: kısmi ban/istisnaya eksik UDP 443 satırı eklendi (HTTP/3)"
   M_A_UNBANFAIL="%s kaldırılamadı: %s"
   M_A_NOTFOUND="%s ne csf.deny'de ne geçici listede birebir bulunamadı"
-  M_A_IGNORED="%s %s tarihine kadar yoksayılacak"; M_A_IGNORED_F="%s siz kaldırana kadar yoksayılacak"
-  M_A_UNIGNORED="%s artık yoksayılmıyor"
-  M_A_NOTIGN="%s yoksayılanlar listesinde değil"
+  M_A_IGNORED="%s %s tarihine kadar susturuldu"; M_A_IGNORED_F="%s siz kaldırana kadar susturuldu"
+  M_A_UNIGNORED="%s artık susturulmuyor"
+  M_A_NOTIGN="%s susturulanlar listesinde değil"
   M_S_TITLE="CSF Auto-Group %s — durum"
   M_S_LAST="Son çalışma"; M_S_NEVER="henüz yok"; M_S_RUNNING="şu an çalışıyor"
   M_S_USAGE="Doluluk"; M_S_PERM="kalıcı"; M_S_TEMP="geçici"
   M_S_REVIEW="Kontrol edilecekler (%s gün)"; M_S_PENDING="İzlenenler"
-  M_S_GROUPS="Aktif aralık banları"; M_S_IGNORED="Yoksayılanlar"; M_S_RECENT="Son işlemler"
+  M_S_GROUPS="Aktif aralık banları"; M_S_IGNORED="Susturulanlar"; M_S_RECENT="Son işlemler"
   M_S_NONE="yok"; M_S_DAYSLEFT="%s gün kaldı"; M_S_TTL="geçici ban %s kaldı"
   M_L_HOST="Hostname"; M_L_FWD="ileri yönde doğrulandı"; M_L_NOFWD="ileri yönde doğrulanamadı"
   M_L_OWNER="Sahibi"; M_L_PREFIX="Duyurulan blok"; M_L_REG="Kayıt"; M_L_DENY="csf.deny"
-  M_L_TEMP="Geçici liste"; M_L_WL="Beyaz liste"; M_L_PENDING="İzleniyor"; M_L_IGN="Yoksayılıyor"; M_L_ACCT="Denemeler"
+  M_L_TEMP="Geçici liste"; M_L_WL="Beyaz liste"; M_L_PENDING="İzleniyor"; M_L_IGN="Susturuldu"; M_L_ACCT="Denemeler"
   M_H_NOREASON="geçici ban (günlükte sebep yok)"
   M_CFG_BAD="Geçersiz değer: %s = %s (%s olmalı)"
   M_CFG_RANGE="%s ile %s arası bir tam sayı"
@@ -578,7 +578,7 @@ else
   M_PANEL_GEN="Panel: %s → Plugins → CSF Auto-Group"
   M_DRY_ON="DRY RUN — nothing will be changed, no email will be sent"
   M_DRY_MAIL="[email not sent] To: %s — Subject: %s"
-  M_IGN16="SKIPPED suspicious network: %s.0.0/16 is ignored (until %s)"
+  M_IGN16="SKIPPED suspicious network: %s.0.0/16 is muted (until %s)"
   M_BUSY="Another run is in progress, try again in a moment"
   M_BAD_TARGET="Invalid target: %s"
   M_BAD_IP="Invalid IPv4 address: %s"
@@ -646,18 +646,18 @@ else
   M_FIX_UDP="%s: added the missing UDP 443 line to the partial ban/exception (HTTP/3)"
   M_A_UNBANFAIL="%s could not be removed: %s"
   M_A_NOTFOUND="%s is not in csf.deny or the temp list (exact match)"
-  M_A_IGNORED="%s will be ignored until %s"; M_A_IGNORED_F="%s will be ignored until you stop it"
-  M_A_UNIGNORED="%s is no longer ignored"
-  M_A_NOTIGN="%s is not on the ignore list"
+  M_A_IGNORED="%s is muted until %s"; M_A_IGNORED_F="%s is muted until you unmute it"
+  M_A_UNIGNORED="%s is no longer muted"
+  M_A_NOTIGN="%s is not on the muted list"
   M_S_TITLE="CSF Auto-Group %s — status"
   M_S_LAST="Last run"; M_S_NEVER="none yet"; M_S_RUNNING="running now"
   M_S_USAGE="Usage"; M_S_PERM="permanent"; M_S_TEMP="temp"
   M_S_REVIEW="Needs review (%s days)"; M_S_PENDING="Watched"
-  M_S_GROUPS="Active range bans"; M_S_IGNORED="Ignored"; M_S_RECENT="Recent actions"
+  M_S_GROUPS="Active range bans"; M_S_IGNORED="Muted"; M_S_RECENT="Recent actions"
   M_S_NONE="none"; M_S_DAYSLEFT="%s days left"; M_S_TTL="temp ban %s left"
   M_L_HOST="Hostname"; M_L_FWD="forward-confirmed"; M_L_NOFWD="not forward-confirmed"
   M_L_OWNER="Owner"; M_L_PREFIX="Announced prefix"; M_L_REG="Registry"; M_L_DENY="csf.deny"
-  M_L_TEMP="Temp list"; M_L_WL="Whitelist"; M_L_PENDING="Watched"; M_L_IGN="Ignored"; M_L_ACCT="Attempts"
+  M_L_TEMP="Temp list"; M_L_WL="Whitelist"; M_L_PENDING="Watched"; M_L_IGN="Muted"; M_L_ACCT="Attempts"
   M_H_NOREASON="temp ban (no reason in the log)"
   M_CFG_BAD="Invalid value: %s = %s (must be %s)"
   M_CFG_RANGE="a whole number from %s to %s"
@@ -3989,10 +3989,10 @@ cloud_srclist() { # → REPLY = araca verilecek "ad|adres" satırları (panelde 
 }
 cloud_enforce() { # FORCE(1 = listeleri şimdi indir) → bulut listesi banını kur / onar / kaldır
     local IFS=$' \t\n' tool="$SELF_DIR/tools/cloud-ban.sh" sig sigf="$CLOUD_DIR/.sig" act self="" i lf need=0 n st
-    [ -r "$tool" ] || return 0
+    [ -r "$tool" ] || return 1
     if [ "$CLOUD_BAN" = 1 ] && [ -n "${CLOUD_ACTIVE// /}" ]; then
-        command -v ipset >/dev/null 2>&1 || return 0
-        mkdir -p "$CLOUD_DIR" || return 0
+        command -v ipset >/dev/null 2>&1 || return 1
+        mkdir -p "$CLOUD_DIR" || return 1
         [ "$WL_LOADED" = 1 ] || load_whitelist
         for i in "${!WL_TXT[@]}"; do [[ "${WL_TXT[i]}" == "$M_WL_SELF: "* ]] && self+="${WL_TXT[i]#*: } "; done   # sunucunun kendi IP'leri listeden çıkarılır
         act="$CLOUD_ACTIVE"
@@ -4574,7 +4574,7 @@ daily_tasks() {  # günde bir kez, turun içinde (ayrı cron satırı gerekmez):
     # listeler kendi yenileme aralıklarıyla (Sağlayıcılar → kartlardaki "Yenileme"); son deneme zamanı .refreshed'de
     local cref="$CLOUD_DIR/.refreshed" sref="$(dirname "$SAYAC_FILE")/services/.refreshed"
     if [ "$SVC_ALLOW" = 1 ] && refresh_due "$sref" "$SVC_REFRESH_DAYS"; then svc_enforce 1; mkdir -p "$(dirname "$sref")"; date +%s > "$sref"; fi
-    if [ "$CLOUD_BAN" = 1 ] && refresh_due "$cref" "$CLOUD_REFRESH_DAYS"; then cloud_enforce 1; cloud_probe; date +%s > "$cref"; fi
+    if [ "$CLOUD_BAN" = 1 ] && refresh_due "$cref" "$CLOUD_REFRESH_DAYS"; then cloud_enforce 1 && { cloud_probe; date +%s > "$cref"; }; fi
     # CDN arkasındaki siteler: istekleri güvenlik duvarına CDN'den gelir, ziyaretçinin IP'si görünmez (Etkisini ölç ve ban-leak ayırır)
     [ -r "$SELF_DIR/tools/cdn-sites.sh" ] && OUT="$CDN_FILE" LOG_FILE="$LOG_FILE" timeout 600 bash "$SELF_DIR/tools/cdn-sites.sh" --if-older 1 >/dev/null 2>&1
     asn=$( { conf_val CC_DENY; echo ","; conf_val CC_DENY_PORTS; } | tr ',' '\n' | grep -iE '^AS[0-9]+$' | paste -sd, -)
