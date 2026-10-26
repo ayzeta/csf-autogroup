@@ -179,7 +179,7 @@ settings, with no prompts. `config.env` is left untouched.
   **Show more** pages further back. Work from before the event log existed is
   filled in from the log. Click an address to open its IP card, or a range
   (/16, /24) to open its range card: whether the range itself is banned, which
-  services hit are still open for it, and the bans inside it.
+  services hit are still open for it, and every IP in it with its state now.
   Settings changes are listed under Settings → Settings history.
 - **Suggestions where decisions are made** — the ban window suggests a partial
   ban when violations hit only one or two services; the remove window shows when
@@ -201,8 +201,10 @@ settings, with no prompts. `config.env` is left untouched.
   whitelists it (port-only `csf.allow` rules are shown with their ports), with
   links to bgp.he.net and AbuseIPDB, and buttons to ban its `/24` or `/16`.
   Recently viewed IPs stay one click away. A range (`1.2.3.0/24`) opens the
-  range card instead: what bans and watches cover it, the services attacked
-  from it (click a count for its IPs and their reasons) and the bans inside it.
+  range card instead: the result and every action (ban, narrower range,
+  remove, ignore) at the top, then one table of the IPs in the range (current
+  singles, temp bans, offenders, and the IPs a ban or watch rests on) with
+  their state now (permanent, temp with time left, not banned) and reason.
 - **Inside a wider ban** — a block inside a banned `/16` (or any wider range) is
   tagged *inside /16* in Active range bans and Watched, and listed under
   *Bans no longer needed* in the Providers tab.

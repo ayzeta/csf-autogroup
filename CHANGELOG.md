@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.15.28 — 2026-10-27
+
+- **Fix: cron runs skipped the firewall upkeep.** cron starts the plugin with
+  `PATH=/usr/bin:/bin`, where `ipset` and `iptables` (in `/usr/sbin`) are not
+  found, so runs from cron silently skipped refreshing and repairing the
+  rented-server lists, the hit counter and the guard rules; only runs started
+  from the panel or a shell did them. The plugin now adds `/usr/sbin` to its
+  path.
+- **Range card, simpler.** The result and every action (ban the range, the
+  suggested narrower range, remove the range's own ban, ignore) are at the
+  top. One table lists every IP in the range with its state now (permanent,
+  temp with time left, not banned, closed by a block or range ban), service
+  and reason; it replaces the services table, the single/temp list and the
+  "not banned now" list, which repeated the same IPs. The note on bans older
+  than the event log appears once.
+- **IP card:** the *Needs review* entry comes right after the result, its
+  *Ignore* button sits with the ban buttons, and the allow source is not
+  repeated when the *Whitelist* section already shows it. Hostname is hidden
+  while lookups are off.
+- **Clickable looks clickable.** Addresses and ranges in every list are blue
+  and underlined, text links are underlined, and the secondary buttons
+  (*Ignore*, *Show more*, *Copy*…) have a border.
+- **Nothing cut off:** addresses and ranges are never shortened (the
+  *Ignored* list and the ban tables cut them before), and summary card titles,
+  the *Why* column and service tile notes wrap. On phones card tables keep
+  their headers and scroll sideways instead of turning into stacked rows.
+- **Notifications:** the events table spans the card and says under each
+  event when it is sent, instead of a paragraph above it. When Slack is not
+  set up in WHM its column is dimmed. Mail and Slack intros are one sentence.
+- **Shorter texts** across Settings, the *Needs review* and *Active range
+  bans* intros, the remove and ignore dialogs, and the glossary.
+- Smaller fixes: a filter chip equal to *All* is hidden; *Watched* shows just
+  the days; History rows use ▸ / ▾ instead of + / −, don't repeat the row's
+  own IP in the allow entry, and show provider-ban removals in grey; the
+  Providers tab no longer lists the banned providers twice; settings history
+  shows display names for retired settings and list sources; lfd's raw
+  repeat-ban line is shown as "Repeat ban (PERMBLOCK)".
+
 ## 1.15.27 — 2026-10-26
 
 - **Restored single bans count like any single ban.** In 1.15.26, after a

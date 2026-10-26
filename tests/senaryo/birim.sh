@@ -14,4 +14,7 @@ t 30000_35000 ",80,30000:40000," 1
 t 30000_35000 ",80,31000:40000," 0
 t 30000:35000 ",30000:35000," 1
 t abc ",80," 0
+# cron ortamı (PATH=/usr/bin:/bin): motor başında /usr/sbin eklenmeli (ipset, iptables orada)
+N=$((N + 1)); P=$(env -i PATH=/usr/bin:/bin bash -c "$(sed -n '1,/^VERSION=/p' "$REPO/csf_autogroup.sh")"$'\n''echo "$PATH"')
+case ":$P:" in *:/usr/sbin:*) echo "  ✓ cron PATH'inde /usr/sbin eklenir";; *) F=$((F + 1)); echo "  ✗ cron PATH'inde /usr/sbin yok: $P";; esac
 echo "Birim: $N durum, $F beklenmeyen"; [ "$F" -eq 0 ]

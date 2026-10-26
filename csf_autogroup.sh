@@ -46,10 +46,14 @@
 #     own IPs in csf.allow, start with high thresholds, and watch the log.
 # ============================================================================
 set -o pipefail
+# cron'un PATH'i /usr/bin:/bin (cronie; ölçüldü): ipset ve iptables /usr/sbin'de, "command -v" bulamıyordu → cron turlarında
+# kiralık sunucu listesi, sayaç ve koruma kurallarının bakımı sessizce atlanıyordu (yalnız panelden / kabuktan turlarda çalışıyordu)
+# (taklit köklerde — SIM_ROOT — testler ipset / iptables'ı bilerek PATH dışında tutar: dokunulmaz)
+if [ -z "${SIM_ROOT:-}" ]; then case ":$PATH:" in *:/usr/sbin:*) ;; *) PATH="${PATH:+$PATH:}/usr/local/sbin:/usr/sbin:/sbin" ;; esac; export PATH; fi
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.27"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.28"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -244,7 +248,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_16_DONE="Şüpheli ağ turu bitti. %s bildirim."
   M_AVIOL="İzinli IP'den ihlal (Geçmiş'e yazıldı): %s → %s, son 24 saatte %s kez"
   M_POPEN="Açık servis (Geçmiş'e yazıldı): %s kısmi banından sonra açık kalan servislere %s ihlal"
-  M_AVIOL_SUBJ="%s izinli IP'den ihlal"; M_AVIOL_BODY="İzin listesindeki, yoksayılan ya da sunucunun kendi adreslerinden lfd kuralına takılan denemeler (lfd banlamadı ya da ban işlemedi). Kontrol edilecekler'de ve Geçmiş'te; IP başına günde bir kez bildirilir; yoksaydıklarınız bildirilmez. Her satırda IP, hostname ve sahibi; servis, son 24 saatte kaç kez, durum, izin ya da yoksayma kaydı ve lfd'nin son kaydı:"
+  M_AVIOL_SUBJ="%s izinli IP'den ihlal"; M_AVIOL_BODY="lfd kuralına takılan ama banlanmayan IP'ler (izinli, yoksayılan ya da sunucunun kendi adresi); IP başına günde bir kez:"
   M_AV_N="%s kez"; M_AV_SRC="kayıt: %s"; M_AV_LAST="son: %s (%s)"
   # günlüklerde denenenler (acct_text; panelde ac_*)
   M_ACCT_mail="denenen posta hesapları: %s"; M_ACCT_ssh="denenen SSH kullanıcıları: %s"; M_ACCT_ftp="denenen FTP hesapları: %s"
@@ -255,7 +259,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_SVCN_web="Web"; M_SVCN_ssh="SSH"; M_SVCN_ftp="FTP"; M_SVCN_cp="cPanel · WHM · Webmail"; M_SVCN_min="Gelen posta"; M_SVCN_mout="Giden posta"
   M_SVCN_sync="Posta eşitleme"; M_SVCN_dns="DNS"; M_SVCN_scan="port taraması"; M_SVCN_repeat="tekrar banlanan"; M_SVCN_other="diğer"
   M_AVK_b="ban işlemiyor"; M_AVK_i="lfd yoksaydı"; M_AVK_y="yoksayılıyor"; M_AVK_s="sunucu IP'si"
-  M_POPEN_SUBJ="%s açık servis"; M_POPEN_BODY="Kısmi ban yalnız seçilen servisleri kapatıyor; bandan sonra açık kalan servislere blok ya da ağ eşiği kadar ihlal geldi. Banı değiştirip o servisleri de kapatabilirsiniz (aralık başına günde bir kez bildirilir):"; M_POPEN_L="kapalı: %s · açık servislere %s ihlal"
+  M_POPEN_SUBJ="%s açık servis"; M_POPEN_BODY="Kısmi banın açık bıraktığı servislere eşik kadar ihlal geldi; banı değiştirip onları da kapatabilirsiniz:"; M_POPEN_L="kapalı: %s · açık servislere %s ihlal"
   M_DG_RV="Kontrol edilecekler (7 gün): %s izinli IP'den ihlal kaydı · %s açık servis kaydı"
   M_MAIL16_BODY="Aşağıdaki ağlarda (/16) birçok bloktan tekil ban (kalıcı ve geçici) birikti. Ağ banlanmadı;\nelle bakmanız önerilir:"
   M_MAIL16_SUBJ="%s şüpheli ağ"
@@ -354,7 +358,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_CFG_CLX="ad|https://adres biçiminde (ad: küçük harf, rakam, tire), en çok 20 kayıt"
   M_CFG_SVCU="kaynak|https://adres biçiminde"
   M_SVC_FAIL_SUBJ="izinli servis listesi indirilemiyor (%s)"
-  M_SVC_FAIL_BODY="Şu izinli servis listeleri uyarı süresinden uzun süredir indirilemiyor: %s. Eski listeler kullanılmaya devam ediyor; ama sağlayıcı adresini değiştirdiyse yeni sunucuları izinli değildir. Adresi panelden düzeltebilirsiniz: Sağlayıcılar → İzinli servisler → Kaynak adresleri."
+  M_SVC_FAIL_BODY="Şu izinli servis listeleri uyarı süresinden uzun süredir indirilemiyor: %s. Eski listeler kullanılıyor; adresi Sağlayıcılar → İzinli servisler → Kaynak adresleri'nden düzeltebilirsiniz."
   M_SVC_FAIL_OK="İzinli servis listeleri yeniden indirilebiliyor"
   M_CFG_ASN="AS ile başlayan numaralar, virgülle (en çok 50)"
   M_CFG_PORTS="virgüllü portlar ya da aralıklar (30000:35000), en çok 15"
@@ -369,7 +373,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_PAUSED="CSF Auto-Group duraklatıldı: yeni ban konmuyor; sağlayıcı banı ve kiralık sunucu banı CSF'te kaldırıldı (Ayarlar → Zamanlama'dan açılır)"
   M_CLOUD_REMOVED="Kiralık sunucu banı kapatıldı; kural, adres kümesi ve csfpost.sh satırı kaldırıldı"
   M_CLOUD_FAIL_SUBJ="kiralık sunucu listesi indirilemiyor (%s)"
-  M_CLOUD_FAIL_BODY="Şu kiralık sunucu listeleri uyarı süresinden uzun süredir indirilemiyor: %s. Eski listeler kullanılmaya devam ediyor; ama sağlayıcı yeni adresler aldıysa onlar banlı değildir. Adresi panelden düzeltebilirsiniz: Sağlayıcılar → Kiralık sunucular → kutucuktaki Adres düğmesi."
+  M_CLOUD_FAIL_BODY="Şu kiralık sunucu listeleri uyarı süresinden uzun süredir indirilemiyor: %s. Eski listeler kullanılıyor; adresi Sağlayıcılar → Kiralık sunucular → Adres düğmesinden düzeltebilirsiniz."
   M_CLOUD_FAIL_OK="Kiralık sunucu listeleri yeniden indirilebiliyor"
   M_DG_CLOUD="Kiralık sunucular: %s · kapalı %s"
   M_ASN_REFRESH="CSF'in ASN verisi %s günlüktü; yenilensin diye lfd yeniden başlatıldı (ASN banı: %s)"
@@ -377,7 +381,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_ORPHANS="Banı CSF ekranından kaldırılmış %s eski kayıt temizlendi (kurtarma kopyası / izin satırı)"
   M_LIM_GONE="Blok banı eklenti dışında kaldırıldı (CSF liste sınırı ya da elle), izlemeye alındı: %s"
   M_LIM_SUBJ="CSF %s blok banını sildi — liste sınırı"
-  M_LIM_BODY="Aşağıdaki blok banları eklenti dışında csf.deny'den kaldırıldı: büyük olasılıkla kalıcı liste sınırına ulaştığı için CSF sildi (DENY_IP_LIMIT = %s; CSF o zaman \"do not delete\" işareti olmayan en eski satırları siler) ya da elle kaldırıldı. İçlerindeki tekil banlar daha önce silinmişti. Bloklar izlemeye alındı: yeniden ihlal ederlerse \"do not delete\" işaretli kalıcı ban konur. Liste sık doluyorsa CSF ayarlarında DENY_IP_LIMIT'i artırın."
+  M_LIM_BODY="Bu blok banları csf.deny'den eklenti dışında kalktı: CSF'in liste sınırı (DENY_IP_LIMIT = %s; işaretsiz en eski satırlar silinir) ya da elle kaldırma. Bloklar izlemeye alındı; yeniden ihlal ederlerse silinmez kalıcı ban konur."
   M_A_TIME="Elle işlem süresi (%s): %s sn"
   M_PART_NOTE="   Not: bu ağda kısmi ban var (%s · %s); yalnız seçilen servisler kapalı, diğer portlardan gelenler sürebilir"
   M_PART_AFTER="   Yalnız kısmi bandan (%s) sonra gelen banlar sayıldı."
@@ -500,7 +504,7 @@ else
   M_16_DONE="Suspicious network pass done. %s report(s)."
   M_AVIOL="Violation from allowed IP (recorded in History): %s → %s, %s times in the last 24 hours"
   M_POPEN="Open service (recorded in History): %s violations on the services the partial ban on %s leaves open"
-  M_AVIOL_SUBJ="%s violations from allowed IPs"; M_AVIOL_BODY="Attempts from allowed, ignored or server-own addresses that tripped an lfd rule (lfd did not ban them or the ban did not apply). In Needs review and History; reported once per IP per day; nothing is sent for what you ignored. Each row: IP, hostname and owner; service, times in the last 24 hours, state, allow or ignore entry and lfd's last record:"
+  M_AVIOL_SUBJ="%s violations from allowed IPs"; M_AVIOL_BODY="IPs that tripped an lfd rule but were not banned (allowed, ignored or the server's own address); once per IP per day:"
   M_AV_N="%s times"; M_AV_SRC="entry: %s"; M_AV_LAST="last: %s (%s)"
   M_ACCT_mail="mail accounts tried: %s"; M_ACCT_ssh="SSH users tried: %s"; M_ACCT_ftp="FTP accounts tried: %s"
   M_ACCT_cp="cPanel/WHM logins tried: %s"; M_ACCT_htp="web password users tried: %s"; M_ACCT_web="targets: %s"
@@ -509,7 +513,7 @@ else
   M_SVCN_web="Web"; M_SVCN_ssh="SSH"; M_SVCN_ftp="FTP"; M_SVCN_cp="cPanel · WHM · Webmail"; M_SVCN_min="Incoming mail"; M_SVCN_mout="Outgoing mail"
   M_SVCN_sync="Mail sync"; M_SVCN_dns="DNS"; M_SVCN_scan="port scan"; M_SVCN_repeat="banned repeatedly"; M_SVCN_other="other"
   M_AVK_b="ban not working"; M_AVK_i="ignored by lfd"; M_AVK_y="ignored"; M_AVK_s="server IP"
-  M_POPEN_SUBJ="%s open services"; M_POPEN_BODY="A partial ban closes only the chosen services; since it went in, the services left open took violations up to the block or network threshold. Change the ban to close them too (reported once per range per day):"; M_POPEN_L="closed: %s · %s violations on the open services"
+  M_POPEN_SUBJ="%s open services"; M_POPEN_BODY="The services a partial ban leaves open took violations up to the threshold; change the ban to close them too:"; M_POPEN_L="closed: %s · %s violations on the open services"
   M_DG_RV="Needs review (7 days): %s allowed-IP violation records · %s open-service records"
   M_MAIL16_BODY="Single bans (permanent and temp) have piled up across several blocks of the following networks (/16). The network was not banned;\nmanual review recommended:"
   M_MAIL16_SUBJ="%s suspicious network(s)"
@@ -608,7 +612,7 @@ else
   M_CFG_CLX="name|https://url (name: lowercase letters, digits, dash), at most 20 entries"
   M_CFG_SVCU="source|https://url"
   M_SVC_FAIL_SUBJ="allowed service list can't be downloaded (%s)"
-  M_SVC_FAIL_BODY="These allowed service lists haven't downloaded for longer than the warning period: %s. The old lists are still used, but if the provider changed its address its new servers aren't allowed. You can fix the address in the panel: Providers → Allowed services → Source addresses."
+  M_SVC_FAIL_BODY="These allowed service lists haven't downloaded for longer than the warning period: %s. The old lists are still used; fix the address under Providers → Allowed services → Source addresses."
   M_SVC_FAIL_OK="Allowed service lists download again"
   M_CFG_ASN="numbers starting with AS, comma separated (at most 50)"
   M_CFG_PORTS="comma separated ports or ranges (30000:35000), at most 15"
@@ -623,7 +627,7 @@ else
   M_PAUSED="CSF Auto-Group is paused: no new bans; the provider ban and the rented-server ban are off in CSF (turn it back on in Settings → Schedule)"
   M_CLOUD_REMOVED="Rented-server ban turned off; the rule, the address set and the csfpost.sh line were removed"
   M_CLOUD_FAIL_SUBJ="rented-server list can't be downloaded (%s)"
-  M_CLOUD_FAIL_BODY="These rented-server lists haven't downloaded for longer than the warning period: %s. The old lists are still used, but addresses the provider added since aren't banned. You can fix the address in the panel: Providers → Rented servers → the Address button on the tile."
+  M_CLOUD_FAIL_BODY="These rented-server lists haven't downloaded for longer than the warning period: %s. The old lists are still used; fix the address under Providers → Rented servers → the Address button."
   M_CLOUD_FAIL_OK="Rented-server lists download again"
   M_DG_CLOUD="Rented servers: %s · blocked %s"
   M_ASN_REFRESH="CSF's ASN data was %s days old; lfd restarted to refresh it (ASN ban: %s)"
@@ -631,7 +635,7 @@ else
   M_ORPHANS="Cleaned up %s leftover entries of bans removed outside the plugin (restore copies / allow lines)"
   M_LIM_GONE="Block ban removed outside the plugin (CSF list limit or by hand), now watched: %s"
   M_LIM_SUBJ="CSF removed %s block ban(s) — list limit"
-  M_LIM_BODY="These block bans were removed from csf.deny without the plugin: most likely CSF dropped them because the permanent list reached its limit (DENY_IP_LIMIT = %s; CSF then deletes the oldest lines not marked \"do not delete\"), or they were removed by hand. The single bans inside them were already gone. The blocks are now watched: if they violate again they get a permanent ban marked \"do not delete\". If the list fills up often, raise DENY_IP_LIMIT in the CSF settings."
+  M_LIM_BODY="These block bans left csf.deny without the plugin: CSF's list limit (DENY_IP_LIMIT = %s; the oldest unmarked lines are deleted) or a manual removal. The blocks are now watched; if they violate again they get a permanent do-not-delete ban."
   M_A_TIME="Manual action time (%s): %s s"
   M_PART_NOTE="   Note: this network has a partial ban (%s · %s); only the selected services are blocked, traffic to other ports can continue"
   M_PART_AFTER="   Only bans added after the partial ban (%s) were counted."

@@ -95,8 +95,8 @@
 .ag-btn-danger-solid { background: var(--ag-bad); border-color: var(--ag-bad); color: #fff; }
 .ag-btn-danger-solid:hover { background: #991b1b; border-color: #991b1b; }
 .ag-btn-sm { height: 28px; padding: 0 10px; font-size: 12.5px; border-radius: 7px; }
-.ag-btn-ghost { border-color: transparent; background: transparent; box-shadow: none; color: var(--ag-text-2); }
-.ag-btn-ghost:hover { background: var(--ag-neutral-soft); border-color: transparent; }
+.ag-btn-ghost { box-shadow: none; color: var(--ag-text-2); }
+.ag-btn-ghost:hover { background: var(--ag-neutral-soft); }
 
 /* ── Update banner ──────────────────────────────────────────────── */
 .ag-banner { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: var(--ag-radius); background: var(--ag-accent-soft); border: 1px solid var(--ag-accent-line); color: #312e81; margin-bottom: 20px; flex-wrap: wrap; }
@@ -126,10 +126,10 @@
 .ag-ring circle { fill: none; stroke-width: 4; stroke: var(--ag-neutral-soft); }
 .ag-ring circle + circle { stroke: var(--ag-accent); stroke-linecap: round; }
 .ag-ring.warn circle + circle { stroke: #d97706; } .ag-ring.bad circle + circle { stroke: #dc2626; }
-.ag-kpi-l { grid-area: l; font-size: 12px; color: var(--ag-text-3); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ag-kpi-l { grid-area: l; font-size: 12px; color: var(--ag-text-3); font-weight: 600; }
 .ag-kpi-v { grid-area: v; font-size: 24px; font-weight: 700; letter-spacing: -.02em; margin-top: 2px; line-height: 1.2; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ag-kpi-v small { font-size: 14px; font-weight: 500; color: var(--ag-text-3); letter-spacing: 0; margin-left: 2px; }
-.ag-kpi-m { grid-area: m; font-size: 12px; color: var(--ag-text-3); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-kpi-m { grid-area: m; font-size: 12px; color: var(--ag-text-3); margin-top: 2px; }
 .ag-kpi-m b { color: var(--ag-text); font-weight: 650; } .ag-kpi-m .ag-kpi-mw { color: var(--ag-warn); }
 .ag-kpi-g { grid-area: g; display: flex; align-items: center; justify-content: flex-end; }
 .ag-kpi-g .ag-ring { width: 44px; height: 44px; }
@@ -161,8 +161,8 @@
 .ag-row-s { font-size: 12.5px; color: var(--ag-text-3); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ag-row-a { display: flex; gap: 6px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
 .ag-row-x { flex: none; font-size: 12.5px; color: var(--ag-text-3); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.ag-cidr { font-family: var(--ag-mono); font-size: 13px; font-weight: 600; color: var(--ag-text); cursor: pointer; border-bottom: 1px dashed transparent; }
-.ag-cidr:hover { border-bottom-color: var(--ag-text-3); }
+.ag-cidr { font-family: var(--ag-mono); font-size: 13px; font-weight: 600; color: var(--ag-accent); cursor: pointer; text-decoration: underline; text-decoration-color: var(--ag-accent-line); text-underline-offset: 3px; }
+.ag-cidr:hover { text-decoration-color: currentColor; }
 
 /* ── Pills ──────────────────────────────────────────────────────── */
 .ag-pill { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; border-radius: 20px; font-size: 11.5px; font-weight: 600; white-space: nowrap; border: 1px solid transparent; line-height: 1; }
@@ -190,16 +190,15 @@
 .ag-ip.ag-ip-h { background: #fafafb; padding-top: 6px; padding-bottom: 6px; font-size: 11px; font-weight: 650; color: var(--ag-text-3); text-transform: uppercase; letter-spacing: .04em; }
 .ag-im-t thead th { text-align: left; font-size: 11px; font-weight: 650; color: var(--ag-text-3); text-transform: uppercase; letter-spacing: .04em; padding: 0 10px 6px 0; white-space: nowrap; }
 .ag-im-t thead th:last-child { text-align: right; padding-right: 0; }
-.ag-im-t th.ag-th-r, .ag-im-t td.ag-rg-n { text-align: right; font-variant-numeric: tabular-nums; }
-.ag-rg-sv td:first-child { width: 45%; }
+.ag-im-t th.ag-th-r { text-align: right; font-variant-numeric: tabular-nums; }
 /* yoksayılanlar: aralık · bitiş · yoksayan · düğme */
 /* Yoksayılanlar (dar sütunda kart): 1) aralık ····· Yoksaymayı kaldır  2) bitiş · yoksayan */
 /* yoksayılanlar: tek satır — ağ/blok · bitiş · kim · ⋯ (başlık sütunlarıyla aynı hizada; iki satırlı düzen başlıkla
    örtüşmüyor ve kartın dibine yapışıyordu); bitiş sığmazsa … ile kısalır */
-.ag-thead.ag-tr-i, .ag-tr.ag-tr-i { grid-template-columns: minmax(0, 1fr) minmax(0, auto) 36px; column-gap: 10px; }
+.ag-thead.ag-tr-i, .ag-tr.ag-tr-i { grid-template-columns: max-content minmax(0, 1fr) 36px; column-gap: 10px; }
 .ag-thead.ag-tr-i .ag-th { cursor: default; }
 .ag-thead.ag-tr-i .ag-th:hover { color: var(--ag-text-3); }
-.ag-tr-i .ag-td-until { font-size: 12.5px; color: var(--ag-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+.ag-tr-i .ag-td-until { font-size: 12.5px; color: var(--ag-text-2); text-align: right; min-width: 0; }
 .ag-ip > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ag-ip .ag-mono { color: var(--ag-accent); cursor: pointer; }
 .ag-ip .ag-mono:hover { text-decoration: underline; }
@@ -340,7 +339,8 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-okbar b { font-weight: 600; }
 .ag-okbar span { margin-left: auto; opacity: .8; font-size: 12.5px; }
 .ag-link { background: none; border: 0; padding: 0; color: var(--ag-accent); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
-.ag-link:hover { text-decoration: underline; }
+.ag-link { text-decoration: underline; text-decoration-color: var(--ag-accent-line); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.ag-link:hover { text-decoration-color: currentColor; }
 
 /* ── Etkinlik grafiği ───────────────────────────────────────────── */
 .ag-activity { margin-bottom: 20px; }
@@ -361,7 +361,7 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-tbl > .ag-item > .ag-tr:hover { background: var(--ag-row-hover); }
 .ag-td { min-width: 0; font-size: 13px; overflow: hidden; }
 .ag-td-main { display: flex; align-items: center; gap: 8px; }
-.ag-td-main .ag-cidr, .ag-td-stack .ag-cidr { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-td-main .ag-cidr, .ag-td-stack .ag-cidr { white-space: nowrap; }
 .ag-td-stack { display: flex; flex-direction: column; gap: 2px; padding: 6px 0; }
 .ag-td .ag-pill svg { width: 11px; height: 11px; flex: none; }
 .ag-t-warn { color: var(--ag-warn); font-size: 12px; font-weight: 600; white-space: nowrap; }
@@ -387,7 +387,7 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 /* kontrol edilecekler: ağ · durum · neden · sahip · işaretlendi · öneri düğmesi · menü */
 .ag-thead.ag-tr-r, .ag-tr.ag-tr-r { grid-template-columns: 150px 120px minmax(0, 1fr) minmax(0, 1.2fr) 100px 140px 36px; }   /* İşaretlendi başlığı 98 px (ölçüldü) */
 .ag-tr.ag-tr-r { padding-top: 9px; padding-bottom: 4px; min-height: 40px; }
-.ag-tr-r .ag-td-why { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-tr-r .ag-td-why { min-width: 0; overflow-wrap: anywhere; }
 /* satırın notları: Durum sütunu hizasından başlar (18 + 150 + 12 px), satırla aynı zemin */
 .ag-tr-note { padding: 0 18px 9px 180px; font-size: 12px; line-height: 1.45; color: var(--ag-text-3); }
 .ag-tr-note:not(:has(div, .ag-own-n:not(:empty))) { padding-bottom: 5px; }
@@ -809,7 +809,10 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
 .ag-im-l .ag-pill { margin-left: 6px; }
 .ag-im-note { margin: 12px 0 0; color: var(--ag-text-3); font-size: 12.5px; }
 .ag-im-foot { margin: 10px 0 0; color: var(--ag-text-3); font-size: 12.5px; }
-@media (max-width: 600px) { .ag-im-t td.ag-im-st { text-align: left; } .ag-im-t tr { display: grid; } }
+@media (max-width: 600px) {
+  .ag-im-t { display: block; overflow-x: auto; }
+  .ag-im-t tr > :first-child { position: sticky; left: 0; background: var(--ag-card); }
+}
 .ag-setform .ag-field > .ag-loginfo { grid-column: 1 / -1; grid-row: 2; justify-self: start; max-width: none; margin-top: 3px; }
 @media (max-width: 900px) {
   .ag-setwrap { grid-template-columns: 1fr; }
@@ -910,6 +913,7 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
   .ag-ev-t .ag-ev-time { display: none; }
   .ag-ev-tm2 { display: inline; white-space: nowrap; color: var(--ag-text-3); font-variant-numeric: tabular-nums; }
   .ag-ev-tm2::before { content: " · "; }
+  .ag-ev-d > .ag-ev-tm2:first-child::before, .ag-ev-o + .ag-ev-tm2::before { content: none; }
   .ag-ev-tm2 .ag-chev { margin-left: 6px; }
   .ag-card-h .ag-tools .ag-chip { height: 24px; padding: 0 8px; font-size: 12px; }
 }
@@ -1090,7 +1094,7 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-tile-m b { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; padding-right: 54px; }
 .ag-tile-m b::before { content: ""; width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid var(--ag-line); flex: none; background: var(--ag-card); }
 .ag-tile.on .ag-tile-m b::before { background: var(--ag-accent); border-color: var(--ag-accent); box-shadow: inset 0 0 0 2px var(--ag-accent-soft); }
-.ag-tile-m small { display: block; font-size: 11.5px; color: var(--ag-text-3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ag-tile-m small { display: block; font-size: 11.5px; color: var(--ag-text-3); margin-top: 2px; }
 .ag-tile-m em { display: block; font-style: normal; font-size: 11.5px; color: var(--ag-text-3); margin-top: 4px; }
 .ag-tile.on .ag-tile-m em { color: var(--ag-accent); }
 /* birden çok liste yayımlayan kaynak: alt listeler kutucuğun altında ince bir sırada, tek tek seçilir */
@@ -1101,7 +1105,7 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-tile-subs .ag-chip-xs .ag-muted { font-size: 11px; }
 .ag-tile .ag-tile-m em.bad { color: var(--ag-warn); }
 .ag-tile .ag-tile-m em.pot { color: var(--ag-d-warn-t); margin-top: 1px; }
-.ag-tile-ed { position: absolute; top: 6px; right: 6px; display: inline-flex; align-items: center; gap: 4px; border: 0; background: transparent; color: var(--ag-text-3); font: inherit; font-size: 11px; padding: 3px 6px; border-radius: 6px; cursor: pointer; }
+.ag-tile-ed { position: absolute; top: 6px; right: 6px; display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--ag-line); background: var(--ag-card); color: var(--ag-text-3); font: inherit; font-size: 11px; padding: 3px 6px; border-radius: 6px; cursor: pointer; }
 .ag-tile-ed svg { width: 13px; height: 13px; }
 .ag-tile-ed:hover, .ag-tile.ed .ag-tile-ed { color: var(--ag-accent); background: var(--ag-card); }
 .ag-urled { margin-top: 10px; border: 1px solid var(--ag-accent-line); border-radius: 10px; padding: 10px 12px; background: var(--ag-card); }
@@ -1201,7 +1205,11 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-ev-m0 { display: inline-block; width: 30px; height: 30px; }   /* menüsüz Geçmiş satırında ⋯ düğmesinin yeri boş kalır, sütun kaymaz */
 /* olay × kanal tablosu (Ayarlar → Bildirim): satır olay sınıfı, sütun kanal; hücre onay kutusu */
 .ag-evm { border-collapse: collapse; margin-top: 2px; font-size: 13px; width: auto; }
-.ag-setform .ag-field.w > .ag-evm.ag-evm { justify-self: start; }   /* geniş alanda tablo yayılmaz (genel geniş alan kuralıyla aynı özgüllük, sonra geldiği için kazanır) */
+/* olay tablosu kartın genişliğinde; olay adı ve altında ne zaman gittiği, işaret sütunları sağda */
+.ag-setform .ag-field.w > .ag-evm.ag-evm { justify-self: stretch; width: 100%; }
+.ag-evm td { padding-top: 8px; padding-bottom: 8px; }
+.ag-evm td:first-child { width: 100%; }
+.ag-evm-w { font-size: 12px; color: var(--ag-text-3); margin-top: 2px; }
 .ag-evm th { font-size: 11.5px; font-weight: 600; color: var(--ag-text-3); text-align: center; padding: 0 16px 6px; white-space: nowrap; }
 .ag-evm th:first-child, .ag-evm td:first-child { text-align: left; padding-left: 0; padding-right: 28px; }
 .ag-evm td { padding: 4px 16px; border-top: 1px solid var(--ag-line-soft); text-align: center; color: var(--ag-text); }
@@ -1234,14 +1242,26 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
   .ag-prow-nm { grid-column: 1 / -1; }
   .ag-prow-st { white-space: normal; }
 }
-/* kart tablolarındaki IP'ler tıklanınca IP kartını açar: Kontrol edilecekler listesindeki IP'lerle aynı görünüm, bölünmeden */
-.ag-im-t td[data-ip] { color: var(--ag-accent); cursor: pointer; white-space: nowrap; }
-.ag-im-t td[data-ip]:hover { text-decoration: underline; }
-/* aralık kartı · ihlal edilen servisler: sayı tıklanınca o servisin IP'leri (IP tıklanınca IP kartı) */
-.ag-rg-ips td { padding-top: 2px; padding-bottom: 8px; font-size: 12.5px; line-height: 1.6; }
-.ag-rg-ips [data-ip] { color: var(--ag-accent); cursor: pointer; white-space: nowrap; }
-.ag-rg-ips [data-ip]:hover { text-decoration: underline; }
+@container agprows (max-width: 460px) {
+  .ag-prow { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .ag-prow-st { grid-column: 1 / -1; }
+  .ag-prow [data-act="asnimpact"] { justify-self: end; }
+}
+/* kart tablolarındaki IP'ler tıklanınca IP kartını açar: bağlantı görünümü (altı çizili), bölünmeden */
+.ag-im-t td[data-ip] { color: var(--ag-accent); cursor: pointer; white-space: nowrap; text-decoration: underline; text-decoration-color: var(--ag-accent-line); text-underline-offset: 3px; }
+.ag-im-t td[data-ip]:hover { text-decoration-color: currentColor; }
+/* aralık kartı · IP tablosu: banlı olmayan IP göze çarpar; "tümünü göster" tablonun altında */
+.ag-rg-open { color: var(--ag-bad); font-weight: 600; white-space: nowrap; }
+.ag-rg-ipt + .ag-link { margin-top: 8px; }
+.ag-tscroll { overflow-x: auto; }
+.ag-rg-ipt td.ag-im-st { white-space: nowrap; text-align: left; padding-right: 10px; }
+.ag-rg-ipt thead th:last-child { text-align: left; }
+.ag-rg-ipt td.ag-im-st .ag-pill { margin: 0; }
 /* kaldırma penceresi: geri yüklenecek tekiller, IP ve sebep tek satırda (sığmayan sebep … ile, tamamı ipucunda) */
 .ag-clean > div { min-width: 0; }
 .ag-clean .ag-rs-l { display: block; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ag-clean .ag-rs-l span { display: inline; margin: 0; color: var(--ag-text-2); }
+/* tanımlı olmayan kanalın sütunu (Slack WHM'de yoksa) ve ana anahtarı kapalı ayarın bağlı alanları: soluk */
+.ag-chk.na { opacity: .35; cursor: not-allowed; }
+.ag-evm-na { font-size: 11px; font-weight: 500; text-transform: none; letter-spacing: 0; }
+.ag-bagli.off { opacity: .5; }

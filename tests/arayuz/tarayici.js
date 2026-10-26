@@ -8,7 +8,47 @@ async function ready(page) {
   await page.waitForFunction(() => { const a = document.getElementById('ag-app'); return a && a.getAttribute('aria-busy') !== 'true'; }, null, { timeout: 90000 });
   await page.waitForTimeout(600);
 }
+// Tıklanan her öğe tıklanabilir görünmeli: kenarlık, zemin ya da alt çizgi (simge düğmesi hariç). Kabul edilen kalıplar:
+// sıralanan tablo başlığı, zeminli çip grubu (sekme gibi), üzerine gelince renklenen satır / döşeme, simge düğmesi.
+const KURAL = `window.agGorunmez = function (root) {
+  function saydam(c) { return !c || c === 'transparent' || /rgba\\(.*,\\s*0\\)$/.test(c); }
+  return Array.from(root.querySelectorAll('[data-ip],[data-act],[data-dr],button,a')).filter(e => {
+    const r = e.getBoundingClientRect(); if (!r.width || !r.height) return false;
+    if (e.closest('.ag-tabs') || e.matches('input,select,textarea,label,summary')) return false;
+    if (e.matches('.ag-th, .ag-chips:not(.ag-icwrap) > .ag-chip, .ag-ev.clickable, .ag-tile-m, .ag-lay-i, .ag-tile-ed, .ag-iconbtn, .ag-menu-i, .ag-setnav-i, .ag-x')) return false;
+    const cs = getComputedStyle(e);
+    if (!e.textContent.trim() && e.querySelector('svg')) return false;
+    if (/underline/.test(cs.textDecorationLine)) return false;
+    if (['Top', 'Right', 'Bottom', 'Left'].some(s => parseFloat(cs['border' + s + 'Width']) > 0 && !saydam(cs['border' + s + 'Color']))) return false;
+    if (!saydam(cs.backgroundColor) && cs.backgroundColor !== 'rgb(255, 255, 255)') return false;
+    return true;
+  }).map(e => (typeof e.className === 'string' && e.className ? e.className : e.tagName) + ': ' + e.textContent.trim().replace(/\\s+/g, ' ').slice(0, 30));
+};
+window.agKart = function () {
+  const d = document.querySelector('.ag-drawer'); if (!d) return null;
+  d.querySelectorAll('details').forEach(x => { x.open = true; });
+  const kendi = ((d.querySelector('.ag-drawer-h h3') || {}).textContent || '').trim();
+  const n = {}; d.querySelectorAll('[data-ip]').forEach(e => { const k = e.textContent.trim(); if (k !== kendi) n[k] = (n[k] || 0) + 1; });
+  const say = {}; (d.querySelector('.ag-drawer-b') || d).textContent.replace(/(\\d+)\\s+(tekil|geçici|kalıcı)(?![a-zçğıöşü])/g, (m, x, w) => { (say[w] = say[w] || new Set()).add(x); return m; });
+  return { gor: window.agGorunmez(d), cok: Object.keys(n).filter(k => n[k] > 1).map(k => k + ' × ' + n[k]),
+    celis: Object.keys(say).filter(w => say[w].size > 1).map(w => w + ': ' + Array.from(say[w]).join(' / ')) };
+};`;
+async function kartKurallari(page, ad) {
+  await page.evaluate(KURAL);
+  const k = await page.evaluate(() => window.agKart());
+  if (!k) return;
+  check(`kart ${ad} · tıklanabilir öğeler tıklanabilir görünüyor`, k.gor.length === 0, k.gor.slice(0, 4).join(' | '));
+  check(`kart ${ad} · aynı IP bir kez`, k.cok.length === 0, k.cok.slice(0, 4).join(' | '));
+  check(`kart ${ad} · çelişen sayı yok`, k.celis.length === 0, k.celis.join(' | '));
+}
 async function layoutChecks(page, label, width) {
+  await page.evaluate(KURAL);
+  const gor = await page.evaluate(() => window.agGorunmez(document.getElementById('ag-app')));
+  check(`${label} · ${width} px · tıklanabilir öğeler tıklanabilir görünüyor`, gor.length === 0, gor.slice(0, 4).join(' | '));
+  // kimlik (IP / aralık adı) hiç kısaltılmaz
+  const cut = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-cidr, [data-ip]')).filter(e => e.offsetWidth > 0 && e.scrollWidth > e.clientWidth + 1)
+    .map(e => e.textContent.trim().slice(0, 20)));
+  check(`${label} · ${width} px · IP / aralık adı kesilmiyor`, cut.length === 0, cut.slice(0, 4).join(' | '));
   const sw = await page.evaluate(() => document.documentElement.scrollWidth);
   check(`${label} · ${width} px · yatay taşma yok`, sw <= width, `belge ${sw}px`);
   const clipped = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-pill')).filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent.trim()));
@@ -181,6 +221,7 @@ async function layoutChecks(page, label, width) {
     await page.waitForTimeout(300);
     const txt = await page.evaluate(() => { const d = document.querySelector('.ag-drawer'); return d ? d.innerText : ''; });
     check(`IP kartı açılıyor: ${r.cidr}`, errs.length === before && txt.length > 40, errs.slice(before).join(' | '));
+    await kartKurallari(page, r.cidr);
     // kartın Kontrol edilecekler satırı Yoksay (yoksayılmamışsa) ya da Yoksaymayı kaldır sunmalı
     const cardIgn = await page.evaluate(() => !!document.querySelector('.ag-drawer [data-act="ignore"], .ag-drawer [data-act="unignore"]'));
     check(`IP kartında Yoksay / kaldır var: ${r.cidr}`, cardIgn);
@@ -207,7 +248,8 @@ async function layoutChecks(page, label, width) {
     await page.click(`.ag-item[data-row="${c}"] [data-act="menu"]`); await page.waitForTimeout(400);
     await page.click(`.ag-item[data-row="${c}"] .ag-menu [data-act="ignore"]`); await page.waitForTimeout(600);
     check('Yoksay penceresi açıldı', await page.$('.ag-modal [data-m="ok"]') !== null);
-    await page.click('.ag-modal [data-m="ok"]'); await page.waitForTimeout(6000);
+    await page.click('.ag-modal [data-m="ok"]');
+    await page.waitForFunction(c => !document.querySelector(`.ag-item[data-row="${c}"] .ag-tr-r`) && document.querySelector(`[data-act="menu"][data-key="im:${c}"]`), c, { timeout: 30000 }).catch(function () {});
     const gone = await page.$(`.ag-item[data-row="${c}"] .ag-tr-r`) === null;
     const listed = await page.$(`[data-act="menu"][data-key="im:${c}"]`) !== null;
     check(`Yoksay: ${c} listeden düştü ve Yoksayılanlar'da`, gone && listed, `düştü=${gone} listede=${listed}`);
@@ -224,13 +266,14 @@ async function layoutChecks(page, label, width) {
       const before7 = await untilOf();
       await page.click(`.ag-menu [data-act="ignore"][data-c="${c}"]`); await page.waitForTimeout(600);
       const d7 = await page.$('.ag-modal #ag-days [data-d="7"]'); if (d7) await d7.click();
-      await page.click('.ag-modal [data-m="ok"]'); await page.waitForTimeout(6000);
+      await page.click('.ag-modal [data-m="ok"]');
+      await page.waitForFunction(([c, b]) => { const r = document.querySelector(`.ag-item[data-row="${c}"] .ag-td-until`); return r && r.textContent !== b; }, [c, before7], { timeout: 30000 }).catch(function () {});
       const after7 = await untilOf();
       check(`Süreyi değiştir: ${c} bitişi değişti`, after7 && after7 !== before7, `${before7} → ${after7}`);
       await openIm();
       await page.click(`.ag-menu [data-act="unignore"][data-c="${c}"]`); await page.waitForTimeout(600);
       const ok = await page.$('.ag-modal [data-m="ok"]'); if (ok) await ok.click();
-      await page.waitForTimeout(6000);
+      await page.waitForFunction(c => document.querySelector(`.ag-item[data-row="${c}"] .ag-tr-r`), c, { timeout: 30000 }).catch(function () {});
       check(`Yoksaymayı kaldır: ${c} geri geldi`, await page.$(`.ag-item[data-row="${c}"] .ag-tr-r`) !== null);
     }
   }
