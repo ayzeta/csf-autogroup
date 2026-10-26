@@ -49,7 +49,7 @@ set -o pipefail
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.26"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.27"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -2124,7 +2124,7 @@ parse_deny() {   # FILE MAIN(1|0) [DEPTH]
                   p = tok; sub(/\.[0-9]+$/, "", p); C[p]++; IPS[p] = IPS[p] " " tok; if (!(p in PO)) { PO[p] = ++np; PL[np] = p } }
           } }
         END { for (i = 1; i <= np; i++) { p = PL[i]; printf "count24[%s]=$(( ${count24[%s]:-0} + %d ));ips24[%s]+=%s\n", p, p, C[p], p, q(IPS[p]) } }' "$1")"
-    [ "$2" = 1 ] && [ "$depth" = 0 ] && { prof deny_read; ineff_load; unban_after_load; }
+    [ "$2" = 1 ] && [ "$depth" = 0 ] && { prof deny_read; ineff_load; }
 }
 wl_full_idx() {  # İZİN_İNDİSİ → REPLY = 1 bütün portlara izin (csf.allow ve Include'ları, GLOBAL_ALLOW, geçici izin, dyndns),
     # 2 sunucunun kendi IP'si, 3 yalnız gelen yönü kesen bana karşı tam izin, 0 değil. allow_atk_load ve ineff_load aynı ölçüt.
@@ -2156,17 +2156,6 @@ wl_ff_lines() {  # → stdout "W lo hi indis ff" (her beyaz liste kaydı; ff wl_
                 if (p ~ /^tcp in [sd]=[01][:_]65535$/) { ff = 3; C[NR] = c } else if (p ~ /^tcp out [sd]=[01][:_]65535$/) O[c] = 1 }
             L[NR] = $1; H[NR] = $2; F[NR] = ff }
             END { for (i = 1; i <= NR; i++) print "W", L[i], H[i], i - 1, (F[i] == 3 && (C[i] in O) ? 1 : F[i]) }'
-}
-unban_after_load() {   # elle kaldırılmış blok banları: o blokta yalnız kaldırmadan SONRA banlanan tekiller sayılır (count24 /
-    # ips24). Kaldırırken banın tekilleri geri yüklenince (ya da önceden duranlar) bir sonraki tur bloğu yeniden banlamasın;
-    # bloktan yeni ban gelirse eşik yeniden işler. Kısmi bandan sonraki /16 sayımıyla aynı kural (ips_after).
-    [ -r "$EVENTS_FILE" ] || return 0
-    local c ue p IFS=$' \t\n'   # durum çıktısı IFS=, ile çağırır: ips24 boşluklarla bölünsün
-    while IFS=' ' read -r c ue; do
-        p="${c%.0/24}"; [ -n "${ips24[$p]+x}" ] || continue
-        ips_after "$ue" ${ips24[$p]}
-        ips24[$p]="$REPLY"; count24[$p]=$(wc -w <<< "$REPLY")
-    done < <(grep -F '"type":"manual_unban"' "$EVENTS_FILE" | sed -n 's/^{"t":\([0-9]*\),.*"cidr":"\([0-9.]*\.0\/24\)".*/\2 \1/p' | awk '{ L[$1] = $2 } END { for (c in L) print c, L[c] }')
 }
 ineff_load() {   # → INEFF[IP] = izin kaydı ("csf.allow: IP (yorum)"), INEFF_S = " IP IP … ": banı İŞLEMEYEN tekil ve geçici IP banları.
     # CSF izinleri banlardan önce uygular (LOCALINPUT: ALLOWIN → DENYIN); csf -td izin denetlemez (ölçüldü 16.33), lfd izinli IP'ye

@@ -257,9 +257,9 @@ can't be banned at all.
 Removing an **automatic** block ban works the same way: **Restore the N single
 bans this ban rests on** (on by default) puts the single bans it replaced back
 in the permanent list, with their original reasons, so those IPs are not fully
-unblocked with the block. Restored singles do not get the block banned again;
-after a manual removal only later bans count towards that block's threshold.
-IPs already banned, covered by another range ban or in the allow list are
+unblocked with the block. Restored singles count towards the block threshold
+like any single ban: if they meet it, the block is banned again on the next
+run (the dialog says so), otherwise when new bans complete it. IPs already banned, covered by another range ban or in the allow list are
 skipped. Old block bans removed automatically are not restored, since that
 removal is there to free space in the list.
 

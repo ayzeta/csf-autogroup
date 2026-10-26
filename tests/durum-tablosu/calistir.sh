@@ -446,9 +446,12 @@ ubev() { printf '{"t":%s,"type":"add24","cidr":"151.80.7.0/24","n":3,"ips":[{"ip
 mk ubrs; ubev; quiet --action unban 151.80.7.0/24 --restore
 mcheck "kaldırma · geri yükle seçiliyken banın 3 tekili geri gelir (sebep ve notla), blok kalkar" "[ \$(grep -c 'kaldırılınca geri yüklendi' '$D') = 3 ] && grep -q '^151.80.7.3 # lfd: Tekrar ban (PERMBLOCK)' '$D' && ! grep -q '^151.80.7.0/24' '$D'"
 quiet
-mcheck "kaldırma · geri yüklenen tekiller sonraki turda bloğu yeniden banlatmaz" "! grep -q '^151.80.7.0/24' '$D'"
-NDT=$(LC_ALL=C date -d "+2 min" "+%a %b %d %H:%M:%S %Y"); single 151.80.7.4 sshd "$NDT"; single 151.80.7.5 sshd "$NDT"; single 151.80.7.6 sshd "$NDT"; quiet
-mcheck "kaldırma · kaldırmadan sonra 3 yeni tekil gelince blok yeniden banlanır" "grep -q '^151.80.7.0/24' '$D'"
+mcheck "kaldırma · geri yüklenen 3 tekil normal tekil gibi sayılır: eşik 3 dolu, sonraki tur bloğu yeniden banlar" "grep -q '^151.80.7.0/24' '$D'"
+mk ub2; printf '{"t":%s,"type":"add24","cidr":"151.80.7.0/24","n":2,"ips":[{"ip":"151.80.7.1","why":"a"},{"ip":"151.80.7.2","why":"b"}],"total":2}\n' "$(( NOW - 86400 ))" > "$R/var/lib/csf_autogroup/events.jsonl"
+printf '151.80.7.0/24 # Auto-grouped /24: 2 kalıcı tekil nedeniyle kalıcı banlandı - %s\n' "$DT" >> "$D"; quiet --action unban 151.80.7.0/24 --restore; quiet
+mcheck "kaldırma · 2 tekil geri yüklenince blok banlanmaz (eşik 3)" "! grep -q '^151.80.7.0/24' '$D'"
+NDT=$(LC_ALL=C date -d "+2 min" "+%a %b %d %H:%M:%S %Y"); single 151.80.7.9 sshd "$NDT"; quiet
+mcheck "kaldırma · 2 geri yüklenen + 1 yeni tekil = eşik 3: blok banlanır" "grep -q '^151.80.7.0/24' '$D'"
 mk ubno; ubev; quiet --action unban 151.80.7.0/24
 mcheck "kaldırma · geri yükle seçili değilse tekil geri gelmez" "! grep -q 'kaldırılınca geri yüklendi' '$D' && ! grep -q '^151.80.7.0/24' '$D'"
 mk keep2; evl 175 add24 1; evl 20 run 2; quiet

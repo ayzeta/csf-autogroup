@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.15.27 — 2026-10-26
+
+- **Restored single bans count like any single ban.** In 1.15.26, after a
+  block ban was removed by hand, only bans that came later counted towards the
+  block's threshold, so restored singles were ignored. Now the choice in the
+  remove dialog decides: restored singles count again (a block with 2 restored
+  is banned when 1 more comes, at a threshold of 3), and unchecked ones are
+  gone. When the singles to restore meet the threshold by themselves, the
+  dialog says the block is banned again on the next run.
+
 ## 1.15.26 — 2026-10-26
 
 - **Removing a block ban can restore the single bans it replaced.** When an
