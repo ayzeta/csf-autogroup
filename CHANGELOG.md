@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.15.31 — 2026-10-30
+
+- **Measure impact, clearer.** The IPs in the lists open their IP card like
+  everywhere else; the *Now* column is shown only when some address is
+  actually banned (it said "not banned now" on every row); in refused-request
+  and POST examples the IP is set apart and clickable instead of looking like
+  part of the path, and long lines wrap instead of cutting off the IP. The
+  advice about services you recognise is given once.
+- **Fix: on phones the provider row's *Port list / Everything* choice was
+  covered by *Measure impact*.** The choice now gets its own line when the
+  row is too narrow.
+- **Fix: with the WHM menu open, the Overview's two columns did not fit.**
+  At about 1120 px the content area is ~880 px, the left column's tables
+  overflowed and a row's ⋯ button covered the right column. The two columns
+  now stack whenever the content area is 1000 px or narrower.
+- **Fix: card tables lost their headers on phones** (range card, measure
+  impact). They scroll sideways and keep their header row.
+
 ## 1.15.30 — 2026-10-27
 
 - **Fix: a failed rented-server list refresh waited a day.** The daily jobs

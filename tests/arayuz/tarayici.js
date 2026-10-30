@@ -24,13 +24,18 @@ const KURAL = `window.agGorunmez = function (root) {
     return true;
   }).map(e => (typeof e.className === 'string' && e.className ? e.className : e.tagName) + ': ' + e.textContent.trim().replace(/\\s+/g, ' ').slice(0, 30));
 };
+window.agBasliksiz = function (root) {
+  return Array.from(root.querySelectorAll('table')).filter(tb => tb.offsetWidth > 0 && tb.querySelector('tbody tr'))
+    .filter(tb => { const h = tb.querySelector('thead'); return !h || h.offsetHeight === 0; })
+    .map(tb => (tb.className || 'table') + ': ' + (tb.querySelector('tbody tr').textContent || '').trim().slice(0, 25));
+};
 window.agKart = function () {
   const d = document.querySelector('.ag-drawer'); if (!d) return null;
   d.querySelectorAll('details').forEach(x => { x.open = true; });
   const kendi = ((d.querySelector('.ag-drawer-h h3') || {}).textContent || '').trim();
   const n = {}; d.querySelectorAll('[data-ip]').forEach(e => { const k = e.textContent.trim(); if (k !== kendi) n[k] = (n[k] || 0) + 1; });
   const say = {}; (d.querySelector('.ag-drawer-b') || d).textContent.replace(/(\\d+)\\s+(tekil|geçici|kalıcı)(?![a-zçğıöşü])/g, (m, x, w) => { (say[w] = say[w] || new Set()).add(x); return m; });
-  return { gor: window.agGorunmez(d), cok: Object.keys(n).filter(k => n[k] > 1).map(k => k + ' × ' + n[k]),
+  return { bas: window.agBasliksiz(d), gor: window.agGorunmez(d), cok: Object.keys(n).filter(k => n[k] > 1).map(k => k + ' × ' + n[k]),
     celis: Object.keys(say).filter(w => say[w].size > 1).map(w => w + ': ' + Array.from(say[w]).join(' / ')) };
 };`;
 async function kartKurallari(page, ad) {
@@ -40,11 +45,28 @@ async function kartKurallari(page, ad) {
   check(`kart ${ad} · tıklanabilir öğeler tıklanabilir görünüyor`, k.gor.length === 0, k.gor.slice(0, 4).join(' | '));
   check(`kart ${ad} · aynı IP bir kez`, k.cok.length === 0, k.cok.slice(0, 4).join(' | '));
   check(`kart ${ad} · çelişen sayı yok`, k.celis.length === 0, k.celis.join(' | '));
+  check(`kart ${ad} · tablolar başlıklı`, k.bas.length === 0, k.bas.join(' | '));
 }
 async function layoutChecks(page, label, width) {
   await page.evaluate(KURAL);
   const gor = await page.evaluate(() => window.agGorunmez(document.getElementById('ag-app')));
+  const bas = await page.evaluate(() => window.agBasliksiz(document.getElementById('ag-app')));
+  check(`${label} · ${width} px · tablolar başlıklı`, bas.length === 0, bas.slice(0, 3).join(' | '));
   check(`${label} · ${width} px · tıklanabilir öğeler tıklanabilir görünüyor`, gor.length === 0, gor.slice(0, 4).join(' | '));
+  // tıklanan iki öğe üst üste binmez (dar ekranda sığmayan düğmenin yanındakinin üstüne taşması)
+  const lapB = await page.evaluate(() => {
+    const E = Array.from(document.querySelectorAll('#ag-app button, #ag-app a, #ag-app input, #ag-app select, #ag-app .ag-chip')).filter(e => e.offsetWidth > 0);
+    const R = E.map(e => e.getBoundingClientRect()), out = [];
+    for (let i = 0; i < E.length && out.length < 4; i++) for (let j = i + 1; j < E.length; j++) {
+      if (E[i].contains(E[j]) || E[j].contains(E[i])) continue;
+      // döşemenin köşesindeki Adres düğmesi bilerek döşemenin üstünde (metin ona yer bırakır)
+      if ([E[i], E[j]].some(e => e.matches('.ag-tile-ed')) && [E[i], E[j]].some(e => e.matches('.ag-tile-m'))) continue;
+      const a = R[i], b = R[j];
+      if (a.left < b.right - 2 && b.left < a.right - 2 && a.top < b.bottom - 2 && b.top < a.bottom - 2) { out.push(E[i].textContent.trim().slice(0, 15) + ' ↔ ' + E[j].textContent.trim().slice(0, 15)); break; }
+    }
+    return out;
+  });
+  check(`${label} · ${width} px · tıklanan öğeler üst üste binmiyor`, lapB.length === 0, lapB.join(' | '));
   // kimlik (IP / aralık adı) hiç kısaltılmaz
   const cut = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-cidr, [data-ip]')).filter(e => e.offsetWidth > 0 && e.scrollWidth > e.clientWidth + 1)
     .map(e => e.textContent.trim().slice(0, 20)));

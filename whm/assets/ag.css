@@ -511,7 +511,7 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
   .ag-ip > :nth-child(2) { grid-area: host; text-align: right; font-size: 12px; color: var(--ag-text-3); }
   .ag-ip > :nth-child(3) { display: none; }
   .ag-ip > :nth-child(4) { grid-area: why; white-space: normal; font-size: 12px; line-height: 1.4; color: var(--ag-text-2); }
-  .ag-ip.ag-ip-h, .ag-im-t thead { display: none; }   /* satırlar alt alta dizilince sütun başlığı yanıltır */
+  .ag-ip.ag-ip-h { display: none; }   /* satırlar alt alta dizilince sütun başlığı yanıltır (kart tabloları kaymalı, başlıklı kalır) */
   .ag-tbl > .ag-item > .ag-tr.ag-tr-i { padding: 10px 10px 10px 16px; }
   .ag-modal-b { padding-left: 22px; }
 }
@@ -751,7 +751,7 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
 .ag-impact-h { font-weight: 600; color: var(--ag-text); margin: 10px 0 4px; }
 .ag-impact ul { list-style: none; margin: 0; padding: 0; }
 .ag-impact li { display: flex; gap: 12px; padding: 2px 0; font-family: var(--ag-mono); font-size: 11.5px; }
-.ag-impact li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-impact li span { min-width: 0; overflow-wrap: anywhere; }   /* satır sarar: sondaki IP kesilmesin */
 .ag-impact li b { margin-left: auto; font-variant-numeric: tabular-nums; }
 .ag-impact-t { margin-top: 10px; }
 /* Etkisini ölç (temiz anlatı): soru, cevap, üç grup, karar, geçmiş, kapalı ayrıntılar */
@@ -899,7 +899,7 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
   .ag-kpi-ic svg { width: 18px; height: 18px; }
   .ag-kpi-g .ag-ring { width: 38px; height: 38px; }
 }
-@container agwrap (max-width: 1000px) { .ag-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container agwrap (max-width: 1000px) { .ag-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ag-grid:not(.ag-provtab) { grid-template-columns: minmax(0, 1fr); } }
 
 /* Geçmiş satırı telefonda: adres · rozet ····· zaman · aç/kapa | ⋯ (rozet sığmazsa zamanla birlikte ikinci satıra iner),
    altında ayrıntı ve sahip aynı paragrafta; süzgeç çipleri küçülür, iki sıraya sığar */
@@ -1242,10 +1242,12 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
   .ag-prow-nm { grid-column: 1 / -1; }
   .ag-prow-st { white-space: normal; }
 }
+/* çok dar kapta (telefon) seçim de kendi satırında; Etkisini ölç ve × alt satırda sağda (aynı satıra sığmıyordu: 308 px kapta
+   seçim 168 + düğme 115 + × 30 + aralar, düğme sola taşıp seçimin üstüne biniyordu) */
 @container agprows (max-width: 460px) {
-  .ag-prow { grid-template-columns: auto minmax(0, 1fr) auto; }
-  .ag-prow-st { grid-column: 1 / -1; }
-  .ag-prow [data-act="asnimpact"] { justify-self: end; }
+  .ag-prow { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .ag-prow-st, .ag-prow > .ag-chips { grid-column: 1 / -1; justify-self: start; }
+  .ag-prow [data-act="asnimpact"] { grid-column: 2; justify-self: end; }
 }
 /* kart tablolarındaki IP'ler tıklanınca IP kartını açar: bağlantı görünümü (altı çizili), bölünmeden */
 .ag-im-t td[data-ip] { color: var(--ag-accent); cursor: pointer; white-space: nowrap; text-decoration: underline; text-decoration-color: var(--ag-accent-line); text-underline-offset: 3px; }
@@ -1265,3 +1267,6 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-chk.na { opacity: .35; cursor: not-allowed; }
 .ag-evm-na { font-size: 11px; font-weight: 500; text-transform: none; letter-spacing: 0; }
 .ag-bagli.off { opacity: .5; }
+/* metin içindeki IP bağlantısı (Etkisini ölç örnekleri): tablodaki IP'lerle aynı görünüm, tıklanınca IP kartı */
+.ag-iplink { color: var(--ag-accent); cursor: pointer; white-space: nowrap; text-decoration: underline; text-decoration-color: var(--ag-accent-line); text-underline-offset: 3px; }
+.ag-iplink:hover { text-decoration-color: currentColor; }
