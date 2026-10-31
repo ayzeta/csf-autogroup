@@ -379,6 +379,26 @@ async function layoutChecks(page, label, width) {
     await shot('deneme-turu');
     await page.keyboard.press('Escape'); await page.waitForTimeout(400);
   }
+  // sekmeye eski veriyle dönüş: yeni durum gelene kadar salt okuyan eylem (menü) çalışır, durum değiştiren (Sustur) bildirimle bekler.
+  // Önce bütün eylemler kapanıyordu; durum isteği sunucuda 5-7 sn sürünce kullanıcı sayfayı donmuş sanıyordu
+  await page.click('.ag-tabs [data-tab="overview"]'); await page.waitForTimeout(600);
+  const back = await page.evaluate(async () => {
+    const od = Date.now; Date.now = () => od() + 120000;               // eldeki veri 2 dakika eski görünsün
+    document.dispatchEvent(new Event('visibilitychange'));
+    await new Promise(r => setTimeout(r, 30));
+    const upd = !!document.querySelector('.ag-back-t');                // "güncelleniyor" (istek sürüyor)
+    const mb = document.querySelector('.ag-item [data-act="menu"]'); if (mb) mb.click();
+    await new Promise(r => setTimeout(r, 30));
+    const menu = !!document.querySelector('.ag-menu');
+    const mut = document.querySelector('.ag-menu [data-act="ignore"], .ag-menu [data-act="unban"], .ag-menu [data-act="forget"]');
+    const n0 = document.querySelectorAll('.ag-toast').length; if (mut) mut.click();
+    await new Promise(r => setTimeout(r, 30));
+    const toast = document.querySelectorAll('.ag-toast').length > n0, modal = !!document.querySelector('.ag-modal');
+    Date.now = od;
+    return { upd, menu, mut: !!mut, toast, modal };
+  });
+  check('eski veriyle dönüş: menü hemen açılır, durum değiştiren eylem bildirimle bekler (pencere açılmaz)', back.upd && back.menu && back.mut && back.toast && !back.modal, JSON.stringify(back));
+  await page.waitForTimeout(3000); await page.keyboard.press('Escape');
   check('JS hatası yok', errs.length === 0, errs.slice(0, 3).join(' | '));
   await browser.close();
   console.log(`Arayüz: ${N} denetim, ${F} beklenmeyen`);

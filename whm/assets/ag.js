@@ -109,7 +109,7 @@
       m_dry_t: 'Deneme turu', m_dry_wait: 'Tur hiçbir şeyi değiştirmeden simüle ediliyor…', m_dry_none: 'Bu tur hiçbir değişiklik yapmazdı.',
       m_upd_t: 'v{0} sürümüne güncellensin mi?', m_upd_b: 'update.sh çalıştırılır; config.env ve kayıtlar korunur. Birkaç saniye sürer.',
       m_upd_run: 'Güncelleniyor…', m_upd_ok: 'Güncelleme tamamlandı.', m_upd_fail: 'Güncelleme tamamlanamadı; çıktıya bakın.',
-      t_started: 'Tur başlatıldı.', t_done: 'Tur tamamlandı.', t_busy: 'Başka bir tur çalışıyor, birazdan tekrar deneyin.', t_cron_busy: 'Bir tur zaten çalışıyor (büyük olasılıkla cron); bitince sonuçlar burada görünecek.',
+      t_started: 'Tur başlatıldı.', t_wait_fresh: 'Güncel durum alınıyor; birkaç saniye sonra yeniden deneyin.', t_done: 'Tur tamamlandı.', t_busy: 'Başka bir tur çalışıyor, birazdan tekrar deneyin.', t_cron_busy: 'Bir tur zaten çalışıyor (büyük olasılıkla cron); bitince sonuçlar burada görünecek.',
       t_err: 'İşlem tamamlanamadı: {0}', e_bad_ip: 'geçerli bir IPv4 adresi değil', e_bad_input: 'girilen değer geçersiz', e_bad_asn: 'geçerli bir AS numarası değil (ör. AS16276)', e_busy: 'bir tur ya da işlem sürüyor, bitince yeniden deneyin', e_confirm_mismatch: 'onay metni eşleşmedi', e_no_script: 'motor dosyası bulunamadı (kurulumu denetleyin)', e_unknown: 'bilinmeyen istek', e_unsafe_repo: 'kurulum dosyasının sahibi root değil ya da başka kullanıcılar yazabiliyor; güvenlik için arayüzden güncellenmez, SSH ile update.sh çalıştırın', e_uptodate: 'zaten güncel', e_session: 'oturum süresi doldu, sayfayı yenileyin', e_bad_target: 'hedef geçersiz', e_bad_value: 'ayar değeri geçersiz', session: 'Oturum süresi doldu. Sayfayı yenileyin.', t_copied: 'Kopyalandı.',
       l_host: 'Hostname', l_fwd: 'ad tekrar bu IP\'ye çözülüyor (doğrulandı)', l_nofwd: 'ad bu IP\'ye geri çözülmüyor (doğrulanamadı)', l_noptr: 'Ters DNS kaydı yok',
       l_owner: 'Sahip', l_prefix: 'Duyurulan aralık', l_reg: 'Kayıt', l_fw: 'Güvenlik duvarı', l_wl: 'Beyaz liste',
@@ -201,7 +201,7 @@
       m_dry_t: 'Dry run', m_dry_wait: 'Simulating a run without changing anything…', m_dry_none: 'This run would not change anything.',
       m_upd_t: 'Update to v{0}?', m_upd_b: 'Runs update.sh; config.env and records are kept. Takes a few seconds.',
       m_upd_run: 'Updating…', m_upd_ok: 'Update complete.', m_upd_fail: 'The update did not complete; see the output.',
-      t_started: 'Run started.', t_done: 'Run finished.', t_busy: 'Another run is in progress, try again shortly.', t_cron_busy: 'A run is already in progress (most likely cron); results will show up here when it finishes.',
+      t_started: 'Run started.', t_wait_fresh: 'Fetching the current status; try again in a few seconds.', t_done: 'Run finished.', t_busy: 'Another run is in progress, try again shortly.', t_cron_busy: 'A run is already in progress (most likely cron); results will show up here when it finishes.',
       t_err: 'Could not complete: {0}', e_bad_ip: 'not a valid IPv4 address', e_bad_input: 'the value is not valid', e_bad_asn: 'not a valid AS number (e.g. AS16276)', e_busy: 'a run or action is in progress; try again when it finishes', e_confirm_mismatch: 'the confirmation text did not match', e_no_script: 'engine file not found (check the install)', e_unknown: 'unknown request', e_unsafe_repo: 'an install file is not owned by root or is writable by others; for safety it is not updated from the panel, run update.sh over SSH', e_uptodate: 'already up to date', e_session: 'the session expired; reload the page', e_bad_target: 'invalid target', e_bad_value: 'invalid setting value', session: 'Session expired. Reload the page.', t_copied: 'Copied.',
       l_host: 'Hostname', l_fwd: 'the name resolves back to this IP (forward-confirmed)', l_nofwd: 'the name does not resolve back to this IP (not confirmed)', l_noptr: 'No reverse DNS',
       l_owner: 'Owner', l_prefix: 'Announced range', l_reg: 'Registry', l_fw: 'Firewall', l_wl: 'Whitelist',
@@ -2087,7 +2087,7 @@
       h += bk('d', t('im_b_cdn_t'), esc(t('im_b_cdn_d', dk.slice(0, 4).map(function (k) { return k + ' (' + (ds[k][1] === 'other' ? t('im_cdn_other') : ds[k][1]) + ')'; }).join(', '), cdns.join(', '))), cd, D.ips);
     }
     if (al) h += bk('g', t('im_b_al_t'), esc(svs.slice(0, 4).join(' · ') + (svs.length ? '. ' : '') + t('im_b_al_d')), al, d.aips);
-    if (C.web) h += bk('c', t('im_b_cl_t'), esc(t('im_b_cl_d', String(C.lists || '').split(' ').filter(Boolean).map(function (x) { return t('cl_' + x) === 'cl_' + x ? x : t('cl_' + x); }).join(', '))) + (cl ? ' ' + esc(t('im_b_cl_seen', impTk(C.last))) : ''), cl, C.ips);
+    if (C.web && cl) h += bk('c', t('im_b_cl_t'), esc(t('im_b_cl_d', String(C.lists || '').split(' ').filter(Boolean).map(function (x) { return t('cl_' + x) === 'cl_' + x ? x : t('cl_' + x); }).join(', '))) + (cl ? ' ' + esc(t('im_b_cl_seen', impTk(C.last))) : ''), cl, C.ips);
     var oc = impCodes(O.codes), ex = (O.top || [])[0];
     var od = op ? esc(oc || '') + (ex ? '<br>' + esc(t('im_b_op_ex', ex[0], num(ex[1]), ex[3])) : '') : esc(t('im_b_op_none'));
     h += bk('o' + (op ? ' on' : ''), t(d.ban ? 'im_b_op_tb' : 'im_b_op_t'), od, op, O.ips) + '</div>';
@@ -2209,9 +2209,14 @@
     });
   }
 
+  function detKey(d) {
+    var c = d.closest('[id]'), sm = d.querySelector('summary');
+    return (c ? c.id : '') + '|' + (sm ? sm.textContent.replace(/[0-9.,+\s]+/g, ' ').trim() : '');
+  }
   function render() {
     if (!S) return;
     indexOwners();
+    var dOpen = {}; $app.querySelectorAll('details').forEach(function (d) { dOpen[detKey(d)] = d.open; });
     var y = window.scrollY, ae = document.activeElement, fsel = ae && $app.contains(ae) ? focusSel(ae) : '', s0 = null, s1 = null;
     var mw = fsel && ae.closest ? ae.closest('.ag-menu-wrap') : null, fmenu = mw ? focusSel(mw.querySelector('[data-act="menu"]')) : '';   // menü kapanırsa odak düğmesine
     try { if (fsel && ae.id && ae.selectionStart !== undefined) { s0 = ae.selectionStart; s1 = ae.selectionEnd; } } catch (e) { s0 = null; }
@@ -2225,6 +2230,7 @@
         : STALE ? '<div class="ag-sync" role="status"><span class="ag-spin ag-spin-sm"></span>' + esc(t('syncing')) + '</div>' : '') + body +
       '<div class="ag-foot">' + esc(t('foot', S.version + (BOOT.commit ? ' (' + BOOT.commit + ')' : ''), BOOT.user || 'root')) + '</div></div>';
     $app.setAttribute('aria-busy', 'false');
+    $app.querySelectorAll('details').forEach(function (d) { var k = detKey(d); if (k in dOpen) d.open = dOpen[k]; });
     window.scrollTo(0, y);
     keyboardable($app);
     if (fsel) {
@@ -2280,6 +2286,16 @@
   }
 
   /* ── Durum / yoklama ───────────────────────────────────────────── */
+  // Eski veriyle (sekmeye dönüş ya da işlem sonrası) yalnız durum değiştiren eylemler bekler: sekme, menü, süzgeç, sayfa, kart,
+  // aç/kapa, ölçüm ve taslak düzenleme hemen çalışır. Önce bütün eylemler bekliyordu: durum isteği sunucuda 5-7 sn sürünce sekmeye
+  // dönen kullanıcı sayfayı donmuş sanıyordu. Listede olmayan eylem bekler (yeni eklenen bir eylem güvenli tarafta kalsın)
+  var READ_ACTS = ' tab ppage at st limmore limall limless ef cf cd menu gsort gpage shownew asnhint digestprev toggle gf evpage commits goto runlog terms ' +
+    'impcancel asnimpact asnadd asnaddin asnrm asnports cloudports srcedit laygo asnmode cloudsrc cloudurlreset svcsub svcsrc svcurlreset evchip cfgchip ' +
+    'numstep cfgdiscard updcheck dry ipcard ';
+  function waitFresh(name) {     // true: eylem bekletildi
+    if (!(STALE || BACK) || READ_ACTS.indexOf(' ' + name + ' ') >= 0) return false;
+    toast(t('t_wait_fresh'), 'ok'); return true;
+  }
   function backTxt() { return '<span class="ag-spin ag-spin-sm"></span> <span class="ag-back-t">' + esc(t('sb_updating')) + '</span>'; }
   function goBack() {             // eski veriyle dönüş: sayıları kaldır, eylemleri beklet (ekran yeniden çizilmez: açık form kalır)
     BACK = true;
@@ -3192,7 +3208,8 @@
   function drAct(ev, close) {   // kart içindeki data-act düğmesi → ACTIONS (kart sayfa gövdesinde, $app dinleyicisinin dışında)
     var a = ev.target.closest('[data-act]');
     if (!a || a.disabled || !ACTIONS[a.getAttribute('data-act')]) return false;
-    ev.preventDefault(); close(); ACTIONS[a.getAttribute('data-act')](a); return true;
+    ev.preventDefault(); if (waitFresh(a.getAttribute('data-act'))) return true;
+    close(); ACTIONS[a.getAttribute('data-act')](a); return true;
   }
   function openDrawer(ip) {
     ip = String(ip || '').trim().replace(/\/32$/, '');
@@ -3225,6 +3242,7 @@
       if (b && b.getAttribute('data-dr') === 'x') close();
       if (b && b.getAttribute('data-dr') === 'copy' && navigator.clipboard) navigator.clipboard.writeText(ip).then(function () { toast(t('t_copied'), 'ok'); });
       // banlandıysa kart yeniden açılır: yeni kapsama satırı görünsün
+      if (b && /^(svcexc|banpfx|ban16|ban24)$/.test(b.getAttribute('data-dr')) && waitFresh(b.getAttribute('data-dr'))) return;   // IP kartının ban düğmeleri de bekler
       if (b && b.getAttribute('data-dr') === 'svcexc') svcExclude(ip, b.getAttribute('data-n')).then(function (ok) { if (ok) { close(); openDrawer(ip); } });
       if (b && b.getAttribute('data-dr') === 'banpfx') {
         var pc = b.getAttribute('data-c');
@@ -3410,6 +3428,7 @@
       if (k === 'x') close();
       if (k === 'copy' && navigator.clipboard) navigator.clipboard.writeText(cidr).then(function () { toast(t('t_copied'), 'ok'); });
       if (k === 'ipall') { dr.querySelectorAll('.ag-rg-more').forEach(function (r) { r.hidden = false; }); b.remove(); }
+      if ((k === 'ban' || k === 'banpfx' || k === 'svcexc') && waitFresh(k)) return;
       if (k === 'ban') rangeBan(bits, bits === 16 || bits === 24 ? target : cidr).then(function (r) { if (r && r.ok) { close(); openRange(cidr); } });
     });
     api('inside', { bits: String(bits), target: target }).then(function (d) {
@@ -3603,6 +3622,7 @@
     var el = act;
     if (!el || el.disabled) return;
     var fn = ACTIONS[el.getAttribute('data-act')];
+    if (fn && waitFresh(el.getAttribute('data-act'))) { ev.preventDefault(); return; }
     if (fn) { ev.preventDefault(); fn(el); }
   });
   document.addEventListener('keydown', function (ev) {

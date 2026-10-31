@@ -57,7 +57,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.37"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.38"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -2857,6 +2857,7 @@ do_status() {
     allow_atk_load $(( now - REVIEW_DAYS * 86400 ))
     prof rv_aa_load
     cls_map < <(for aai in "${!AA_IP[@]}"; do printf 'aa%s|%s\n' "$aai" "${AA_R[aai]}"; done)
+    pa "aa · cls izinli"
     local -A AAG=() AAU=() RS24=() RS16=() RSI=()
     local aai aaw aac aaj aap aaq aal aalc="" aat aan aak aax
     local -a aaa
@@ -2865,14 +2866,18 @@ do_status() {
     local -A RVIP=()
     for aaj in "${review[@]}"; do while read -r aaq; do RVIP[$aaq]=1; done < <(grep -oE '"ip":"[0-9.]+"' <<< "$aaj" | cut -d'"' -f4); done
     for aai in "${!AA_IP[@]}"; do [ -n "${RVIP[${AA_IP[aai]}]}" ] && AAU[$aai]=1; done
+    pa "aa · önceki satırlar"
     # izinsiz tekiller (kalıcı + geçici) /24 ve /16'ya göre: karışık grupların sayımı için
     for aai in "${!SINGLE_NOTE[@]}"; do [ -n "${INEFF[$aai]+x}" ] || [ -n "${OLD_SGL[$aai]+x}" ] && continue; RSI[$aai]="${SINGLE_NOTE[$aai]}"; done
     # geçici tekiller: geçici eşikle aynı pencere (son turdan bu yana geçici banlı olanlar; ban geçmişi)
     temp_t0
+    pa "aa · izinsiz tekiller"
     while IFS='|' read -r aai _ _ aaw; do [ -n "${RSI[$aai]+x}" ] || [ -n "${INEFF[$aai]+x}" ] || RSI[$aai]="$aaw"; done < <(temp_window "$REPLY")
+    pa "aa · temp_window"
     for aai in "${!AA_IP[@]}"; do unset "RSI[${AA_IP[aai]}]"; done
     for aai in "${!RSI[@]}"; do RS24[${aai%.*}]+=" $aai"; RS16[${aai%.*.*}]+=" $aai"; done
     cls_map < <(for aai in "${!RSI[@]}"; do printf 'rs%s|%s\n' "$aai" "${RSI[$aai]//|/ }"; done)
+    pa "aa · cls izinsiz"; pc "aa izinsiz tekil" "${#RSI[@]}"; pc "aa izinli IP" "${#AA_IP[@]}"
     rv_add() {   # TÜR CIDR WL_ETİKETİ "izinli indisleri" "izinsiz IP'ler" EK_JSON
         local js="" x n=0 nb=0 t=0 aa=0 bl=" "
         # satırın zamanı (İşaretlendi) = kontrol süresindeki İLK kayıt; IP listesindeki t son kayıt (satır notunda "Son kayıt: … (ne zaman)")
@@ -2898,6 +2903,7 @@ do_status() {
         rv_add allow_grp "$aac" "${WL_TXT[aaw]}" "${aaa[*]}" "" ""; aalc=""
         for aai in "${aaa[@]}"; do AAU[$aai]=1; done
     done
+    pa "aa · a) izin kaydı"
     # b) /24: izinli + izinsiz tekiller blok eşiğinde (blok banı izin yüzünden zaten atlanır → "Atlandı")
     local -A A24=() A16=()
     for aai in "${!AA_IP[@]}"; do [ -n "${AAU[$aai]}" ] || A24[${AA_IP[aai]%.*}]+=" $aai"; done
@@ -2910,6 +2916,7 @@ do_status() {
         rv_add skip_wl "$aac" "$aal" "${aaa[*]}" "${RS24[$aap]}" ""; aalc=""
         for aai in "${aaa[@]}"; do AAU[$aai]=1; done
     done
+    pa "aa · b) /24"
     # c) /16: şüpheli ağ ölçütü (eşik kadar saldırgan, en az 2 blok)
     for aai in "${!AA_IP[@]}"; do [ -n "${AAU[$aai]}" ] || A16[${AA_IP[aai]%.*.*}]+=" $aai"; done
     for aap in "${!A16[@]}"; do
@@ -2922,15 +2929,18 @@ do_status() {
         rv_add warn16 "$aac" "$aal" "${aaa[*]}" "${RS16[$aap]}" ",\"perm\":null"; aalc=""
         for aai in "${aaa[@]}"; do AAU[$aai]=1; done
     done
+    pa "aa · c) /16"
     # d) kalanlar tek IP
     for aai in "${!AA_IP[@]}"; do
         [ -n "${AAU[$aai]}" ] && continue
         aac="${AA_IP[aai]}"; [ -n "${seen[$aac]}" ] && continue; ign_until "$aac" && continue; seen[$aac]=1
         aal="${AA_S[aai]}"; aalc=""; [ "${AA_W[aai]}" -ge 0 ] && { aal="${WL_TXT[${AA_W[aai]}]}"; aalc="${WL_CM[${AA_W[aai]}]}"; }
         aax=""
+        if [ "${AA_F[aai]:-0}" = 2 ]; then pa "aa · d) tek IP"; fi
         if [ "${AA_F[aai]:-0}" = 2 ] && aa_acct "$aac" && [ -n "$REPLY" ]; then   # kendi IP'si: posta günlüğünde hangi hesapla denendiği
             aax=",\"acct\":$REPLY"; jstr "$ACCT_F"; aax+=",\"acctf\":$REPLY"
         fi
+        if [ "${AA_F[aai]:-0}" = 2 ]; then pa "aa · d) aa_acct (sunucu IP'si)"; fi
         rv_add allow_ban "$aac" "$aal" "$aai" "" ",\"bk\":\"${AA_K[aai]}\",\"cnt\":${AA_N[aai]},\"full\":${AA_F[aai]:-0}$aax"; aalc=""
     done
     # Kısmi banı yetmeyen aralık: kısmi ban konduktan sonra kapalı olmayan servislere gelen saldırılar blok (/24) ya da ağ
@@ -2938,6 +2948,7 @@ do_status() {
     # Öteki satırlar gibi Kontrol edilecekler penceresine bağlı: yalnız kısmi bandan sonra VE son REVIEW_DAYS içinde konan
     # tekiller sayılır; o sürede yeni ihlal gelmezse satır düşer (önce bandan sonraki bütün tekiller sayılıyordu, csf.deny'de
     # duran eski tekiller yüzünden satır hiç düşmeyebiliyordu). Aktif banlar'daki "bandan sonra" bilgisi bütün geçmişi tutar.
+    pa "aa · d) tek IP"
     prof rv_aa_rows
     local rvwin=$(( now - REVIEW_DAYS * 86400 )) pao pws pjs pso=""
     # bütün tekiller (kalıcı + geçici) bir kez: her kısmi ban için binlerce satırı bash'te yeniden üretmek pahalıydı
@@ -4878,8 +4889,9 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
           else { otot++; OIPS[ip] = 1; OC[code]++; OR[ip]++; if (k > olast) olast = k; if (code ~ /^2/) { ook++; OOK[ip]++ }
               if (bkey != "" && k >= bkey) { btot++; BIP[ip] = 1; if (code ~ /^2/) bok++; if (k > blast) blast = k   # ban konduktan sonra
                   if (k >= bkey2) blate++                                          # kaydedildikten 2 dakika sonra ve sonrası
-                  # en yeni 8 istek, yeniden eskiye (AK zaman, AE satır; dosyalar karışık sırayla okunur)
-                  if (nae < 8 || k > AK[nae]) { if (nae < 8) nae++; j = nae; while (j > 1 && AK[j - 1] < k) { AK[j] = AK[j - 1]; AE[j] = AE[j - 1]; j-- }
+                  # en yeni 8 istek, yeniden eskiye (AK zaman, AE satır; dosyalar karışık sırayla okunur). Yalnız ilk 2 dakikadan
+                  # sonrakiler: "ban işliyor" sonucunun altında kayıt anındaki 200 kodlu istekler ban işlemiyormuş gibi okunuyordu
+                  if (k >= bkey2 && (nae < 8 || k > AK[nae])) { if (nae < 8) nae++; j = nae; while (j > 1 && AK[j - 1] < k) { AK[j] = AK[j - 1]; AE[j] = AE[j - 1]; j-- }
                       AK[j] = k; AE[j] = "[" js(k) "," js(ip) "," js(site) "," js(rqs) "," js(code) "]" } }
               if (!(ip in OSM)) OSM[ip] = site " · " rqs
               if (code !~ /^[23]/) { fk = code " · " site " · " rqs; FQ[fk]++; if (!(fk in FI)) FI[fk] = ip } }   # başarısız istek örnekleri (açık adresler)

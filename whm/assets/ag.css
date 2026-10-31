@@ -63,7 +63,8 @@
 /* işlem bitti, yeni durum bekleniyor: eylem düğmeleri bekletilir (eski duruma göre tıklanmasın) */
 .ag-sync { position: sticky; top: 8px; z-index: 30; display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%; margin: 0 auto 12px;
   padding: 7px 14px; border-radius: 999px; background: var(--ag-card); border: 1px solid var(--ag-line); box-shadow: 0 4px 14px rgba(15, 23, 42, .08); font-size: 13px; color: var(--ag-text-2); }
-.ag-stale [data-act]:not([data-act="tab"]), .ag-stale [data-dr] { pointer-events: none; opacity: .45; }
+/* eski veriyle bütün sayfa soluklaşıp kilitlenmiyor (donmuş sanılıyordu): durum değiştiren eylemler tıklanınca bildirimle bekler (ag.js
+   waitFresh); yalnız sayılar "güncelleniyor" der */
 /* işlem sürerken: ekranın ortasında kutu; sayfa nerede kaydırılmış olursa olsun görünür, arkası tıklanmaz */
 .ag-wait { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(15, 23, 42, .18); }
 .ag-wait-b { display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 340px; padding: 22px 26px; text-align: center;

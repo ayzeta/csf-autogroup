@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.15.38 — 2026-11-01
+
+- **Fix: returning to the tab froze the page for a few seconds.** With data
+  older than 70 seconds every button and menu was disabled until the new
+  status arrived, which takes several seconds on a busy server. Tabs, menus,
+  cards, filters, pages and measurements now work at once; only actions that
+  change something (ban, remove, mute, save, run) wait, with a short notice.
+- **Fix: opened sections closed by themselves.** The page is redrawn on every
+  refresh (once a minute); expanded sections such as Measure impact's lists
+  collapsed each time. Their open or closed state is now kept.
+- **Measure impact:** the examples under "requests after the ban" list only
+  requests after the first 2 minutes; requests made while the ban was being
+  saved were shown under "the ban is working" and read like a failure. The
+  rented-server box is left out when no request came from those addresses.
+
 ## 1.15.37 — 2026-11-01
 
 - **Fix: a NUL byte in a log hid every later line.** A log file with a run of
