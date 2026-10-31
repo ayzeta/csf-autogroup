@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.15.40 — 2026-11-01
+
+- **Faster status:** the server's own IP in "To check" no longer scans the mail
+  logs on every refresh (slow with large mail logs). Its attempts come
+  from the same 10-minute cache as the IP card, so the row now also lists SSH,
+  FTP, cPanel and web attempts, not only mail accounts.
+
 ## 1.15.39 — 2026-11-01
 
 - **Measure impact, crawl signs:** a user agent shared by 10 or more IPs counts

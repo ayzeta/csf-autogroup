@@ -57,7 +57,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.39"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.40"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -2945,13 +2945,9 @@ do_status() {
         [ -n "${AAU[$aai]}" ] && continue
         aac="${AA_IP[aai]}"; [ -n "${seen[$aac]}" ] && continue; ign_until "$aac" && continue; seen[$aac]=1
         aal="${AA_S[aai]}"; aalc=""; [ "${AA_W[aai]}" -ge 0 ] && { aal="${WL_TXT[${AA_W[aai]}]}"; aalc="${WL_CM[${AA_W[aai]}]}"; }
-        aax=""
-        if [ "${AA_F[aai]:-0}" = 2 ]; then pa "aa · d) tek IP"; fi
-        if [ "${AA_F[aai]:-0}" = 2 ] && aa_acct "$aac" && [ -n "$REPLY" ]; then   # kendi IP'si: posta günlüğünde hangi hesapla denendiği
-            aax=",\"acct\":$REPLY"; jstr "$ACCT_F"; aax+=",\"acctf\":$REPLY"
-        fi
-        if [ "${AA_F[aai]:-0}" = 2 ]; then pa "aa · d) aa_acct (sunucu IP'si)"; fi
-        rv_add allow_ban "$aac" "$aal" "$aai" "" ",\"bk\":\"${AA_K[aai]}\",\"cnt\":${AA_N[aai]},\"full\":${AA_F[aai]:-0}$aax"; aalc=""
+        # sunucu IP'sinin denediği hesaplar satırda değil: durum çıktısının "accts" haritasında (denemeler önbelleği, IP kartıyla aynı);
+        # önce burada her istekte posta günlükleri yeniden taranıyordu (sunucuda ölçüldü: 1,04 sn)
+        rv_add allow_ban "$aac" "$aal" "$aai" "" ",\"bk\":\"${AA_K[aai]}\",\"cnt\":${AA_N[aai]},\"full\":${AA_F[aai]:-0}"; aalc=""
     done
     # Kısmi banı yetmeyen aralık: kısmi ban konduktan sonra kapalı olmayan servislere gelen saldırılar blok (/24) ya da ağ
     # (/16 ve daha geniş) eşiğine ulaştı — tekiller tek tek banlanıyor ama aralık o servislere açık
@@ -5441,7 +5437,7 @@ rig_pat() {      # HOST(küçük harf) → 0: bir csf.rignore kaydıyla eşleşi
 }
 # Günlük satırının günü (awk işlevi dk(); since/cy/cm değişkenleriyle): exim/ISO "2026-10-20 …", login_log "[2026-10-20 …",
 # syslog "Oct 20 …" (yıl yok: bu yıl, ay ileride ise geçen yıl), Apache "[Tue Oct 20 … 2026]", nginx "2026/10/20 …", eski
-# login_log "[10/20/2026:…". acct_all ve aa_acct aynı pencereyi uygulasın diye ortak.
+# login_log "[10/20/2026:…". acct_build kullanır.
 AWK_DK='
                 function dk(   a, m, y) {       # satırın günü YYYYMMDD; tanınmazsa 0 (sayılır)
                     if (!MOI) { MOI = split("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec", A, " "); for (i = 1; i <= 12; i++) MO[A[i]] = i }
@@ -5454,33 +5450,6 @@ AWK_DK='
                     return 0
                 }
 '
-dk_keep() {     # stdin → yalnız Kontrol edilecekler penceresindeki (REVIEW_DAYS) satırlar; tarihi tanınmayan satır kalır
-    LC_ALL=C awk -v since="$(date -d "$REVIEW_DAYS days ago" +%Y%m%d)" -v cy="$(date +%Y)" -v cm="$(date +%m)" "$AWK_DK"'{ k = dk(); if (k && k < since + 0) next; print }'
-}
-aa_acct() {      # IP → REPLY = posta günlüklerinde bu IP'den yanlış şifreyle giriş denenen hesaplar, JSON [{"u":hesap,"n":deneme}]
-    # (en çok 10, çoktan aza); ACCT_F = okunan dosya adları. Dosyalar csf.conf'tan: SMTPAUTH_LOG (exim), POP3D_LOG ve IMAPD_LOG
-    # (dovecot). Satır biçimleri (sunucuda ölçüldü 2026-10-13):
-    #   exim:    "… authenticator failed for (ad) [IP]:port: 535 Incorrect authentication data (set_id=hesap)"   → 1 deneme
-    #   dovecot: "… (auth failed, N attempts in S secs) (auth_failed): user=<hesap>, method=PLAIN, rip=IP, lip=…" → 1 deneme
-    #            (lfd de satır başına bir sayar, "N attempts"e bakmaz: sayı banın sebebindekiyle tutarlı)
-    # Bugünkü dosyalar ve Kontrol edilecekler penceresi (REVIEW_DAYS) içinde döndürülmüş kopyaları (exim_mainlog-YYYYMMDD.gz
-    # gibi; zcat -f düz ve gz okur): 6 gün önceki deneme bugünkü dosyada değil. Kaynak adı olarak asıl dosyanın adı yazılır.
-    # Satırın kendi tarihi de pencerede olmalı (dk_keep; acct_all ile aynı): IP kartıyla aynı hesaplar ve sayılar.
-    local f rows
-    REPLY=""; ACCT_F=""
-    acct_files || return 1
-    local -a FL=("${ACCT_FL[@]}") LB=("${ACCT_LB[@]}")
-    rows=$(for i in "${!FL[@]}"; do f="${FL[i]}"
-        zcat -f "$f" 2>/dev/null | LC_ALL=C grep -F "[$1]" | LC_ALL=C grep -F 'authenticator failed for' | dk_keep | LC_ALL=C grep -o 'set_id=[^)]*' | cut -d= -f2- | awk -v s="${LB[i]}" '{ print $0 "|1|" s }'
-        zcat -f "$f" 2>/dev/null | LC_ALL=C grep -F "rip=$1," | LC_ALL=C grep -F 'auth failed' | dk_keep |
-            awk -v s="${LB[i]}" 'match($0, /user=<[^>]*>/) { u = substr($0, RSTART + 6, RLENGTH - 7); n = 1
-                print u "|" n "|" s }'
-    done)
-    [ -n "$rows" ] || return 1
-    ACCT_F=$(printf '%s\n' "$rows" | cut -d'|' -f3 | sort -u | paste -sd, - | sed 's/,/, /g')
-    REPLY="[$(printf '%s\n' "$rows" | awk -F'|' '{ N[$1] += $2 } END { for (u in N) print N[u] "\t" u }' | sort -rn | head -n 10 |
-        awk -F'\t' '{ u = $2; gsub(/\\/, "\\\\", u); gsub(/"/, "\\\"", u); printf "%s{\"u\":\"%s\",\"n\":%d}", (n++ ? "," : ""), u, $1 }')]"
-}
 acct_files() {   # [csf.conf ANAHTARI …] → ACCT_FL = okunacak günlükler (bugünkü + REVIEW_DAYS içinde döndürülmüşler), ACCT_LB = asıl
     # dosya adları. Varsayılan posta günlükleri. Döndürülmüş kopya yanında (secure-YYYYMMDD, exim_mainlog-YYYYMMDD.gz) ya da
     # cPanel'in arşivinde (/usr/local/cpanel/logs/archive/login_log-AA-YYYY.gz: cPanel günlüklerini boyutla döndürür).

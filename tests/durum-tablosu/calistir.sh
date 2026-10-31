@@ -103,6 +103,8 @@ mcheck "eski uyarı: ölçütü bugün de tutuyorsa IP listesi ve servisiyle kal
 lfdl() { printf '%s lin lfd[1001]: %s\n' "$(LC_ALL=C date -d "@$(( NOW - $1 ))" '+%b %e %H:%M:%S')" "$2" >> "$R/lfd.log"; }
 lfdb() { lfdl "$1" "(sshd) Failed SSH login from $2 (FR/France/-): 5 in the last 3600 secs - *Blocked in csf* for 43200 secs [LF_SSHD]"; }
 lfdi() { lfdl "$1" "Failed SSH login from $2 - ignored"; }
+# sunucu IP'sinin denemeleri: durumun "accts" haritası (denemeler önbelleği; terminal IP sorgusu önbelleği kurar)
+sacct() { run --lookup 203.0.113.10 >/dev/null 2>&1; run --status --json 2>/dev/null | grep -o '"accts":{.*' | grep -o '"203\.0\.113\.10":\[[^]]*\]'; }
 rvrow() { run --status --json 2>/dev/null | grep -o '"review":\[.*\],"ignored"' | sed 's/^"review":\[//; s/,{"t":/\n{"t":/g' | grep -E "^\{\"t\":[0-9]+,\"type\":\"[a-z_0-9]+\",\"cidr\":\"$1\"" | head -n 1; }   # satır başına bir kayıt
 mkl() { mk "$1"; echo "LFD_LOG=$R/lfd.log" >> "$R/app/config.env"; : > "$R/lfd.log"; }
 mkl aab;  printf '151.80.7.9 # müşteri\n' >> "$A"; lfdb 3600 151.80.7.9
@@ -183,7 +185,7 @@ printf '%s\n' "$(date +%F)"' 13:34:31 dovecot_login authenticator failed for H=(
     "$(date +%F)"' 05:07:23 dovecot_login authenticator failed for H=(site-a.example) [203.0.113.10]:38634: 535 Incorrect authentication data (set_id=info@site-a.example)' \
     "$(date +%F)"' 06:00:00 dovecot_login authenticator failed for H=(x) [203.0.113.99]:1: 535 Incorrect authentication data (set_id=baska@site.example)' > "$R/exim_mainlog"
 mcheck "sunucunun kendi IP'si yoksayıldı → 'Sunucunun kendi IP'si' (full=2), kaynak 'sunucu IP'si'" "rvrow 203.0.113.10 | grep -q '\"wl\":\"sunucu IP.si: 203.0.113.10\".*\"bk\":\"i\",\"cnt\":3,\"full\":2'"
-mcheck "kendi IP'si: posta günlüğündeki hesaplar çoktan aza, yalnız bu IP'ninkiler" "rvrow 203.0.113.10 | grep -q '\"acct\":\[{\"u\":\"info@site-a.example\",\"n\":2},{\"u\":\"info@site-b.example\",\"n\":1}\],\"acctf\":\"exim_mainlog\"'"
+mcheck "kendi IP'si: posta günlüğündeki hesaplar çoktan aza, yalnız bu IP'ninkiler (satırda tarama yok)" "sacct | grep -qF '[{\"s\":\"mail\",\"u\":\"info@site-a.example\",\"n\":2},{\"s\":\"mail\",\"u\":\"info@site-b.example\",\"n\":1}]' && ! rvrow 203.0.113.10 | grep -q acct"
 # dovecot (POP3D_LOG / IMAPD_LOG, aynı dosya bir kez okunur): user=<hesap> … rip=IP; satır başına bir deneme (lfd gibi); exim ile birleşir
 mkl aaselfd; lfdl 600 "Failed IMAP login from 203.0.113.10 - ignored"
 printf 'SMTPAUTH_LOG = "%s"\nPOP3D_LOG = "%s"\nIMAPD_LOG = "%s"\n' "$R/exim_mainlog" "$R/maillog" "$R/maillog" >> "$R/etc/csf/csf.conf"
@@ -191,12 +193,12 @@ printf '%s\n' "$(date +%F)"' 05:07:23 dovecot_login authenticator failed for H=(
 printf '%s\n' "$(LC_ALL=C date '+%b %e')"' 04:28:26 lin dovecot[570645]: imap-login: Login aborted: Connection closed (auth failed, 3 attempts in 21 secs) (auth_failed): user=<info@site-c.example>, method=PLAIN, rip=203.0.113.10, lip=203.0.113.10, TLS, session=<a>' \
     "$(LC_ALL=C date '+%b %e')"' 04:28:46 lin dovecot[570645]: pop3-login: Login aborted: Connection closed (auth failed, 1 attempts in 2 secs) (auth_failed): user=<info@site-a.example>, method=PLAIN, rip=203.0.113.10, lip=203.0.113.10, TLS, session=<b>' \
     "$(LC_ALL=C date '+%b %e')"' 04:29:00 lin dovecot[570645]: imap-login: Login aborted: Connection closed (auth failed, 3 attempts in 18 secs) (auth_failed): user=<info>, method=PLAIN, rip=203.0.113.100, lip=203.0.113.10, TLS, session=<c>' > "$R/maillog"
-mcheck "kendi IP'si: dovecot satırı lfd gibi bir deneme sayılır, exim'inkilerle birleşir (1 + 1, 1), kaynak dosyalar" "rvrow 203.0.113.10 | grep -q '\"acct\":\[{\"u\":\"info@site-a.example\",\"n\":2},{\"u\":\"info@site-c.example\",\"n\":1}\],\"acctf\":\"exim_mainlog, maillog\"'"
+mcheck "kendi IP'si: dovecot satırı lfd gibi bir deneme sayılır, exim'inkilerle birleşir (1 + 1, 1)" "sacct | grep -qF '[{\"s\":\"mail\",\"u\":\"info@site-a.example\",\"n\":2},{\"s\":\"mail\",\"u\":\"info@site-c.example\",\"n\":1}]'"
 # döndürülmüş günlük (exim_mainlog-YYYYMMDD.gz, pencere içinde): hesaplar oradan da okunur, kaynak adı asıl dosya
 mkl aaselfr; lfdl 600 "Failed SMTP AUTH login from 203.0.113.10 - ignored"
 printf 'SMTPAUTH_LOG = "%s"\n' "$R/exim_mainlog" >> "$R/etc/csf/csf.conf"; : > "$R/exim_mainlog"
 printf '%s\n' "$(date -d '-2 days' +%F)"' 05:07:23 dovecot_login authenticator failed for H=(site-r.example) [203.0.113.10]:38634: 535 Incorrect authentication data (set_id=info@site-r.example)' > "$R/exim_mainlog-20261011"; gzip -f "$R/exim_mainlog-20261011"
-mcheck "kendi IP'si: döndürülmüş (gz) posta günlüğündeki hesap da listelenir, kaynak adı asıl dosya" "rvrow 203.0.113.10 | grep -q '\"acct\":\[{\"u\":\"info@site-r.example\",\"n\":1}\],\"acctf\":\"exim_mainlog\"'"
+mcheck "kendi IP'si: döndürülmüş (gz) posta günlüğündeki hesap da listelenir" "sacct | grep -qF '[{\"s\":\"mail\",\"u\":\"info@site-r.example\",\"n\":1}]'"
 mkl aaselfa; printf '203.0.113.10 # kendi\n' >> "$A"; lfdl 600 "Failed SMTP AUTH login from 203.0.113.10 - ignored"
 mcheck "kendi IP'si csf.allow'da da olsa önce 'sunucu IP'si' sayılır" "rvrow 203.0.113.10 | grep -q '\"wl\":\"sunucu IP.si: 203.0.113.10\".*\"full\":2'"
 # Denemeler her IP için (sunucu IP'si değil de): durum haritası (IP listeleri), IP kartı, mail satırları. Tarihler bugün:
@@ -247,7 +249,7 @@ fi
 # sunucu IP'si satırının hesapları da IP kartıyla aynı pencerede (satırın kendi tarihi)
 mkl aaselfo; lfdl 600 "Failed SMTP AUTH login from 203.0.113.10 - ignored"; printf 'SMTPAUTH_LOG = "%s"\n' "$R/exim_mainlog" >> "$R/etc/csf/csf.conf"
 printf '%s dovecot_login authenticator failed for H=(x) [203.0.113.10]:1: 535 Incorrect authentication data (set_id=%s)\n' "$(date '+%F %T')" yeni@site.example "$(date -d '-9 days' '+%F %T')" eski@site.example > "$R/exim_mainlog"
-mcheck "sunucu IP'si satırı: 7 günden eski posta denemesi sayılmaz (IP kartıyla aynı)" "rvrow 203.0.113.10 | grep -q '\"acct\":\[{\"u\":\"yeni@site.example\",\"n\":1}\]'"
+mcheck "sunucu IP'si satırı: 7 günden eski posta denemesi sayılmaz (IP kartıyla aynı)" "sacct | grep -qF '[{\"s\":\"mail\",\"u\":\"yeni@site.example\",\"n\":1}]'"
 # IP kartı: aynı IP için tek portluk ve tam izin satırı varsa tam izin gösterilir (ban işlemez)
 mk wlbest; printf '%s\n' 'tcp|in|d=22|s=151.80.7.9 # ssh ofis' '151.80.7.9 # tam izin' > "$A"
 mcheck "IP kartı: tam izin satırı tek portluk satırdan önce (karar 'ban işlemiyor')" "run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"wl\":\"csf.allow: 151.80.7.9 (tam izin)\"'"
