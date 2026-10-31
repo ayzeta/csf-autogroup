@@ -53,7 +53,7 @@ if [ -z "${SIM_ROOT:-}" ]; then case ":$PATH:" in *:/usr/sbin:*) ;; *) PATH="${P
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.33"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.34"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -4590,7 +4590,7 @@ prov_json() {    # → REPLY = durum JSON'u: izinli servisler (kaynak başına s
     prof prov_cloudpot
     jstr "$CLOUD_EXTRA"; o+=",\"cloud\":{\"extra\":$REPLY,\"pot\":$cpot,\"on\":$([ "$CLOUD_BAN" = 1 ] && echo true || echo false),\"sources\":\"$CLOUD_SOURCES\",\"tcp\":\"$CLOUD_TCP\",\"udp\":\"$CLOUD_UDP\",\"urls\":\"$CLOUD_URLS\",\"src\":[$cs],\"cat\":{$ccat},\"n\":$cn}"
     jstr "${ASN_MSG:-}"                     # yukarıdaki döngüler REPLY'yi ezdi: sağlayıcı banı iletisi burada hazırlanır
-    o+=",\"asn\":{\"on\":$([ "$ASN_BAN" = 1 ] && echo true || echo false),\"list\":\"$ASN_LIST\",\"all\":\"$ASN_ALL\",\"mode\":\"$ASN_MODE\",\"tcp\":\"$ASN_TCP\",\"udp\":\"$ASN_UDP\",\"state\":\"${ASN_STATE:-}\",\"msg\":$REPLY,\"sets\":[$sets],\"geo_t\":$(num "$gt"),\"ipset\":$([ "$(conf_val LF_IPSET)" = 0 ] && echo false || echo true)}}"
+    o+=",\"asn\":{\"on\":$([ "$ASN_BAN" = 1 ] && echo true || echo false),\"list\":\"$ASN_LIST\",\"all\":\"$ASN_ALL\",\"mode\":\"$ASN_MODE\",\"tcp\":\"$ASN_TCP\",\"udp\":\"$ASN_UDP\",\"state\":\"${ASN_STATE:-}\",\"msg\":$REPLY,\"sets\":[$sets],\"geo_t\":$(num "$gt"),\"geo_dd\":$(grep -qF "DAILY_TASKS $TODAY" "$SAYAC_FILE" 2>/dev/null && echo true || echo false),\"ipset\":$([ "$(conf_val LF_IPSET)" = 0 ] && echo false || echo true)}}"
     REPLY="$o"
 }
 asn_bans_json() { # RNG ALW CLF CWEB COK → stdout JSON: sağlayıcının aralıklarına düşen csf.deny banları ve şu anki kapsamları
@@ -6104,7 +6104,7 @@ do_config() {
                          if (index($0, "\"type\":\"run\"")) { r++; if (!r0 || t < r0) r0 = t } else { n++; if (!n0 || t < n0) n0 = t } }
                          END { printf "%d %d %d %d", n, n0, r, r0 }' "$EVENTS_FILE" 2>/dev/null)
                 read -r en en0 er er0 <<< "${eo:-0 0 0 0}"
-                o+=",\"ev\":{\"n\":$(num "$en"),\"oldest\":$(num "$en0"),\"runs\":$(num "$er"),\"runs_oldest\":$(num "$er0"),\"bytes\":$(num "$(stat -c %s "$EVENTS_FILE" 2>/dev/null)"),\"bl_n\":$(num "$(grep -c . "$BANLOG_FILE" 2>/dev/null)"),\"bl_oldest\":$(num "$(awk -F'|' '$3 + 0 > 0 { if (!m || $3 < m) m = $3 } END { print m + 0 }' "$BANLOG_FILE" 2>/dev/null)"),\"bl_bytes\":$(num "$(stat -c %s "$BANLOG_FILE" 2>/dev/null)")}"
+                o+=",\"ev\":{\"n\":$(num "$en"),\"oldest\":$(num "$en0"),\"runs\":$(num "$er"),\"runs_oldest\":$(num "$er0"),\"bytes\":$(num "$(stat -c %s "$EVENTS_FILE" 2>/dev/null)"),\"bl_n\":$(num "$(grep -c . "$BANLOG_FILE" 2>/dev/null)"),\"bl_oldest\":$(num "$(awk -F'|' -v n="$(date +%s)" '$3 + 0 > 0 && $4 + 0 > 0 && $4 + 0 <= n { if (!m || $3 < m) m = $3 } END { print m + 0 }' "$BANLOG_FILE" 2>/dev/null)"),\"bl_on\":$(num "$(awk -F'|' -v n="$(date +%s)" '$4 == 0 || $4 + 0 > n { c++ } END { print c + 0 }' "$BANLOG_FILE" 2>/dev/null)"),\"bl_bytes\":$(num "$(stat -c %s "$BANLOG_FILE" 2>/dev/null)")}"
                 # Sunucu gereksinimleri (Ayarlar sekmesindeki kart): ok | missing | warn
                 local dp="" dk ds
                 for dk in csf crontab mail dns logrotate flock timeout git imunify modsec sqlite3; do

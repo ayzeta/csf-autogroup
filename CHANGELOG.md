@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.15.34 — 2026-11-01
+
+- **Fix: the refresh day of CSF's ASN data could be a past date.** When the
+  day had passed (the day's tasks had already run), the Providers tab showed
+  it anyway; it now shows the day it will actually be refreshed.
+- **Record keeping: the ban history line separates bans still in place** (kept
+  while they last) from ended ones, whose oldest is shown; before, the oldest
+  record could be an old ban still in CSF, older than the history period.
+
 ## 1.15.33 — 2026-11-01
 
 - **Ban history.** Every run records the single bans since the previous run
