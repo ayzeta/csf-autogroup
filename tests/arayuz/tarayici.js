@@ -60,6 +60,9 @@ window.agKart = function () {
   return { bas: window.agBasliksiz(d), ipb: window.agIpBagsiz(d), hiz: window.agHizaKayik(d), gor: window.agGorunmez(d), cok: Object.keys(n).filter(k => n[k] > 1).map(k => k + ' × ' + n[k]),
     celis: Object.keys(say).filter(w => say[w].size > 1).map(w => w + ': ' + Array.from(say[w]).join(' / ')) };
 };`;
+// sayfa yeniden çizilse de (veri geç geldi, yoklama) tıklama anında öğeyi yeniden bulur; page.$ tutamacı geçersiz kalıyordu
+// ("Element is not attached to the DOM", ara sıra)
+async function tik(page, sel) { const l = page.locator(sel).first(); if (!(await l.count())) return false; await l.click({ timeout: 15000 }); return true; }
 async function kartKurallari(page, ad) {
   await page.evaluate(KURAL);
   const k = await page.evaluate(() => window.agKart());
@@ -146,8 +149,7 @@ async function layoutChecks(page, label, width) {
   for (const tab of ['overview', 'history', 'prov', 'settings']) {
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 900 });
-      const b = await page.$(`.ag-tabs [data-tab="${tab}"]`);
-      if (b) { await b.click(); await page.waitForTimeout(900); }
+      if (await tik(page, `.ag-tabs [data-tab="${tab}"]`)) await page.waitForTimeout(900);
       await layoutChecks(page, tab, width);
       await shot(`${tab}-${width}`);
       if (width === 390 && tab === 'overview') {
@@ -199,9 +201,8 @@ async function layoutChecks(page, label, width) {
   await page.setViewportSize({ width: 390, height: 560 });
   await page.click('.ag-tabs [data-tab="overview"]'); await page.waitForTimeout(600);
   {
-    const b = await page.$('[data-act="terms"]');
-    if (b) {
-      await b.click(); await page.waitForTimeout(600);
+    if (await tik(page, '[data-act="terms"]')) {
+      await page.waitForTimeout(600);
       const r = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); if (!m) return null; const h = m.querySelector('.ag-modal-h'), f = m.querySelector('.ag-modal-f');
         const R = e => e ? e.getBoundingClientRect() : null, mh = R(h), mf = R(f); return { ok: !!(mh && mf) && mh.top >= 0 && mf.bottom <= window.innerHeight, head: mh && Math.round(mh.top), foot: mf && Math.round(mf.bottom), vh: window.innerHeight }; });
       check('390×560: Terimler penceresi başlık ve Kapat ile görünüm içinde', !!r && r.ok, JSON.stringify(r));
@@ -231,7 +232,7 @@ async function layoutChecks(page, label, width) {
     check('Ayarlar: her bölüm açıklama ile başlıyor, ilk kart aynı hizada (±24 px)', bad.length === 0 && spread <= 24, bad.join(' | ') + ' ' + tops.join(','));
   }
   {
-    const nav = await page.$('.ag-setnav [data-s="thr"]'); if (nav) { await nav.click(); await page.waitForTimeout(500); }
+    if (await tik(page, '.ag-setnav [data-s="thr"]')) await page.waitForTimeout(500);
     const inp = await page.$('#ag-f-THRESHOLD_24');
     if (inp) {
       const v0 = +(await inp.inputValue());
@@ -246,7 +247,7 @@ async function layoutChecks(page, label, width) {
   }
   {
     // Bildirim: olay × kanal tablosu — 5 olay (1.15.4: Kontrol edilecekler bulguları) × 2 kanal; hücre tıklanınca kaydet çubuğu çıkar, geri tıklanınca taslak temiz; telefonda sığar
-    const nav = await page.$('.ag-setnav [data-s="notify"]'); if (nav) { await nav.click(); await page.waitForTimeout(500); }
+    if (await tik(page, '.ag-setnav [data-s="notify"]')) await page.waitForTimeout(500);
     const cells = await page.$$('.ag-evm .ag-chk');
     check('Bildirim: olay × kanal tablosu 10 hücre', cells.length === 10, String(cells.length));
     if (cells.length === 10) {
@@ -330,14 +331,14 @@ async function layoutChecks(page, label, width) {
       // Süreyi değiştir: 30 gün → 7 gün; bitiş tarihi değişmeli
       const before7 = await untilOf();
       await page.click(`.ag-menu [data-act="ignore"][data-c="${c}"]`); await page.waitForTimeout(600);
-      const d7 = await page.$('.ag-modal #ag-days [data-d="7"]'); if (d7) await d7.click();
+      await tik(page, '.ag-modal #ag-days [data-d="7"]');
       await page.click('.ag-modal [data-m="ok"]');
       await page.waitForFunction(([c, b]) => { const r = document.querySelector(`.ag-item[data-row="${c}"] .ag-td-until`); return r && r.textContent !== b; }, [c, before7], { timeout: 30000 }).catch(function () {});
       const after7 = await untilOf();
       check(`Süreyi değiştir: ${c} bitişi değişti`, after7 && after7 !== before7, `${before7} → ${after7}`);
       await openIm();
       await page.click(`.ag-menu [data-act="unignore"][data-c="${c}"]`); await page.waitForTimeout(600);
-      const ok = await page.$('.ag-modal [data-m="ok"]'); if (ok) await ok.click();
+      await tik(page, '.ag-modal [data-m="ok"]');
       await page.waitForFunction(c => document.querySelector(`.ag-item[data-row="${c}"] .ag-tr-r`), c, { timeout: 30000 }).catch(function () {});
       check(`Susturmayı bitir: ${c} geri geldi`, await page.$(`.ag-item[data-row="${c}"] .ag-tr-r`) !== null);
     }
@@ -353,7 +354,7 @@ async function layoutChecks(page, label, width) {
     if (rw) {
       const pfx = await rw.getAttribute('data-t');
       await rw.click(); await page.waitForTimeout(500);
-      const ok = await page.$('.ag-modal [data-m="ok"]'); if (ok) await ok.click();
+      await tik(page, '.ag-modal [data-m="ok"]');
       await page.waitForTimeout(6000);
       const left = await page.evaluate(p => { const r = Array.from(document.querySelectorAll('.ag-item[data-row]')).filter(x => x.getAttribute('data-row') === p + '.0/24')[0]; return r ? r.innerText : ''; }, pfx);
       check(`İzlemeyi yeniden başlat: ${pfx}.0/24 satırı duruyor`, left.length > 0, left.slice(0, 60).replace(/\n/g, ' '));

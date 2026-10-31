@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.15.36 — 2026-11-01
+
+- **Measure impact shows every IP's current state, not only single bans.** An
+  address inside a range ban (`/24`, `/16` …, permanent or temp — the plugin's
+  temp block ban included) or in a block that is being watched after a temp
+  block ban read as "not banned now"; seeing it needed the IP card.
+- **`tools/asn-profile.sh`** (read-only): a provider's web requests of the last
+  24 hours, to tell browsers from crawlers: pages against files (css, js,
+  images, fonts), distinct addresses per IP, the busiest minute, user agents and
+  how many IPs share them, the most requested pages, sites, and requests for
+  robots, sitemap, wp-json, xmlrpc, wp-login, `.env`, `.git`.
+  `bash tools/asn-profile.sh 9009`.
+
 ## 1.15.35 — 2026-11-01
 
 - **Fix: lists and CSF's ASN data were refreshed up to a day late.** The

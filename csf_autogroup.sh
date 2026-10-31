@@ -53,7 +53,7 @@ if [ -z "${SIM_ROOT:-}" ]; then case ":$PATH:" in *:/usr/sbin:*) ;; *) PATH="${P
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.35"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.36"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -4698,13 +4698,19 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
     find -L "$dir" -type f -mmin -1440 ! -name '*bytes_log*' ! -name '*.offset*' ! -name '*.gz' 2>/dev/null > "$lst"
     since=$(date -d '24 hours ago' +%Y%m%d%H%M%S)
     # dosyalar tek awk'a verilir (xargs çok dosyada gruplara bölüp yalnız son grubun sonucunu bırakıyordu)
-    awk -v rf="$rng" -v lf="$lst" -v since="$since" -v af="$alw" -v cf="$clf" -v cdf="$CDN_FILE" -v cweb="$cweb" -v cact="${CLOUD_ACTIVE# }" -v ban="$ban" -v bkey="$bkey" -v bsince="$bsince" -v bweb="$bweb" -v tbf="$CSF_VAR/csf.tempban" -v dnf="$DENY_FILE" -v imf="$IMUNIFY_FILE" -v now="$(date +%s)" '
+    awk -v rf="$rng" -v lf="$lst" -v since="$since" -v af="$alw" -v cf="$clf" -v cdf="$CDN_FILE" -v cweb="$cweb" -v cact="${CLOUD_ACTIVE# }" -v ban="$ban" -v bkey="$bkey" -v bsince="$bsince" -v bweb="$bweb" -v tbf="$CSF_VAR/csf.tempban" -v dnf="$DENY_FILE" -v wf="$SAYAC_FILE" -v wcut="$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')" -v imf="$IMUNIFY_FILE" -v now="$(date +%s)" '
         BEGIN { while ((getline l < rf) > 0) { split(l, x, " "); m++; LO[m] = x[1] + 0; HI[m] = x[2] + 0 }
                 while ((getline l < cf) > 0) { split(l, x, " "); cn++; CL[cn] = x[1] + 0; h = x[2] + 0
                     if (cn == 1 || h > CP[cn - 1]) { CP[cn] = h; CN[cn] = x[3] } else { CP[cn] = CP[cn - 1]; CN[cn] = CN[cn - 1] } }
                 # şu anki banlar: geçici (kalan saniye), csf.deny içindeki tek IP ve /24 blok satırları, Imunify360 kara listesi
-                while ((getline l < tbf) > 0) { split(l, x, "|"); if (x[2] ~ /^[0-9.]+$/ && x[1] + x[5] > now) TB[x[2]] = x[1] + x[5] - now }
-                while ((getline l < dnf) > 0) { sub(/[ \t#].*/, "", l); if (l ~ /^[0-9]/) DN[l] = 1 }
+                # aralık banları da (kalıcı ve geçici; /24, /16, …): adresi kapsayan ban şu anki durumda söylenir. İzlenen bloklar sayaçtan
+                # (geçici blok banından sonra izleme süresi içinde): kartı açmadan görülsün
+                while ((getline l < tbf) > 0) { split(l, x, "|"); if (x[1] + x[5] <= now) continue
+                    if (x[2] ~ /^[0-9.]+$/) TB[x[2]] = x[1] + x[5] - now
+                    else if (x[2] ~ /^[0-9.]+\/[0-9]+$/) { split(x[2], y, "/"); tn++; TL[tn] = v4(y[1]); TH[tn] = TL[tn] + 2 ^ (32 - y[2]) - 1; TT[tn] = x[1] + x[5] - now } }
+                while ((getline l < dnf) > 0) { sub(/[ \t#].*/, "", l); if (l ~ /^[0-9]/) { DN[l] = 1
+                    if (l ~ /\//) { split(l, y, "/"); dn2++; DL[dn2] = v4(y[1]); DH[dn2] = DL[dn2] + 2 ^ (32 - y[2]) - 1 } } }
+                while ((getline l < wf) > 0) { split(l, x, " "); if (x[1] ~ /^[0-9]+\.[0-9]+\.[0-9]+$/ && x[2] >= wcut) WT[x[1]] = 1 }
                 while ((getline l < imf) > 0) { split(l, x, "|"); if (x[1] ~ /^[0-9.]+$/) IMB[x[1]] = 1 }
                 while ((getline l < af) > 0) { split(l, x, " "); an++; AL[an] = x[1] + 0; h = x[2] + 0
                     if (an == 1 || h > AP[an - 1]) { AP[an] = h; AN[an] = x[3] } else { AP[an] = AP[an - 1]; AN[an] = AN[an - 1] } }
@@ -4730,12 +4736,16 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
             v = ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4]; a = 1; b = cn; k = 0
             while (a <= b) { c = int((a + b) / 2); if (CL[c] <= v) { k = c; a = c + 1 } else b = c - 1 }
             return (k && CP[k] >= v) ? CN[k] : "" }
-        function ipst(ip,  o, p) {   # "temp:SANİYE,deny,deny24,imunify" (şu an hangi listelerde)
-            o = ""; p = ip; sub(/\.[0-9]+$/, "", p)
+        function v4(a,  q) { split(a, q, "."); return ((q[1] * 256 + q[2]) * 256 + q[3]) * 256 + q[4] }
+        function ipst(ip,  o, p, v, i, rg, tr) {   # "temp:SANİYE,deny,deny24,tempr:SANİYE,imunify,watch" (şu an hangi listelerde)
+            o = ""; p = ip; sub(/\.[0-9]+$/, "", p); v = v4(ip)
             if (ip in TB) o = o (o == "" ? "" : ",") "temp:" TB[ip]
             if (ip in DN) o = o (o == "" ? "" : ",") "deny"
-            else if ((p ".0/24") in DN) o = o (o == "" ? "" : ",") "deny24"
+            else { rg = 0; for (i = 1; i <= dn2; i++) if (v >= DL[i] && v <= DH[i]) { rg = 1; break }; if (rg) o = o (o == "" ? "" : ",") "deny24" }
+            tr = 0; for (i = 1; i <= tn; i++) if (v >= TL[i] && v <= TH[i] && TT[i] > tr) tr = TT[i]
+            if (tr && !rg) o = o (o == "" ? "" : ",") "tempr:" tr
             if (ip in IMB) o = o (o == "" ? "" : ",") "imunify"
+            if ((p in WT) && !rg && !tr) o = o (o == "" ? "" : ",") "watch"     # izlenen blok (banı yok)
             return o }
         function topip(A, k, X, N,  o, i, best, bk, n) { o = ""   # [IP, istek, başarılı, örnek, şu anki durum]
             for (n = 0; n < k; n++) { best = 0; bk = ""; for (i in A) if (A[i] > best) { best = A[i]; bk = i }

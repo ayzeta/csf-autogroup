@@ -17,4 +17,9 @@ t abc ",80," 0
 # cron ortamı (PATH=/usr/bin:/bin): motor başında /usr/sbin eklenmeli (ipset, iptables orada)
 N=$((N + 1)); P=$(env -i PATH=/usr/bin:/bin bash -c "$(sed -n '1,/^VERSION=/p' "$REPO/csf_autogroup.sh")"$'\n''echo "$PATH"')
 case ":$P:" in *:/usr/sbin:*) echo "  ✓ cron PATH'inde /usr/sbin eklenir";; *) F=$((F + 1)); echo "  ✗ cron PATH'inde /usr/sbin yok: $P";; esac
+# tek tırnaklı programın (awk …) içindeki yorumda kesme işareti tırnağı kapatır; bash -n yakalamaz (dört kez oldu)
+for f in "$REPO/csf_autogroup.sh" "$REPO"/tools/*.sh; do
+    N=$((N + 1)); k=$(awk -f "$(dirname "$0")/tirnak.awk" "$f" | head -n 1)
+    if [ -z "$k" ]; then echo "  ✓ tırnak içi yorumda kesme işareti yok: $(basename "$f")"; else F=$((F + 1)); echo "  ✗ $(basename "$f") $k"; fi
+done
 echo "Birim: $N durum, $F beklenmeyen"; [ "$F" -eq 0 ]
