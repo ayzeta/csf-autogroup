@@ -9,7 +9,10 @@ GEO="${GEO:-/var/lib/csf/Geo/ip2asn-combined.tsv}"
 TMPF=$(mktemp) && TMPR=$(mktemp) || exit 1; trap 'rm -f "$TMPF" "$TMPR"' EXIT
 DIRS="${DIRS:-/var/log/apache2/domlogs /usr/local/apache/domlogs /etc/apache2/logs/domlogs}"
 SINCE=$(LC_ALL=C date -d '24 hours ago' +%Y%m%d%H%M%S)
-find -L $DIRS -type f -mmin -1440 ! -name '*bytes_log*' ! -name '*.offset*' ! -name '*.gz' 2>/dev/null | sort -u > "$TMPF"
+# ilk bulunan dizin (Etkisini ölç gibi): cPanel'de üçü aynı yere bağlantı, hepsi okunursa her istek üç kez sayılıyordu
+DIR=""; for d in $DIRS; do [ -d "$d" ] && { DIR="$d"; break; }; done
+[ -n "$DIR" ] || { echo "web günlükleri (domlogs) bulunamadı: $DIRS" >&2; exit 1; }
+find -L "$DIR" -type f -mmin -1440 ! -name '*bytes_log*' ! -name '*.offset*' ! -name '*.gz' 2>/dev/null | sort -u > "$TMPF"
 LC_ALL=C awk -F'\t' -v a="$A" '$3 == a && $1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ { split($1, p, "."); split($2, q, ".")
     printf "%.0f %.0f\n", ((p[1]*256+p[2])*256+p[3])*256+p[4], ((q[1]*256+q[2])*256+q[3])*256+q[4] }' "$GEO" | sort -n > "$TMPR"
 LC_ALL=C awk -v rf="$TMPR" -v lf="$TMPF" -v since="$SINCE" '

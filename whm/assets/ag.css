@@ -29,7 +29,7 @@
   --ag-d-temp: #0d9488; --ag-d-temp-t: #0f766e; --ag-d-temp-s: #f0fdfa; --ag-d-temp-l: #99f6e4;   /* geçici (süreli) ban */
   --ag-d-part: #2563eb; --ag-d-part-t: #1d4ed8; --ag-d-part-s: #eff6ff; --ag-d-part-l: #bfdbfe;   /* kısmi ban (yalnız seçilen servisler) */
   --ag-d-warn: #d97706; --ag-d-warn-t: #b45309; --ag-d-warn-s: #fffbeb; --ag-d-warn-l: #fde68a;   /* şüpheli ağ, dikkat */
-  --ag-d-skip: #64748b; --ag-d-skip-t: #475569; --ag-d-skip-s: #f8fafc; --ag-d-skip-l: #e2e8f0;   /* atlandı (beyaz liste) */
+  --ag-d-skip: #db2777; --ag-d-skip-t: #be185d; --ag-d-skip-s: #fdf2f8; --ag-d-skip-l: #fbcfe8;   /* izin ya da yoksayma yüzünden banlanmadı: atlandı, izinli, yoksayılan, sunucu IP'si, ban işlemiyor */
   --ag-shadow-lg: 0 20px 48px rgba(16, 24, 40, .18), 0 4px 12px rgba(16, 24, 40, .08);
   --ag-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -778,6 +778,7 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
 .ag-im-v b { display: block; margin-bottom: 4px; color: var(--ag-ok); font-size: 14px; }
 .ag-im-v p { margin: 0; color: var(--ag-ok); font-size: 13px; }
 .ag-im-v.warn { border-color: var(--ag-warn-line); background: var(--ag-warn-soft); }
+.ag-im-crawl p { margin: 4px 0; font-size: 13px; overflow-wrap: anywhere; }
 .ag-im-v.warn b, .ag-im-v.warn p { color: var(--ag-warn); }
 .ag-im-v.none { border-color: var(--ag-line); background: var(--ag-neutral-soft); }
 .ag-im-v.none b, .ag-im-v.none p { color: var(--ag-text-2); }
@@ -810,9 +811,14 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
 .ag-im-l .ag-pill { margin-left: 6px; }
 .ag-im-note { margin: 12px 0 0; color: var(--ag-text-3); font-size: 12.5px; }
 .ag-im-foot { margin: 10px 0 0; color: var(--ag-text-3); font-size: 12.5px; }
+.ag-im-stm { display: none; }
 @media (max-width: 600px) {
   .ag-im-t { display: block; overflow-x: auto; }
   .ag-im-t tr > :first-child { position: sticky; left: 0; background: var(--ag-card); }
+  /* Etkisini ölç IP tablosu: durum rozetleri ayrı sütunda istek metnini 45 px'e sıkıştırıyordu ("site1.e / xample"): metnin altında */
+  .ag-im-t:not(.ag-rg-ipt) .ag-im-st { display: none; }
+  .ag-im-t:not(.ag-rg-ipt) .ag-im-stm { display: block; margin-top: 4px; }
+  .ag-im-stm .ag-pill { margin: 0 4px 3px 0; white-space: normal; height: auto; }
 }
 .ag-setform .ag-field > .ag-loginfo { grid-column: 1 / -1; grid-row: 2; justify-self: start; max-width: none; margin-top: 3px; }
 @media (max-width: 900px) {
@@ -926,16 +932,17 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
   .ag-card-h .ag-tools .ag-chip { flex: none; }
   /* tablo satırı: 1) adres · durum · menü  2) ülke · ASN · kurum · kapsayan ban (tam genişlik)  3) tekil · eklendi */
   /* (yoksayılanlar .ag-tr-i bu kuralın dışında: kendi iki satırlı düzeni var, yukarıda) */
-  .ag-tbl > .ag-item > .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) { grid-template-columns: auto minmax(0, 1fr) auto 32px; grid-template-areas: "main main state act" "own own own own" "num when when when";
+  .ag-tbl > .ag-item > .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) { grid-template-columns: max-content minmax(0, 1fr) auto 32px; grid-template-areas: "main . state act" "own own own own" "num when when when";
     column-gap: 8px; row-gap: 5px; padding: 10px 10px 10px 16px; }
   .ag-tbl > .ag-item > .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) .ag-num-0 { display: none !important; }
   .ag-tbl > .ag-item > .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) .ag-td-main { grid-area: main; }
   .ag-tbl > .ag-item > .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) .ag-td-state { grid-area: state; }
   .ag-tbl > .ag-item > .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) .ag-td-act { grid-area: act; }
   .ag-tbl > .ag-item > .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) .ag-td-own { grid-area: own; display: flex; font-size: 12px; }
-  .ag-tbl > .ag-item > .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) .ag-num-c { grid-area: num; display: block; font-size: 12px; color: var(--ag-text-3); white-space: nowrap; }
+  .ag-tbl > .ag-item > .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) .ag-num-c { grid-area: num; display: block; font-size: 12px; color: var(--ag-text-3); white-space: nowrap; text-align: left; }   /* adres sütunu genişleyince sağa kayıyordu */
   .ag-tbl > .ag-item > .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) .ag-when { grid-area: when; display: block; font-size: 12px; text-align: left; }
-  .ag-tbl > .ag-item > .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) .ag-num-c:not(.ag-num-0) + .ag-when::before { content: "· "; }
+  .ag-tbl > .ag-item > .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) .ag-num-c:not(.ag-num-0) { grid-column: 1 / -1; }
+  .ag-tbl > .ag-item > .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) .ag-num-c:not(.ag-num-0) + .ag-when { display: none; }   /* zaman tekil hücresinde */
   .ag-tbl > .ag-item > .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) .ag-num-0 + .ag-when { grid-column: 1 / -1; }
   .ag-tbl > .ag-item > .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) .ag-mob { display: inline; }
   /* izlenenler: 1) adres · menü  2) ülke · ASN · kurum ····· kalan gün */

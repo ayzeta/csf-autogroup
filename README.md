@@ -175,8 +175,8 @@ settings, with no prompts. `config.env` is left untouched.
   action, and once a day the review list's findings that are otherwise
   recomputed from the logs (violations from allowed IPs, open services), so
   they stay after the review row is gone; back to the start of the event log:
-  the latest 300 load first and
-  **Show more** pages further back. Work from before the event log existed is
+  20 per page, like the other lists; the last page's **›** loads older entries
+  from the event log. Work from before the event log existed is
   filled in from the log. Click an address to open its IP card, or a range
   (/16, /24) to open its range card: whether the range itself is banned, which
   services hit are still open for it, and every IP in it with its state now.
@@ -270,8 +270,8 @@ removal is there to free space in the list.
 - **Everything** — the range is cut in both directions (a normal CSF ban).
 - **Selected services** — only connections *from* the range to the services you
   pick are blocked (Web, SSH on this server's real SSH port, FTP, cPanel · WHM ·
-  Webmail, incoming mail, mail sync, DNS, plus any other ports or ranges such as
-  `8080, 30000-35000`). Everything else stays open, and connections from this
+  Webmail, incoming mail, mail client (sending, IMAP, POP3), DNS, plus any
+  other ports or ranges such as `8080, 30000-35000`). Everything else stays open, and connections from this
   server to the range are not affected. Web includes UDP 443 (HTTP/3) and DNS
   includes UDP 53. It is one `csf.deny` line (split per 15
   ports), shown as *partial* in Active range bans; it doesn't cover the range, so
@@ -285,7 +285,7 @@ removal is there to free space in the list.
   counted as whitelist entries.
 
 Each service button shows how many IPs of the range hit it, read from the
-ban reasons LFD wrote (`(sshd)` → SSH, `(smtpauth)` / `(imapd)` → mail sync,
+ban reasons LFD wrote (`(sshd)` → SSH, `(smtpauth)` / `(imapd)` → mail client,
 ModSecurity and web rules → Web, port scans → "Everything" is suggested).
 **Selected services** preselects only the services hit; **Everything
 except** preselects nothing and warns when an service hit is kept open.
@@ -630,7 +630,22 @@ restoring `config.env` is enough.
   services, addresses an active rented-server list already closes, and the rest.
   For allowed services the responses they got are listed with the most
   frequent refused requests (which page gave Googlebot a 403, for instance);
-  those come from the site or ModSecurity, not from a ban.
+  those come from the site or ModSecurity, not from a ban. Allowed addresses
+  include your own full allows in `csf.allow` (office, customers).
+  - **Crawl signs** for the open addresses: clients that name themselves as
+    crawlers, one user agent spread over many IPs, IPs visiting several sites,
+    IPs that ask only for pages (no css, js or images) and requests to form and
+    API endpoints. When most successful requests carry these signs, the screen
+    suggests a ModSecurity rule for the crawler's user agent, which is more
+    targeted than banning the whole provider.
+  - Every listed IP shows what covers it right now, the same as its IP card:
+    single, temp and range bans, a watched block, a provider or country ban
+    (with *port list only* or *everything*), an active rented-server list and
+    port lines in `csf.deny`.
+  - Once the provider is banned, requests from open addresses after the ban are
+    counted; the first 2 minutes after saving (while CSF and lfd reload) are not
+    counted as "the ban did not stop them", and the latest requests are listed
+    with time, IP, site and code.
 - After saving, the setting is written to CSF right away and lfd is restarted
   (lfd fills the address sets); the screen shows how many ranges are loaded.
   Turning it off removes only what the plugin added.

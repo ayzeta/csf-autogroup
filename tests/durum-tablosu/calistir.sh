@@ -107,6 +107,14 @@ rvrow() { run --status --json 2>/dev/null | grep -o '"review":\[.*\],"ignored"' 
 mkl() { mk "$1"; echo "LFD_LOG=$R/lfd.log" >> "$R/app/config.env"; : > "$R/lfd.log"; }
 mkl aab;  printf '151.80.7.9 # müşteri\n' >> "$A"; lfdb 3600 151.80.7.9
 mcheck "izinli IP lfd'de banlandı → 'Ban işlemiyor' (tam izin)" "rvrow 151.80.7.9 | grep -q '\"type\":\"allow_ban\".*\"bk\":\"b\".*\"full\":1'"
+# günlükte NUL bloğu (logrotate copytruncate, çökme): GNU grep "binary file matches" deyip sonraki satırları yazmıyordu → bloktan
+# sonraki ban kaybolup eski "yoksaydı" kayıtları satırı belirliyordu (gerçek CSF testinde ölçüldü)
+# izlenen blok turun ölçütüyle: sayaç tarihi izleme süresi (180 gün) içindeyse izleniyor; süresi dolan satır turun sonunda silinene
+# kadar panel onu "izleniyor" (kalan gün negatif) gösteriyordu, tur ise kalıcıya almıyordu
+mk watchexp; printf '%s\n' "151.80.7 $(date -d '-182 days' +%F)" "151.80.8 $(date -d '-179 days' +%F)" >> "$C"
+mcheck "süresi dolmuş izleme İzlenenler'de yok, süresi içindeki var; IP kartı da aynı" "run --status --json 2>/dev/null | grep -o '\"pending\":\[[^]]*\]' | grep -q '\"prefix\":\"151.80.8\"' && ! run --status --json 2>/dev/null | grep -o '\"pending\":\[[^]]*\]' | grep -q '\"prefix\":\"151.80.7\"' && run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"pend\":\"\"'"
+mkl aanul; printf '151.80.7.9 # müşteri\n' >> "$A"; lfdi 7200 151.80.7.9; head -c 4096 /dev/zero >> "$R/lfd.log"; printf '\n' >> "$R/lfd.log"; lfdb 600 151.80.7.9
+mcheck "lfd günlüğünde NUL bloğundan sonraki ban da okunur → 'Ban işlemiyor'" "rvrow 151.80.7.9 | grep -q '\"type\":\"allow_ban\".*\"bk\":\"b\".*\"full\":1'"
 # satır, panelin yazdığı düşme anında düşer (son kayıt + REVIEW_DAYS, saatiyle): motor kayıtları gün gün topluyor, pencerenin
 # ilk gününü bütünüyle tuttuğu için satır bir gün geç düşüyordu (kullanıcı: "24 Eki'de düşer" yazıyor, 24 Eki'de duruyor)
 mkl aadrop1; printf '151.80.7.9 # müşteri\n' >> "$A"; lfdi $(( 7 * 86400 + 3600 )) 151.80.7.9

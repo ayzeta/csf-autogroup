@@ -97,8 +97,17 @@ async function layoutChecks(page, label, width) {
   });
   check(`${label} · ${width} px · tıklanan öğeler üst üste binmiyor`, lapB.length === 0, lapB.join(' | '));
   // kimlik (IP / aralık adı) hiç kısaltılmaz
-  const cut = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-cidr, [data-ip]')).filter(e => e.offsetWidth > 0 && e.scrollWidth > e.clientWidth + 1)
-    .map(e => e.textContent.trim().slice(0, 20)));
+  // öğenin kendisi taşmasa da taşmayı gizleyen bir üst kutu onu kesebilir (telefonda "173.239.240.0/24" → "…/2" göründü)
+  const cut = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-cidr, [data-ip]')).filter(e => {
+    if (!e.offsetWidth) return false;
+    if (e.scrollWidth > e.clientWidth + 1) return true;
+    const r = e.getBoundingClientRect();
+    for (let a = e.parentElement; a && a !== document.body; a = a.parentElement) {
+      const o = getComputedStyle(a); if (o.overflowX === 'visible' && o.overflow === 'visible') continue;
+      const q = a.getBoundingClientRect(); return r.right > q.right + 1 || r.left < q.left - 1;
+    }
+    return false;
+  }).map(e => e.textContent.trim().slice(0, 20)));
   check(`${label} · ${width} px · IP / aralık adı kesilmiyor`, cut.length === 0, cut.slice(0, 4).join(' | '));
   const sw = await page.evaluate(() => document.documentElement.scrollWidth);
   check(`${label} · ${width} px · yatay taşma yok`, sw <= width, `belge ${sw}px`);

@@ -65,8 +65,13 @@ review() {   # → "G[:açık servisler]" (Kontrol edilecekler'de) ya da "-"
       const r=(j.review||[]).find(x=>x.cidr==='151.80.0.0/16'); console.log(r ? 'G' + (r.pnsvc ? ':' + r.pnsvc : '') : '-');" "$(wp "$R/st.json")" 2>&1
 }
 check() {    # AD BEKLENEN GERÇEK
-    N=$((N + 1))
-    if [ "${3%%:*}" = "$2" ]; then OUT+="  ✓ $1 → $3"$'\n'; else F=$((F + 1)); OUT+="  ✗ $1 → $3 (beklenen $2)"$'\n'; fi
+    N=$((N + 1)); local l
+    if [ "${3%%:*}" = "$2" ]; then l="  ✓ $1 → $3"; else F=$((F + 1)); l="  ✗ $1 → $3 (beklenen $2)"; fi
+    OUT+="$l"$'\n'
+    # gerçek mod yarım saat sürüyor: her sonuç anında (saat ve sıra numarasıyla) stderr'e yazılır, beklerken ilerleme görülür;
+    # DUR_ILK=1 ilk beklenmeyen sonuçta durur (sonucu yarım saat sonra öğrenmek yerine)
+    if [ "${CANLI:-${GERCEK:-0}}" = 1 ]; then printf '%s [%d] %s\n' "$(date +%H:%M:%S)" "$N" "$l" >&2; fi
+    if [ "${DUR_ILK:-0}" = 1 ] && [[ "$l" == "  ✗"* ]]; then printf 'Senaryolar\n%s' "$OUT"; echo "ilk beklenmeyen sonuçta durdu ($N. senaryo)"; exit 1; fi
 }
 # ── GERÇEK MOD (GERCEK=1): taklit yerine çalışan gerçek CSF/lfd (test sanal makinesi; root) ──
 # Banlar gerçek csf.deny'ye yazılır ve csf -r ile güvenlik duvarına yüklenir; kiralık liste gerçek araçla (curl, ipset,

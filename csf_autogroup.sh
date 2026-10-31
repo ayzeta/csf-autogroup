@@ -52,8 +52,12 @@ set -o pipefail
 if [ -z "${SIM_ROOT:-}" ]; then case ":$PATH:" in *:/usr/sbin:*) ;; *) PATH="${PATH:+$PATH:}/usr/local/sbin:/usr/sbin:/sbin" ;; esac; export PATH; fi
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
+# Günlükte tek bir NUL baytı (logrotate copytruncate, çökme sonrası dosya) GNU grep'i "binary file matches" deyip eşleşen
+# satırları yazmamaya iter: o noktadan sonraki bütün lfd / posta / site günlüğü kayıtları sessizce kayboluyordu (ölçüldü: WSL'de
+# lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
+grep() { command grep -a "$@"; }
 
-VERSION="1.15.36"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.37"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -264,7 +268,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_T_H="%s saat"; M_T_M="%s dakika"; M_T_S="%s saniye"
   # servis adları panelle aynı (ag.js svc_*)
   M_SVCN_web="Web"; M_SVCN_ssh="SSH"; M_SVCN_ftp="FTP"; M_SVCN_cp="cPanel · WHM · Webmail"; M_SVCN_min="Gelen posta"; M_SVCN_mout="Giden posta"
-  M_SVCN_sync="Posta eşitleme"; M_SVCN_dns="DNS"; M_SVCN_scan="port taraması"; M_SVCN_repeat="tekrar banlanan"; M_SVCN_other="diğer"
+  M_SVCN_sync="E-posta istemcisi"; M_SVCN_dns="DNS"; M_SVCN_scan="port taraması"; M_SVCN_repeat="tekrar banlanan"; M_SVCN_other="diğer"
   M_AVK_b="ban işlemiyor"; M_AVK_i="lfd yoksaydı"; M_AVK_y="yoksayılıyor"; M_AVK_s="sunucu IP'si"
   M_POPEN_SUBJ="%s açık servis"; M_POPEN_BODY="Kısmi banın açık bıraktığı servislere eşik kadar ihlal geldi; banı değiştirip onları da kapatabilirsiniz:"; M_POPEN_L="kapalı: %s · açık servislere %s ihlal"
   M_DG_RV="Kontrol edilecekler (7 gün): %s izinli IP'den ihlal kaydı · %s açık servis kaydı"
@@ -518,7 +522,7 @@ else
   M_PERMB="Repeat ban (PERMBLOCK): in the last %s, at least %s temp bans, made permanent"; M_PB_SVC="earlier ban: %s"
   M_T_H="%s hour(s)"; M_T_M="%s minute(s)"; M_T_S="%s second(s)"
   M_SVCN_web="Web"; M_SVCN_ssh="SSH"; M_SVCN_ftp="FTP"; M_SVCN_cp="cPanel · WHM · Webmail"; M_SVCN_min="Incoming mail"; M_SVCN_mout="Outgoing mail"
-  M_SVCN_sync="Mail sync"; M_SVCN_dns="DNS"; M_SVCN_scan="port scan"; M_SVCN_repeat="banned repeatedly"; M_SVCN_other="other"
+  M_SVCN_sync="Mail client"; M_SVCN_dns="DNS"; M_SVCN_scan="port scan"; M_SVCN_repeat="banned repeatedly"; M_SVCN_other="other"
   M_AVK_b="ban not working"; M_AVK_i="ignored by lfd"; M_AVK_y="ignored"; M_AVK_s="server IP"
   M_POPEN_SUBJ="%s open services"; M_POPEN_BODY="The services a partial ban leaves open took violations up to the threshold; change the ban to close them too:"; M_POPEN_L="closed: %s · %s violations on the open services"
   M_DG_RV="Needs review (7 days): %s allowed-IP violation records · %s open-service records"
@@ -2710,11 +2714,12 @@ do_status() {
     # Sayaç satırları tek awk geçişinde: kalan gün (day_epoch gibi yerel gece yarısı; geçersiz tarih 0 sayılır) ve kapsayan ilk
     # geniş ban (under_of gibi WD sırasıyla). Önce blok başına bash'te tarih çevirme + bütün geniş banlarla döngü: sunucuda 44
     # blok × 83 geniş ban ~0,3 sn ölçüldü.
+    tpk_load    # izlenen blokta son turdan bu yana aynı anda geçici banlı en çok tekil (geçici eşikle aynı hesap): "Unut" kararı için
     while IFS=' ' read -r c u left gu; do
         pc "pending blok"
         ttl="${TG_TTL[$c.0/24]:-0}"; [ "$ttl" -lt 0 ] && ttl=0
         [ "$gu" = "-" ] && gu=""
-        pending+=("{\"prefix\":\"$c\",\"since\":\"$u\",\"days_left\":$left,\"temp_ttl\":$ttl${gu:+,\"under\":\"$gu\"}}")
+        pending+=("{\"prefix\":\"$c\",\"since\":\"$u\",\"days_left\":$left,\"temp_ttl\":$ttl,\"s\":${count24[$c]:-0},\"t\":${TPK_N[$c]:-0}${gu:+,\"under\":\"$gu\"}}")
         [ "$JSON" = 1 ] || ptext+=("$(printf '%-18s %s · %s' "$c.0/24" "$u" "$(m "$M_S_DAYSLEFT" "$left")")")
     done < <( { for gi in "${!WD_LO[@]}"; do echo "W ${WD_LO[gi]} ${WD_HI[gi]} ${WD_TXT[gi]}"; done; echo "#--"; cat "$SAYAC_FILE" 2>/dev/null; } |
         awk -v now="$now" -v ret="$SAYAC_RETENTION_DAYS" '
@@ -2725,7 +2730,7 @@ do_status() {
                 age = int((now - ep) / 86400); g = "-"; split($1, o, ".")
                 if (o[1] + 0 <= 255 && o[2] + 0 <= 255 && o[3] + 0 <= 255) { lo = ((o[1] * 256 + o[2]) * 256 + o[3]) * 256
                     for (i = 1; i <= n; i++) if (WL[i] <= lo && WH[i] >= lo + 255) { g = WT[i]; break } }
-                print $1, $2, ret - age, g }')
+                if (ret - age >= 0) print $1, $2, ret - age, g }')
 
     prof pending
     # Kontrol edilecekler: son REVIEW_DAYS gündeki /16 uyarıları ve beyaz liste atlamaları,
@@ -3307,10 +3312,14 @@ inside_scan() {  # CIDR
             if [[ "$tip" != */* ]] && [ -z "${SINGLE_NOTE[$tip]+x}" ]; then short_reason "$note" "$tip"; inside_ev "$tip" "$REPLY"; fi
         done < "$CSF_VAR/csf.tempban"
     fi
-    while read -r x _; do
+    # IN_WATCH bütün sayaç satırları (ban konunca hepsi temizlenir); IN_WATCHA yalnız izleme süresi içindekiler (kart "izleniyor"
+    # der; turun ölçütü, süresi dolan satır turun sonunda silinir)
+    local wcut; wcut=$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d'); IN_WATCHA=()
+    while read -r x xd _; do
         [[ "$x" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] && [ -z "${seen[w$x]}" ] || continue
         ip2int "$x.0"; (( REPLY >= lo && REPLY <= hi )) || continue
         seen[w$x]=1; IN_WATCH+=("$x"); pf[$x]=1
+        [[ "$xd" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] && [[ ! "$xd" < "$wcut" ]] && IN_WATCHA+=("$x")
     done < <(cat "$SAYAC_FILE" 2>/dev/null)
     # port sınırlı satırlar (tcp|in|d=22|s=…): tam ban değil, dokunulmaz; pencere bilgi olarak gösterir
     while IFS= read -r line; do
@@ -3474,11 +3483,17 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
                 asn="${asn%% *}"; [ -n "$ap" ] && [ "${ap#*/}" -le "$cbits" ] 2>/dev/null || { ccn=""; asn=""; }   # duyurulan önek bütün aralığı içermeli
             fi
         fi
-        if [ -n "$ccn" ] && [[ "$ccd" == *" $ccn "* ]]; then IN_COVER="CC_DENY $ccn"
-        elif [ -n "$asn" ] && [[ "$ccd" == *" AS$asn "* ]]; then IN_COVER="CC_DENY AS$asn"
-        # port listesiyle ban (CC_DENY_PORTS): aralığın tamamı yalnız o portlarda kapalı (aralık kartı gösterir)
-        elif [ -n "$asn" ] && [[ "$ccpd" == *" AS$asn "* ]]; then IN_CCP="AS$asn"
-        elif [ -n "$ccn" ] && [[ "$ccpd" == *" $ccn "* ]]; then IN_CCP="$ccn"; fi
+        # CSF'in kendi verisi (IP kartıyla aynı: csf_geo_cover); o kodun verisi yoksa Cymru'nun ülke / ASN'i. Önce yalnız Cymru soruluyordu:
+        # sorgu kapalıyken sağlayıcı banı aralık kartında görünmüyordu
+        local gc w; csf_geo_cover "$clo" "$chi" $ccd $ccpd; gc=" $REPLY "
+        for w in ${ccn:+$ccn} ${asn:+AS$asn}; do
+            [[ "$gc" == *" $w "* ]] && continue
+            [ -r "$CSF_VAR/zone/${w,,}.zone" ] && continue
+            [[ "$w" == AS* ]] && [ -r "$CSF_VAR/Geo/ip2asn-combined.tsv" ] && continue
+            gc+="$w "
+        done
+        for w in $gc; do [[ "$ccd" == *" $w "* ]] && { IN_COVER="CC_DENY $w"; break; }; done
+        if [ -z "$IN_COVER" ]; then for w in $gc; do [[ "$ccpd" == *" $w "* ]] && { IN_CCP="$w"; break; }; done; fi
     fi
     # beyaz liste: ban eylemindeki kontrolün aynısı (/24'te bloktaki IP'lerle, /16'da aralık çakışması)
     WL_HIT=""; WL_RETRY=0
@@ -3503,6 +3518,12 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
         ssh_ports; o+=",\"ssh\":\"$REPLY\""
         ftp_passive; o+=",\"ftp_pasv\":\"$REPLY\""
         inside_attacks "$c"; o+=",\"attacks\":$REPLY,\"attack_ips\":$IN_ATKIPS"
+        # aralıktaki IP'lerin denediği hesaplar (posta, SSH, FTP, cPanel, web; IP kartıyla aynı kaynak): ban kararından önce, hatalı
+        # girişler bir müşterinin kendi hesabına mı görülsün
+        local aip aj="" al=()
+        while IFS= read -r aip; do [ -n "$aip" ] && al+=("$aip"); done < <({ printf '%s\n' "${IN_SGL[@]}" "${IN_SGLD[@]}"; grep -oE '"ip":"[0-9.]+"' <<< "$IN_ATKIPS" | cut -d'"' -f4; } | awk 'NF && !S[$0]++' | head -n 256)
+        if [ "${#al[@]}" -gt 0 ]; then ACCT_RO=1; acct_need "${al[@]}"; for aip in "${al[@]}"; do [ -n "${ACCTM[$aip]}" ] && aj+="${aj:+,}\"$aip\":${ACCTM[$aip]}"; done; fi
+        o+=",\"accts\":{$aj}"
         o+=",\"ccport\":\"$IN_CCP\",\"ccp_tcp\":\"$(conf_val CC_DENY_PORTS_TCP | tr -d ' ')\",\"ccp_udp\":\"$(conf_val CC_DENY_PORTS_UDP | tr -d ' ')\""
         # aralık kartı: tekiller (ip, sebep, servis), en çok 40; PERMBLOCK'un servisi lfd günlüğünden
         local sj="" sx sn=0 sv sk; local -a spb=()
@@ -3534,7 +3555,7 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
         fi
         o+=",\"own_full\":$ownf,\"open\":\"${opn%%|*}\",\"open_extra\":\"$([ -n "$opn" ] && echo "${opn#*|}")\",\"restore\":$rcn"
         o+=",\"singles\":${#IN_SGL[@]},\"singles_dnd\":${#IN_SGLD[@]},\"temps\":${#IN_TMP[@]}"
-        jarr "${IN_WATCH[@]/%/.0/24}"; o+=",\"watched\":$REPLY"
+        jarr "${IN_WATCHA[@]/%/.0/24}"; o+=",\"watched\":$REPLY"
         # "boşalır": CSF'in sınırına giren satırlar (do not delete olanlar zaten sayılmaz)
         local fr=0 fx fl
         for fx in "${IN_BLK[@]}" "${IN_OTH[@]}" "${IN_SGL[@]}"; do fl="${DLINE[$fx]}"; [ -n "$fl" ] && ! is_dnd "$fl" && fr=$((fr + 1)); done
@@ -3546,6 +3567,43 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
     echo "  $(m "$M_IN_SUM" ${#IN_BLK[@]} $(( ${#IN_SGL[@]} + ${#IN_SGLD[@]} )) ${#IN_SGLD[@]} ${#IN_TMP[@]} ${#IN_WATCH[@]} ${#IN_OTH[@]})"
     [ -n "$WL_HIT" ] && echo "  $(m "$M_IN_WL" "$WL_HIT")"
     return 0
+}
+# IP'yi ya da aralığı kapsayan CSF ülke / ASN banları CSF'in kendi verisinden: lfd'nin yazdığı bölge dosyası (zone/xx.zone,
+# zone/asNNNN.zone); ASN'in bölge dosyası yoksa CSF'in ip2asn verisi. CSF banı bu veriye göre uygular (Sahip satırı Team Cymru'dan).
+# Aralık, kodun parçaları (bitişik olanlar birleştirilerek) onu baştan sona kapsıyorsa kapsanmış sayılır
+csf_geo_cover() {   # ALT ÜST KOD… → REPLY = aralığı kapsayan kodlar (boşlukla; verisi olmayan kodlar yok)
+    local lo="$1" hi="$2" c z an="" geo="$CSF_VAR/Geo/ip2asn-combined.tsv"; local -a fz=(); shift 2
+    for c in "$@"; do z="$CSF_VAR/zone/${c,,}.zone"
+        if [ -r "$z" ]; then fz+=("$z"); elif [[ "$c" =~ ^AS([0-9]+)$ ]]; then an+=" ${BASH_REMATCH[1]}"; fi
+    done
+    REPLY=$( { [ ${#fz[@]} -gt 0 ] && awk -F'[./]' -v L="$lo" -v H="$hi" 'NF >= 4 && $1 ~ /^[0-9]+$/ { b = (NF == 5 ? $5 : 32); a = (($1 * 256 + $2) * 256 + $3) * 256 + $4
+                    e = a + 2 ^ (32 - b) - 1; if (e >= L && a <= H) { f = FILENAME; sub(/.*\//, "", f); sub(/[.]zone$/, "", f); printf "%s %.0f %.0f\n", toupper(f), a, e } }' "${fz[@]}"
+               [ -n "$an" ] && [ -r "$geo" ] && awk -F'\t' -v L="$lo" -v H="$hi" -v A="$an " 'index(A, " " $3 " ") && $1 ~ /^[0-9.]+$/ { split($1, p, "."); split($2, q, ".")
+                    a = ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4]; e = ((q[1] * 256 + q[2]) * 256 + q[3]) * 256 + q[4]; if (e >= L && a <= H) printf "AS%s %.0f %.0f\n", $3, a, e }' "$geo"
+             } 2>/dev/null | sort -k1,1 -k2,2n | awk -v L="$lo" -v H="$hi" '{ if ($1 != k) { k = $1; r[k] = L - 1 } if ($2 <= r[k] + 1 && $3 > r[k]) r[k] = $3 }
+                    END { for (k in r) if (r[k] >= H) print k }' | sort | paste -sd' ' -)
+}
+# csf_geo_cover'ın toplu hâli (tur ve durum: birçok IP tek geçişte): IP… → GEOI[ip] = " KOD KOD " (CC_DENY / CC_DENY_PORTS'taki
+# kodlardan CSF verisinde IP'yi kapsayanlar), GEO_HAS = " verisi olan kodlar " (verisi olmayan kodda Cymru'ya bakılır)
+geo_ips_load() {
+    declare -gA GEOI=(); GEO_HAS=" "
+    local c z an="" geo="$CSF_VAR/Geo/ip2asn-combined.tsv" ip codes; local -a fz=()
+    codes=$(printf '%s %s' "$(conf_val CC_DENY)" "$(conf_val CC_DENY_PORTS)" | LC_ALL=C tr '[:lower:],' '[:upper:] ')
+    for c in $codes; do z="$CSF_VAR/zone/${c,,}.zone"
+        if [ -r "$z" ]; then fz+=("$z"); GEO_HAS+="$c "
+        elif [[ "$c" =~ ^AS([0-9]+)$ ]] && [ -r "$geo" ]; then an+=" ${BASH_REMATCH[1]}"; GEO_HAS+="$c "; fi
+    done
+    [ $# -gt 0 ] && [ "$GEO_HAS" != " " ] || return 0
+    while read -r ip c; do GEOI[$ip]+=" $c "; done < <(
+        { printf '%s\n' "$@" | sed 's/^/I /'
+          [ ${#fz[@]} -gt 0 ] && awk -F'[./]' 'NF >= 4 && $1 ~ /^[0-9]+$/ { f = FILENAME; sub(/.*\//, "", f); sub(/[.]zone$/, "", f)
+                b = (NF == 5 ? $5 : 32); a = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "R %s %.0f %.0f\n", toupper(f), a, a + 2 ^ (32 - b) - 1 }' "${fz[@]}"
+          [ -n "$an" ] && awk -F'\t' -v A="$an " 'index(A, " " $3 " ") && $1 ~ /^[0-9.]+$/ { split($1, p, "."); split($2, q, ".")
+                printf "R AS%s %.0f %.0f\n", $3, ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4], ((q[1] * 256 + q[2]) * 256 + q[3]) * 256 + q[4] }' "$geo"
+        } 2>/dev/null | awk '$1 == "R" { n++; K[n] = $2; L[n] = $3 + 0; H[n] = $4 + 0; next }
+            $1 == "I" { I[++m] = $2 }
+            END { for (j = 1; j <= m; j++) { split(I[j], q, "."); v = ((q[1] * 256 + q[2]) * 256 + q[3]) * 256 + q[4]
+                      for (i = 1; i <= n; i++) if (v >= L[i] && v <= H[i] && !S[j, K[i]]++) print I[j], K[i] } }')
 }
 do_lookup() {
     local ip="$1" n host="" fwd=false txt asn="" pfx="" cc="" reg="" alloc="" asname="" a b c d i
@@ -3600,12 +3658,22 @@ do_lookup() {
     done < <(grep -F '|' "$DENY_FILE" 2>/dev/null | grep -v '^[[:space:]]*#')
     ccd=" $(conf_val CC_DENY | LC_ALL=C tr '[:lower:],' '[:upper:] ') "
     ccp=" $(conf_val CC_DENY_PORTS | LC_ALL=C tr '[:lower:],' '[:upper:] ') "
-    if [ -n "$cc" ] && [[ "$ccd" == *" $cc "* ]]; then covers+=("4294967296|{\"kind\":\"cc\",\"what\":\"$cc\"}"); fi
-    if [ -n "$asn" ] && [[ "$ccd" == *" AS$asn "* ]]; then covers+=("4294967297|{\"kind\":\"asn\",\"what\":\"AS$asn\"}"); fi
-    local cpt cpu w
+    # ülke / ASN banı: CSF'in kendi verisi (bölge dosyası, ip2asn); o kodun verisi yoksa Team Cymru'nun ülke / ASN'i. Önce yalnız Cymru
+    # bakılıyordu: sorgu kapalıyken ya da Cymru başka ASN dediğinde CSF'in uyguladığı sağlayıcı banı kartta görünmüyordu
+    local cpt cpu w gc
+    csf_geo_cover "$n" "$n" $ccd $ccp; gc=" $REPLY "
+    for w in ${cc:+$cc} ${asn:+AS$asn}; do
+        [[ "$gc" == *" $w "* ]] && continue
+        [ -r "$CSF_VAR/zone/${w,,}.zone" ] && continue
+        [[ "$w" == AS* ]] && [ -r "$CSF_VAR/Geo/ip2asn-combined.tsv" ] && continue
+        gc+="$w "
+    done
     cpt=$(conf_val CC_DENY_PORTS_TCP); cpu=$(conf_val CC_DENY_PORTS_UDP)
     [[ "$cpt" =~ ^[0-9,:_-]*$ ]] || cpt=""; [[ "$cpu" =~ ^[0-9,:_-]*$ ]] || cpu=""
-    for w in ${cc:+$cc} ${asn:+AS$asn}; do
+    for w in $gc; do
+        if [[ "$ccd" == *" $w "* ]]; then
+            if [[ "$w" == AS* ]]; then covers+=("4294967297|{\"kind\":\"asn\",\"what\":\"$w\"}"); else covers+=("4294967296|{\"kind\":\"cc\",\"what\":\"$w\"}"); fi
+        fi
         [[ "$ccp" == *" $w "* ]] && covers+=("4294967298|{\"kind\":\"ccport\",\"what\":\"$w\",\"tcp\":\"$cpt\",\"udp\":\"$cpu\"}")
     done
     if cloud_has "$ip"; then covers+=("4294967299|{\"kind\":\"cloud\",\"what\":\"$REPLY\",\"tcp\":\"$CLOUD_TCP\",\"udp\":\"$CLOUD_UDP\"}"); fi
@@ -3645,8 +3713,8 @@ do_lookup() {
         rig_match "$(printf '%s' "$host" | LC_ALL=C tr '[:upper:]' '[:lower:]')" "$ip" && rig="$REPLY"   # motorun beyaz liste kuralıyla aynı
     fi
     local p24="${ip%.*}"
-    line=$(grep -m1 -E "^${p24//./\\.} " "$SAYAC_FILE" 2>/dev/null)
-    [ -n "$line" ] && pend="${line#* }"
+    line=$(grep -m1 -E "^${p24//./\\.} [0-9]{4}-[0-9]{2}-[0-9]{2}$" "$SAYAC_FILE" 2>/dev/null)
+    [ -n "$line" ] && [[ ! "${line#* }" < "$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')" ]] && pend="${line#* }"   # turun ölçütü: süresi içinde
     # IP'yi içine alan her yoksayma (tek IP, /24, /16, izin ya da duyurulan aralık): motorun bildirim kuralıyla aynı
     local ign_by="" ign_t=""
     if ign_covers "$ip" && ign_until "$IGN_HIT"; then
@@ -4604,7 +4672,10 @@ prov_json() {    # → REPLY = durum JSON'u: izinli servisler (kaynak başına s
         done < "$CLOUD_DIR/status"
     fi
     for cx in $CLOUD_CATALOG; do cloud_urls "$cx"; ccat+="${ccat:+,}\"$cx\":\"$REPLY\""; done
-    command -v ipset >/dev/null 2>&1 && cn=$(ipset list -t ag_cloud 2>/dev/null | awk -F': ' '/^Number of entries/ { print $2 }')
+    # küme yoksa -2 (liste açıkken CSF'e yüklenmemiş: ban uygulanmıyor); önce 0 veriyordu, panel "0 aralık" deyip uyarmıyordu
+    if command -v ipset >/dev/null 2>&1; then
+        if ipset list -n ag_cloud >/dev/null 2>&1; then cn=$(ipset list -t ag_cloud 2>/dev/null | awk -F': ' '/^Number of entries/ { print $2 }'); else cn=-2; fi
+    fi
     [[ "$cn" =~ ^-?[0-9]+$ ]] || cn=0
     prof prov_cloudlist
     local cpot; cloud_pot; cpot="$REPLY"
@@ -4663,11 +4734,17 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
         split($1, p, "."); split($2, q, ".")
         print ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4], ((q[1] * 256 + q[2]) * 256 + q[3]) * 256 + q[4] }' "$geo" | sort -n > "$rng"
     local lst since alw; lst=$(mktemp) || { rm -f "$rng"; return 1; }
-    # izinli servisler (csf.allow Include): CSF bunlara bandan önce izin verir; ölçümde ayrıca işaretlenir
+    # izinli adresler: CSF bunlara bandan önce izin verir; ölçümde ayrıca işaretlenir. İzinli servisler (services.allow, servis adıyla)
+    # ve kendi tam izinleriniz (csf.allow ve Include'ları, GLOBAL_ALLOW, geçici izin; "csfallow"). Önce yalnız servisler sayılıyordu:
+    # ofis ya da müşteri izni "banın keseceği" isteklerde görünüyordu
     alw=$(mktemp) || { rm -f "$rng" "$lst"; return 1; }
-    [ -r "$SVC_OUT" ] && awk '$1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\/[0-9]+)?$/ { nm = $0; sub(/.*service /, "", nm); sub(/[[:space:]].*/, "", nm)
+    local wi wlo whi wix wff
+    { [ -r "$SVC_OUT" ] && awk '$1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\/[0-9]+)?$/ { nm = $0; sub(/.*service /, "", nm); sub(/[[:space:]].*/, "", nm)
             split($1, s, "/"); split(s[1], p, "."); b = (s[2] == "" ? 32 : s[2] + 0); lo = ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4]
-            printf "%.0f %.0f %s\n", lo, lo + 2 ^ (32 - b) - 1, nm }' "$SVC_OUT" | sort -n -k1,1 > "$alw"
+            printf "%.0f %.0f %s\n", lo, lo + 2 ^ (32 - b) - 1, nm }' "$SVC_OUT"
+      load_whitelist >/dev/null 2>&1
+      while read -r wi wlo whi wix wff; do [ "$wff" = 1 ] || continue; [[ "${WL_TXT[wix]}" == *services.allow* ]] && continue; printf '%s %s csfallow\n' "$wlo" "$whi"; done < <(wl_ff_lines)
+    } | sort -n -k1,1 > "$alw"
     # etkin kiralık sunucu listeleri: web portlarını (80 ve 443) kapatıyorsa bu adreslerden gelen istekler CSF'te zaten düşer
     local clf cweb=0 x; clf=$(mktemp) || { rm -f "$rng" "$lst" "$alw"; return 1; }
     if [ "$CLOUD_ON" = 1 ] && port_in 80 ",${CLOUD_TCP// /}," && port_in 443 ",${CLOUD_TCP// /},"; then
@@ -4676,6 +4753,21 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
             [ -r "$CLOUD_DIR/$x.txt" ] && awk -F'[./]' -v s="$x" 'NF >= 4 { b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%.0f %.0f %s\n", lo, lo + 2 ^ (32 - b) - 1, s }' "$CLOUD_DIR/$x.txt"
         done | sort -n -k1,1 > "$clf"
     fi
+    # adresi kapsayan öteki banlar (IP kartının "Bu IP'yi kapsayan banlar" listesiyle aynı türler): ülke banı (CSF'in bölge
+    # dosyası, CC_DENY ya da CC_DENY_PORTS) ve etkin kiralık listeler (web portlarını kapatmasalar da); csf.deny port satırları awk içinde
+    local xcf k c z; xcf=$(mktemp) || { rm -f "$rng" "$lst" "$alw" "$clf"; return 1; }
+    { for k in CC_DENY CC_DENY_PORTS; do
+          for c in $(conf_val "$k" | LC_ALL=C tr '[:lower:],' '[:upper:] '); do
+              [[ "$c" =~ ^[A-Z]{2}$ ]] || continue; z="$CSF_VAR/zone/${c,,}.zone"; [ -r "$z" ] || continue
+              awk -F'[./]' -v s="cc:$c:$([ "$k" = CC_DENY ] && echo all || echo ports)" 'NF >= 4 && $1 ~ /^[0-9]+$/ { b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%.0f %.0f %s\n", lo, lo + 2 ^ (32 - b) - 1, s }' "$z"
+          done
+      done
+      if [ "$CLOUD_ON" = 1 ]; then
+          for x in $CLOUD_ACTIVE; do
+              [ -r "$CLOUD_DIR/$x.txt" ] && awk -F'[./]' -v s="cloud:$x" 'NF >= 4 && $1 ~ /^[0-9]+$/ { b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%.0f %.0f %s\n", lo, lo + 2 ^ (32 - b) - 1, s }' "$CLOUD_DIR/$x.txt"
+          done
+      fi
+    } > "$xcf"
     asn_banned; local ban="${ASB[$n]:-}" bsince=0 bkey=""
     # banlıysa banın konduğu an: sağlayıcı olaylarında bu ASN'nin kesintisiz yer aldığı son dizinin ilk olayı;
     # ondan sonraki istekler ayrıca sayılır (ban işliyorsa web günlüğünde açık adreslerden istek kalmaz)
@@ -4698,7 +4790,7 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
     find -L "$dir" -type f -mmin -1440 ! -name '*bytes_log*' ! -name '*.offset*' ! -name '*.gz' 2>/dev/null > "$lst"
     since=$(date -d '24 hours ago' +%Y%m%d%H%M%S)
     # dosyalar tek awk'a verilir (xargs çok dosyada gruplara bölüp yalnız son grubun sonucunu bırakıyordu)
-    awk -v rf="$rng" -v lf="$lst" -v since="$since" -v af="$alw" -v cf="$clf" -v cdf="$CDN_FILE" -v cweb="$cweb" -v cact="${CLOUD_ACTIVE# }" -v ban="$ban" -v bkey="$bkey" -v bsince="$bsince" -v bweb="$bweb" -v tbf="$CSF_VAR/csf.tempban" -v dnf="$DENY_FILE" -v wf="$SAYAC_FILE" -v wcut="$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')" -v imf="$IMUNIFY_FILE" -v now="$(date +%s)" '
+    awk -v rf="$rng" -v lf="$lst" -v since="$since" -v af="$alw" -v cf="$clf" -v cdf="$CDN_FILE" -v cweb="$cweb" -v cact="${CLOUD_ACTIVE# }" -v ban="$ban" -v bkey="$bkey" -v bkey2="$([ -n "$bkey" ] && date -d "@$(( bsince + 120 ))" +%Y%m%d%H%M%S)" -v bsince="$bsince" -v bweb="$bweb" -v tbf="$CSF_VAR/csf.tempban" -v dnf="$DENY_FILE" -v wf="$SAYAC_FILE" -v wcut="$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')" -v imf="$IMUNIFY_FILE" -v xf="$xcf" -v now="$(date +%s)" '
         BEGIN { while ((getline l < rf) > 0) { split(l, x, " "); m++; LO[m] = x[1] + 0; HI[m] = x[2] + 0 }
                 while ((getline l < cf) > 0) { split(l, x, " "); cn++; CL[cn] = x[1] + 0; h = x[2] + 0
                     if (cn == 1 || h > CP[cn - 1]) { CP[cn] = h; CN[cn] = x[3] } else { CP[cn] = CP[cn - 1]; CN[cn] = CN[cn - 1] } }
@@ -4708,7 +4800,18 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
                 while ((getline l < tbf) > 0) { split(l, x, "|"); if (x[1] + x[5] <= now) continue
                     if (x[2] ~ /^[0-9.]+$/) TB[x[2]] = x[1] + x[5] - now
                     else if (x[2] ~ /^[0-9.]+\/[0-9]+$/) { split(x[2], y, "/"); tn++; TL[tn] = v4(y[1]); TH[tn] = TL[tn] + 2 ^ (32 - y[2]) - 1; TT[tn] = x[1] + x[5] - now } }
-                while ((getline l < dnf) > 0) { sub(/[ \t#].*/, "", l); if (l ~ /^[0-9]/) { DN[l] = 1
+                while ((getline l < xf) > 0) { split(l, x, " "); xn++; XL[xn] = x[1] + 0; XH[xn] = x[2] + 0; XS[xn] = x[3] }
+                while ((getline l < dnf) > 0) { sub(/[ \t#].*/, "", l)
+                    # port satırı (kısmi ban): yönden sonraki ilk s= / d= port, sonraki adres; yalnız gelen yön
+                    if (l ~ /[|]/) { nf = split(l, f, "|"); pr = "tcp"; dr = "in"; pt = ""; ad = ""
+                        for (i = 1; i <= nf; i++) { if (f[i] ~ /^(tcp|udp|icmp)$/) pr = f[i]; else if (f[i] ~ /^(in|out)$/) dr = f[i]
+                            else if (f[i] ~ /^[sd]=/) { if (pt == "") pt = substr(f[i], 3); else if (ad == "") ad = substr(f[i], 3) } }
+                        # /8 ten geniş satır (herkese bir portu kapatan kural) ban sayılmaz: IP kartındaki adv_wide ile aynı
+                        split(ad, y, "/"); if (y[2] == "") y[2] = 32
+                        if (dr == "in" && ad ~ /^[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+([\/][0-9]+)?$/ && pt !~ /[.]/ && y[2] + 0 >= 8) { xn++; XL[xn] = v4(y[1])
+                            XH[xn] = XL[xn] + 2 ^ (32 - y[2]) - 1; gsub(/,/, ";", pt); gsub(/_/, "-", pt); XS[xn] = "port:" toupper(pr) " " pt }
+                        continue }
+                    if (l ~ /^[0-9]/) { DN[l] = 1
                     if (l ~ /\//) { split(l, y, "/"); dn2++; DL[dn2] = v4(y[1]); DH[dn2] = DL[dn2] + 2 ^ (32 - y[2]) - 1 } } }
                 while ((getline l < wf) > 0) { split(l, x, " "); if (x[1] ~ /^[0-9]+\.[0-9]+\.[0-9]+$/ && x[2] >= wcut) WT[x[1]] = 1 }
                 while ((getline l < imf) > 0) { split(l, x, "|"); if (x[1] ~ /^[0-9.]+$/) IMB[x[1]] = 1 }
@@ -4746,6 +4849,8 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
             if (tr && !rg) o = o (o == "" ? "" : ",") "tempr:" tr
             if (ip in IMB) o = o (o == "" ? "" : ",") "imunify"
             if ((p in WT) && !rg && !tr) o = o (o == "" ? "" : ",") "watch"     # izlenen blok (banı yok)
+            if (ban != "" && !rg) o = o (o == "" ? "" : ",") "asn:" ban          # bu sağlayıcının banı (ports: yalnız port listesi)
+            if (!rg) for (i = 1; i <= xn; i++) if (v >= XL[i] && v <= XH[i] && index("," o ",", "," XS[i] ",") == 0) o = o (o == "" ? "" : ",") XS[i]   # ülke, kiralık liste, port satırı
             return o }
         function topip(A, k, X, N,  o, i, best, bk, n) { o = ""   # [IP, istek, başarılı, örnek, şu anki durum]
             for (n = 0; n < k; n++) { best = 0; bk = ""; for (i in A) if (A[i] > best) { best = A[i]; bk = i }
@@ -4771,30 +4876,65 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
               CR[ip]++; if (!(ip in CSM)) CSM[ip] = cl " · " site " · " rqs
               ck = code " · " site " · " rqs; CQ[ck]++; if (!(ck in CI)) CI[ck] = ip }
           else { otot++; OIPS[ip] = 1; OC[code]++; OR[ip]++; if (k > olast) olast = k; if (code ~ /^2/) { ook++; OOK[ip]++ }
-              if (bkey != "" && k >= bkey) { btot++; BIP[ip] = 1; if (code ~ /^2/) bok++; if (k > blast) blast = k }   # ban konduktan sonra
+              if (bkey != "" && k >= bkey) { btot++; BIP[ip] = 1; if (code ~ /^2/) bok++; if (k > blast) blast = k   # ban konduktan sonra
+                  if (k >= bkey2) blate++                                          # kaydedildikten 2 dakika sonra ve sonrası
+                  # en yeni 8 istek, yeniden eskiye (AK zaman, AE satır; dosyalar karışık sırayla okunur)
+                  if (nae < 8 || k > AK[nae]) { if (nae < 8) nae++; j = nae; while (j > 1 && AK[j - 1] < k) { AK[j] = AK[j - 1]; AE[j] = AE[j - 1]; j-- }
+                      AK[j] = k; AE[j] = "[" js(k) "," js(ip) "," js(site) "," js(rqs) "," js(code) "]" } }
               if (!(ip in OSM)) OSM[ip] = site " · " rqs
               if (code !~ /^[23]/) { fk = code " · " site " · " rqs; FQ[fk]++; if (!(fk in FI)) FI[fk] = ip } }   # başarısız istek örnekleri (açık adresler)
           u = rest; sub(/^[^"]*"[^"]*" "/, "", u); sub(/"[^"]*$/, "", u)
+          # tarama belirtileri (açık adresler; banın keseceği istekler): tarayıcı kimliği ve kaç IP paylaşıyor, kendini tarayıcı diye
+          # bildirenler (ad), IP başına site sayısı, dosya istemeyen IP, form / API uçları
+          if (w == "" && cl == "" && !(site in CDN)) {
+              if (!(ip in OUA)) OUA[ip] = u
+              if (!((u, ip) in XUI)) { XUI[u, ip] = 1; XUN[u]++ }; XUR[u]++
+              bn = botname(u); if (bn != "") { if (!((bn, ip) in XBI)) { XBI[bn, ip] = 1; XBN[bn]++ }; XBR[bn]++; XB[ip] = 1 }
+              if (!((ip, site) in XS)) { XS[ip, site] = 1; XNS[ip]++ }
+              if (rq3[2] ~ /\.(css|js|png|jpe?g|gif|svg|webp|avif|woff2?|ttf|eot|ico|mp4|map)(\?|$)/) XA[ip]++
+              if (rq3[2] ~ /wp-json|xmlrpc|wp-login|contact-forms|oembed|\/feed\/?($|\?)/) { ap = rq3[2]; sub(/\?.*/, "", ap); XP[ap]++ } }
           if (code ~ /^2/) { ok++; S[site]++
               if (req ~ /^POST /) { split(req, rq, " "); pk = site " · " substr(rq[2], 1, 60) " · " u; P[pk]++; if (!(pk in PI)) PI[pk] = ip; if (w != "") { PA[pk]++; PN[pk] = w } }
               if (u !~ /^Mozilla/) { B[u]++; if (w != "") { BA[u]++; BN[u] = w } } } }
+        function topp(A, k, X, N, I,  o, i, best, bk, n) { o = ""    # top gibi + 6. alan: örnek adresin şu anki durumu (ipst)
+            for (n = 0; n < k; n++) { best = 0; bk = ""; for (i in A) if (A[i] > best) { best = A[i]; bk = i }
+                if (bk == "") break; o = o (o == "" ? "" : ",") "[" js(bk) "," best "," (X[bk] + 0) "," js(N[bk]) "," js(I[bk]) "," js(ipst(I[bk])) "]"; delete A[bk] }
+            return "[" o "]" }
         function top(A, k, X, N, I,  o, i, best, bk, n) { o = ""     # [anahtar, sayı, izinli sayı, izinli servis, örnek IP]
             for (n = 0; n < k; n++) { best = 0; bk = ""; for (i in A) if (A[i] > best) { best = A[i]; bk = i }
                 if (bk == "") break; o = o (o == "" ? "" : ",") "[" js(bk) "," best "," (X[bk] + 0) "," js(N[bk]) "," js(I[bk]) "]"; delete A[bk] }
             return "[" o "]" }
         function obj(A,  o, i) { o = ""; for (i in A) o = o (o == "" ? "" : ",") js(i) ":" A[i]; return "{" o "}" }
+        function botname(u,  b) {      # kendini tarayıcı diye bildiren kimlik: "…Bot/1.0", "crawler", "spider" ya da araç (curl, python …)
+            if (match(u, /[A-Za-z0-9_.-]*([Bb][Oo][Tt]|[Cc]rawler|[Ss]pider|[Ss]craper|[Ss]lurp)[A-Za-z0-9_.-]*/)) return substr(u, RSTART, RLENGTH)
+            if (match(u, /^(curl|[Ww]get|[Pp]ython|Go-http-client|Java|okhttp|axios|node-fetch|Scrapy|libwww|HeadlessChrome)[^ ;)]*/)) return substr(u, RSTART, RLENGTH)
+            if (match(u, /HeadlessChrome/)) return "HeadlessChrome"
+            return "" }
+        function crawl(  o, b, n, i, k, mi, mr, pi, pr, fi, fr, fo, x) {   # tarama belirtileri JSON (açık adresler)
+            o = ""; for (n = 0; n < 6; n++) { b = 0; k = ""; for (i in XBR) if (XBR[i] > b) { b = XBR[i]; k = i }; if (k == "") break
+                o = o (o == "" ? "" : ",") "[" js(k) "," XBN[k] "," XBR[k] "]"; delete XBR[k] }
+            x = "\"bots\":[" o "]"
+            o = ""; for (n = 0; n < 6; n++) { b = 9; k = ""; for (i in XUN) if (XUN[i] > b && botname(i) == "") { b = XUN[i]; k = i }; if (k == "") break
+                o = o (o == "" ? "" : ",") "[" js(substr(k, 1, 120)) "," XUN[k] "," XUR[k] "]"; PK[k] = 1; delete XUN[k] }
+            x = x ",\"pool\":[" o "]"
+            for (i in OUA) { if (XNS[i] >= 3) { mi++; mr += OR[i] }; if (!XA[i]) { pi++; pr += OR[i] }
+                if ((i in XB) || (OUA[i] in PK) || XNS[i] >= 3) { fi++; fr += OR[i]; fo += OOK[i] } }
+            o = ""; for (n = 0; n < 6; n++) { b = 0; k = ""; for (i in XP) if (XP[i] > b) { b = XP[i]; k = i }; if (k == "") break
+                o = o (o == "" ? "" : ",") "[" js(substr(k, 1, 80)) "," XP[k] "]"; delete XP[k] }
+            return "{" x ",\"multi\":[" mi + 0 "," mr + 0 "],\"pageonly\":[" pi + 0 "," pr + 0 "],\"api\":[" o "],\"flag\":[" fi + 0 "," fr + 0 "," fo + 0 "]}" }
         END { nip = 0; for (i in IPS) nip++; naip = 0; for (i in AIP) naip++; ncip = 0; for (i in CIP) ncip++; noip = 0; for (i in OIPS) noip++
               printf "{\"ok\":true,\"total\":%d,\"ips\":%d,\"ok2xx\":%d,\"areq\":%d,\"aips\":%d,\"codes\":%s,\"ocodes\":%s,\"acodes\":%s,\"asvc\":%s,\"posts\":%s,\"bots\":%s,\"sites\":%s,\"fails\":%s,\"afails\":%s,",
-                  tot, nip, ok, atot, naip, obj(C), obj(OC), obj(AC), obj(AS), top(P, 15, PA, PN, PI), top(B, 15, BA, BN), top(S, 10), top(FQ, 12, FX, FN, FI), top(AQ, 8, AX, AWN, AI)
+                  tot, nip, ok, atot, naip, obj(C), obj(OC), obj(AC), obj(AS), topp(P, 15, PA, PN, PI), top(B, 15, BA, BN), top(S, 10), top(FQ, 12, FX, FN, FI), top(AQ, 8, AX, AWN, AI)
               printf "\"cloud\":{\"web\":%s,\"lists\":%s,\"req\":%d,\"ips\":%d,\"ok\":%d,\"codes\":%s,\"src\":%s,\"last\":\"%s\",\"ex\":%s},",
                   (cweb == 1 ? "true" : "false"), js(cact), ctot, ncip, cok, obj(CC), obj(CS), clast, topip(CR, 10, COK, CSM)
               ndip = 0; for (i in DIP) ndip++; dsv = ""; for (i in DS) dsv = dsv (dsv == "" ? "" : ",") js(i) ":[" DS[i] "," js(CDN[i]) "]"
               printf "\"cdn\":{\"req\":%d,\"ips\":%d,\"ok\":%d,\"codes\":%s,\"sites\":{%s}},", dtot, ndip, dok, obj(DC), dsv
-              nbip = 0; for (i in BIP) nbip++
-              printf "\"after\":{\"web\":%d,\"since\":%d,\"req\":%d,\"ips\":%d,\"ok\":%d,\"last\":\"%s\"},", bweb, bsince, btot, nbip, bok, blast
+              nbip = 0; for (i in BIP) nbip++; aex = ""; for (i = 1; i <= nae; i++) aex = aex (i > 1 ? "," : "") AE[i]
+              printf "\"crawl\":%s,", crawl()
+              printf "\"after\":{\"web\":%d,\"since\":%d,\"req\":%d,\"ips\":%d,\"ok\":%d,\"last\":\"%s\",\"late\":%d,\"ex\":[%s]},", bweb, bsince, btot, nbip, bok, blast, blate, aex
               printf "\"open\":{\"req\":%d,\"ips\":%d,\"ok\":%d,\"codes\":%s,\"last\":\"%s\",\"top\":%s},\"ban\":%s}\n",
                   otot, noip, ook, obj(OC), olast, topip(OR, 10, OOK, OSM), js(ban) }' /dev/null | grep . | { IFS= read -r L; b=$(cat "$bjf" 2>/dev/null); [ -n "$b" ] && L="${L%\}},\"bans\":$b}"; printf '%s\n' "$L"; } || echo '{"ok":true,"total":0,"ips":0,"ok2xx":0,"codes":{},"posts":[],"bots":[],"sites":[]}'
-    rm -f "$rng" "$lst" "$alw" "$clf" "$bjf"
+    rm -f "$rng" "$lst" "$alw" "$clf" "$bjf" "$xcf"
 }
 svc_health() {   # izinli servis kaynaklarından uyarı süresinden uzun süredir indirilemeyenler → bildirim
     local st="$(dirname "$SAYAC_FILE")/services/status" n c t e f bad="" now; now=$(date +%s)
@@ -4895,8 +5035,10 @@ do_action() {    # NAME TARGET [DAYS]
             fi
             self_overlap "$lo" "$hi" && { act_out 1 "$(m "$M_A_SELF" "$cidr" "$SELF_HIT")"; return; }
             inside_scan "$cidr"
-            WL_HIT=""
+            WL_HIT=""; WL_RETRY=0
             if [ "$bits" = 24 ]; then wl_check "$t" "${ips24[$t]:-$t.1}"; else wl_range16 "${cidr%.*.*}" "$lo" "$hi"; fi
+            # doğrulanamadı (ülke / ters DNS bilinmiyor): izin kaydı değil, otomatik ban bunu sonraki tura bırakır; elle banı engellemez
+            [ "${WL_RETRY:-0}" = 1 ] && WL_HIT=""
             if [ -n "$WL_HIT" ] && [ "$FORCE" != 1 ]; then act_out 4 "$(m "$M_A_WL" "$cidr" "$WL_HIT")"; return; fi
             # kısmi ban: aralığı tamamen kapsamaz; içindekilere ve izlemelere dokunulmaz
             if [ "$BMODE" = svc ]; then part_ports; ban_partial "$cidr" "$bits" "$REPLY"; return; fi
@@ -5502,7 +5644,7 @@ perm_cls_preload() { # tekillerin PERMBLOCK olanları → PERM_CLS (tek tarama)
 }
 prov_cover() {   # stdin "ip|sebep|asn" → 0: her IP CSF'te banlı bir sağlayıcıda ve ban saldırılan servisi kapatıyor
     # (her şey banında her servis; port listesi banında saldırının servisinin portları listede olmalı). Sahibi bilinmeyen IP: kapsanmıyor.
-    local ip r a p n=0 k tcp cc ccd ccp IFS=$' \t\n'
+    local ip r a p n=0 k tcp cc ccd ccp gs hit w IFS=$' \t\n'
     tcp=",$(conf_val CC_DENY_PORTS_TCP | tr -d ' '),"
     # ülke banı da kapsar: CC_DENY'deki ülke her şeyi, CC_DENY_PORTS'taki ülke yalnız o portları (IP kartı ve ban penceresi
     # bunu zaten biliyordu; uyarı kararı bilmiyor, ülkesi banlı ağ Kontrol edilecekler'de kalıyordu)
@@ -5510,6 +5652,8 @@ prov_cover() {   # stdin "ip|sebep|asn" → 0: her IP CSF'te banlı bir sağlay�
     PC_ASN=""
     pa "pcov · başı"
     local -a pcl=(); mapfile -t pcl; cloud_prefill $(printf '%s\n' "${pcl[@]}" | cut -d'|' -f1)
+    geo_ips_load $(printf '%s\n' "${pcl[@]}" | cut -d'|' -f1)                       # ülke / ASN banı CSF'in kendi verisinden
+    pa "pcov · geo"
     pa "pcov · cloud_prefill"; pc "pcov IP" "${#pcl[@]}"
     for ip in "${pcl[@]}"; do
         IFS='|' read -r ip r a <<< "$ip"
@@ -5523,12 +5667,18 @@ prov_cover() {   # stdin "ip|sebep|asn" → 0: her IP CSF'te banlı bir sağlay�
         # sayılıyor, web'i kapalı ağ (kiralık sunucu listesinde, web saldırıları + bir PERMBLOCK) Kontrol edilecekler'de kalıyordu.
         if [ "$k" = repeat ]; then perm_cls "$ip"; [ -n "$REPLY" ] || continue; k="$REPLY"; fi
         pa "pcov · perm_cls"
-        cc="${OWN_C[${ip%.*}]}"
-        if [[ "$cc" =~ ^[A-Z]{2}$ ]] && { [[ "$ccd" == *",$cc,"* ]] || { [[ "$ccp" == *",$cc,"* ]] && pc_ports "$k" "$tcp"; }; }; then
-            n=$((n + 1)); [[ " $PC_ASN " == *" CC_DENY $cc "* ]] || PC_ASN+="${PC_ASN:+ }CC_DENY $cc"; continue
-        fi
-        if [ -n "$a" ] && [ -n "${ASB[$a]}" ] && { [ "${ASB[$a]}" = all ] || pc_ports "$k" "$tcp"; }; then
-            n=$((n + 1)); [[ " $PC_ASN " == *" AS$a "* ]] || PC_ASN+="${PC_ASN:+ }AS$a"; continue
+        # ülke ya da sağlayıcı banı: CSF'in kendi verisi (IP kartı ve aralık kartıyla aynı); verisi olmayan kodda Cymru'nun ülke / ASN'i.
+        # Önce yalnız Cymru'ya bakılıyordu: sorgu kapalıyken ya da Cymru başka ASN dediğinde banlı sağlayıcının ağı uyarıda kalıyordu
+        cc="${OWN_C[${ip%.*}]}"; gs="${GEOI[$ip]} "
+        [[ "$cc" =~ ^[A-Z]{2}$ ]] && [[ "$GEO_HAS" != *" $cc "* ]] && gs+=" $cc "
+        [ -n "$a" ] && [[ "$GEO_HAS" != *" AS$a "* ]] && gs+=" AS$a "
+        hit=""
+        for w in $gs; do
+            if [[ "$ccd" == *",$w,"* ]] || { [[ "$ccp" == *",$w,"* ]] && pc_ports "$k" "$tcp"; }; then hit="$w"; break; fi
+        done
+        if [ -n "$hit" ]; then
+            [[ "$hit" == AS* ]] || hit="CC_DENY $hit"
+            n=$((n + 1)); [[ " $PC_ASN " == *" $hit "* ]] || PC_ASN+="${PC_ASN:+ }$hit"; continue
         fi
         # sağlayıcı banı yoksa bulut listesi (kendi port listesiyle)
         cloud_has "$ip" && pc_ports "$k" ",${CLOUD_TCP// /}," || { pa "pcov · kapsama"; return 1; }

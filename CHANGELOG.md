@@ -1,5 +1,101 @@
 # Changelog
 
+## 1.15.37 — 2026-11-01
+
+- **Fix: a NUL byte in a log hid every later line.** A log file with a run of
+  NUL bytes (left by logrotate's copytruncate or after a crash) made `grep`
+  print "binary file matches" instead of the matching lines, so lfd, mail and
+  site log entries after that point were silently ignored (an allowed IP whose
+  ban did not work could show as "ignored by lfd"). Logs are now always read
+  as text.
+- **Measure impact: crawl signs.** For the open addresses: clients that name
+  themselves as crawlers, user agents shared by many IPs, IPs visiting several
+  sites, IPs that ask only for pages, and requests to form and API endpoints.
+  When most successful requests carry these signs, the verdict suggests a
+  ModSecurity rule for the crawler's user agent instead of a provider ban.
+- **Fix: Measure impact said "not banned now" for addresses a provider ban
+  covers.** Each IP now shows the provider ban (port list only or everything),
+  a country ban, an active rented-server list and port lines in `csf.deny`,
+  the same as its IP card; the IP card's "watched" and the list no longer seem
+  to disagree. Port lines wider than `/8` (a rule that closes a port for
+  everyone) are not counted as a ban, as on the IP card.
+- **Fix: "the ban did not stop these requests" right after saving.** Requests in
+  the first 2 minutes after the ban was saved are no longer counted against it;
+  the latest requests after the ban are listed with time, IP, site and code.
+- **IP card: country and provider bans from CSF's own data** (lfd's zone files,
+  else CSF's ASN data), the data CSF applies the ban with. The owner line comes
+  from Team Cymru and can differ; a provider ban was not shown when lookups were
+  off or Team Cymru named another ASN.
+- **The range card and the "suspicious network" decision use CSF's own country
+  and ASN data too**, the same as the IP card: a range inside a banned provider
+  showed no provider ban when lookups were off, and a suspicious network whose
+  IPs were all inside a banned provider could stay in Needs review.
+- **Range card IP table:** an IP without a single ban shows what still covers it
+  (provider or country port list, rented-server list, the range's own partial
+  ban, a port line) or that it is allowed or ignored, instead of "not banned".
+  The note about allowed IPs is no longer repeated when the range's own Needs
+  review row already lists them.
+- **IP card:** the block status says when the block is skipped because of an
+  allow entry (and which one), instead of "if it is whitelisted…"; an IP whose
+  range is in Needs review shows that row. The generic "Team Cymru can differ"
+  note is replaced by a note only when Team Cymru and CSF's data really differ.
+- **One colour for "not banned because of an allow or ignore entry"**: allowed,
+  ignored, server-IP and "ban not working" rows used the same amber as
+  suspicious networks; they now share the colour of *skipped (whitelist)*.
+- **Measure impact:** states shared by every listed IP are shown once above the
+  table; crawl signs no longer say "the IPs change" for a crawler seen on one
+  IP, and "user agent" and "crawler" are no longer the same word in Turkish;
+  a repeat ban with no service record reads the same as on the Most blocked
+  providers card.
+- **History and the settings history are paged** (20 per page, like the other
+  lists) instead of growing with **Show more**; the last page loads older
+  entries from the event log.
+- **Fix: on phones a long badge cut the range in the Active range bans list**
+  ("173.239.240.0/24" showed as "…/2"); the address column now always fits the
+  address.
+- **Fix: Measure impact on phones squeezed the request column to a few
+  letters** when IP states had their own column; on phones the states now sit
+  under the request.
+- **Fix: a watched block whose watch had run out still showed as watched**
+  (with "0 days") until the next run removed it, while runs already treated it
+  as not watched. The list, the IP card and the range card now use the run's
+  rule; the last day reads "under a day".
+- **Range card of a watched block** offers the list's actions (make permanent,
+  stop watching) and no longer says "only the bans inside it are closed" when
+  there are none.
+- **Rented-server and allowed-service lists** say when their last download is
+  older than the refresh period (refreshing happens in runs).
+- **"Mail sync" is now "Mail client"**: the group covers sending (SMTP AUTH,
+  465/587) as well as IMAP and POP3, and a failed SMTP login read as "sync".
+- **Fix: "Runs happen on schedule" when the plugin's crontab line was missing.**
+  The status band now says runs are not scheduled and how to fix it.
+- **Fix: rented-server lists that were on but not loaded in CSF showed "0
+  ranges" with no warning**; the Providers tab now says the addresses are not
+  closed right now (the next run sets the list up again).
+- **Stop watching** says how many days of watching are left; the Watched list
+  shows "under a day" instead of "0 days". **Remove ban** says when the ban is
+  older than the event log (why it was set is not recorded), as the range card
+  does.
+- Ranges written in the IP card and the range card open their card; the ban
+  history explains a missing removal time once under the table instead of on
+  every row; texts that guessed a cause ("the address may have changed", "may
+  be incomplete") now say what is known or what to check.
+- **Partial-ban suggestion** says how many violations have no service on record
+  instead of saying "only these services".
+- **Measure impact counts your own full allows in `csf.allow`** as allowed
+  addresses (they were counted among the requests a ban would cut).
+- **More facts where you decide:** the range ban window and range card say
+  whether the range is muted, whether its ban was removed by hand before, and
+  which accounts its IPs tried; *Stop watching* says how many singles the block
+  has against the thresholds; *Remove ban* says when a wider ban, a provider ban
+  or a rented-server list already closes the same; adding a service allow for
+  a banned IP asks first; successful POSTs show each IP's current state.
+- **Fix: manual ban reported an allow entry when the whitelist could not be
+  checked.**
+- **Fix: `tools/asn-profile.sh` counted every request three times** on cPanel,
+  where the domlog directories are links to one another; it reads the first
+  one found.
+
 ## 1.15.36 — 2026-11-01
 
 - **Measure impact shows every IP's current state, not only single bans.** An
