@@ -111,12 +111,12 @@ settings, with no prompts. `config.env` is left untouched.
   **LFD** (running) and **Cron** (runs on time). Turns red when any of them has
   a problem. Coming back to a tab that was hidden for a while, the run times
   show *updating…* until the new status arrives, never the old numbers.
-- **Period** — 7 or 30 days, for the summary cards and the activity chart
-  together.
 - **Summary cards** — active block bans, items to review, and how full CSF's
-  permanent and temp lists are, each with its change over the chosen period.
+  permanent and temp lists are, each with its change over the last 7 days (the
+  list cards show it once there is a run record from 7 days ago).
 - **Activity** — a daily chart of block bans, blocks made permanent, temp block
-  bans, suspicious networks and whitelist skips. Hover a day for its breakdown.
+  bans, suspicious networks and whitelist skips, for 7 or 30 days. Hover a day
+  for its breakdown.
 - **Colors** — one meaning, one color everywhere (badges, icons, chart): red full
   ban, violet made permanent, teal temp ban, blue partial ban, amber suspicious
   network, gray whitelist skip.
@@ -328,11 +328,13 @@ its own:
 - **General** — running / paused, how often the cron run starts (every 5 / 10
   / 15 / 30 minutes or hourly), and the language of the log, the mails and
   the panel. More frequent runs ban a block that crosses a threshold sooner
-  (at most one run later); every run, even a quiet one, adds a summary line to
-  the log and a run record to History.
+  (at most one run later); they do not change what is counted (temp bans that
+  start and end between two runs are counted on the next run). Every run, even
+  a quiet one, adds a summary line to the log and a run record to History.
 - **Ban rules** — block ban (`/24`): permanent singles needed, the count that
   makes it *kept* (`do not delete`) and the temp block ban; suspicious network
-  (`/16`, permanent and temp single bans counted together); the watch period
+  (`/16`, permanent and temp single bans counted together); the permanent
+  single window (default 90 days, see below); the watch period
   (a temp-banned block that comes back within it is banned for good); how
   long entries stay in *Needs review*; and the old bans: old-block limit
   (default 365 days), how recent an attempt keeps a block from being old
@@ -378,9 +380,9 @@ its own:
   Auto-Group uses (CSF, cron, mail, dig/host, logrotate, flock, timeout, git,
   Imunify360, ModSecurity hit log, sqlite3) and what happens when one is
   missing, **Record keeping**: how many days History (bans, warnings, manual
-  actions, setting changes; default 180) and the run records (default 31, at
-  least 31: the summary cards compare with 30 days ago) are kept, with how many
-  there are now and how far back they go; and the log file: rotated by the
+  actions, setting changes; default 180), the run records (default 31) and the
+  ban history (default 90, at least the permanent single window) are kept, with
+  how many there are now and how far back they go; and the log file: rotated by the
   system's logrotate (`/etc/logrotate.d/csf_autogroup`, written from these
   settings; default 1 MB, 5 compressed archives); where logrotate is missing,
   lines older than a number of days (default 30) are removed instead. A run
@@ -401,12 +403,37 @@ block that comes back turns into a permanent one.
 | `/24` with **≥3** permanent single bans | permanently ban the `/24`, remove the singles |
 | `/24` with **≥5** permanent singles | ban `/24` + `do not delete` |
 | `/16` with **≥5** singles across **≥2** `/24`s (permanent and temp counted together, each IP once) | flag as suspicious network by email, no auto-ban; reported again only when a new IP comes in (at most once a day). With a partial ban on the network, only bans after it count |
-| `/24` with **≥3** temp bans (first time) | temp-ban the `/24` for 12h, watch it |
+| `/24` with **≥3** temp bans at the same time (first time) | temp-ban the `/24` for 12h, watch it |
 | same `/24` seen again (temp bans or permanent singles while watched) | permanent ban + `do not delete` |
 | plugin's block ban left `csf.deny` without the plugin (CSF drops the oldest unmarked lines when `DENY_IP_LIMIT` is reached) | watch the `/24`, alert by email and in History |
 | deny list **≥80%** of its limit | alert: email once a day; Slack once when it starts and once when resolved |
 | CSF disabled / in testing mode / rules not loaded, or LFD not running | alert: email once a day; Slack once when it starts and once when resolved |
 | block ban older than the old-block limit (optional) | remove it |
+
+**What the thresholds count.** Permanent singles count if their date in
+`csf.deny` (lfd and `csf -d` write it at the end of the line) is within the
+*permanent single window* (default 90 days); older ones stay banned in CSF but
+do not count toward the block (`/24`) and network (`/16`) thresholds or the
+provider ranking, and when the block is banned they are removed with the
+others. Lines without a date count. Temp singles count for as long as each ban
+lasts: every run looks at the temp bans since the previous run and takes the
+largest number in a block that were banned at the same moment. So the count
+does not depend on how often the run starts, and each ban counts for the time
+lfd gave it, whatever `LF_TRIGGER_PERM` / `LF_*_PERM` / `CT_BLOCK_TIME` say on
+that server. The first run after installing or updating starts counting from
+that moment.
+
+**Ban history.** Every run records the single bans since the previous run in
+`/var/lib/csf_autogroup/banlog` — from lfd's log (`*Blocked in csf* for N secs`
+for temp bans, without a duration for permanent ones), the temp list (manual
+`csf -td` bans are not logged by lfd) and `csf.deny` — with when, how long and
+why. The record stays after the ban ends (a temp ban expires, CSF drops an old
+line when the list is full, lfd's log rotates): a ban that leaves the list
+before its time is recorded as ending at that run. It is kept for the ban
+history period (default 90 days, at least the permanent single window). The
+temp threshold, the provider ranking, the service behind a PERMBLOCK, the IP
+card's *Ban history* and the range card's IP table all read it. The first run
+fills it from lfd's log archives.
 
 Temp bans already covered by a permanent block are cleared, watch records expire
 after 180 days (configurable), and the log is capped. Singles marked

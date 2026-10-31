@@ -10,7 +10,29 @@ async function ready(page) {
 }
 // Tıklanan her öğe tıklanabilir görünmeli: kenarlık, zemin ya da alt çizgi (simge düğmesi hariç). Kabul edilen kalıplar:
 // sıralanan tablo başlığı, zeminli çip grubu (sekme gibi), üzerine gelince renklenen satır / döşeme, simge düğmesi.
-const KURAL = `window.agGorunmez = function (root) {
+const KURAL = `window.agHizaKayik = function (root) {
+  // sütun başlığı ile hücreleri aynı hizada (sağa yaslı başlık, sola yaslı içerik okuyanı şaşırtır)
+  const out = [];
+  Array.from(root.querySelectorAll('table')).filter(tb => tb.offsetWidth > 0).forEach(tb => {
+    const th = Array.from(tb.querySelectorAll('thead th')), tr = tb.querySelector('tbody tr'); if (!th.length || !tr) return;
+    const td = Array.from(tr.children);
+    th.forEach((h, i) => { const c = td[i]; if (!c || !h.offsetWidth || !c.textContent.trim()) return;
+      const a = getComputedStyle(h).textAlign, b = getComputedStyle(c).textAlign;
+      const n = x => (x === 'start' ? 'left' : x === 'end' ? 'right' : x);
+      if (n(a) !== n(b)) out.push((tb.className || 'table') + ': ' + h.textContent.trim() + ' (' + n(a) + ' / ' + n(b) + ')'); });
+  });
+  return out;
+};
+window.agIpBagsiz = function (root) {
+  // tek başına IP ya da aralık yazan öğe IP / aralık kartını açmalı (kartın kendi başlığı, giriş kutuları hariç)
+  const re = /^\\d{1,3}(\\.\\d{1,3}){3}(\\/\\d{1,2})?$/;
+  return Array.from(root.querySelectorAll('td, span, div, b, li, code')).filter(e => {
+    if (!e.offsetWidth || !re.test(e.textContent.trim())) return false;
+    if (Array.from(e.children).some(c => c.textContent.trim() === e.textContent.trim())) return false;
+    return !e.closest('[data-ip], [data-act], a, button, input, textarea, select, .ag-drawer-h');
+  }).map(e => (e.className || e.tagName) + ': ' + e.textContent.trim());
+};
+window.agGorunmez = function (root) {
   function saydam(c) { return !c || c === 'transparent' || /rgba\\(.*,\\s*0\\)$/.test(c); }
   return Array.from(root.querySelectorAll('[data-ip],[data-act],[data-dr],button,a')).filter(e => {
     const r = e.getBoundingClientRect(); if (!r.width || !r.height) return false;
@@ -35,7 +57,7 @@ window.agKart = function () {
   const kendi = ((d.querySelector('.ag-drawer-h h3') || {}).textContent || '').trim();
   const n = {}; d.querySelectorAll('[data-ip]').forEach(e => { const k = e.textContent.trim(); if (k !== kendi) n[k] = (n[k] || 0) + 1; });
   const say = {}; (d.querySelector('.ag-drawer-b') || d).textContent.replace(/(\\d+)\\s+(tekil|geçici|kalıcı)(?![a-zçğıöşü])/g, (m, x, w) => { (say[w] = say[w] || new Set()).add(x); return m; });
-  return { bas: window.agBasliksiz(d), gor: window.agGorunmez(d), cok: Object.keys(n).filter(k => n[k] > 1).map(k => k + ' × ' + n[k]),
+  return { bas: window.agBasliksiz(d), ipb: window.agIpBagsiz(d), hiz: window.agHizaKayik(d), gor: window.agGorunmez(d), cok: Object.keys(n).filter(k => n[k] > 1).map(k => k + ' × ' + n[k]),
     celis: Object.keys(say).filter(w => say[w].size > 1).map(w => w + ': ' + Array.from(say[w]).join(' / ')) };
 };`;
 async function kartKurallari(page, ad) {
@@ -46,12 +68,16 @@ async function kartKurallari(page, ad) {
   check(`kart ${ad} · aynı IP bir kez`, k.cok.length === 0, k.cok.slice(0, 4).join(' | '));
   check(`kart ${ad} · çelişen sayı yok`, k.celis.length === 0, k.celis.join(' | '));
   check(`kart ${ad} · tablolar başlıklı`, k.bas.length === 0, k.bas.join(' | '));
+  check(`kart ${ad} · IP / aralık yazan her öğe tıklanıyor`, k.ipb.length === 0, k.ipb.slice(0, 4).join(' | '));
+  check(`kart ${ad} · sütun başlıkları hücrelerle aynı hizada`, k.hiz.length === 0, k.hiz.slice(0, 4).join(' | '));
 }
 async function layoutChecks(page, label, width) {
   await page.evaluate(KURAL);
   const gor = await page.evaluate(() => window.agGorunmez(document.getElementById('ag-app')));
   const bas = await page.evaluate(() => window.agBasliksiz(document.getElementById('ag-app')));
   check(`${label} · ${width} px · tablolar başlıklı`, bas.length === 0, bas.slice(0, 3).join(' | '));
+  const ipb = await page.evaluate(() => window.agIpBagsiz(document.getElementById('ag-app')));
+  check(`${label} · ${width} px · IP / aralık yazan her öğe tıklanıyor`, ipb.length === 0, ipb.slice(0, 4).join(' | '));
   check(`${label} · ${width} px · tıklanabilir öğeler tıklanabilir görünüyor`, gor.length === 0, gor.slice(0, 4).join(' | '));
   // tıklanan iki öğe üst üste binmez (dar ekranda sığmayan düğmenin yanındakinin üstüne taşması)
   const lapB = await page.evaluate(() => {

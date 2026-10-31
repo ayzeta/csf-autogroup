@@ -1,5 +1,81 @@
 # Changelog
 
+## 1.15.33 — 2026-11-01
+
+- **Ban history.** Every run records the single bans since the previous run
+  (from lfd's log, the temp list and `csf.deny`) with when, how long and why,
+  and keeps the record after the ban ends: a temp ban that expires, an old line
+  CSF drops when the list is full and a rotated lfd log no longer lose the
+  reason. A ban that leaves the list before its time is recorded as ending at
+  that run. Kept for 90 days by default (*Settings → Server → Record keeping*,
+  at least the permanent single window); the first run fills it from lfd's log
+  archives.
+- **What reads it:** the temp threshold (a temp ban removed early no longer
+  counts for its full time), the IP card's new *Ban history*, the range card's
+  IP table (bans that ended show their reason), the service behind a
+  PERMBLOCK (the earlier temp ban; the separate cache and the scan of every lfd
+  archive are gone), the open services after a partial ban, and the provider
+  ranking (temp bans that expired now count).
+- **Permanent single window.** Permanent singles older than 90 days by
+  default (by their date in `csf.deny`) no longer count toward the block and
+  network thresholds or the provider ranking; they stay banned in CSF and are
+  removed with the others when their block is banned. Lines without a date
+  count. The IP card says how many of a block's singles are outside the window.
+  *Settings → Ban rules → Permanent single window*.
+- **Fix: a PERMBLOCK's trigger tag** (`[LF_SSHD]`) is kept with the ban, so its
+  service is known even when only the PERMBLOCK line was logged.
+- **Fix: a range under its own temp block ban read as "partly banned, SSH
+  open".** The range card counted only a covering permanent ban as closing
+  the whole range; its own block ban (permanent, or temp while it lasts) now
+  does too, and the IPs in it show as closed by the range ban.
+- **Ban history on the cards:** a temp ban removed before its time shows lfd's
+  duration and when it was removed; a single that left the list because a block
+  ban took it over says so; IPs in a range card that come only from the history
+  show the date of their last ban.
+- **Fix: column headers aligned differently from their cells** in Measure impact
+  when the *Now* column is hidden (the last column was right-aligned whatever
+  it held).
+
+## 1.15.32 — 2026-10-31
+
+- **Temp threshold no longer depends on how often the run starts.** A block
+  got its temp ban only if a run saw enough temp singles in the temp list at
+  that moment; temp bans that started and ended between two runs, or
+  overlapped only briefly, were missed. Each run now looks at every temp ban
+  since the previous run — the ones in the temp list and the ones lfd logged
+  with their duration (`*Blocked in csf* for N secs`) — and counts the largest
+  number in a block banned at the same moment. Each ban counts for the time lfd
+  gave it, whatever `LF_TRIGGER` / `LF_*_PERM` / `CT_BLOCK_TIME` say on the
+  server. The IP card, the threshold preview in Settings and the suspicious
+  network count use the same count. The first run after updating starts
+  counting from that moment.
+- **Settings say what the thresholds count**: permanent singles while they
+  stay in `csf.deny` (no time limit), temp singles for their ban time; the temp
+  threshold shows lfd's temp ban time on this server.
+- **Measure impact: one window at a time, named.** Opening a measurement (or
+  *Ban…* from the busiest list) closes the others, and each window names its
+  provider; an old measurement left open under another provider read as if it
+  belonged to the new one.
+- **Is the provider ban working?** For a banned provider the measurement counts
+  separately what reached the sites from open addresses after the ban was set.
+- **Fix: "N IPs banned in the last N days" counted every event that mentioned
+  the provider** (suspicious network warnings too) and the window ran from the
+  first one. The events are now listed by kind and date. "Last violation" (the
+  newest ban still in CSF) is gone, and the CSF ban sentence is shown once.
+- **Fix: a ban was marked "already closed by the rented-server list" whatever
+  its service.** The list closes web ports only; bans for SSH, mail or an
+  unknown service close more and now count as doing the work. Block bans
+  inside a list are no longer dropped from the busiest providers count.
+- **Bans one by one**: the IPs and ranges open their card; a range ban without
+  a date in `csf.deny` takes it from the event log; the *Now* column is shown
+  only when the rows differ.
+- **Fix: CSF's ASN data was refreshed a day late** (on day 26 with the 25-day
+  setting). The panel shows the day it will be refreshed.
+- **Summary cards always compare with 7 days ago.** They followed the 7 / 30
+  day choice of the activity chart below them, and when the oldest run record
+  was newer than the period they said "since install" although the record was
+  only the oldest one kept. The chart choice now changes the chart only.
+
 ## 1.15.31 — 2026-10-30
 
 - **Measure impact, clearer.** The IPs in the lists open their IP card like

@@ -247,7 +247,7 @@ mcheck "IP kartı: tam izin satırı tek portluk satırdan önce (karar 'ban iş
 izgec() { printf '151.80.7.9 # musteri\n' >> "$A"; printf '%s|151.80.7.9||in|3600|lfd: (pop3d) Failed POP3 login from 151.80.7.9 (FR/France/-): 5 in the last 3600 secs\n' "$NOW" >> "$T"; }
 mk izw16; izgec; for x in 7.1 8.1 8.2 9.1; do single 151.80.$x sshd; done; printf 'WARN16_151.80 %s\n' "$(date -d '-3 days' +%F)" >> "$C"
 mcheck "izinli IP'nin geçici banı şüpheli ağ sayımına girmez (4 tekil + izinli IP, eşik 5: uyarı yok)" "! run --status --json 2>/dev/null | grep -q '\"cidr\":\"151.80.0.0/16\"'"
-mcheck "Ayarlar → Eşikler etkisi ve IP kartının eşiğe uzaklığı izinli IP'nin banını saymaz" "run --status --json 2>/dev/null | grep -q '\"dist\":{\"151.80\":\[\"1:0\",\"1:0\",\"2:0\"\]}' && run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"blk\":{\"s\":1,\"t\":0,'"
+mcheck "Ayarlar → Eşikler etkisi ve IP kartının eşiğe uzaklığı izinli IP'nin banını saymaz" "run --status --json 2>/dev/null | grep -q '\"dist\":{\"151.80\":\[\"1:0\",\"1:0\",\"2:0\"\]}' && run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"blk\":{\"s\":1,\"o\":0,\"t\":0,'"
 mkm izblk 1; printf '151.80.7.9 # musteri\n' >> "$A"; for x in 7.1 7.2 7.9; do single 151.80.$x sshd; done; quiet
 mcheck "blok eşiği: 2 tekil + izinli IP'nin kalıcı banı eşiği doldurmaz (ban da 'atlandı' satırı da yok)" "! grep -q '^151.80.7.0/24' '$D' && ! grep -q '\"type\":\"skip_wl\"' '$R/var/lib/csf_autogroup/events.jsonl' 2>/dev/null"
 mk iztmp; izgec; for x in 1 2; do printf '%s|151.80.7.%s||in|3600|lfd: (sshd) Failed SSH login from 151.80.7.%s\n' "$NOW" "$x" "$x" >> "$T"; done; quiet
@@ -433,10 +433,10 @@ mk expips; printf '{"t":%s,"type":"add24","cidr":"151.80.7.0/24","n":2,"ips":[{"
 printf '151.80.7.0/24 # Auto-grouped /24: 2 kalıcı tekil nedeniyle kalıcı banlandı - %s\n' "$(LC_ALL=C date -d '400 days ago' '+%a %b %d %H:%M:%S %Y')" >> "$D"
 echo "BLOCK_EXPIRE_AUTO=1" >> "$R/app/config.env"; quiet
 mcheck "kayıt · eski blok banı kaldırılınca kaldırma kaydı banın IP'lerini taşır, satır geçerli JSON" "grep '\"type\":\"expire\"' '$R/var/lib/csf_autogroup/events.jsonl' | grep -q '\"ips\":\[{\"ip\":\"151.80.7.1\".*{\"ip\":\"151.80.7.2\",\"why\":\"b\"}\]' && grep '\"type\":\"expire\"' '$R/var/lib/csf_autogroup/events.jsonl' | node -e 'let s=\"\";process.stdin.on(\"data\",d=>s+=d).on(\"end\",()=>{JSON.parse(s.trim());})'"
-# PERMBLOCK'un servisi: tur geçici banın servisini önbelleğe yazar (lfd günlüğü dönse de kalıcıya alınınca bilinsin); aralık
+# PERMBLOCK'un servisi: tur geçici banı sebebiyle ban geçmişine yazar (lfd günlüğü dönse de kalıcıya alınınca bilinsin); aralık
 # kartı servis tablosu aynı yoldan sayar ve servis başına IP listesini verir (sayı tıklanınca)
 mk pbcache; printf '%s|151.80.7.30||in|3600|lfd: (sshd) Failed SSH login from 151.80.7.30 (FR/France/-): 5 in the last 3600 secs\n' "$NOW" >> "$T"; quiet
-mcheck "PERMBLOCK servisi · tur geçici banın servisini önbelleğe yazar" "grep -qx '151.80.7.30 ssh' '$R/var/lib/csf_autogroup/perm_cls'"
+mcheck "PERMBLOCK servisi · tur geçici banı sebebiyle ban geçmişine yazar" "grep -q '^151.80.7.30|t|.*(sshd)' '$R/var/lib/csf_autogroup/banlog'"
 : > "$T"; printf '%s\n' "151.80.7.30 # lfd: (PERMBLOCK) 151.80.7.30 (FR/France/-) has had more than 3 temp blocks in the last 259200 secs - $DT" >> "$D"
 mcheck "PERMBLOCK servisi · aralık kartı önbellekteki servisle sayar ve IP listesini verir (tekrar banlanan değil)" "run --inside 151.80.7.0/24 --json 2>/dev/null | grep -q '\"attacks\":{\"ssh\":1},\"attack_ips\":{\"ssh\":\[{\"ip\":\"151.80.7.30\",\"why\":\"Tekrar ban (PERMBLOCK)'"
 # elle blok banı kaldırma: banın yerini aldığı tekiller olay kaydından geri yüklenir (seçilirse); geri yüklenenler bloğu yeniden
@@ -463,6 +463,91 @@ mk daily; printf '%s\n' "CLOUD_BAN=1" "CLOUD_SOURCES=aws" >> "$R/app/config.env"
 mcheck "günlük işler: kiralık sunucu yenilemesi çalışamazsa gün kapanmaz ve .refreshed yazılmaz" "! grep -q '^DAILY_TASKS ' '$C' && [ ! -e '$R/var/lib/csf_autogroup/cloud/.refreshed' ]"
 mk daily0; quiet
 mcheck "günlük işler: kiralık sunucu banı kapalıyken gün kapanır" "grep -q '^DAILY_TASKS ' '$C'"
+# CSF'in ASN verisi ayardaki gün kadar eskiyse yenilenir (önce find -mtime +25 kullanılıyordu: 25 gün ayarında 26. günde);
+# lfd yeniden başlatması taklit systemctl ile (makinenin gerçek lfd'si değil)
+geo() {   # ad yaş-dakika
+    mk "$1"; printf '%s\n' 'CC_DENY_PORTS = "AS64500"' 'CC_DENY_PORTS_TCP = "80,443"' >> "$R/etc/csf/csf.conf"
+    mkdir -p "$R/var/lib/csf/Geo" "$R/bin"; G="$R/var/lib/csf/Geo/ip2asn-combined.tsv"; printf '1.0.0.0\t1.0.0.255\t64500\tUS\tX\n' > "$G"
+    touch -d "-$2 min" "$G"; printf '%s\n' '#!/bin/bash' "echo \"\$@\" >> '$R/systemctl.log'" > "$R/bin/systemctl"; chmod +x "$R/bin/systemctl"
+    env SIM_ROOT="$R" PATH="$R/bin:$W/bin:/usr/bin:/bin" AG_BY=root bash "$R/app/csf_autogroup.sh" >/dev/null 2>&1
+}
+geo geo25 $((25 * 1440 - 30))
+mcheck "ASN verisi: ayar 25 gün, veri 25 günlük → yenilenir (lfd yeniden başlatılır)" "[ ! -e '$G' ] && [ -e '$G.old' ] && grep -q 'restart lfd' '$R/systemctl.log'"
+geo geo24 $((24 * 1440))
+mcheck "ASN verisi: ayar 25 gün, veri 24 günlük → yenilenmez" "[ -e '$G' ] && [ ! -e '$R/systemctl.log' ]"
+
+# geçici eşik: son turdan bu yana AYNI ANDA geçici banlı tekiller (lfd günlüğündeki "for N secs" + geçici liste); tur aralığından
+# bağımsız. tw AD [since-saniye-önce|-] "ip:başlangıç-saniye-önce:süre" … (lfd satırları; since yoksa ilk tur)
+tw() {
+    mk "$1"; local s="$2"; shift 2; printf '%s\n' "LFD_LOG=$R/lfd.log" >> "$R/app/config.env"; : > "$R/lfd.log"
+    [ "$s" = - ] || echo $(( $(date +%s) - s )) > "$R/var/lib/csf_autogroup/temp.since"
+    local x ip b d; for x in "$@"; do IFS=: read -r ip b d <<< "$x"
+        printf '%s lin lfd[1]: (sshd) Failed SSH login from %s (FR/France/-): 10 in the last 3600 secs - *Blocked in csf* for %s secs [LF_TRIGGER]\n' \
+            "$(LC_ALL=C date -d "@$(( $(date +%s) - b ))" '+%b %e %H:%M:%S')" "$ip" "$d" >> "$R/lfd.log"; done
+}
+twban() { grep -q '"type":"temp24","cidr":"151.80.7.0/24"' "$R/var/lib/csf_autogroup/events.jsonl" 2>/dev/null; }
+tw twov 1800 151.80.7.1:1500:600 151.80.7.2:1400:600 151.80.7.3:1300:600
+run --lookup 151.80.7.9 --json > "$W/out/twov.lookup.json" 2>/dev/null; quiet
+mcheck "geçici eşik: iki tur arasında açılıp kapanan, çakışan 3 ban → blok geçici banlanır" "twban"
+mcheck "geçici eşik: IP kartının blok durumu turla aynı sayıyı verir (aynı anda 3)" "grep -q '\"blk\":{\"s\":0,\"o\":0,\"t\":3,' '$W/out/twov.lookup.json'"
+mcheck "geçici eşik: tur pencerenin başını kaydeder (sonraki tur aynı banları yeniden saymaz)" "[ \$(( \$(date +%s) - \$(cat '$R/var/lib/csf_autogroup/temp.since') )) -lt 120 ]"
+tw twseq 1800 151.80.7.1:1700:60 151.80.7.2:1500:60 151.80.7.3:1300:60; quiet
+mcheck "geçici eşik: aynı blokta 3 ban ama hiçbiri çakışmıyor → banlanmaz" "! twban"
+tw twfirst - 151.80.7.1:1500:7200 151.80.7.2:1400:600 151.80.7.3:1300:600; quiet
+mcheck "geçici eşik: güncellemeden sonraki ilk tur geçmiş günlüğü geriye taramaz" "! twban"
+tw twold 1800 151.80.7.1:9000:600 151.80.7.2:1400:600 151.80.7.3:1300:600; quiet
+mcheck "geçici eşik: son turdan önce bitmiş ban sayılmaz" "! twban"
+tw twrot 1800 151.80.7.1:1500:600 151.80.7.2:1400:600 151.80.7.3:1300:600
+mv "$R/lfd.log" "$R/lfd.log-20261031"; gzip "$R/lfd.log-20261031"; : > "$R/lfd.log"; quiet
+mcheck "geçici eşik: arada döndürülmüş (.gz) lfd günlüğü de okunur" "twban"
+tw twlist 1800; for x in 1 2 3; do printf '%s|151.80.7.%s||in|3600|Manually added: 151.80.7.%s\n' "$(date +%s)" "$x" "$x" >> "$T"; done; quiet
+mcheck "geçici eşik: elle konan geçici banlar (günlükte yok, geçici listede) sayılır" "twban"
+tw twallow 1800 151.80.7.1:1500:600 151.80.7.2:1400:600 151.80.7.3:1300:600; printf '%s\n' "151.80.7.3 # müşteri" >> "$A"; quiet
+mcheck "geçici eşik: izinli IP'nin geçici banı sayılmaz (3 çakışan, biri izinli → banlanmaz)" "! twban"
+tw twperm 1800 151.80.7.1:1500:600 151.80.7.2:1400:600 151.80.7.3:1300:600; single 151.80.7.3 sshd; quiet
+mcheck "geçici eşik: sonradan kalıcıya alınmış IP geçici sayıma girmez" "! twban"
+
+# ban geçmişi (banlog): lfd günlüğü + geçici liste + csf.deny; erken kaldırma; saklama; IP kartı; PERMBLOCK'un servisi
+BL="var/lib/csf_autogroup/banlog"
+tw blog 1800 151.80.9.1:1500:600 151.80.9.2:900:7200; single 151.80.8.5 sshd
+printf '%s|151.80.9.2||inout|7200|lfd: (sshd) Failed SSH login from 151.80.9.2 (FR/France/-): 10 in the last 3600 secs\n' "$(( $(date +%s) - 900 ))" >> "$T"   # süren ban listede de durur
+printf '%s lin lfd[1]: (PERMBLOCK) 151.80.8.6 (FR/France/-) has had more than 3 temp blocks in the last 259200 secs - *Blocked in csf* [LF_TRIGGER]\n' "$(LC_ALL=C date -d '-10 min' '+%b %e %H:%M:%S')" >> "$R/lfd.log"
+quiet
+mcheck "ban geçmişi: lfd günlüğündeki geçici banlar süreleriyle yazılır" "grep -q '^151.80.9.1|t|' '$R/$BL' && awk -F'|' '\$1 == \"151.80.9.2\" && \$4 - \$3 == 7200' '$R/$BL' | grep -q ."
+mcheck "ban geçmişi: csf.deny tekili kalıcı ve sürüyor (bitiş 0)" "awk -F'|' '\$1 == \"151.80.8.5\" && \$2 == \"p\" && \$4 == 0' '$R/$BL' | grep -q ."
+mcheck "ban geçmişi: listede olmayan lfd kalıcı banı da yazılır (CSF silmiş sayılır)" "awk -F'|' '\$1 == \"151.80.8.6\" && \$2 == \"p\" && \$4 > 0' '$R/$BL' | grep -q ."
+run --lookup 151.80.9.2 --json > "$W/out/blog.lookup.json" 2>/dev/null
+mcheck "ban geçmişi: IP kartı geçmişi verir (geçici, süresiyle)" "grep -q '\"bl\":\[\[\"t\",' '$W/out/blog.lookup.json'"
+# erken kaldırma: geçici listede duran ban (süresi bitmemiş) elle kaldırılınca bitişi son güncellemenin anı olur
+mk blrm; printf '%s\n' "LFD_LOG=$R/lfd.log" >> "$R/app/config.env"; : > "$R/lfd.log"
+printf '%s|151.80.9.7||in|43200|lfd: (sshd) Failed SSH login from 151.80.9.7 (FR/France/-): 10 in the last 3600 secs\n' "$(( $(date +%s) - 600 ))" >> "$T"; quiet
+mk0=$(cat "$R/$BL.mark"); : > "$T"; quiet
+mcheck "ban geçmişi: süresi bitmeden listeden kalkan geçici banın bitişi kalktığı turla düzelir" "awk -F'|' -v m=$mk0 '\$1 == \"151.80.9.7\" && \$4 == m' '$R/$BL' | grep -q ."
+# saklama: BANLOG_DAYS (en az PERM_WINDOW_DAYS) kadar; süresi geçen kayıt silinir, süren kalıcı silinmez
+mk blkeep; printf '%s\n' "BANLOG_DAYS=30" "PERM_WINDOW_DAYS=30" >> "$R/app/config.env"; n0=$(date +%s)
+printf '%s\n' "151.80.9.10|t|$((n0 - 50 * 86400))|$((n0 - 49 * 86400))|lfd: eski" "151.80.9.11|t|$((n0 - 10 * 86400))|$((n0 - 9 * 86400))|lfd: yeni" > "$R/$BL"; echo "$n0" > "$R/$BL.mark"; quiet
+mcheck "ban geçmişi: saklama süresinden eski kayıt silinir, yenisi kalır" "! grep -q '^151.80.9.10|' '$R/$BL' && grep -q '^151.80.9.11|' '$R/$BL'"
+# PERMBLOCK'un servisi ban geçmişindeki önceki geçici bandan (lfd günlüğü dönmüş olsa da)
+mk blpb; n0=$(date +%s); printf '%s\n' "151.80.9.20|t|$((n0 - 86400))|$((n0 - 43200))|lfd: (sshd) Failed SSH login from 151.80.9.20 (FR/France/-): 10 in the last 3600 secs" > "$R/$BL"; echo "$n0" > "$R/$BL.mark"
+printf '%s\n' "151.80.9.20 # lfd: (PERMBLOCK) 151.80.9.20 (FR/France/-) has had more than 3 temp blocks in the last 259200 secs - $DT" >> "$D"
+run --inside 151.80.9.0/24 --json > "$W/out/blpb.in.json" 2>/dev/null
+mcheck "ban geçmişi: PERMBLOCK'un servisi önceki geçici bandan bulunur (SSH)" "grep -q '\"ssh\":1' '$W/out/blpb.in.json'"
+
+# kalıcı tekil penceresi (PERM_WINDOW_DAYS, varsayılan 90): eski kalıcı tekil blok ve ağ eşiğine sayılmaz; tarihsiz sayılır
+OLDDT=$(LC_ALL=C date -d '-120 days' '+%a %b %d %H:%M:%S %Y')
+p24() { grep -q '^151.80.7.0/24' "$D"; }
+mk pwold; single 151.80.7.1 sshd; single 151.80.7.2 sshd; single 151.80.7.3 sshd "$OLDDT"; quiet
+mcheck "kalıcı pencere: 2 yeni + 1 eski (120 gün) tekil → blok banlanmaz (eşik 3)" "! p24"
+run --lookup 151.80.7.1 --json > "$W/out/pwold.lookup.json" 2>/dev/null
+mcheck "kalıcı pencere: IP kartı eski tekili ayrıca söyler (o: 1)" "grep -q '\"blk\":{\"s\":2,\"o\":1,' '$W/out/pwold.lookup.json'"
+mk pwnew; for x in 1 2 3; do single 151.80.7.$x sshd; done; single 151.80.7.4 sshd "$OLDDT"; quiet
+mcheck "kalıcı pencere: 3 yeni + 1 eski → blok banlanır, eski tekil de csf.deny'den silinir" "p24 && ! grep -q '^151.80.7.4 ' '$D'"
+mk pwnodate; single 151.80.7.1 sshd; single 151.80.7.2 sshd; printf '%s\n' "151.80.7.3 # elle eklendi" >> "$D"; quiet
+mcheck "kalıcı pencere: tarihsiz tekil sayılır (2 yeni + 1 tarihsiz → blok banlanır)" "p24"
+mk pw16; for x in 7.1 8.1 9.1; do single 151.80.$x sshd; done; for x in 10.1 11.1 12.1; do single 151.80.$x sshd "$OLDDT"; done; quiet
+mcheck "kalıcı pencere: /16 uyarısı eski tekilleri saymaz (3 yeni + 3 eski, eşik 5 → uyarı yok)" "! grep -q '\"type\":\"warn16\"' '$R/var/lib/csf_autogroup/events.jsonl' 2>/dev/null"
+mk pw16b; for x in 7.1 8.1 9.1 10.1 11.1; do single 151.80.$x sshd; done; quiet
+mcheck "kalıcı pencere: aynı /16'da 5 yeni tekil → uyarı verilir (karşılaştırma)" "grep -q '\"type\":\"warn16\"' '$R/var/lib/csf_autogroup/events.jsonl'"
 node "$(wp "$H/render.js")" "$(wp "$REPO/whm/assets/ag.js")" "$(wp "$W/out")" "$@"; RC=$?
 printf '\nMotor kuralları\n%s' "$ML"
 [ "$MF" -gt 0 ] && { echo "$MF motor kuralı ihlali"; exit 1; }

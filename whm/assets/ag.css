@@ -189,7 +189,7 @@
 .ag-ip:nth-child(even) { background: #f4f5f8; }
 .ag-ip.ag-ip-h { background: #fafafb; padding-top: 6px; padding-bottom: 6px; font-size: 11px; font-weight: 650; color: var(--ag-text-3); text-transform: uppercase; letter-spacing: .04em; }
 .ag-im-t thead th { text-align: left; font-size: 11px; font-weight: 650; color: var(--ag-text-3); text-transform: uppercase; letter-spacing: .04em; padding: 0 10px 6px 0; white-space: nowrap; }
-.ag-im-t thead th:last-child { text-align: right; padding-right: 0; }
+.ag-im-t thead th.ag-im-st { text-align: right; padding-right: 0; }   /* durum sütunu (rozetler sağda); öteki son sütunlar içerikleri gibi sola */
 .ag-im-t th.ag-th-r { text-align: right; font-variant-numeric: tabular-nums; }
 /* yoksayılanlar: aralık · bitiş · yoksayan · düğme */
 /* Yoksayılanlar (dar sütunda kart): 1) aralık ····· Yoksaymayı kaldır  2) bitiş · yoksayan */
@@ -757,6 +757,7 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
 /* Etkisini ölç (temiz anlatı): soru, cevap, üç grup, karar, geçmiş, kapalı ayrıntılar */
 .ag-impact.ag-im { margin-top: 14px; padding: 20px 4px 4px; font-size: 13.5px; line-height: 1.55; }
 .ag-im-q { margin: 0 0 6px; font-size: 16px; font-weight: 650; color: var(--ag-text); letter-spacing: -.01em; }
+.ag-im-who { display: block; font-size: 12px; font-weight: 600; color: var(--ag-muted); letter-spacing: 0; margin-bottom: 2px; }
 .ag-im-lead { margin: 0 0 16px; color: var(--ag-text-2); }
 .ag-im-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--ag-neutral-soft); margin: 0 0 16px; }
 .ag-im-bar i { display: block; height: 100%; }
@@ -1257,7 +1258,7 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-rg-ipt + .ag-link { margin-top: 8px; }
 .ag-tscroll { overflow-x: auto; }
 .ag-rg-ipt td.ag-im-st { white-space: nowrap; text-align: left; padding-right: 10px; }
-.ag-rg-ipt thead th:last-child { text-align: left; }
+.ag-bl-t td:first-child { white-space: nowrap; }
 .ag-rg-ipt td.ag-im-st .ag-pill { margin: 0; }
 /* kaldırma penceresi: geri yüklenecek tekiller, IP ve sebep tek satırda (sığmayan sebep … ile, tamamı ipucunda) */
 .ag-clean > div { min-width: 0; }
