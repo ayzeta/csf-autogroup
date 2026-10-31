@@ -171,10 +171,27 @@ async function layoutChecks(page, label, width) {
           const e = L[0], b = e.querySelector('.ag-ev-b'), d = e.querySelector('.ag-ev-d'), t = e.querySelector('.ag-ev-t .ag-ev-time'), t2 = e.querySelector('.ag-ev-tm2'), m = e.querySelector('.ag-ev-m');
           const alone = L.filter(x => { const dd = x.querySelector('.ag-ev-d'), tt = x.querySelector('.ag-ev-tm2'); if (!dd || !tt || !dd.textContent.replace(tt.textContent, '').trim()) return false;
             return tt.getBoundingClientRect().left - dd.getBoundingClientRect().left < 8; }).length;
-          const tall = L.filter(x => !x.querySelector('.ag-ev-st') && x.getBoundingClientRect().height > 100).map(x => Math.round(x.getBoundingClientRect().height));
+          // uzun adres (10.255.255.254) ile tür rozeti sığmayınca rozet alta geçer: o satırda bir satır fazlası olağan (125 px)
+          const tall = L.filter(x => { if (x.querySelector('.ag-ev-st')) return false;
+            const tt = x.querySelector('.ag-ev-t'), a = tt && tt.firstElementChild, p = tt && tt.querySelector('.ag-pill');
+            const wr = a && p && p.getBoundingClientRect().top >= a.getBoundingClientRect().bottom - 2;
+            return x.getBoundingClientRect().height > (wr ? 125 : 100); }).map(x => Math.round(x.getBoundingClientRect().height));
           return { ok: !!(d && t2) && d.contains(t2) && t2.getBoundingClientRect().height > 0 && (!t || t.getBoundingClientRect().height === 0),
             menuTop: m ? Math.round(m.getBoundingClientRect().top - b.getBoundingClientRect().top) : 0, alone, tall }; });
         check('390: Geçmiş satırında zaman ayrıntıda ve tek başına kalmıyor, menü üstte, rozetsiz satır ≤ 100 px', r === null || (r.ok && r.menuTop <= 6 && r.alone === 0 && r.tall.length === 0), r ? JSON.stringify(r) : 'olay yok, atlandı');
+        // aynı bilgi bir satırda iki kez yazılmaz ("Sunucu IP'si · … · beyaz liste: sunucu IP'si" gibi)
+        const tek = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-ev-d')).map(d => {
+          const tm = d.querySelector('.ag-ev-tm2'); const s = d.textContent.replace(tm ? tm.textContent : '', '');
+          const P = s.split('·').map(x => x.trim().toLowerCase()).filter(x => x.length > 3);
+          return P.some((a, i) => P.some((b, j) => i !== j && (a === b || b.endsWith(': ' + a)))) ? s.trim().slice(0, 90) : null; }).filter(Boolean));
+        check('390: Geçmiş satırında aynı bilgi iki kez yok', tek.length === 0, tek.slice(0, 3).join(' | '));
+        // önünde metin olan saat metne yapışmaz ("10 kez31.10 12:58"): ayırıcı (· ) görünür
+        const yap = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-ev-d .ag-ev-tm2')).filter(tm => {
+          if (!tm.getBoundingClientRect().width) return false;
+          const d = tm.closest('.ag-ev-d'), r = document.createRange(); r.setStart(d, 0); r.setEndBefore(tm);
+          const once = r.toString().trim(), c = getComputedStyle(tm, '::before').content;
+          return once && !/[·]$/.test(once) && (!c || c === 'none' || c === 'normal'); }).map(tm => tm.closest('.ag-ev-d').textContent.trim().slice(0, 60)));
+        check('390: Geçmiş satırında saat metne yapışık değil', yap.length === 0, yap.slice(0, 3).join(' | '));
       }
     }
   }

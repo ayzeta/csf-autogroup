@@ -644,7 +644,9 @@ restoring `config.env` is enough.
   ranges CSF loaded.
 - **CSF's ASN data:** lfd downloads `/var/lib/csf/Geo/ip2asn-combined.tsv` only
   when it is missing, so the addresses go stale; the plugin has lfd download it
-  again when it is older than the period set in the card (default 25 days).
+  again when it is older than the period set in the card (default 25 days),
+  checked on every run, so it is refreshed on the first run after the period is
+  up.
 - A provider ban set up by hand in CSF is adopted the first time.
 - This server's own provider is never banned.
 
@@ -657,7 +659,7 @@ Online) and the site monitors UptimeRobot, Pingdom and StatusCake, plus your own
 `csf.allow` (plain addresses, kept in an ipset); CSF checks the allow list
 first, so they pass country and provider bans, on every port. Lists are
 downloaded again as often as set under **Refresh** in the card (default every
-day); a list that fails to download, or returns far fewer
+day; checked on every run); a list that fails to download, or returns far fewer
 addresses than before, keeps its previous version; ranges wider than /16 are
 refused. Yandex and Facebook don't publish address lists.
 

@@ -460,9 +460,7 @@ mcheck "saklama · süresi dolmamış kayıt varken dosya yeniden yazılmaz (yal
 # günlük işler: kiralık sunucu yenilemesinin sırası geldi ama çalışamadı (taklit kökte ipset yok) → gün kapanmaz, sonraki tur
 # yeniden dener; kiralık sunucu banı kapalıyken gün kapanır (önce başarısız yenileme de "yapıldı" sayılıyor, bir gün bekletiyordu)
 mk daily; printf '%s\n' "CLOUD_BAN=1" "CLOUD_SOURCES=aws" >> "$R/app/config.env"; quiet
-mcheck "günlük işler: kiralık sunucu yenilemesi çalışamazsa gün kapanmaz ve .refreshed yazılmaz" "! grep -q '^DAILY_TASKS ' '$C' && [ ! -e '$R/var/lib/csf_autogroup/cloud/.refreshed' ]"
-mk daily0; quiet
-mcheck "günlük işler: kiralık sunucu banı kapalıyken gün kapanır" "grep -q '^DAILY_TASKS ' '$C'"
+mcheck "yenileme: kiralık sunucu yenilemesi çalışamazsa .refreshed yazılmaz (sonraki tur yeniden dener)" "[ ! -e '$R/var/lib/csf_autogroup/cloud/.refreshed' ]"
 # CSF'in ASN verisi ayardaki gün kadar eskiyse yenilenir (önce find -mtime +25 kullanılıyordu: 25 gün ayarında 26. günde);
 # lfd yeniden başlatması taklit systemctl ile (makinenin gerçek lfd'si değil)
 geo() {   # ad yaş-dakika
@@ -471,10 +469,16 @@ geo() {   # ad yaş-dakika
     touch -d "-$2 min" "$G"; printf '%s\n' '#!/bin/bash' "echo \"\$@\" >> '$R/systemctl.log'" > "$R/bin/systemctl"; chmod +x "$R/bin/systemctl"
     env SIM_ROOT="$R" PATH="$R/bin:$W/bin:/usr/bin:/bin" AG_BY=root bash "$R/app/csf_autogroup.sh" >/dev/null 2>&1
 }
-geo geo25 $((25 * 1440 - 30))
+geo geo25 $((25 * 1440 + 30))
 mcheck "ASN verisi: ayar 25 gün, veri 25 günlük → yenilenir (lfd yeniden başlatılır)" "[ ! -e '$G' ] && [ -e '$G.old' ] && grep -q 'restart lfd' '$R/systemctl.log'"
 geo geo24 $((24 * 1440))
 mcheck "ASN verisi: ayar 25 gün, veri 24 günlük → yenilenmez" "[ -e '$G' ] && [ ! -e '$R/systemctl.log' ]"
+# ASN verisi her turda denetlenir: eski sürümün gün anahtarı dursa da süre dolunca bu turda yenilenir
+mk geodd; printf 'DAILY_TASKS %s\n' "$(date +%F)" >> "$C"; printf '%s\n' 'CC_DENY_PORTS = "AS64500"' >> "$R/etc/csf/csf.conf"
+mkdir -p "$R/var/lib/csf/Geo" "$R/bin"; G="$R/var/lib/csf/Geo/ip2asn-combined.tsv"; printf '1.0.0.0\t1.0.0.255\t64500\tUS\tX\n' > "$G"; touch -d "-$((25 * 1440 + 60)) min" "$G"
+printf '%s\n' '#!/bin/bash' "echo \"\$@\" >> '$R/systemctl.log'" > "$R/bin/systemctl"; chmod +x "$R/bin/systemctl"
+env SIM_ROOT="$R" PATH="$R/bin:$W/bin:/usr/bin:/bin" AG_BY=root bash "$R/app/csf_autogroup.sh" >/dev/null 2>&1
+mcheck "ASN verisi: günün işleri yapılmışken de süre dolunca bu turda yenilenir" "[ ! -e '$G' ] && grep -q 'restart lfd' '$R/systemctl.log'"
 
 # geçici eşik: son turdan bu yana AYNI ANDA geçici banlı tekiller (lfd günlüğündeki "for N secs" + geçici liste); tur aralığından
 # bağımsız. tw AD [since-saniye-önce|-] "ip:başlangıç-saniye-önce:süre" … (lfd satırları; since yoksa ilk tur)

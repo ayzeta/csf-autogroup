@@ -53,7 +53,7 @@ if [ -z "${SIM_ROOT:-}" ]; then case ":$PATH:" in *:/usr/sbin:*) ;; *) PATH="${P
 # Bash 5.2+: ${x//a/b} içinde "&" eşleşen parça sayılıyor (patsub_replacement); "&lt;" gibi kaçışlar bozulmasın
 shopt -u patsub_replacement 2>/dev/null || true
 
-VERSION="1.15.34"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.35"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1081,7 +1081,8 @@ allow_viol_events() {
         kt="M_AVK_$kind"; local avh="-" avo="" avw acc
         ptr_lookup "$ip"; [ -n "$REPLY" ] && avh="${REPLY%.}"
         owner_lookup "$ip"; avo="$OWN_LONG"
-        svc_names "${CLSM[av$i]:-other}"; avw="$REPLY · $(m "$M_AV_N" "${AA_N[i]}") · ${!kt}${src:+ · $(m "$M_AV_SRC" "$src")}"
+        svc_names "${CLSM[av$i]:-other}"; local avs="$src"; [ "$kind" = s ] && avs=""     # sunucu IP'sinde tür kaynağı zaten söylüyor (panelle aynı)
+        avw="$REPLY · $(m "$M_AV_N" "${AA_N[i]}") · ${!kt}${avs:+ · $(m "$M_AV_SRC" "$avs")}"
         [ -n "${AA_R[i]}" ] && avw+=" · $(m "$M_AV_LAST" "${AA_R[i]}" "$(date -d "@${AA_T[i]:-0}" '+%d.%m %H:%M' 2>/dev/null)")"
         acct_text "$ip" "${AA_R[i]}"; [ -n "$REPLY" ] && avw+=" · $REPLY"   # günlüklerde neyi denediği (posta, SSH, FTP, cPanel, web)
         avw=$(tr -s ' ' <<< "${avw//$'\t'/ }")      # tabloda alan ayıracı iki boşluk: alan içinde çift boşluk kalmasın
@@ -2304,7 +2305,10 @@ ign_since() {    # CIDR → IGN_T boşsa (1.15.3 öncesi satır) olay kaydındak
 
 # ── Ban geçmişi (banlog) ───────────────────────────────────────────────────────
 # Tekil banların (tek IP) kaydı: satır "ip|k|başlangıç|bitiş|sebep|asıl bitiş" (k: t geçici, p kalıcı; bitiş 0 = kalıcı ve hâlâ
-# csf.deny'de; başlangıç 0 = tarihi bilinmiyor; asıl bitiş: geçicide lfd'nin verdiği süreyle bitiş, erken kaldırılınca bitişten büyük). Kaynaklar: lfd günlüğü ("*Blocked in csf* for N secs" geçici, süresiz satır kalıcı; lfd.pl),
+# csf.deny'de; başlangıç 0 = tarihi bilinmiyor; asıl bitiş: geçicide lfd'nin verdiği süreyle bitiş, erken kaldırılınca bitişten büyük;
+# 7. alan "e": olay kaydından — o anda banlıydı, başlangıcı ve süresi bilinmez; başlangıç = bitiş = kaydın anı).
+# Olay kaydındaki IP'li kayıtlar (şüpheli ağ, geçici / kalıcı blok banı, elle ban) lfd günlüğü dönmüş olsa da geçmişi taşır: IP başına
+# en son kayıt, aynı anı kapsayan gerçek bir kayıt yoksa eklenir. Eşik ve açık servis sayımı bunları okumaz (gerçek süre gerekir). Kaynaklar: lfd günlüğü ("*Blocked in csf* for N secs" geçici, süresiz satır kalıcı; lfd.pl),
 # geçici liste (csf.tempban; elle csf -td günlüğe girmez) ve csf.deny (tarih satırın sonunda). Bilgi lfd günlüğü dönünce ya da CSF
 # satırı silince kaybolmasın diye tutulur: geçici eşik, PERMBLOCK'un önceki servisi, sağlayıcı sıralaması, IP / aralık kartı.
 # Tek yazan tur (bl_update, ana kilit altında); öteki herkes bl_load'un aynı birleşik görünümünü (BLV) okur. Dosya yoksa lfd
@@ -2350,6 +2354,16 @@ bl_load() {      # → BLV (birleşik ban geçmişi, satırlar "ip|k|başlangı�
         [ -n "$mark" ] && awk -F'|' 'NF >= 5 { print "B|" $0 }' "$BANLOG_FILE"
         [ "${#files[@]}" -gt 0 ] && zcat -f "${files[@]}" 2>/dev/null | bl_lfd_parse "$([ -n "$mark" ] && echo $(( mark - 300 )) || echo 0)"
         [ "$tbok" = 1 ] && awk -F'|' '$2 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && $1 ~ /^[0-9]+$/ && $5 ~ /^[0-9]+$/ { gsub(/\|/, " ", $6); print "T|" $2 "|t|" $1 "|" $1 + $5 "|" $6 }' "$CSF_VAR/csf.tempban"
+        [ -r "$EVENTS_FILE" ] && grep -E '"type":"(warn16|warn16t|temp24|add24|promote|manual_ban)"' "$EVENTS_FILE" 2>/dev/null | grep -F '"ips":[{' | LC_ALL=C awk '
+            { t = 0; if (match($0, /"t":[0-9]+/)) t = substr($0, RSTART + 4, RLENGTH - 4) + 0; if (!t) next
+              ty = ""; if (match($0, /"type":"[a-z0-9_]+"/)) ty = substr($0, RSTART + 8, RLENGTH - 9)
+              k = (ty == "add24" || ty == "promote") ? "p" : "t"          # blok banına giren kalıcı tekiller o an silindi; ötekiler geçici ya da karışık
+              s = $0; sub(/^.*"ips":\[/, "", s)
+              while (match(s, /\{"ip":"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"[^}]*\}/)) {
+                  o = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
+                  ip = o; sub(/^\{"ip":"/, "", ip); sub(/".*/, "", ip)
+                  w = ""; if (match(o, /"why":"([^"\\]|\\.)*"/)) w = substr(o, RSTART + 7, RLENGTH - 8)
+                  gsub(/\\"/, "\"", w); gsub(/\|/, " ", w); print "V|" ip "|" k "|" t "|" t "|" w } }' 
         [ -r "$DENY_FILE" ] && LC_ALL=C awk '
             BEGIN { split("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec", A, " "); for (i = 1; i <= 12; i++) MO[A[i]] = i }
             $1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && !S[$1]++ { c = $0; sub(/^[^#]*#[ \t]*/, "", c); if (c == $0) c = ""; e = 0
@@ -2358,6 +2372,7 @@ bl_load() {      # → BLV (birleşik ban geçmişi, satırlar "ip|k|başlangı�
                     c = substr(c, 1, RSTART - 1); sub(/[ \t]*-[ \t]*$/, "", c) }
                 gsub(/\|/, " ", c); print "D|" $1 "|p|" (e > 0 ? e : 0) "|0|" c }' "$DENY_FILE"
       } | LC_ALL=C awk -F'|' -v now="$now" -v mark="${mark:-0}" -v cut=$(( now - keep * 86400 )) -v tbok="$tbok" '
+        ($1 == "V" || ($1 == "B" && $8 == "e")) { if ($4 + 0 >= VT[$2] + 0) { VT[$2] = $4 + 0; VK[$2] = $3; VR[$2] = $6 }; next }   # olay kaydından: IP başına en son
         { ip = $2; k = $3; s = $4 + 0; e = $5 + 0; r = $6; ne = ($7 != "" ? $7 + 0 : e)
           if ($1 == "T") TB[ip] = 1; if ($1 == "D") DN[ip] = 1
           K = ip "|" k; n = ++N[K]; S[K, n] = s; E[K, n] = e; R[K, n] = r; F[K, n] = $1; X[K, n] = ne }
@@ -2393,7 +2408,13 @@ bl_load() {      # → BLV (birleşik ban geçmişi, satırlar "ip|k|başlangı�
                     }
                     if (e > 0 && e < cut) continue
                     r = OR[i]; if (k == "p" && OG[i] != "" && !index(r, OG[i])) r = r " " OG[i]
-                    print ip "|" k "|" s "|" e "|" r "|" (k == "t" && OX[i] > e ? OX[i] : e) } }
+                    x = (k == "t" && OX[i] > e ? OX[i] : e)
+                    CV[ip] = CV[ip] " " (s > 0 ? s : 0) ":" (e == 0 ? now : (x > e ? x : e))    # bu adresin gerçek kayıtlarının aralıkları
+                    print ip "|" k "|" s "|" e "|" r "|" x } }
+            # olay kaydından gelen: aynı anı (1 dk payla) kapsayan gerçek kayıt yoksa ve saklama içindeyse
+            for (ip in VT) { t = VT[ip]; if (t < cut) continue; n = split(CV[ip], P, " "); hit = 0
+                for (i = 1; i <= n; i++) { split(P[i], z, ":"); if (t >= z[1] - 60 && t <= z[2] + 60) { hit = 1; break } }
+                if (!hit) print ip "|" VK[ip] "|" t "|" t "|" VR[ip] "|" t "|e" }
         }' | sort -t'|' -k3,3n )
 }
 bl_update() {    # tur: birleşik görünümü dosyaya yazar (DRY yazmaz); servis önbelleği ban geçmişinden (perm_cls_load) okunur
@@ -2413,7 +2434,7 @@ bl_svc_map() {   # DOSYA → "IP servis": her IP'nin ban geçmişindeki son geç
 bl_tlines() {    # [SINCE] → stdout "ip|sebep|e:başlangıç": ban geçmişindeki geçici banlar (bitişi SINCE'ten sonra olanlar); csf.tempban'ın
     # "ip|not|e:zaman" biçimi (attack_json, ips_after, allow_atk_load aynı ayrıştırıcıyı kullanır)
     bl_load
-    printf '%s\n' "$BLV" | awk -F'|' -v s="${1:-0}" '$2 == "t" && $4 + 0 > s + 0 { print $1 "|" $5 "|e:" $3 }'
+    printf '%s\n' "$BLV" | awk -F'|' -v s="${1:-0}" '$2 == "t" && $7 != "e" && $4 + 0 > s + 0 { print $1 "|" $5 "|e:" $3 }'
 }
 
 # ── Geçici eşiğin penceresi: son turdan bu yana geçici banlı tekiller ─────────
@@ -2431,7 +2452,7 @@ temp_t0() {      # → REPLY = pencerenin başı: son turun başı; yoksa (ilk t
 }
 temp_window() {  # T0 → stdout "ip|başlangıç|bitiş|sebep": T0'dan sonra herhangi bir an geçici banlı olmuş tek IP'ler (ban geçmişinden)
     bl_load
-    printf '%s\n' "$BLV" | awk -F'|' -v t0="$1" '$2 == "t" && $4 + 0 > t0 + 0 { print $1 "|" $3 "|" $4 "|" $5 }'
+    printf '%s\n' "$BLV" | awk -F'|' -v t0="$1" '$2 == "t" && $7 != "e" && $4 + 0 > t0 + 0 { print $1 "|" $3 "|" $4 "|" $5 }'
 }
 temp_peak() {    # stdin "ip|başlangıç|bitiş|…" → stdout "önek|en çok|IP'ler": pencerede (t0 → şimdi) her blokta aynı anda geçici banlı en
     # çok tekil ve o andaki IP'ler. Aday anlar: her banın başlangıcı (t0'dan önce başlamışsa t0); o an başlamış ve bitmemiş banlar sayılır.
@@ -3645,10 +3666,10 @@ do_lookup() {
         # ban geçmişi: bu IP'nin tekil banları, yeniden eskiye en çok 20 ([tür, başlangıç, bitiş, sebep]; bitiş 0 = kalıcı ve sürüyor)
         local bk bs be br blj=""
         bl_load
-        local bx
-        while IFS='|' read -r bk bs be br bx; do
-            [ -n "$bk" ] || continue; short_reason "$br" "$ip"; jstr "$REPLY"; blj+="${blj:+,}[\"$bk\",$bs,$be,$REPLY,${bx:-$be}]"
-        done < <(printf '%s\n' "$BLV" | awk -F'|' -v ip="$ip" '$1 == ip { print $2 "|" $3 "|" $4 "|" $5 "|" ($6 != "" ? $6 : $4) }' | sort -t'|' -k2,2nr | head -n 20)
+        local bx bv
+        while IFS='|' read -r bk bs be br bx bv; do
+            [ -n "$bk" ] || continue; short_reason "$br" "$ip"; jstr "$REPLY"; blj+="${blj:+,}[\"$bk\",$bs,$be,$REPLY,${bx:-$be},$([ "$bv" = e ] && echo 1 || echo 0)]"
+        done < <(printf '%s\n' "$BLV" | awk -F'|' -v ip="$ip" '$1 == ip { print $2 "|" $3 "|" $4 "|" $5 "|" ($6 != "" ? $6 : $4) "|" $7 }' | sort -t'|' -k2,2nr | head -n 20)
         o+=",\"bl\":[$blj]"
         # izlenen blok: olay kaydı başlamadan izlemeye alınmışsa sebebi ban geçmişinden (izleme gününe kadar o blokta geçici banlananlar)
         if [ -n "$pend" ]; then
@@ -4590,7 +4611,7 @@ prov_json() {    # → REPLY = durum JSON'u: izinli servisler (kaynak başına s
     prof prov_cloudpot
     jstr "$CLOUD_EXTRA"; o+=",\"cloud\":{\"extra\":$REPLY,\"pot\":$cpot,\"on\":$([ "$CLOUD_BAN" = 1 ] && echo true || echo false),\"sources\":\"$CLOUD_SOURCES\",\"tcp\":\"$CLOUD_TCP\",\"udp\":\"$CLOUD_UDP\",\"urls\":\"$CLOUD_URLS\",\"src\":[$cs],\"cat\":{$ccat},\"n\":$cn}"
     jstr "${ASN_MSG:-}"                     # yukarıdaki döngüler REPLY'yi ezdi: sağlayıcı banı iletisi burada hazırlanır
-    o+=",\"asn\":{\"on\":$([ "$ASN_BAN" = 1 ] && echo true || echo false),\"list\":\"$ASN_LIST\",\"all\":\"$ASN_ALL\",\"mode\":\"$ASN_MODE\",\"tcp\":\"$ASN_TCP\",\"udp\":\"$ASN_UDP\",\"state\":\"${ASN_STATE:-}\",\"msg\":$REPLY,\"sets\":[$sets],\"geo_t\":$(num "$gt"),\"geo_dd\":$(grep -qF "DAILY_TASKS $TODAY" "$SAYAC_FILE" 2>/dev/null && echo true || echo false),\"ipset\":$([ "$(conf_val LF_IPSET)" = 0 ] && echo false || echo true)}}"
+    o+=",\"asn\":{\"on\":$([ "$ASN_BAN" = 1 ] && echo true || echo false),\"list\":\"$ASN_LIST\",\"all\":\"$ASN_ALL\",\"mode\":\"$ASN_MODE\",\"tcp\":\"$ASN_TCP\",\"udp\":\"$ASN_UDP\",\"state\":\"${ASN_STATE:-}\",\"msg\":$REPLY,\"sets\":[$sets],\"geo_t\":$(num "$gt"),\"ipset\":$([ "$(conf_val LF_IPSET)" = 0 ] && echo false || echo true)}}"
     REPLY="$o"
 }
 asn_bans_json() { # RNG ALW CLF CWEB COK → stdout JSON: sağlayıcının aralıklarına düşen csf.deny banları ve şu anki kapsamları
@@ -4780,47 +4801,49 @@ svc_health() {   # izinli servis kaynaklarından uyarı süresinden uzun süredi
     ic_track IC_RUN SvcFail "$([ -n "$bad" ] && echo 1 || echo 0)" "$(m "$M_SVC_FAIL_SUBJ" "$bad")" "$(m "$M_SVC_FAIL_BODY" "$bad")" "$M_SVC_FAIL_OK"
     return 0
 }
-refresh_due() {  # DOSYA GÜN → 0: dosyadaki son yenileme zamanından bu yana GÜN geçti (ya da hiç yenilenmedi)
+refresh_due() {  # DOSYA GÜN → 0: dosyadaki son yenileme zamanından bu yana GÜN geçti (ya da hiç yenilenmedi); her turda denetlenir
     local t; t=$(cat "$1" 2>/dev/null)
     [[ "$t" =~ ^[0-9]+$ ]] || return 0
-    (( $(date +%s) - t >= $2 * 86400 - 3600 ))      # bir saat pay: günlük iş her gün biraz farklı saatte çalışır
+    (( $(date +%s) - t >= $2 * 86400 ))
 }
-daily_tasks() {  # günde bir kez, turun içinde (ayrı cron satırı gerekmez):
-    # 1) yayımlanmış servis adresleri: araç kullanılıyorsa (csf.allow'da Include satırı varsa) listeler yenilenir
-    # 2) ASN banı varsa CSF'in ASN verisi: lfd dosyayı yalnız yoksa indirir, kendiliğinden yenilemez; 25 günden
-    #    eskiyse kenara alınır ve lfd yeniden başlatılır, lfd güncel veriyi indirip setleri yeniden doldurur
-    local out="$CSF_DIR/csf_autogroup.services.allow" tool="$SELF_DIR/tools/services-allow.sh" geo="$CSF_VAR/Geo/ip2asn-combined.tsv" asn age
-    grep -qF "DAILY_TASKS $TODAY" "$SAYAC_FILE" 2>/dev/null && return 0
-    # günün anahtarı işler BİTİNCE yazılır: tur yarıda kesilirse sonraki tur kalanını yapar (her işin kendi zaman damgası var)
-    # listeler kendi yenileme aralıklarıyla (Sağlayıcılar → kartlardaki "Yenileme"); son deneme zamanı .refreshed'de
-    local cref="$CLOUD_DIR/.refreshed" sref="$(dirname "$SAYAC_FILE")/services/.refreshed" miss=0
+refresh_tasks() { # her tur, her iş kendi zaman damgasıyla (ayrı cron satırı gerekmez); süresi dolan sonraki turda yenilenir:
+    # izinli servis listeleri (SVC_REFRESH_DAYS), kiralık sunucu listeleri (CLOUD_REFRESH_DAYS), CDN arkasındaki siteler. Önce günde
+    # bir kez (günün ilk turunda) çalışıyordu: süre gün içinde dolunca ya da liste gün içinde elle yenilenince sonraki yenileme
+    # ertesi günü bekliyordu (kayma bir güne kadar). Son deneme zamanı .refreshed'de; yenileme çalışamazsa yazılmaz, sonraki
+    # tur yeniden dener. CSF'in ASN verisi geo_refresh'te.
+    local cref="$CLOUD_DIR/.refreshed" sref="$(dirname "$SAYAC_FILE")/services/.refreshed"
     if [ "$SVC_ALLOW" = 1 ] && refresh_due "$sref" "$SVC_REFRESH_DAYS"; then svc_enforce 1; mkdir -p "$(dirname "$sref")"; date +%s > "$sref"; fi
-    if [ "$CLOUD_BAN" = 1 ] && refresh_due "$cref" "$CLOUD_REFRESH_DAYS"; then if cloud_enforce 1; then cloud_probe; date +%s > "$cref"; else miss=1; fi; fi
+    if [ "$CLOUD_BAN" = 1 ] && refresh_due "$cref" "$CLOUD_REFRESH_DAYS"; then cloud_enforce 1 && { cloud_probe; date +%s > "$cref"; }; fi
     # CDN arkasındaki siteler: istekleri güvenlik duvarına CDN'den gelir, ziyaretçinin IP'si görünmez (Etkisini ölç ve ban-leak ayırır)
     [ -r "$SELF_DIR/tools/cdn-sites.sh" ] && OUT="$CDN_FILE" LOG_FILE="$LOG_FILE" timeout 600 bash "$SELF_DIR/tools/cdn-sites.sh" --if-older 1 >/dev/null 2>&1
+    return 0
+}
+geo_refresh() {  # her tur: ASN banı varsa ve CSF'in ASN verisi (ip2asn) ayardaki günden (GEO_REFRESH_DAYS) eskiyse kenara alınır ve lfd
+    # yeniden başlatılır, lfd güncel veriyi indirip setleri yeniden doldurur. Önce günlük işlerin içindeydi (günde bir, günün ilk
+    # turunda): süre gün içinde dolunca ertesi günü bekliyordu, 25 gün ayarında veri 26–27 günlük oluyordu. Dosyanın tarihine
+    # bakmak her turda bedava. lfd 12 saatte yenisini indiremezse eski veri geri konur ve 12 saat yeniden denenmez (her turda
+    # lfd yeniden başlatılmasın).
+    local geo="$CSF_VAR/Geo/ip2asn-combined.tsv" asn now gmt age mv0 tr0
     asn=$( { conf_val CC_DENY; echo ","; conf_val CC_DENY_PORTS; } | tr ',' '\n' | grep -iE '^AS[0-9]+$' | paste -sd, -)
-    # yenilemek için kenara alınan dosyanın yerine 12 saatte yenisi gelmediyse (lfd indiremedi) eskisi geri konur
-    # (kenara alma anı .moved'da: aynı gün yarıda kalmış bir turdan sonra lfd'ye indirme fırsatı tanınır)
-    local mv0; mv0=$(cat "$geo.moved" 2>/dev/null); [[ "$mv0" =~ ^[0-9]+$ ]] || mv0=0
-    if [ -n "$asn" ] && [ ! -e "$geo" ] && [ -e "$geo.old" ] && [ $(( $(date +%s) - mv0 )) -ge 43200 ]; then
+    [ -n "$asn" ] || return 0
+    now=$(date +%s)
+    mv0=$(cat "$geo.moved" 2>/dev/null); [[ "$mv0" =~ ^[0-9]+$ ]] || mv0=0
+    if [ ! -e "$geo" ] && [ -e "$geo.old" ] && [ $(( now - mv0 )) -ge 43200 ]; then
         mv -f "$geo.old" "$geo" && { systemctl restart lfd 2>/dev/null 9>&- || service lfd restart >/dev/null 2>&1 9>&-; }
-        log "$(m "$M_ASN_REFRESH_FAIL" "?")"
+        echo "$now" > "$geo.tried"; log "$(m "$M_ASN_REFRESH_FAIL" "?")"
     fi
     [ -e "$geo" ] && rm -f "$geo.moved"
-    # yaş, listelerin yenilemesiyle aynı kuralla (refresh_due: ayar kadar gün, bir saat payla); önce find -mtime +GÜN
-    # kullanılıyordu, o "GÜN+1 tam gün" demek: 25 gün ayarında veri ancak 26. günde yenileniyordu
-    local gmt; gmt=$(stat -c %Y "$geo" 2>/dev/null)
-    if [ -n "$asn" ] && [[ "$gmt" =~ ^[0-9]+$ ]] && refresh_due <(echo "$gmt") "$GEO_REFRESH_DAYS"; then
-        age=$(( ( $(date +%s) - gmt ) / 86400 ))
-        if mv -f "$geo" "$geo.old" && date +%s > "$geo.moved" && { systemctl restart lfd 2>/dev/null 9>&- || service lfd restart >/dev/null 2>&1 9>&-; }; then
-            log "$(m "$M_ASN_REFRESH" "$age" "$asn")"
-        else
-            [ -e "$geo" ] || mv -f "$geo.old" "$geo"           # lfd başlatılamadıysa eski veri yerine dönsün
-            rm -f "$geo.moved"
-            log "$(m "$M_ASN_REFRESH_FAIL" "$age")"
-        fi
+    tr0=$(cat "$geo.tried" 2>/dev/null); [[ "$tr0" =~ ^[0-9]+$ ]] && [ $(( now - tr0 )) -lt 43200 ] && return 0
+    gmt=$(stat -c %Y "$geo" 2>/dev/null); [[ "$gmt" =~ ^[0-9]+$ ]] || return 0
+    [ $(( now - gmt )) -ge $(( GEO_REFRESH_DAYS * 86400 )) ] || return 0
+    age=$(( ( now - gmt ) / 86400 ))
+    if mv -f "$geo" "$geo.old" && echo "$now" > "$geo.moved" && { systemctl restart lfd 2>/dev/null 9>&- || service lfd restart >/dev/null 2>&1 9>&-; }; then
+        rm -f "$geo.tried"; log "$(m "$M_ASN_REFRESH" "$age" "$asn")"
+    else
+        [ -e "$geo" ] || mv -f "$geo.old" "$geo"           # lfd başlatılamadıysa eski veri yerine dönsün
+        rm -f "$geo.moved"; echo "$now" > "$geo.tried"
+        log "$(m "$M_ASN_REFRESH_FAIL" "$age")"
     fi
-    [ "$miss" = 1 ] || cnt_add "DAILY_TASKS $TODAY"   # yenileme çalışamadıysa gün kapanmaz: sonraki tur yeniden dener
     return 0
 }
 part_note() {    # LO HI → REPLY = "CIDR|svc" (aralıktaki ilk kısmi ban) ya da boş
@@ -6312,7 +6335,7 @@ pa "turn csf.deny okuma"; [ "$DRY" = 1 ] || orphans_clean       # eklenti dış�
 pa "turn artık temizliği"; [ "$DRY" = 1 ] || limit_watch         # CSF sınır dolunca sildiyse: izlemeye al, bildir
 pa "turn sınır izleme"; [ "$DRY" = 1 ] || proto_fix           # eski kısmi ban / istisnalara eksik UDP 443 (HTTP/3)
 pa "turn UDP 443"; [ "$DRY" = 1 ] || { svc_enforce 0; asn_enforce; cloud_enforce 0; cloud_on_calc; hits_update; guard_update; }   # izinli servisler, sağlayıcı banı, bulut listeleri: istenen durum CSF'te mi
-pa "turn servis/sağlayıcı/bulut zorlama"; [ "$DRY" = 1 ] || daily_tasks; CR_OK=""   # günde bir: servis izin listeleri, CSF'in ASN verisi; kiralık listeler yenilenmiş olabilir: aralık önbelleği yeniden denetlensin
+pa "turn servis/sağlayıcı/bulut zorlama"; [ "$DRY" = 1 ] || { refresh_tasks; geo_refresh; }; CR_OK=""   # günde bir: servis izin listeleri, CSF'in ASN verisi; kiralık listeler yenilenmiş olabilir: aralık önbelleği yeniden denetlensin
 pa "turn günlük işler"; [ "$DRY" = 1 ] || { svc_health; cloud_health; }   # indirilemeyen izinli servis / bulut listesi: bildirim
 
 prof "turn denetim+zorlama"

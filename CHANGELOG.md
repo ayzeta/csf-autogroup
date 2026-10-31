@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.15.35 — 2026-11-01
+
+- **Fix: lists and CSF's ASN data were refreshed up to a day late.** The
+  rented-server lists, the allowed-service lists and CSF's ASN data were
+  checked only once a day, on the day's first run: when the period ran out
+  later that day (or a list was refreshed by hand during the day) the refresh
+  waited for the next day, so a 25-day setting meant 26–27 days. Each of them is
+  now checked on every run and refreshed on the first run after its period is
+  up. If lfd cannot download the ASN data, the old data is put back and the
+  next try waits 12 hours.
+- **Providers tab:** says how old CSF's ASN data is and either how long until it
+  is refreshed or that the period is up and it is refreshed on the next run
+  (no more "on the first run of" a date).
+- **Ban history from the event log.** Single bans that the event log recorded
+  (suspicious network warnings, block bans, manual bans) but lfd's log no
+  longer holds are added to the ban history as "banned at this time" (start and
+  length not recorded), when no real record covers that moment. They count for
+  the provider ranking and show on the cards; the temp threshold and the open
+  services after a partial ban do not use them.
+- **Fix: on phones the time in History stuck to the text** ("10 times31.10
+  12:58"): the separator was dropped whenever the details were plain text.
+- **Fix: "Server IP" was said twice** in a History row and in the mail for a
+  violation from the server's own address ("Server IP · … · whitelist: server
+  IP").
+
 ## 1.15.34 — 2026-11-01
 
 - **Fix: the refresh day of CSF's ASN data could be a past date.** When the
