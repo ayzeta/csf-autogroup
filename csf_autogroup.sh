@@ -57,7 +57,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.38"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.39"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -2428,6 +2428,16 @@ bl_update() {    # tur: birleşik görünümü dosyaya yazar (DRY yazmaz); servi
         rm -f "$BANLOG_FILE.tmp.$$"
     return 0
 }
+blk_svc_map() {  # DOSYA → "CIDR servis": olay kaydında aralık banının dayandığı IP'lerin sebeplerinden en sık servis (son olay)
+    # csf.deny'deki blok satırının yorumu sebep taşımıyor; Etkisini ölç blok banının servisini "diğer" sayıyordu, hemen altında
+    # aynı sağlayıcının ihlalleri "hepsi web" diyordu
+    [ -r "$EVENTS_FILE" ] || { : > "$1"; return 0; }
+    grep -E '"type":"(add24|temp24|promote|manual_ban)"' "$EVENTS_FILE" 2>/dev/null | awk "$AWK_CLS"'
+        match($0, /"cidr":"[0-9.]+\/[0-9]+"/) { c = substr($0, RSTART + 8, RLENGTH - 9); delete N; b = ""; m = 0; r = $0
+            while (match(r, /"why":"[^"]*"/)) { k = cls(substr(r, RSTART + 7, RLENGTH - 8)); r = substr(r, RSTART + RLENGTH); if (k != "other" && k != "repeat") { N[k]++; if (N[k] > m) { m = N[k]; b = k } } }
+            if (b != "") S[c] = b }
+        END { for (c in S) print c, S[c] }' > "$1"
+}
 bl_svc_map() {   # DOSYA → "IP servis": her IP'nin ban geçmişindeki son geçici banının servisi (PERMBLOCK'un önceki servisi; perm_cls_load
     # ile aynı kural), geçmişte olmayanlar için eski önbellek (perm_cls)
     bl_load
@@ -4699,7 +4709,7 @@ prov_json() {    # → REPLY = durum JSON'u: izinli servisler (kaynak başına s
 asn_bans_json() { # RNG ALW CLF CWEB COK → stdout JSON: sağlayıcının aralıklarına düşen csf.deny banları ve şu anki kapsamları
     # COK: portlarının hepsini kiralık liste kapatan servisler (",web,"); yalnız o servisteki ban "listede, zaten kapalı" sayılır,
     # öteki servislerde (SSH, posta …) ve servisi bilinmeyen banlarda ban listenin kapatmadığı portları da kapatır (tur da böyle sayar)
-    awk -v rf="$1" -v af="$2" -v cf="$3" -v cweb="$4" -v cok="${5:-}" -v pc="${PERM_SVM:-$PERM_CACHE}" "$AWK_CLS"'
+    awk -v rf="$1" -v af="$2" -v cf="$3" -v cweb="$4" -v cok="${5:-}" -v pc="${PERM_SVM:-$PERM_CACHE}" -v bf="${BLK_SVM:-/dev/null}" "$AWK_CLS"'
         function v4(x,  p) { split(x, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
         function de(x,  a, k, M, i, h) { split("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec", M, " "); k = split(x, a, /[ \t]+/)
             if (k < 4 || a[k] !~ /^[0-9][0-9][0-9][0-9]$/ || a[k - 1] !~ /^[0-9][0-9]:[0-9][0-9]:[0-9][0-9]$/) return 0
@@ -4712,7 +4722,8 @@ asn_bans_json() { # RNG ALW CLF CWEB COK → stdout JSON: sağlayıcının aral�
                     if (an == 1 || h > AH[an - 1]) { AH[an] = h; AN[an] = x[3] } else { AH[an] = AH[an - 1]; AN[an] = AN[an - 1] } }
                 while ((getline l < cf) > 0) { split(l, x, " "); cn++; CL[cn] = x[1] + 0; h = x[2] + 0
                     if (cn == 1 || h > CH[cn - 1]) { CH[cn] = h; CN[cn] = x[3] } else { CH[cn] = CH[cn - 1]; CN[cn] = CN[cn - 1] } }
-                while ((getline l < pc) > 0) { split(l, x, " "); PC[x[1]] = x[2] } }
+                while ((getline l < pc) > 0) { split(l, x, " "); PC[x[1]] = x[2] }
+                while ((getline l < bf) > 0) { split(l, x, " "); BS[x[1]] = x[2] } }
         /^[[:space:]]*(#|$)/ { next }
         { c = $0; sub(/[ \t]*#.*/, "", c); cm = $0; sub(/^[^#]*#[ \t]*/, "", cm); k = ""
           if (c ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) { k = "s"; t0 = c; lo = v4(c); hi = lo }
@@ -4722,6 +4733,7 @@ asn_bans_json() { # RNG ALW CLF CWEB COK → stdout JSON: sağlayıcının aral�
               if (t0 in SEENP) next; SEENP[t0] = 1 }
           if (k == "" || !rn || !bs(RL, RH, rn, lo)) next
           sv = cls(cm); if (sv == "repeat" && k == "s" && (t0 in PC)) sv = PC[t0]
+          if (k == "b" && sv == "other" && (t0 in BS)) sv = BS[t0]          # blok banı: olay kaydındaki IP sebeplerinden
           cv = "open"; j = an ? bs(AL, AH, an, lo) : 0; if (j && AH[j] >= hi) cv = "allow:" AN[j]
           else if (cweb == 1 && cn && k == "s" && index(cok, "," sv ",")) { j = bs(CL, CH, cn, lo); if (j && CH[j] >= hi) cv = "cloud:" CN[j] }
           t = de(cm); r = cm; sub(/^lfd: */, "", r); sub(/ - [A-Z][a-z][a-z] [A-Z][a-z][a-z] +[0-9]+ [0-9:]+ [0-9]+[[:space:]]*$/, "", r); r = substr(r, 1, 100)
@@ -4797,7 +4809,8 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
     fi
     local cok="," cs; for cs in web ssh ftp cp min sync mout wout dns; do pc_ports "$cs" ",${CLOUD_TCP// /}," && cok+="$cs,"; done
     local bjf svm; svm=$(mktemp) && bl_svc_map "$svm"
-    bjf=$(mktemp) && PERM_SVM="$svm" asn_bans_json "$rng" "$alw" "$clf" "$cweb" "$cok" > "$bjf" 2>/dev/null; rm -f "$svm"
+    local bsm; bsm=$(mktemp) && blk_svc_map "$bsm"
+    bjf=$(mktemp) && PERM_SVM="$svm" BLK_SVM="$bsm" asn_bans_json "$rng" "$alw" "$clf" "$cweb" "$cok" > "$bjf" 2>/dev/null; rm -f "$svm" "$bsm"
     find -L "$dir" -type f -mmin -1440 ! -name '*bytes_log*' ! -name '*.offset*' ! -name '*.gz' 2>/dev/null > "$lst"
     since=$(date -d '24 hours ago' +%Y%m%d%H%M%S)
     # dosyalar tek awk'a verilir (xargs çok dosyada gruplara bölüp yalnız son grubun sonucunu bırakıyordu)
@@ -4922,11 +4935,15 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
             if (match(u, /^(curl|[Ww]get|[Pp]ython|Go-http-client|Java|okhttp|axios|node-fetch|Scrapy|libwww|HeadlessChrome)[^ ;)]*/)) return substr(u, RSTART, RLENGTH)
             if (match(u, /HeadlessChrome/)) return "HeadlessChrome"
             return "" }
-        function crawl(  o, b, n, i, k, mi, mr, pi, pr, fi, fr, fo, x) {   # tarama belirtileri JSON (açık adresler)
+        function crawl(  o, b, n, i, k, mi, mr, pi, pr, fi, fr, fo, x, kk, pp, XMU) {   # tarama belirtileri JSON (açık adresler)
             o = ""; for (n = 0; n < 6; n++) { b = 0; k = ""; for (i in XBR) if (XBR[i] > b) { b = XBR[i]; k = i }; if (k == "") break
                 o = o (o == "" ? "" : ",") "[" js(k) "," XBN[k] "," XBR[k] "]"; delete XBR[k] }
             x = "\"bots\":[" o "]"
-            o = ""; for (n = 0; n < 6; n++) { b = 9; k = ""; for (i in XUN) if (XUN[i] > b && botname(i) == "") { b = XUN[i]; k = i }; if (k == "") break
+            # aynı kimliği 10+ IP paylaşıyor ve tarama gibi davranıyor: IP başına ortalama en az 5 istek ya da bu adreslerin yarısı 3+ siteyi
+            # geziyor. Yalnız IP sayısı yetmiyordu: VPN altyapısında (M247) sıradan bir iPhone kimliği 15 adreste, adres başına 2 istekle
+            # "tarama" sayılıyordu; gerçek ziyaretçiler birkaç sayfa açıp gider
+            for (kk in XUI) { split(kk, pp, SUBSEP); if (XNS[pp[2]] >= 3) XMU[pp[1]]++ }
+            o = ""; for (n = 0; n < 6; n++) { b = 9; k = ""; for (i in XUN) if (XUN[i] > b && botname(i) == "" && (XUR[i] >= 5 * XUN[i] || XMU[i] * 2 >= XUN[i])) { b = XUN[i]; k = i }; if (k == "") break
                 o = o (o == "" ? "" : ",") "[" js(substr(k, 1, 120)) "," XUN[k] "," XUR[k] "]"; PK[k] = 1; delete XUN[k] }
             x = x ",\"pool\":[" o "]"
             for (i in OUA) { if (XNS[i] >= 3) { mi++; mr += OR[i] }; if (!XA[i]) { pi++; pr += OR[i] }

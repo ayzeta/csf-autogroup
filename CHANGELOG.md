@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.15.39 — 2026-11-01
+
+- **Measure impact, crawl signs:** a user agent shared by 10 or more IPs counts
+  as a crawl sign only when those IPs behave like crawling (at least 5 requests
+  per IP on average, or half of them visit 3 or more sites). Real visitors
+  behind a VPN shared one common phone browser's user agent across many IPs
+  with a couple of requests each and were counted as crawling.
+- **Measure impact, bans of this provider:** a block ban's service comes from
+  the violations it was based on (event log) instead of "other".
+
 ## 1.15.38 — 2026-11-01
 
 - **Fix: returning to the tab froze the page for a few seconds.** With data
