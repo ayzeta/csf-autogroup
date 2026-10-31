@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.15.41 — 2026-11-01
+
+- **Measure impact, bans of this provider:** a block ban whose csf.deny
+  comment carries no violation reason and that is not in the event log is
+  counted as "reason not recorded" instead of "other". A comment with an lfd
+  reason (such as sshd or ModSecurity) counts under that service.
+
 ## 1.15.40 — 2026-11-01
 
 - **Faster status:** the server's own IP in "To check" no longer scans the mail

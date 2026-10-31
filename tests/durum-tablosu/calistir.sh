@@ -403,6 +403,14 @@ TL=$(LC_ALL=C date -d '-1 hour' '+%d/%b/%Y:%H:%M:%S +0000')
 printf '66.249.66.1 - - [%s] "GET /gizli HTTP/1.1" 403 10 "-" "Googlebot/2.1"\n66.249.66.1 - - [%s] "GET /gizli HTTP/1.1" 403 10 "-" "Googlebot/2.1"\n66.249.66.2 - - [%s] "GET / HTTP/1.1" 200 10 "-" "Googlebot/2.1"\n' "$TL" "$TL" "$TL" > "$R/domlogs/site.test"
 mcheck "Etkisini ölç: izinli servisin 403 aldığı istek örnekte (kod · site · istek ×2, servis, örnek IP); başarılı istek listede değil" "run --asn-impact AS15169 --json 2>/dev/null | grep -q '\"afails\":\[\[\"403 · site.test · GET /gizli\",2,0,\"googlebot\",\"66.249.66.1\"\]\]'"
 
+# Etkisini ölç: olay kaydında olmayan blok banı — yorumunda sebep yoksa "sebebi kayıtlı değil", sebep yazıyorsa o servis (diğer değil)
+mk impnr; mkdir -p "$R/var/lib/csf/Geo" "$R/domlogs"
+printf '151.80.0.0\t151.80.255.255\t16276\tFR\tOVH\n' > "$R/var/lib/csf/Geo/ip2asn-combined.tsv"
+echo "DOMLOGS=$R/domlogs" >> "$R/app/config.env"
+printf '151.80.7.9 - - [%s] "GET / HTTP/1.1" 200 10 "-" "Mozilla/5.0"\n' "$(LC_ALL=C date -d '-1 hour' '+%d/%b/%Y:%H:%M:%S +0000')" > "$R/domlogs/site.test"
+printf '151.80.7.0/24      # 3 IP\n151.80.8.0/24 # 4 IP do not delete\n151.80.9.0/24 # (sshd) elle, 5 IP\n' >> "$D"
+mcheck "Etkisini ölç: yorumunda sebep olmayan blok banları 'sebebi kayıtlı değil' (2), yorumda lfd sebebi olan o servis (ssh 1)" "run --asn-impact AS16276 --json 2>/dev/null | grep -o '\"svc\":{[^}]*}' | grep -q '\"norec\":2' && run --asn-impact AS16276 --json 2>/dev/null | grep -o '\"svc\":{[^}]*}' | grep -q '\"ssh\":1' && ! run --asn-impact AS16276 --json 2>/dev/null | grep -o '\"svc\":{[^}]*}' | grep -q other"
+
 # ekran: yazısı aralık olan öğe IP kartı değil aralık kartı açar (tıklanan şey ile açılan şey aynı)
 AGJS="$REPO/whm/assets/ag.js"                 # yol tek tırnak içerebilir ("Drive'ım"): değişkenle verilir
 mcheck "aralığa tıklamak aralık kartını açar" "grep -qF 'if (RANGE_RE.test(rtx)) openRange(rtx); else openDrawer' \"\$AGJS\""

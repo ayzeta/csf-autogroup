@@ -57,7 +57,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.40"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.41"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -268,7 +268,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_T_H="%s saat"; M_T_M="%s dakika"; M_T_S="%s saniye"
   # servis adları panelle aynı (ag.js svc_*)
   M_SVCN_web="Web"; M_SVCN_ssh="SSH"; M_SVCN_ftp="FTP"; M_SVCN_cp="cPanel · WHM · Webmail"; M_SVCN_min="Gelen posta"; M_SVCN_mout="Giden posta"
-  M_SVCN_sync="E-posta istemcisi"; M_SVCN_dns="DNS"; M_SVCN_scan="port taraması"; M_SVCN_repeat="tekrar banlanan"; M_SVCN_other="diğer"
+  M_SVCN_sync="E-posta istemcisi"; M_SVCN_dns="DNS"; M_SVCN_scan="port taraması"; M_SVCN_repeat="tekrar banlanan"; M_SVCN_other="diğer"; M_SVCN_norec="sebebi kayıtlı değil"
   M_AVK_b="ban işlemiyor"; M_AVK_i="lfd yoksaydı"; M_AVK_y="yoksayılıyor"; M_AVK_s="sunucu IP'si"
   M_POPEN_SUBJ="%s açık servis"; M_POPEN_BODY="Kısmi banın açık bıraktığı servislere eşik kadar ihlal geldi; banı değiştirip onları da kapatabilirsiniz:"; M_POPEN_L="kapalı: %s · açık servislere %s ihlal"
   M_DG_RV="Kontrol edilecekler (7 gün): %s izinli IP'den ihlal kaydı · %s açık servis kaydı"
@@ -522,7 +522,7 @@ else
   M_PERMB="Repeat ban (PERMBLOCK): in the last %s, at least %s temp bans, made permanent"; M_PB_SVC="earlier ban: %s"
   M_T_H="%s hour(s)"; M_T_M="%s minute(s)"; M_T_S="%s second(s)"
   M_SVCN_web="Web"; M_SVCN_ssh="SSH"; M_SVCN_ftp="FTP"; M_SVCN_cp="cPanel · WHM · Webmail"; M_SVCN_min="Incoming mail"; M_SVCN_mout="Outgoing mail"
-  M_SVCN_sync="Mail client"; M_SVCN_dns="DNS"; M_SVCN_scan="port scan"; M_SVCN_repeat="banned repeatedly"; M_SVCN_other="other"
+  M_SVCN_sync="Mail client"; M_SVCN_dns="DNS"; M_SVCN_scan="port scan"; M_SVCN_repeat="banned repeatedly"; M_SVCN_other="other"; M_SVCN_norec="reason not recorded"
   M_AVK_b="ban not working"; M_AVK_i="ignored by lfd"; M_AVK_y="ignored"; M_AVK_s="server IP"
   M_POPEN_SUBJ="%s open services"; M_POPEN_BODY="The services a partial ban leaves open took violations up to the threshold; change the ban to close them too:"; M_POPEN_L="closed: %s · %s violations on the open services"
   M_DG_RV="Needs review (7 days): %s allowed-IP violation records · %s open-service records"
@@ -4729,7 +4729,12 @@ asn_bans_json() { # RNG ALW CLF CWEB COK → stdout JSON: sağlayıcının aral�
               if (t0 in SEENP) next; SEENP[t0] = 1 }
           if (k == "" || !rn || !bs(RL, RH, rn, lo)) next
           sv = cls(cm); if (sv == "repeat" && k == "s" && (t0 in PC)) sv = PC[t0]
-          if (k == "b" && sv == "other" && (t0 in BS)) sv = BS[t0]          # blok banı: olay kaydındaki IP sebeplerinden
+          if (k == "b" && sv == "other") {          # blok banı: olay kaydındaki IP sebeplerinden
+              if (t0 in BS) sv = BS[t0]
+              else {                                # olay kaydında yok: yorumda sebep yoksa "sebebi kayıtlı değil" (diğer değil)
+                  nq = tolower(cm); if (nq ~ /^auto-grouped/ || index($0, "#") == 0) nq = ""   # eklentinin blok yorumu sebep taşımaz
+                  gsub(/do not delete|[0-9]+ ip|[a-z][a-z][a-z] [a-z][a-z][a-z] +[0-9]+ [0-9:]+ [0-9]+/, "", nq)
+                  if (nq !~ /[a-z]/) sv = "norec" } }
           cv = "open"; j = an ? bs(AL, AH, an, lo) : 0; if (j && AH[j] >= hi) cv = "allow:" AN[j]
           else if (cweb == 1 && cn && k == "s" && index(cok, "," sv ",")) { j = bs(CL, CH, cn, lo); if (j && CH[j] >= hi) cv = "cloud:" CN[j] }
           t = de(cm); r = cm; sub(/^lfd: */, "", r); sub(/ - [A-Z][a-z][a-z] [A-Z][a-z][a-z] +[0-9]+ [0-9:]+ [0-9]+[[:space:]]*$/, "", r); r = substr(r, 1, 100)
