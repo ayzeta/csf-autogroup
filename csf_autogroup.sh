@@ -57,7 +57,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.41"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.42"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -215,10 +215,22 @@ done
 AG_BY="${AG_BY:-root}"; [[ "$AG_BY" =~ ^[A-Za-z0-9._-]{1,32}$ ]] || AG_BY="root"
 
 # ── Messages (printf templates; %s placeholders) ────────────────────────────
+tr_ctype() {     # Türkçe modda harf sınıfı (LC_CTYPE) Türkçe değil: tr_TR'de büyük I küçülünce noktasız ı olur (sunucuda ölçüldü:
+    # awk tolower("IMAP") = "ımap", bash ${c,,} "IT" = "ıt"). Sebep sınıflaması ("Failed IMAP login", "[LF_DISTATTACK]"), ülke
+    # bölge dosyası (zone/it.zone), cc_ kümeleri ve grep -i bozuluyordu. Tarih ve metin Türkçe kalır (LC_TIME, LC_MESSAGES).
+    local l=$'\n'"$(locale -a 2>/dev/null)"$'\n'
+    case "$l" in
+        *$'\n'C.utf8$'\n'*) export LC_CTYPE=C.utf8 ;;
+        *$'\n'C.UTF-8$'\n'*) export LC_CTYPE=C.UTF-8 ;;
+        *$'\n'en_US.utf8$'\n'*) export LC_CTYPE=en_US.utf8 ;;
+        *) export LC_CTYPE=C ;;
+    esac
+}
 if [ "$MSG_LANG" = "tr" ]; then
   # Türkçe tarih/metin; ama sıralama kuralı C: tr_TR'de "i" [a-z] aralığına girmiyor (ı/i ayrı harf),
   # e-posta, alan adı ve tarih denetimleri "gmail" gibi değerleri reddediyordu (sunucuda doğrulandı).
   unset LC_ALL; export LANG=tr_TR.UTF-8 LC_COLLATE=C
+  tr_ctype
   M_START="--- Başladı ---"
   M_END_T="--- Bitti (toplam %s sn) ---"
   M_CFG_ROTFAIL="UYARI: logrotate ayarı yazılamadı (/etc/logrotate.d)"

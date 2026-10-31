@@ -14,6 +14,7 @@ CASES=(
   "lfd: (PERMBLOCK) 1.2.3.4 (FR/France/-) has had more than 3 temp blocks in the last 259200 secs|repeat"
   "lfd: (pop3d) Failed POP3 login from 1.2.3.4 (IN/India/http.example.in): 5 in the last 3600 secs|sync"
   "lfd: *Port Scan* detected from 1.2.3.4 (CN/China/-). 11 hits in the last 39 seconds|scan"
+  "Failed IMAP login from 1.2.3.4 - ignored|sync"
 )
 F=0
 for c in "${CASES[@]}"; do

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.15.42 — 2026-11-01
+
+- **Fix: Turkish mode lower-cased "I" as dotless "ı".** With the plugin
+  language set to Turkish, the Turkish character rules turned "IMAP" into
+  "ımap" and "IT" into "ıt". Ban reasons with a capital I ("Failed IMAP login",
+  "[LF_DISTATTACK]", "IP") were classified as "other", country codes with an I
+  (IT, IN, IR, ID, IE, IL, IQ, IS) did not find their CSF zone file or set, and
+  case-insensitive matches missed. Dates and texts stay Turkish; only the
+  character rules now follow the standard (C.UTF-8) ones. This also makes the
+  1.15.41 "reason not recorded" count work in Turkish mode.
+
 ## 1.15.41 — 2026-11-01
 
 - **Measure impact, bans of this provider:** a block ban whose csf.deny
