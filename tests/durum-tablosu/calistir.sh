@@ -403,6 +403,17 @@ TL=$(LC_ALL=C date -d '-1 hour' '+%d/%b/%Y:%H:%M:%S +0000')
 printf '66.249.66.1 - - [%s] "GET /gizli HTTP/1.1" 403 10 "-" "Googlebot/2.1"\n66.249.66.1 - - [%s] "GET /gizli HTTP/1.1" 403 10 "-" "Googlebot/2.1"\n66.249.66.2 - - [%s] "GET / HTTP/1.1" 200 10 "-" "Googlebot/2.1"\n' "$TL" "$TL" "$TL" > "$R/domlogs/site.test"
 mcheck "Etkisini ölç: izinli servisin 403 aldığı istek örnekte (kod · site · istek ×2, servis, örnek IP); başarılı istek listede değil" "run --asn-impact AS15169 --json 2>/dev/null | grep -q '\"afails\":\[\[\"403 · site.test · GET /gizli\",2,0,\"googlebot\",\"66.249.66.1\"\]\]'"
 
+# Imunify360 8.15 "port bilen" beyaz listesi (v3/imunify360-csf.txt, csf.allow'a Include ile): satırlar tek yönlü ve tek portlu
+# (sunucuda ölçüldü 2026-11-01: 224 × tcp|out|d=443|d=IP, 18 × tcp|out|d=8883, 5 × tcp|in|d=22|s=IP, 1 × udp|out|d=53). Ban altında tek
+# yönlü satır hiçbir şey geçirmez (gerçek CSF'te ölçüldü) → o IP'yi kapsayan /24 otomatik banlanmamalı, IP kartı izni doğru adlandırmalı
+for v in "out443|tcp|out|d=443|d=151.80.7.50|out" "in22|tcp|in|d=22|s=151.80.7.50|in_ok" "udp53|udp|out|d=53|d=151.80.7.50|out"; do
+    nm="${v%%|*}"; r="${v#*|}"; wle="${r##*|}"; ln="${r%|*}"
+    mk "imv3$nm"; printf '%s\n' "# Imunify360 infrastructure whitelist, CSF advanced-filter format." "$ln" > "$R/etc/csf/imunify360-csf.txt"
+    printf 'Include %s\n' "$R/etc/csf/imunify360-csf.txt" >> "$A"
+    for x in 1 2 3; do single 151.80.7.$x sshd; done; quiet
+    mcheck "Imunify v3 '$ln' (Include): IP kartı izni '$wle', kapsayan /24 otomatik banlanmaz ('Atlandı')" "run --lookup 151.80.7.50 --json 2>/dev/null | grep -q '\"wle\":\"$wle\"' && ! grep -q '^151.80.7.0/24' '$D' && rvrow 151.80.7.0/24 | grep -q '\"type\":\"skip_wl\"'"
+done
+
 # Etkisini ölç: olay kaydında olmayan blok banı — yorumunda sebep yoksa "sebebi kayıtlı değil", sebep yazıyorsa o servis (diğer değil)
 mk impnr; mkdir -p "$R/var/lib/csf/Geo" "$R/domlogs"
 printf '151.80.0.0\t151.80.255.255\t16276\tFR\tOVH\n' > "$R/var/lib/csf/Geo/ip2asn-combined.tsv"
