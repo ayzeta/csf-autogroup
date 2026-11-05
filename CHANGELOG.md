@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.15.43 — 2026-11-05
+
+- **Wording:** the most blocked providers list said the reason of a
+  provider's bans was unknown because they predate the event log; that cause
+  was not established. It now says "no reason recorded", and its hint names
+  where the plugin looked (single-ban notes in csf.deny, ban history, event
+  log). A /16 row in "To check" whose violations map to no service now says
+  "service not in the reasons" instead of "service unknown".
+
 ## 1.15.42 — 2026-11-01
 
 - **Fix: Turkish mode lower-cased "I" as dotless "ı".** With the plugin
