@@ -1,0 +1,46 @@
+{
+  "changeNumber": 1,
+  "cloud": "Public",
+  "values": [
+    {
+      "name": "AzureCloud.westus",
+      "id": "AzureCloud.westus",
+      "properties": {
+        "changeNumber": 150,
+        "region": "westus",
+        "regionId": 37,
+        "platform": "Azure",
+        "systemService": "",
+        "addressPrefixes": [
+          "4.150.224.0/19",
+          "9.129.20.0/23",
+          "9.129.40.0/24"
+        ],
+        "networkFeatures": [
+          "API",
+          "NSG"
+        ]
+      }
+    },
+    {
+      "name": "AzureCloud",
+      "id": "AzureCloud",
+      "properties": {
+        "changeNumber": 320,
+        "region": "",
+        "regionId": 0,
+        "platform": "Azure",
+        "systemService": "",
+        "addressPrefixes": [
+          "4.144.0.0/14",
+          "4.148.0.0/15",
+          "4.150.0.0/18"
+        ],
+        "networkFeatures": [
+          "API",
+          "NSG"
+        ]
+      }
+    }
+  ]
+}

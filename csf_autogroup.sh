@@ -57,7 +57,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.45"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.46"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -877,7 +877,7 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
             done
             return 0 ;;
         SVC_URLS|CLOUD_URLS)      # yalnız https adresi; ad hazır kaynaklardan biri olmalı
-            local x u re='^[a-z0-9-]{1,40}[|]https://[A-Za-z0-9._~:/?#@=%+&-]{4,255}$'; CFG_VAL=""
+            local x u re='^[a-z0-9-]{1,40}[|]https://[A-Za-z0-9._~:/?#@=%+&-]{4,255}([|](-|[jt]:[A-Za-z0-9%._~=\&:-]{1,600})([|](-|[A-Za-z0-9._~/*:-]{3,300}))?)?$'; CFG_VAL=""
             for x in $v; do
                 [[ "$x" =~ $re ]] || { CFG_ERR=$(m "$M_CFG_BAD" "$k" "$x" "$M_CFG_SVCU"); return 1; }
                 CFG_VAL+="${CFG_VAL:+ }$x"
@@ -892,7 +892,7 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
             done
             return 0 ;;
         CLOUD_EXTRA)
-            local x n=0 re='^[a-z0-9-]{1,60}[|]https://[A-Za-z0-9._~:/?#@=%+&-]{4,255}$'; CFG_VAL=""
+            local x n=0 re='^[a-z0-9-]{1,60}[|]https://[A-Za-z0-9._~:/?#@=%+&-]{4,255}([|](-|[jt]:[A-Za-z0-9%._~=\&:-]{1,600})([|](-|[A-Za-z0-9._~/*:-]{3,300}))?)?$'; CFG_VAL=""
             for x in $v; do
                 n=$((n + 1))
                 if [ "$n" -gt 50 ] || ! [[ "$x" =~ $re ]]; then CFG_ERR=$(m "$M_CFG_BAD" "$k" "$x" "$M_CFG_CLX"); return 1; fi
@@ -900,7 +900,7 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
             done
             return 0 ;;
         SVC_EXTRA)
-            local x n=0 re='^[A-Za-z0-9._-]{1,60}[|](https://[A-Za-z0-9._~:/?#@=%+&-]{4,255}|[0-9]{1,3}([.][0-9]{1,3}){3}(/[0-9]{1,2})?)$'; CFG_VAL=""
+            local x n=0 re='^[A-Za-z0-9._-]{1,60}[|](https://[A-Za-z0-9._~:/?#@=%+&-]{4,255}([|](-|[jt]:[A-Za-z0-9%._~=\&:-]{1,600})([|](-|[A-Za-z0-9._~/*:-]{3,300}))?)?|[0-9]{1,3}([.][0-9]{1,3}){3}(/[0-9]{1,2})?)$'; CFG_VAL=""
             for x in $v; do
                 n=$((n + 1))
                 if [ "$n" -gt 50 ] || ! [[ "$x" =~ $re ]]; then
@@ -4299,6 +4299,14 @@ cloud_urls() {   # KAYNAK → REPLY = varsayılan liste adresi (firmanın kirala
         *)            REPLY="" ;;
     esac
 }
+cloud_flt() {    # KAYNAK → REPLY = hazır listenin varsayılan süzgeci (tools/src-filter.pl): AWS dosyasında yalnız EC2 (kiralık sunucular;
+    # CloudFront, S3, Route 53 değil), Azure Service Tags'te yalnız AzureCloud etiketi. Panelde görünür, değiştirilebilir.
+    case "$1" in aws) REPLY="j:service=EC2" ;; azure) REPLY="j:name=AzureCloud" ;; *) REPLY="" ;; esac
+}
+cloud_link() {   # KAYNAK → REPLY = adres bir sayfaysa listenin bağlantısını bulan desen (* her şey). Microsoft Service Tags dosyasını her
+    # hafta yeni adla yayımlar; sabit olan indirme sayfası: araç sayfada desene uyan ilk https bağlantısını indirir
+    case "$1" in azure) REPLY="download.microsoft.com/*ServiceTags_Public_*.json" ;; *) REPLY="" ;; esac
+}
 cloud_label() {  # KAYNAK → REPLY = görünen ad
     case "$1" in gcp) REPLY="Google Cloud" ;; aws) REPLY="AWS EC2" ;; azure) REPLY="Azure" ;; oracle) REPLY="Oracle Cloud" ;; digitalocean) REPLY="DigitalOcean" ;;
         linode) REPLY="Linode (Akamai)" ;; vultr) REPLY="Vultr" ;;
@@ -4307,11 +4315,15 @@ cloud_label() {  # KAYNAK → REPLY = görünen ad
         x-*) REPLY="${1#x-}" ;; *) REPLY="$1" ;; esac
 }
 cloud_srclist() { # → REPLY = araca verilecek "ad|adres" satırları (panelde değiştirilmiş adres önce)
-    local IFS=$' \t\n' x u o=""
+    local IFS=$' \t\n' x u d df dl o=""
     for x in ${CLOUD_SOURCES//,/ }; do
-        cloud_urls "$x"; [ -n "$REPLY" ] || continue
-        u=$(printf '%s\n' $CLOUD_URLS | grep -m1 "^$x|" | cut -d'|' -f2-)
-        o+="$x|${u:-$REPLY}"$'\n'
+        cloud_urls "$x"; [ -n "$REPLY" ] || continue; d="$REPLY"; cloud_flt "$x"; df="$REPLY"; cloud_link "$x"; dl="$REPLY"
+        u=$(printf '%s\n' $CLOUD_URLS | grep -m1 "^$x|" | cut -d'|' -f2-)   # "adres[|süzgeç[|desen]]"; yazılmayan alan varsayılan
+        case "$u" in
+            *"|"*"|"*) o+="$x|$u"$'\n' ;;
+            *"|"*) o+="$x|$u${dl:+|$dl}"$'\n' ;;
+            *) [ -n "$df$dl" ] && o+="$x|${u:-$d}|${df:--}${dl:+|$dl}"$'\n' || o+="$x|${u:-$d}"$'\n' ;;
+        esac
     done
     for x in $CLOUD_EXTRA; do o+="x-${x%%|*}|${x#*|}"$'\n'; done      # kendi listeleriniz
     REPLY="$o"
@@ -4712,7 +4724,10 @@ prov_json() {    # → REPLY = durum JSON'u: izinli servisler (kaynak başına s
             cs+="${cs:+,}{\"n\":\"$n\",\"c\":$(num "$c"),\"t\":$(num "$t"),\"f\":$(num "$f"),\"e\":\"${e//[^a-z]/}\"}"
         done < "$CLOUD_DIR/status"
     fi
-    for cx in $CLOUD_CATALOG; do cloud_urls "$cx"; ccat+="${ccat:+,}\"$cx\":\"$REPLY\""; done
+    local cflt=""
+    local clnk=""
+    for cx in $CLOUD_CATALOG; do cloud_urls "$cx"; ccat+="${ccat:+,}\"$cx\":\"$REPLY\""; cloud_flt "$cx"; [ -n "$REPLY" ] && cflt+="${cflt:+,}\"$cx\":\"$REPLY\""
+        cloud_link "$cx"; [ -n "$REPLY" ] && clnk+="${clnk:+,}\"$cx\":\"$REPLY\""; done
     # küme yoksa -2 (liste açıkken CSF'e yüklenmemiş: ban uygulanmıyor); önce 0 veriyordu, panel "0 aralık" deyip uyarmıyordu
     if command -v ipset >/dev/null 2>&1; then
         if ipset list -n ag_cloud >/dev/null 2>&1; then cn=$(ipset list -t ag_cloud 2>/dev/null | awk -F': ' '/^Number of entries/ { print $2 }'); else cn=-2; fi
@@ -4721,7 +4736,7 @@ prov_json() {    # → REPLY = durum JSON'u: izinli servisler (kaynak başına s
     prof prov_cloudlist
     local cpot; cloud_pot; cpot="$REPLY"
     prof prov_cloudpot
-    jstr "$CLOUD_EXTRA"; o+=",\"cloud\":{\"extra\":$REPLY,\"pot\":$cpot,\"on\":$([ "$CLOUD_BAN" = 1 ] && echo true || echo false),\"sources\":\"$CLOUD_SOURCES\",\"tcp\":\"$CLOUD_TCP\",\"udp\":\"$CLOUD_UDP\",\"urls\":\"$CLOUD_URLS\",\"src\":[$cs],\"cat\":{$ccat},\"n\":$cn}"
+    jstr "$CLOUD_EXTRA"; o+=",\"cloud\":{\"extra\":$REPLY,\"pot\":$cpot,\"on\":$([ "$CLOUD_BAN" = 1 ] && echo true || echo false),\"sources\":\"$CLOUD_SOURCES\",\"tcp\":\"$CLOUD_TCP\",\"udp\":\"$CLOUD_UDP\",\"urls\":\"$CLOUD_URLS\",\"src\":[$cs],\"cat\":{$ccat},\"fcat\":{$cflt},\"lcat\":{$clnk},\"n\":$cn}"
     jstr "${ASN_MSG:-}"                     # yukarıdaki döngüler REPLY'yi ezdi: sağlayıcı banı iletisi burada hazırlanır
     o+=",\"asn\":{\"on\":$([ "$ASN_BAN" = 1 ] && echo true || echo false),\"list\":\"$ASN_LIST\",\"all\":\"$ASN_ALL\",\"mode\":\"$ASN_MODE\",\"tcp\":\"$ASN_TCP\",\"udp\":\"$ASN_UDP\",\"state\":\"${ASN_STATE:-}\",\"msg\":$REPLY,\"sets\":[$sets],\"geo_t\":$(num "$gt"),\"ipset\":$([ "$(conf_val LF_IPSET)" = 0 ] && echo false || echo true)}}"
     REPLY="$o"

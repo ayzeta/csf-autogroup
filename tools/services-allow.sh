@@ -81,13 +81,23 @@ done < "$EXTRA"
 
 body=""; total=0
 for s in "${SOURCES[@]}"; do
-    name="${s%%|*}"; src="${s#*|}"
+    name="${s%%|*}"; src="${s#*|}"; flt=""; lnk=""
+    [[ "$src" == *"|"* ]] && { flt="${src#*|}"; src="${src%%|*}"; }   # süzgeç (tools/src-filter.pl, kiralık listelerle ortak)
+    [[ "$flt" == *"|"* ]] && { lnk="${flt#*|}"; flt="${flt%%|*}"; }   # adres bir sayfa: listenin bağlantısını bulan desen ("-" = yok)
+    [ "$lnk" = "-" ] && lnk=""
     [[ "$name" =~ ^[A-Za-z0-9._-]+$ ]] || continue
     old="$CACHE/$name.txt"; prev=0; [ -s "$old" ] && prev=$(grep -c . "$old")
     if [[ "$src" == http* ]]; then
         # Microsoft 365 kendi posta sunucuları için /13'e kadar aralık yayımlıyor (40.96.0.0/13); yalnız bu kaynakta izin verilir
         mn=16; [[ "$name" == microsoft365* ]] && mn=12
-        new=$(curl -fsSL --max-time 30 -A "$UA" "$src" 2>/dev/null | ipv4_list "$mn")
+        if [ -n "$lnk" ]; then           # sayfada desene uyan ilk bağlantı (cloud-ban.sh'ın link_re ve page_link işlevleri, aynı kural)
+            for fn in link_re page_link; do eval "$(awk "/^$fn\\(\\) \\{/{f=1} f{print} f && /^}\$/{exit}" "$(dirname "$0")/cloud-ban.sh")"; done
+            if page_link "$src" "$lnk"; then src="$REPLY"; else src=""; fi
+        fi
+        if [[ "$src" != https://* ]]; then new=""
+        elif [ -n "$flt" ] && [ "$flt" != "-" ]; then
+            new=$(curl -fsSL --max-time 60 -A "$UA" "$src" 2>/dev/null | perl "$(dirname "$0")/src-filter.pl" "$flt" | ipv4_list "$mn")
+        else new=$(curl -fsSL --max-time 60 -A "$UA" "$src" 2>/dev/null | ipv4_list "$mn"); fi
     else
         new=$(printf '%s\n' "$src" | ipv4_list)
     fi

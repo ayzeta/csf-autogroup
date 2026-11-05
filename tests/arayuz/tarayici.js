@@ -423,7 +423,8 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     // yeni kutu: başlık + kaynak satırları; kutunun içinden: kaynak başlığı + adres
     const addForm = async (n, u, rows) => { await page.waitForSelector('.ag-modal [data-row]', { timeout: 10000 });
       if (await page.$('.ag-modal #ag-an')) await page.fill('#ag-an', n); else await page.fill('.ag-modal [data-row="0"] [data-f="t"]', n);
-      if (rows) for (let i = 0; i < rows.length; i++) { if (i) await page.click('#ag-addrow'); await page.fill(`.ag-modal [data-row="${i}"] [data-f="t"]`, rows[i][0]); await page.fill(`.ag-modal [data-row="${i}"] [data-f="u"]`, rows[i][1]); }
+      if (rows) for (let i = 0; i < rows.length; i++) { if (i) await page.click('#ag-addrow'); await page.fill(`.ag-modal [data-row="${i}"] [data-f="t"]`, rows[i][0]); await page.fill(`.ag-modal [data-row="${i}"] [data-f="u"]`, rows[i][1]);
+        if (rows[i][2]) await page.fill(`.ag-modal [data-row="${i}"] [data-f="f"]`, rows[i][2]); }
       else await page.fill('.ag-modal [data-row="0"] [data-f="u"]', u);
       await page.click('.ag-modal [data-m="ok"]'); await page.waitForTimeout(400); };
     // yeni kutu
@@ -432,8 +433,11 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     check('kiralık liste: "Liste ekle" ile yeni kutu öteki kutular gibi görünür', n1.includes('deneme'), n1.join(','));
     // kutuya kaynak: düzenleyicideki "Kaynak ekle"
     await tik(page, `${G} .ag-tile:has(.ag-tile-m b:text-is("deneme")) .ag-tile-ed`); await page.waitForTimeout(300);
-    await tik(page, '[data-act="srcadd"][data-v="cl|deneme"]'); await addForm('ikinci', 'https://ornek.com/iki.txt');
+    await tik(page, '[data-act="srcadd"][data-v="cl|deneme"]'); await addForm('', '', [['ikinci', 'https://ornek.com/iki.json', 'service=EC2&region=eu-north-1']]);
     const c2 = await chips(G, 'deneme');
+    // süzgeç kaynağın satırında görünür (düzenleyici açık kalır)
+    const f2 = await page.$eval('.ag-urled-r[data-src="cl|x|deneme--ikinci"] [data-f="f"]', e => e.value).catch(() => null);
+    check('kiralık liste: kaynağa yazılan süzgeç düzenleyicide görünür', f2 === 'service=EC2&region=eu-north-1', JSON.stringify(f2));
     check('kiralık liste: kutuya ikinci kaynak eklenince kaynaklar çip olarak görünür', !!c2 && c2.length === 2 && c2.includes('ikinci'), JSON.stringify(c2));
     await tik(page, `${G} .ag-tile:has(.ag-tile-m b:text-is("deneme")) .ag-chip-x[data-v="cl|x:deneme--ikinci"]`); await page.waitForTimeout(300);
     const c3 = await chips(G, 'deneme');
@@ -450,6 +454,15 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
       else await page.keyboard.press('Escape');
       check('kiralık liste: hazır kutu silinir ve "Liste ekle"den geri gelir', gone && bi >= 0 && (await names(G)).includes(gcp), JSON.stringify({ gone, back }));
     } else check('kiralık liste: hazır kutu silinir ve "Liste ekle"den geri gelir', false, 'Google Cloud kutusu yok');
+    // hazır AWS kutusunun süzgeci (service=EC2) düzenleyicide görünür: kullanıcı örnek alıp kendi kutusunda kurabilir
+    await tik(page, `${G} .ag-tile-add`); await page.waitForSelector('.ag-modal [data-ri]', { timeout: 10000 }).catch(() => {});
+    const ai = (await page.$$eval('.ag-modal [data-ri]', L => L.map(b => b.textContent.trim()))).findIndex(t => /^AWS/.test(t));
+    if (ai >= 0) { await page.click(`.ag-modal [data-ri="${ai}"]`); await page.click('.ag-modal [data-m="ok"]'); await page.waitForTimeout(400); } else await page.keyboard.press('Escape');
+    const awsT = (await names(G)).find(t => /^AWS/.test(t)) || '';
+    if (awsT) { await tik(page, `${G} .ag-tile:has(.ag-tile-m b:text-is("${awsT}")) .ag-tile-ed`); await page.waitForTimeout(300); }
+    const af = await page.$eval('.ag-urled-r[data-src="cl|b|aws"] [data-f="f"]', e => e.value).catch(() => null);
+    check('kiralık liste: hazır AWS kutusunun süzgeci düzenleyicide görünür', af === 'service=EC2', JSON.stringify({ awsT, af }));
+    if (awsT) { await tik(page, `${G} .ag-tile:has(.ag-tile-m b:text-is("${awsT}")) .ag-tile-rm`); await page.waitForTimeout(300); }
     // izinli servisler: hazır kutuya kendi kaynağınız, hazır alt kaynak silinir ve geri gelir
     const goo = (await names(SG)).find(t => /Google/.test(t)) || '';
     if (goo) {

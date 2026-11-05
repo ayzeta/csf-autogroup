@@ -41,28 +41,42 @@ ipv4_list() {
     grep -oE '(^|[^0-9.])[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?' | grep -oE '[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?' |
         awk -F'[./]' '{ ok = 1; for (i = 1; i <= 4; i++) if ($i > 255) ok = 0; if (NF == 5 && ($5 < 10 || $5 > 32)) ok = 0; if (ok) print }' | sort -u
 }
-# kaynağa göre süzgeç: AWS listesinde yalnız EC2 (kiralık sunucular; CloudFront, S3, Route 53 denetimleri değil)
-pick() {
-    case "$1" in
-        aws*) awk 'BEGIN { RS = "}" } /"service": *"EC2"/' | ipv4_list ;;
-        azure*) awk '/"name": *"AzureCloud",/ { f = 1 } f && /"addressPrefixes"/ { p = 1; next } p && /\]/ { exit } p' | ipv4_list ;;   # yalnız AzureCloud etiketi
-        *) ipv4_list ;;
-    esac
+# süzgeç (tools/src-filter.pl, izinli servislerle ortak): kaynak satırının üçüncü alanı — "j:ALAN=DEĞER…" JSON nesneleri,
+# "t:METİN" satırlar; yoksa ya da "-" ise dosyadaki bütün IPv4 aralıkları. Hazır AWS (j:service=EC2) ve Azure (j:name=AzureCloud)
+# listelerinin süzgeci motorun kataloğundan gelir (önce burada ada bağlı awk idi; gerçek dosyalarda aynı aralıkları verdiği ölçüldü)
+FILTER="$(dirname "$SELF_PATH")/src-filter.pl"
+pick() {         # [SÜZGEÇ] → stdin süzülür
+    if [ -n "${1:-}" ] && [ "$1" != "-" ]; then perl "$FILTER" "$1" | ipv4_list; else ipv4_list; fi
 }
-fetch() {        # AD ADRES → ham liste
-    local u="$2"
-    case "$1" in
-        azure*)
-            # Microsoft listeyi her hafta yeni adla yayımlar (ServiceTags_Public_TARİH.json); sabit olan indirme sayfası,
-            # güncel dosyanın bağlantısı oradan okunur. Adres doğrudan bir .json ise o indirilir.
-            if [[ "$u" != *.json ]]; then
-                u=$(curl -fsSL --max-time 30 -A "$BUA" -H 'Accept: text/html,application/xhtml+xml' -H 'Accept-Language: en-US,en;q=0.9' "$u" 2>/dev/null |
-                    grep -oE 'https://download\.microsoft\.com/download/[^"]*ServiceTags_Public_[0-9]+\.json' | head -n 1)
-                [ -n "$u" ] || return 1
-            fi
-            curl -fsSL --max-time 120 -A "$BUA" "$u" ;;
-        *) curl -fsSL --max-time 60 -A "$UA" "$u" ;;
-    esac
+link_re() {      # DESEN (harf, rakam, . _ ~ / : - ve * her şey) → REPLY = bağlantıyı bulan genişletilmiş düzenli ifade: https:// ile başlar, desendeki
+    # metin harfi harfine aranır, * tırnak, boşluk ve köşeli ayraç dışında her şey
+    local d="$1" r="" c i
+    [[ "$d" =~ ^[A-Za-z0-9._~/*:-]+$ ]] || { REPLY='^$'; return 1; }
+    for (( i = 0; i < ${#d}; i++ )); do c="${d:i:1}"
+        case "$c" in '*') r+="[^\"'<>[:space:]]*" ;; [A-Za-z0-9]) r+="$c" ;; *) r+="[$c]" ;; esac
+    done
+    REPLY="https://([^\"'<>[:space:]]*)?$r"
+}
+page_link() {    # SAYFA DESEN → REPLY = sayfada desene uyan ilk bağlantı. Sayfadaki mutlak https adresleri ve href / src değerleri
+    # okunur; göreli bağlantı ("/yol", "//alan/yol") sayfanın alanıyla tamamlanır (Cloudflare'ın ips sayfası "/ips-v4/#" yazıyor,
+    # Microsoft'unki mutlak adres; ikisi de ölçüldü 2026-11-05). Kiralık listeler ve izinli servisler ortak kullanır.
+    local re o pg ua="${BUA:-$UA}"
+    link_re "$2" || return 1; re="$REPLY"; o=$(printf '%s' "$1" | grep -oE '^https://[^/]+')
+    pg=$(curl -fsSL --max-time 30 -A "$ua" -H 'Accept: text/html,application/xhtml+xml' -H 'Accept-Language: en-US,en;q=0.9' "$1" 2>/dev/null) || return 1
+    REPLY=$( { printf '%s\n' "$pg" | grep -oE 'https://[^"'\''<>[:space:]]+'
+               printf '%s\n' "$pg" | grep -oE '(href|src)=["'\''][^"'\''<>[:space:]]+' | sed -E 's/^(href|src)=.//' |
+                   awk -v o="$o" '/^\/\// { print "https:" $0; next } /^\// { print o $0 }'
+             } | grep -oE "$re" | head -n 1)
+    [[ "$REPLY" == https://* ]]
+}
+fetch() {        # ADRES [DESEN] → ham liste. Desen varsa adres bir sayfadır: sayfada desene uyan ilk bağlantı indirilir
+    # (Microsoft Service Tags her hafta yeni adla yayımlanır; sabit olan indirme sayfası — hazır Azure kutusu da böyle)
+    local u="$1"
+    if [ -n "${2:-}" ]; then
+        page_link "$u" "$2" || return 1
+        curl -fsSL --max-time 120 -A "$BUA" "$REPLY"; return
+    fi
+    curl -fsSL --max-time 60 -A "$UA" "$u"
 }
 hook_add() {     # csfpost.sh'a tek satır: CSF yeniden başlayınca kural geri gelsin (Imunify satırı en sonda kalır)
     local line="[ -r \"$SELF_PATH\" ] && CACHE=\"$CACHE\" LOG_FILE=\"$LOG_FILE\" bash \"$SELF_PATH\" --apply $MARK"
@@ -181,15 +195,17 @@ case "${1:-}" in
     --remove) rules_del; hook_del; rm -f "$CACHE/status" "$CACHE/active"; log "kaldırıldı"; exit 0 ;;
 esac
 
-# indir: her etkin kaynak "ad|adres" (SRC, satır satır); indirilemezse ya da yarıdan çok küçülürse önceki liste korunur
+# indir: her etkin kaynak "ad|adres[|süzgeç]" (SRC, satır satır); indirilemezse ya da yarıdan çok küçülürse önceki liste korunur
 mkdir -p "$CACHE" 2>/dev/null
 st=""
 while IFS= read -r s; do
     [ -n "$s" ] || continue
-    name="${s%%|*}"; src="${s#*|}"
+    name="${s%%|*}"; src="${s#*|}"; flt=""; lnk=""
+    [[ "$src" == *"|"* ]] && { flt="${src#*|}"; src="${src%%|*}"; }
+    [[ "$flt" == *"|"* ]] && { lnk="${flt#*|}"; flt="${flt%%|*}"; }; [ "$lnk" = "-" ] && lnk=""
     [[ "$name" =~ ^[a-z0-9-]+$ ]] || continue
     old="$CACHE/$name.txt"; prev=0; [ -s "$old" ] && prev=$(grep -c . "$old")
-    new=$(fetch "$name" "$src" 2>/dev/null | pick "$name")
+    new=$(fetch "$src" "$lnk" 2>/dev/null | pick "$flt")
     n=$(printf '%s' "$new" | grep -c .)
     ot=$(stat -c %Y "$old" 2>/dev/null || echo 0); err=""
     if [ "$n" -eq 0 ] || { [ "$prev" -gt 0 ] && [ "$n" -lt $(( prev / 2 )) ]; }; then

@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.15.46 — 2026-11-05
+
+- **A filter and a page link for every source** (rented servers and allowed
+  services alike). A JSON list can be filtered by field: `service=EC2`, several
+  conditions with `&` (`service=EC2&region=eu-north-1` takes one AWS region);
+  a plain text or CSV list by line text (`~,US,`). A condition may be met by
+  the object itself or by one that contains it (Oracle: `region=eu-frankfurt-1&tags=OCI`).
+  If the address is a page rather than a list, a link pattern (`*` matches
+  anything) finds the list on it; relative links on the page work too
+  (Cloudflare's IP page). With no filter every IPv4 range at the address is
+  taken, as before.
+- The built-in AWS and Azure boxes now use the same filter
+  (`service=EC2`, `name=AzureCloud`, and for Azure the link pattern on
+  Microsoft's download page) instead of fixed code; their result is the same
+  ranges. The filter and pattern show in the box's **Address** editor, can be
+  changed and reset, and serve as an example for boxes of your own.
+- **Fix:** the panel refused saving a source with a page link pattern (`*`).
+- `tools/filter-check.sh` checks the filters on a live server (download only, nothing written to the firewall).
+
 ## 1.15.45 — 2026-11-05
 
 - **Build a box like the built-in ones.** A new box now takes a title (any

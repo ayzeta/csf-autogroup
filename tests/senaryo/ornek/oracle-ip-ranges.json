@@ -1,0 +1,51 @@
+{
+  "last_updated_timestamp": "2026-10-28T02:47:53.012304",
+  "regions": [
+    {
+      "region": "mx-monterrey-1",
+      "cidrs": [
+        {
+          "cidr": "40.233.0.0/19",
+          "tags": [
+            "OCI"
+          ]
+        },
+        {
+          "cidr": "139.177.96.0/21",
+          "tags": [
+            "OCI"
+          ]
+        },
+        {
+          "cidr": "64.181.146.0/23",
+          "tags": [
+            "OSN"
+          ]
+        }
+      ]
+    },
+    {
+      "region": "eu-frankfurt-1",
+      "cidrs": [
+        {
+          "cidr": "79.76.96.0/19",
+          "tags": [
+            "OCI"
+          ]
+        },
+        {
+          "cidr": "89.168.64.0/18",
+          "tags": [
+            "OCI"
+          ]
+        },
+        {
+          "cidr": "92.4.240.0/20",
+          "tags": [
+            "OSN"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -729,9 +729,14 @@ default) or remove the whole box. **Add list** / **Add service** brings back a
 removed built-in box or source, or starts a new box: a title (any text), an
 optional description and one or more sources, each with its own title, so a box
 of your own can have the same shape as the built-in Google or OpenAI boxes.
-Titles are kept in `SRC_LABELS`; internal names are made from them. A source you add to the rented-server card
-takes every IPv4 range in the file; only the built-in AWS and Azure boxes filter
-the provider's file to rented servers. In `config.env` your own sources stay in
+Titles are kept in `SRC_LABELS`; internal names are made from them. Every source can carry a **filter**: in a JSON
+list `field=value`, several conditions joined with `&` (the built-in AWS box
+uses `service=EC2`, Azure `name=AzureCloud`; `service=EC2&region=eu-north-1`
+takes one AWS region), in a plain text or CSV list `~text` (only lines that
+contain the text). If the address is a page rather than a list, a **link
+pattern** (`*` matches anything) finds the list on it, as the built-in Azure
+box does on Microsoft's download page. With no filter every IPv4 range at the
+address is taken. `tools/src-filter.pl` does the filtering for both cards. `tools/filter-check.sh` checks the filters on a live server without touching the firewall: built-in boxes against hand-built copies, and other providers that publish the same ways. In `config.env` your own sources stay in
 `CLOUD_EXTRA` / `SVC_EXTRA` as `name|address`; `box--source|address` puts a
 source into a box. Boxes also show how many offending IPs from the event log
 fall in each rented-server list.
