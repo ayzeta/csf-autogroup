@@ -57,7 +57,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.43"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.44"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -378,7 +378,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_A_NOSAVE="%s: kurtarma kopyası yazılamadı (%s); kapsananlar yerinde bırakıldı"
   M_A_NODRY="Elle işlemler kuru çalıştırmada (--dry-run) yapılmaz"
   M_CFG_SVCX="ad|https://adres ya da ad|IP biçiminde, en çok 50 kayıt"
-  M_CFG_CLX="ad|https://adres biçiminde (ad: küçük harf, rakam, tire), en çok 20 kayıt"
+  M_CFG_CLX="ad|https://adres biçiminde (ad: küçük harf, rakam, tire; en çok 60 karakter), en çok 50 kayıt"
   M_CFG_SVCU="kaynak|https://adres biçiminde"
   M_SVC_FAIL_SUBJ="izinli servis listesi indirilemiyor (%s)"
   M_SVC_FAIL_BODY="Şu izinli servis listeleri uyarı süresinden uzun süredir indirilemiyor: %s. Eski listeler kullanılıyor; adresi Sağlayıcılar → İzinli servisler → Kaynak adresleri'nden düzeltebilirsiniz."
@@ -632,7 +632,7 @@ else
   M_A_NOSAVE="%s: the restore copy could not be written (%s); covered entries were left in place"
   M_A_NODRY="Manual actions are not run in a dry run (--dry-run)"
   M_CFG_SVCX="name|https://url or name|IP, at most 50 entries"
-  M_CFG_CLX="name|https://url (name: lowercase letters, digits, dash), at most 20 entries"
+  M_CFG_CLX="name|https://url (name: lowercase letters, digits, dash; at most 60 characters), at most 50 entries"
   M_CFG_SVCU="source|https://url"
   M_SVC_FAIL_SUBJ="allowed service list can't be downloaded (%s)"
   M_SVC_FAIL_BODY="These allowed service lists haven't downloaded for longer than the warning period: %s. The old lists are still used; fix the address under Providers → Allowed services → Source addresses."
@@ -883,15 +883,15 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
             done
             return 0 ;;
         CLOUD_EXTRA)
-            local x n=0 re='^[a-z0-9-]{1,30}[|]https://[A-Za-z0-9._~:/?#@=%+&-]{4,255}$'; CFG_VAL=""
+            local x n=0 re='^[a-z0-9-]{1,60}[|]https://[A-Za-z0-9._~:/?#@=%+&-]{4,255}$'; CFG_VAL=""
             for x in $v; do
                 n=$((n + 1))
-                if [ "$n" -gt 20 ] || ! [[ "$x" =~ $re ]]; then CFG_ERR=$(m "$M_CFG_BAD" "$k" "$x" "$M_CFG_CLX"); return 1; fi
+                if [ "$n" -gt 50 ] || ! [[ "$x" =~ $re ]]; then CFG_ERR=$(m "$M_CFG_BAD" "$k" "$x" "$M_CFG_CLX"); return 1; fi
                 CFG_VAL+="${CFG_VAL:+ }$x"
             done
             return 0 ;;
         SVC_EXTRA)
-            local x n=0 re='^[A-Za-z0-9._-]{1,40}[|](https://[A-Za-z0-9._~:/?#@=%+&-]{4,255}|[0-9]{1,3}([.][0-9]{1,3}){3}(/[0-9]{1,2})?)$'; CFG_VAL=""
+            local x n=0 re='^[A-Za-z0-9._-]{1,60}[|](https://[A-Za-z0-9._~:/?#@=%+&-]{4,255}|[0-9]{1,3}([.][0-9]{1,3}){3}(/[0-9]{1,2})?)$'; CFG_VAL=""
             for x in $v; do
                 n=$((n + 1))
                 if [ "$n" -gt 50 ] || ! [[ "$x" =~ $re ]]; then
@@ -4292,7 +4292,10 @@ cloud_urls() {   # KAYNAK → REPLY = varsayılan liste adresi (firmanın kirala
 }
 cloud_label() {  # KAYNAK → REPLY = görünen ad
     case "$1" in gcp) REPLY="Google Cloud" ;; aws) REPLY="AWS EC2" ;; azure) REPLY="Azure" ;; oracle) REPLY="Oracle Cloud" ;; digitalocean) REPLY="DigitalOcean" ;;
-        linode) REPLY="Linode (Akamai)" ;; vultr) REPLY="Vultr" ;; x-*) REPLY="${1#x-}" ;; *) REPLY="$1" ;; esac
+        linode) REPLY="Linode (Akamai)" ;; vultr) REPLY="Vultr" ;;
+        # kendi kaynağınız: "x-hetzner" → hetzner, kutu altındaki "x-aws--eu-north-1" → "AWS EC2 · eu-north-1" (panelin clName'i ile aynı)
+        x-*--*) local r="${1#x-}"; cloud_label "${r%%--*}"; REPLY="$REPLY · ${r#*--}" ;;
+        x-*) REPLY="${1#x-}" ;; *) REPLY="$1" ;; esac
 }
 cloud_srclist() { # → REPLY = araca verilecek "ad|adres" satırları (panelde değiştirilmiş adres önce)
     local IFS=$' \t\n' x u o=""

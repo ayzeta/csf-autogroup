@@ -679,7 +679,7 @@ addresses than before, keeps its previous version; ranges wider than /16 are
 refused. Yandex and Facebook don't publish address lists.
 
 Google and OpenAI publish several lists, one per kind of visitor; each shows as
-a chip on its tile and can be switched off on its own. Google: crawlers
+a chip on its box. Google: crawlers
 (Googlebot), special crawlers (AdsBot and the like), user-triggered fetchers
 (site verification, feed readers) and Google's own fetchers. OpenAI: GPTBot
 (training crawler), OAI-SearchBot (search) and ChatGPT-User (pages a user asks
@@ -720,9 +720,19 @@ exists, since CSF then runs only that one). If a service you rely on runs in one
 and calls your sites, allow its address. `tools/cloud-ban.sh` does the work;
 the plugin runs it.
 
-Each list's download address can be changed from its tile (**Address**), and
-**Extra lists** take your own `name|https://url` lists. Tiles also show how
-many offending IPs from the event log fall in each list, selected or not.
+**Boxes (rented servers and allowed services).** Both cards show their lists as
+boxes, built-in or your own alike. The built-in boxes are only a starting set:
+a box holds one or more sources (download addresses), shown as chips when there
+is more than one. On every box you can add a source, remove one (built-in ones
+too), change a source's address (**Address**; a built-in one can go back to its
+default) or remove the whole box. **Add list** / **Add service** brings back a
+removed built-in box or source, or starts a new box from a name and an address,
+to which more sources can be added. A source you add to the rented-server card
+takes every IPv4 range in the file; only the built-in AWS and Azure boxes filter
+the provider's file to rented servers. In `config.env` your own sources stay in
+`CLOUD_EXTRA` / `SVC_EXTRA` as `name|address`; `box--source|address` puts a
+source into a box. Boxes also show how many offending IPs from the event log
+fall in each rented-server list.
 
 ## Development
 

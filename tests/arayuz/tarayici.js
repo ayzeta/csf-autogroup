@@ -142,11 +142,11 @@ async function layoutChecks(page, label, width) {
     return null; }).filter(Boolean));
   check(`${label} · ${width} px · satır hücreleri üst üste binmiyor`, lap.length === 0, lap.slice(0, 3).join(' | '));
 }
+const errs = [];          // sayfanın JS hataları: test yarıda düşerse de yazılır
 (async () => {
   const opts = { args: ['--no-sandbox'] };
   if (process.env.AG_CHROME) opts.executablePath = process.env.AG_CHROME;
   const browser = await chromium.launch(opts);
-  const errs = [];
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   page.on('pageerror', e => errs.push(e.message));
   page.on('console', m => { var u = (m.location && m.location().url) || ''; if (m.type() === 'error' && !/favicon/.test(m.text() + u)) errs.push(m.text() + (u ? ' (' + u + ')' : '')); });
@@ -384,6 +384,8 @@ async function layoutChecks(page, label, width) {
   await page.click('.ag-tabs [data-tab="overview"]'); await page.waitForTimeout(600);
   const back = await page.evaluate(async () => {
     const od = Date.now; Date.now = () => od() + 120000;               // eldeki veri 2 dakika eski görünsün
+    // yeni durum isteği sürerken sınanır: yerel sunucu 30 ms içinde cevaplarsa veri tazelenip denetim yanlış düşüyordu
+    const of = window.fetch; window.fetch = (u, o) => o && /^a=status(&|$)/.test(String(o.body || '')) ? new Promise(r => setTimeout(() => r(of(u, o)), 3000)) : of(u, o);
     document.dispatchEvent(new Event('visibilitychange'));
     await new Promise(r => setTimeout(r, 30));
     const upd = !!document.querySelector('.ag-back-t');                // "güncelleniyor" (istek sürüyor)
@@ -394,13 +396,79 @@ async function layoutChecks(page, label, width) {
     const n0 = document.querySelectorAll('.ag-toast').length; if (mut) mut.click();
     await new Promise(r => setTimeout(r, 30));
     const toast = document.querySelectorAll('.ag-toast').length > n0, modal = !!document.querySelector('.ag-modal');
-    Date.now = od;
+    Date.now = od; window.fetch = of;
     return { upd, menu, mut: !!mut, toast, modal };
   });
   check('eski veriyle dönüş: menü hemen açılır, durum değiştiren eylem bildirimle bekler (pencere açılmaz)', back.upd && back.menu && back.mut && back.toast && !back.modal, JSON.stringify(back));
+  // Sağlayıcılar: kiralık liste ve izinli servis kutuları tek tip — hazır gelenler de kendi eklenenler de aynı kutu, ekle / sil,
+  // kutuya kaynak (taslakta; sonunda vazgeçilir, kaydedilmez)
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.click('.ag-tabs [data-tab="prov"]');
+  await page.waitForSelector('#ag-cloud-card', { timeout: 30000 }).catch(() => {});   // sekme ayarları yeniden yükler (sabit bekleme yetmiyordu)
+  {
+    const ac = async (k) => { await tik(page, `[data-act="cfgchip"][data-k="${k}"][data-v="1"]`); await page.waitForTimeout(400); };
+    await ac('CLOUD_BAN'); await ac('SVC_ALLOW');
+    const G = '#ag-cloud-card .ag-tiles', SG = '#ag-svc-card .ag-tiles';
+    const hazir = await page.evaluate(() => ({ add: document.querySelectorAll('#ag-cloud-card .ag-tile-add').length, sadd: document.querySelectorAll('#ag-svc-card .ag-tile-add').length,
+      modal: (document.querySelector('.ag-modal') || {}).innerText || '', kart: ((document.querySelector('#ag-cloud-card') || {}).innerText || '').slice(0, 160),
+      sekme: Array.from(document.querySelectorAll('.ag-tabs [data-tab]')).filter(b => b.classList.contains('on') || b.getAttribute('aria-selected') === 'true').map(b => b.getAttribute('data-tab')).join(','),
+      kartlar: Array.from(document.querySelectorAll('#ag-app section[id]')).map(x => x.id).join(','), sayfa: document.querySelector('#ag-app').innerText.slice(0, 200) }));
+    check('Sağlayıcılar: katmanlar açılınca kutular ve "Ekle" düğmeleri çizilir', hazir.add === 1 && hazir.sadd === 1 && !hazir.modal, JSON.stringify(hazir));
+    if (hazir.modal) { await page.keyboard.press('Escape'); await page.waitForTimeout(300); }
+    const names = async (g) => page.$$eval(`${g} .ag-tile-m b`, L => L.map(b => b.textContent.trim()));
+    const chips = async (g, nm) => page.$$eval(`${g} .ag-tile`, (L, nm) => { const x = L.find(e => (e.querySelector('.ag-tile-m b') || {}).textContent === nm);
+      return x ? Array.from(x.querySelectorAll('.ag-tile-subs .ag-chip')).map(c => c.firstChild.textContent.trim()) : null; }, nm);
+    const addForm = async (n, u) => { await page.waitForSelector('.ag-modal #ag-an', { timeout: 10000 }); await page.fill('#ag-an', n); await page.fill('#ag-au', u);
+      await page.click('.ag-modal [data-m="ok"]'); await page.waitForTimeout(400); };
+    // yeni kutu
+    await tik(page, `${G} .ag-tile-add`); await addForm('deneme', 'https://ornek.com/liste.txt');
+    const n1 = await names(G);
+    check('kiralık liste: "Liste ekle" ile yeni kutu öteki kutular gibi görünür', n1.includes('deneme'), n1.join(','));
+    // kutuya kaynak: düzenleyicideki "Kaynak ekle"
+    await tik(page, `${G} .ag-tile:has(.ag-tile-m b:text-is("deneme")) .ag-tile-ed`); await page.waitForTimeout(300);
+    await tik(page, '[data-act="srcadd"][data-v="cl|deneme"]'); await addForm('ikinci', 'https://ornek.com/iki.txt');
+    const c2 = await chips(G, 'deneme');
+    check('kiralık liste: kutuya ikinci kaynak eklenince kaynaklar çip olarak görünür', !!c2 && c2.length === 2 && c2.includes('ikinci'), JSON.stringify(c2));
+    await tik(page, `${G} .ag-tile:has(.ag-tile-m b:text-is("deneme")) .ag-chip-x[data-v="cl|x:deneme--ikinci"]`); await page.waitForTimeout(300);
+    const c3 = await chips(G, 'deneme');
+    check('kiralık liste: kaynak × ile kalkar', !!c3 && c3.length === 0, JSON.stringify(c3));
+    // hazır kutu silinir, "Liste ekle" penceresinden geri gelir
+    const gcp = await page.evaluate(() => (Array.from(document.querySelectorAll('#ag-cloud-card .ag-tile-m b')).map(b => b.textContent.trim()).find(t => /Google/.test(t))) || '');
+    if (gcp) {
+      await tik(page, `${G} .ag-tile:has(.ag-tile-m b:text-is("${gcp}")) .ag-tile-rm`); await page.waitForTimeout(300);
+      const gone = !(await names(G)).includes(gcp);
+      await tik(page, `${G} .ag-tile-add`); await page.waitForSelector('.ag-modal [data-ri]', { timeout: 10000 }).catch(() => {});
+      const back = await page.$$eval('.ag-modal [data-ri]', L => L.map(b => b.textContent.trim()));
+      const bi = back.findIndex(t => t.indexOf(gcp) === 0);
+      if (bi >= 0) { await page.click(`.ag-modal [data-ri="${bi}"]`); await page.click('.ag-modal [data-m="ok"]'); await page.waitForTimeout(400); }
+      else await page.keyboard.press('Escape');
+      check('kiralık liste: hazır kutu silinir ve "Liste ekle"den geri gelir', gone && bi >= 0 && (await names(G)).includes(gcp), JSON.stringify({ gone, back }));
+    } else check('kiralık liste: hazır kutu silinir ve "Liste ekle"den geri gelir', false, 'Google Cloud kutusu yok');
+    // izinli servisler: hazır kutuya kendi kaynağınız, hazır alt kaynak silinir ve geri gelir
+    const goo = (await names(SG)).find(t => /Google/.test(t)) || '';
+    if (goo) {
+      await tik(page, `${SG} .ag-tile:has(.ag-tile-m b:text-is("${goo}")) .ag-tile-ed`); await page.waitForTimeout(300);
+      await tik(page, '[data-act="srcadd"][data-v="svc|google"]'); await addForm('ek', '203.0.113.10');
+      const s1 = await chips(SG, goo);
+      check('izinli servis: hazır kutuya kendi kaynağınız çip olarak eklenir', !!s1 && s1.includes('ek'), JSON.stringify(s1));
+      const sub = s1 && s1.find(x => x !== 'ek');
+      await tik(page, `${SG} .ag-tile:has(.ag-tile-m b:text-is("${goo}")) .ag-chip-x[data-v^="svc|b:"]`); await page.waitForTimeout(300);
+      const s2 = await chips(SG, goo);
+      await tik(page, `${SG} .ag-tile-add`); await page.waitForSelector('.ag-modal [data-ri]', { timeout: 10000 }).catch(() => {});
+      const back = await page.$$eval('.ag-modal [data-ri]', L => L.map(b => b.textContent.trim()));
+      await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+      check('izinli servis: hazır alt kaynak × ile kalkar, "Servis ekle"de geri getirilecekler arasında', !!s2 && s2.length === s1.length - 1 && back.some(t => t.indexOf(sub || '?') >= 0), JSON.stringify({ s1, s2, back }));
+    } else check('izinli servis: hazır kutuya kendi kaynağınız çip olarak eklenir', false, 'Google kutusu yok');
+    // ham liste adı ekranda görünmez (x-…, extra-…, kutu--kaynak)
+    const ham = await page.evaluate(() => (document.querySelector('#ag-app').innerText.match(/\b(x-[a-z0-9-]+|extra-[A-Za-z0-9._-]+|[a-z0-9]+--[a-z0-9-]+)\b/g) || []).slice(0, 5));
+    check('kutular: ekranda ham liste adı yok', ham.length === 0, ham.join(', '));
+    for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(400); await layoutChecks(page, 'prov-kutular', w); await shot(`prov-kutular-${w}`); }
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await tik(page, '[data-act="cfgdiscard"]'); await page.waitForTimeout(400);
+  }
   await page.waitForTimeout(3000); await page.keyboard.press('Escape');
   check('JS hatası yok', errs.length === 0, errs.slice(0, 3).join(' | '));
   await browser.close();
   console.log(`Arayüz: ${N} denetim, ${F} beklenmeyen`);
   process.exit(F ? 1 : 0);
-})().catch(e => { console.log('  ✗ HATA: ' + e.message); process.exit(1); });
+})().catch(e => { console.log('  ✗ HATA: ' + e.message + (errs.length ? ' · sayfa hataları: ' + errs.slice(0, 3).join(' | ') : '')); process.exit(1); });

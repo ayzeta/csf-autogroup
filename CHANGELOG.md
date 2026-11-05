@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.15.44 — 2026-11-05
+
+- **Rented servers and allowed services: every list is a box you can shape.**
+  The built-in lists are only a starting set. Built-in and your own lists now
+  look the same: a box with one or more sources (shown as chips when there is
+  more than one), its download addresses under **Address**, and a remove
+  button. You can add a source to any box (a fifth Google list, or your own
+  regions of a provider), remove a source or a whole box (built-in ones too),
+  and bring removed built-in boxes and sources back from **Add list** /
+  **Add service**, which also starts a new box from a name and an address. The
+  separate "Extra lists" / "Extra addresses" text boxes are gone; existing
+  entries show up as boxes. The settings keys are unchanged (`box--source|url`
+  puts a source into a box); up to 50 own sources per card, names up to 60
+  characters.
+- **Fix:** changing the address of one built-in source dropped the changed
+  address of any other source.
+- List names read the same on every screen ("AWS EC2 · eu-north-1" instead of
+  the internal name).
+
 ## 1.15.43 — 2026-11-05
 
 - **Wording:** the most blocked providers list said the reason of a
