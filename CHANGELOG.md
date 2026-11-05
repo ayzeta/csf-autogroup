@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.15.49 — 2026-11-06
+
+- Measure impact, note under the results: a rented-server list no longer gets
+  the provider's "before banning" note, and a banned provider gets "requests
+  from before the ban are included" only when the ban is younger than the
+  24 hours measured.
+
 ## 1.15.48 — 2026-11-06
 
 - **Fix (source details):** an IP that is allowed on every port (an allowed

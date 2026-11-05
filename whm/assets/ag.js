@@ -2281,7 +2281,7 @@
       impAgain(a) + '</div>';
     return h;
   }
-  function impAgain(a) { var d = UI.impact && UI.impact[a]; return '<p class="ag-im-foot">' + (d && d._at ? esc(t('pv_imp_at', rel(d._at))) + ' · ' : '') + '<button class="ag-link" data-act="asnimpact" data-v="' + esc(a) + '" data-again="1">' + esc(t('pv_imp_again')) + '</button> · ' + esc(t(d && d.ban ? 'pv_imp_hb' : 'pv_imp_h')) + '</p>'; }
+  function impAgain(a) { var d = UI.impact && UI.impact[a]; return '<p class="ag-im-foot">' + (d && d._at ? esc(t('pv_imp_at', rel(d._at))) + ' · ' : '') + '<button class="ag-link" data-act="asnimpact" data-v="' + esc(a) + '" data-again="1">' + esc(t('pv_imp_again')) + '</button>' + (/^cl:/.test(a) || (d && d.ban && !(d.after && d.after.since && nowSec() - d.after.since < 86400)) ? '' : ' · ' + esc(t(d && d.ban ? 'pv_imp_hb' : 'pv_imp_h'))) + '</p>'; }   // alt not: kiralık listede yok (kural kutuda); banlı sağlayıcıda yalnız ban 24 saatten yeniyse (pencerede bandan önceki istek olabilir)
   /* Ayarlar bölümleri: hangi anahtar hangi bölümde (kaydedilmemiş değişiklik noktası için) */
   function settingsSections() {
     return [
