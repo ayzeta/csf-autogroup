@@ -180,12 +180,15 @@ switch ($a) {
     case 'prov_apply':                              // sağlayıcı banı / izinli servisler: kaydedilen ayarı CSF'e şimdi uygula
         ag_json(ag_run_json(['--prov-apply', '--json'], 300));
 
-    case 'asn_impact':                              // banlamadan önce: son 24 saatte bu sağlayıcıdan sitelere gelen istekler
-        $asn = strtoupper(trim((string) ($_POST['asn'] ?? '')));
-        if (!preg_match('/^AS[0-9]{1,10}$/', $asn)) {
+    case 'asn_impact':                              // son 24 saatte bu sağlayıcıdan (ASnnn) ya da kiralık listeden (cl:ad) sitelere gelen istekler
+    case 'src_ips':                                 // ayrıntı penceresi: bu sağlayıcıya / kiralık listeye düşen ihlal eden IP'ler
+        $key = trim((string) ($_POST['asn'] ?? ''));
+        if (preg_match('/^as[0-9]{1,10}$/i', $key)) {
+            $key = strtoupper($key);
+        } elseif (!preg_match('/^cl:[a-z0-9-]{1,63}(\+[a-z0-9-]{1,63}){0,30}$/', $key)) {
             ag_json(['ok' => false, 'error' => 'bad_asn']);
         }
-        ag_json(ag_run_json(['--asn-impact', $asn, '--json'], 180));
+        ag_json($a === 'src_ips' ? ag_run_json(['--src-ips', $key, '--json'], 60) : ag_run_json(['--asn-impact', $key, '--json'], 180));
 
     case 'config_test_mail':
         ag_json(ag_run_json(['--config', 'test-mail', '--json'], 30));

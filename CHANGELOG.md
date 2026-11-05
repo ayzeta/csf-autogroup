@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.15.47 — 2026-11-06
+
+- **Source details, one window for providers and rented-server lists.**
+  **Details** on a provider row and the offending-IP count on a rented-server
+  box open the same window: how the source is banned now, the number of
+  offending IPs by service, which ports would cut them, and a table of the IPs
+  (IP, service, last record, where it was recorded, what covers it now:
+  single, temp or range ban, or the provider / list ban itself). The last
+  24 hours of web requests are measured only on request, and now work for a
+  rented-server list too.
+- The offending-IP count on a rented-server box now counts the same sources
+  as the details (event log, single bans in `csf.deny`, the temp list), and
+  its tip names them.
+- On a phone the details table shows the record and current state under the
+  service instead of in columns that did not fit.
+- New command `--src-ips ASnnn|cl:list` prints that IP list as JSON.
+
 ## 1.15.46 — 2026-11-05
 
 - **A filter and a page link for every source** (rented servers and allowed

@@ -403,6 +403,19 @@ TL=$(LC_ALL=C date -d '-1 hour' '+%d/%b/%Y:%H:%M:%S +0000')
 printf '66.249.66.1 - - [%s] "GET /gizli HTTP/1.1" 403 10 "-" "Googlebot/2.1"\n66.249.66.1 - - [%s] "GET /gizli HTTP/1.1" 403 10 "-" "Googlebot/2.1"\n66.249.66.2 - - [%s] "GET / HTTP/1.1" 200 10 "-" "Googlebot/2.1"\n' "$TL" "$TL" "$TL" > "$R/domlogs/site.test"
 mcheck "Etkisini ölç: izinli servisin 403 aldığı istek örnekte (kod · site · istek ×2, servis, örnek IP); başarılı istek listede değil" "run --asn-impact AS15169 --json 2>/dev/null | grep -q '\"afails\":\[\[\"403 · site.test · GET /gizli\",2,0,\"googlebot\",\"66.249.66.1\"\]\]'"
 
+# Kaynak ayrıntısı (--src-ips): kiralık liste kutusundaki ihlal eden IP sayısı (durumun prov.cloud.pot) ile ayrıntının tablosu aynı
+# kaynaklardan (olay kaydı, csf.deny tekilleri, geçici liste) ve aynı sayıda; her IP'nin şu anki durumu (kalıcı, geçici, aralık banı)
+mk srcips; mkdir -p "$R/var/lib/csf_autogroup/cloud/probe"; printf '151.80.0.0/16\n' > "$R/var/lib/csf_autogroup/cloud/probe/gcp.txt"
+printf '{"t":%s,"type":"temp24","cidr":"151.80.7.0/24","n":1,"ips":[{"ip":"151.80.7.9","host":"","why":"lfd - (sshd) Failed SSH login"}]}\n' "$NOW" > "$R/var/lib/csf_autogroup/events.jsonl"
+single 151.80.7.10 sshd; single 198.51.100.5 sshd
+printf '%s\n' "$NOW|151.80.7.11||in|3600|lfd: (smtpauth) Failed SMTP AUTH login from 151.80.7.11" >> "$T"
+printf '%s\n' "151.80.9.0/24 # csf_autogroup: elle blok banı - do not delete" >> "$D"; single 151.80.9.20 sshd; sed -i '/^151.80.9.20 /d' "$D"
+printf '{"t":%s,"type":"warn16","cidr":"151.80.0.0/16","n":1,"ips":[{"ip":"151.80.9.20","host":"","why":"lfd - (sshd) Failed SSH login"}]}\n' "$NOW" >> "$R/var/lib/csf_autogroup/events.jsonl"
+SI=$(run --src-ips cl:gcp --json 2>/dev/null); PO=$(run --status --json 2>/dev/null | grep -o '"pot":{[^}]*}' | grep -o '"gcp":[0-9]*' | cut -d: -f2)
+mcheck "kaynak ayrıntısı: kutudaki sayı (pot) = ayrıntının IP sayısı, listenin dışındaki IP sayılmaz" "[ \"\$(printf '%s' '$SI' | grep -o '\"n\":[0-9]*')\" = '\"n\":4' ] && [ '$PO' = 4 ] && ! printf '%s' '$SI' | grep -q 198.51.100.5"
+mcheck "kaynak ayrıntısı: şu anki durum — tekil kalıcı, geçici, aralık banı içinde, banlı değil" "printf '%s' '$SI' | grep -q '\"151.80.7.10\",\"ssh\",[^]]*,\"deny\",\"deny\"\]' && printf '%s' '$SI' | grep -q '\"151.80.7.11\",\"sync\",[^]]*,\"temp\",\"temp\"\]' && printf '%s' '$SI' | grep -q '\"151.80.9.20\",[^]]*\"deny24:151.80.9.0/24\"\]' && printf '%s' '$SI' | grep -q '\"151.80.7.9\",\"ssh\",[^]]*,\"temp24\",\"\"\]'"
+mcheck "kaynak ayrıntısı: hatalı anahtar reddedilir" "run --src-ips 'cl:../x' --json 2>/dev/null | grep -q bad_key"
+
 # Imunify360 8.15 "port bilen" beyaz listesi (v3/imunify360-csf.txt, csf.allow'a Include ile): satırlar tek yönlü ve tek portlu
 # (sunucuda ölçüldü 2026-11-01: 224 × tcp|out|d=443|d=IP, 18 × tcp|out|d=8883, 5 × tcp|in|d=22|s=IP, 1 × udp|out|d=53). Ban altında tek
 # yönlü satır hiçbir şey geçirmez (gerçek CSF'te ölçüldü) → o IP'yi kapsayan /24 otomatik banlanmamalı, IP kartı izni doğru adlandırmalı

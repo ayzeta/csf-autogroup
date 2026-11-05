@@ -1142,6 +1142,22 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-tile-ed svg { width: 13px; height: 13px; }
 .ag-tile-ed:hover, .ag-tile.ed .ag-tile-ed { color: var(--ag-accent); background: var(--ag-card); }
 .ag-urled { margin-top: 10px; border: 1px solid var(--ag-accent-line); border-radius: 10px; padding: 10px 12px; background: var(--ag-card); }
+/* kaynak ayrıntısı: sağlayıcı satırında ve kiralık liste kutularının altında aynı bölüm */
+.ag-srcd { margin-top: 10px; border: 1px solid var(--ag-accent-line); border-radius: 10px; padding: 10px 12px; background: var(--ag-card); min-width: 0; }
+.ag-srcd-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.ag-srcd > p { margin: 4px 0; font-size: 12.5px; }
+.ag-srcd .ag-sd-t { margin-top: 6px; }
+.ag-sd-t th.ag-sd-st, .ag-sd-t td.ag-sd-st { text-align: right; white-space: nowrap; }
+.ag-sd-m { display: none; }
+/* telefonda beş sütun sığmıyor (Şu an ekran dışında kalıyordu): kayıt ve şu an servisin altında */
+@media (max-width: 600px) {
+  .ag-sd-t .ag-sd-f, .ag-sd-t .ag-sd-st { display: none; }
+  .ag-sd-t .ag-sd-m { display: block; margin-top: 3px; color: var(--ag-text-3); font-size: 12px; }
+}
+.ag-srcd-w { border-top: 1px dashed var(--ag-line); margin-top: 10px; padding-top: 8px; }
+.ag-srcd-w h4 { margin: 0 0 6px; font-size: 13px; }
+.ag-srcd-w > .ag-btn svg { width: 13px; height: 13px; }
+.ag-tile .ag-tile-m em.pot .ag-link { font: inherit; color: inherit; padding: 0; border: 0; background: none; text-align: left; cursor: pointer; }
 .ag-urled-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; font-size: 12.5px; }
 .ag-urled-r { padding: 4px 0; font-size: 12px; }
 .ag-urled .ag-url-in { display: flex; align-items: center; gap: 8px; }

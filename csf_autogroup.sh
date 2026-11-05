@@ -57,7 +57,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.46"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.47"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -189,6 +189,7 @@ while [ $# -gt 0 ]; do
         --events)  MODE=events ;;
         --inside)  MODE=inside ;;
         --asn-impact) MODE=asnimpact ;;
+        --src-ips) MODE=srcips ;;
         --prov-apply) MODE=prov ;;
         --keep)    CLEAN=0 ;;
         --restore) RESTORE=1 ;;
@@ -4785,17 +4786,78 @@ asn_bans_json() { # RNG ALW CLF CWEB COK → stdout JSON: sağlayıcının aral�
         END { o = ""; for (n = 0; n < 40; n++) { b = 0; bt = -1; for (i in IT) if (IT[i] > bt) { bt = IT[i]; b = i }; if (!b) break; o = o (o == "" ? "" : ",") I[b]; delete IT[b] }
               printf "{\"n\":%d,\"s\":%d,\"b\":%d,\"p\":%d,\"last\":%d,\"open\":%d,\"cloud\":%d,\"allow\":%d,\"csrc\":%s,\"asvc\":%s,\"svc\":%s,\"items\":[%s]}", N, K["s"], K["b"], K["p"], LAST, CV["open"], CV["cloud"], CV["allow"], sub2("cloud"), sub2("allow"), obj(SV), o }' "$DENY_FILE"
 }
-do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan gelen istekler: kodlar, başarılı istekler, siteler
-    local a="${1^^}" n geo="$CSF_VAR/Geo/ip2asn-combined.tsv" dir="" d files rng
-    [[ "$a" =~ ^AS([0-9]{1,10})$ ]] || { echo '{"ok":false,"error":"bad_asn"}'; return 2; }
-    n="${BASH_REMATCH[1]}"
-    [ -r "$geo" ] || { echo '{"ok":false,"error":"no_asn_data"}'; return 1; }
-    for d in ${DOMLOGS:-} /var/log/apache2/domlogs /usr/local/apache/domlogs /etc/apache2/logs/domlogs; do [ -d "$d" ] && { dir="$d"; break; }; done
-    [ -n "$dir" ] || { echo '{"ok":false,"error":"no_logs"}'; return 1; }
+src_rng() {      # ANAHTAR DOSYA → DOSYA'ya sıralı "lo hi" aralıkları: sağlayıcı (ASnnn; CSF'in ASN verisi) ya da kiralık liste (cl:ad;
+    # indirilen liste, seçili olmayan liste probe/ altında — kutudaki ihlal sayısı cloud_pot da aynı dosyayı okur). Çıkış 3 = ASN
+    # verisi yok, 4 = liste yok, 2 = anahtar hatalı. Ayrıntı penceresinin IP listesi ve ölçümü aynı aralıkları kullanır.
+    local k="$1" f geo="$CSF_VAR/Geo/ip2asn-combined.tsv"
+    case "$k" in
+        AS[0-9]*) [ -r "$geo" ] || return 3
+            awk -F'\t' -v n="${k#AS}" '$3 == n && $1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ {
+                split($1, p, "."); split($2, q, ".")
+                print ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4], ((q[1] * 256 + q[2]) * 256 + q[3]) * 256 + q[4] }' "$geo" | sort -n > "$2" ;;
+        cl:*) local x fs=()                  # bir kutunun birden çok kaynağı: cl:aws+x-aws2--eu
+            local IFS='+'; for x in ${k#cl:}; do f="$CLOUD_DIR/$x.txt"; [ -r "$f" ] || f="$CLOUD_DIR/probe/$x.txt"; [ -r "$f" ] && fs+=("$f"); done; unset IFS
+            [ "${#fs[@]}" -gt 0 ] || return 4
+            awk -F'[./]' 'NF >= 4 { b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%.0f %.0f\n", lo, lo + 2 ^ (32 - b) - 1 }' "${fs[@]}" |
+                sort -n -k1,1 > "$2" ;;
+        *) return 2 ;;
+    esac
+}
+do_src_ips() {   # ANAHTAR (ASnnn | cl:ad) → JSON: o sağlayıcıya / kiralık listeye düşen ihlal eden IP'ler. Kaynaklar kutudaki sayıyla
+    # (cloud_pot) aynı: olay kaydındaki IP'ler, csf.deny tekilleri, geçici liste — sayı ile tablo aynı veriden. IP başına en yeni kayıt
+    # (zaman, nereden, sebep, servis) ve şu anki durumu: tekil kalıcı ban, geçici ban, ya da onu kapsayan aralık banı (csf.deny /
+    # geçici listedeki CIDR). En yeni 500 satır; "n" hepsinin sayısı.
+    local k="$1" rng svm rc
+    [[ "$k" =~ ^(AS[0-9]{1,10}|cl:[a-z0-9-]{1,63}([+][a-z0-9-]{1,63}){0,30})$ ]] || { echo '{"ok":false,"error":"bad_key"}'; return 2; }
     rng=$(mktemp) || return 1
-    awk -F'\t' -v n="$n" '$3 == n && $1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ {
-        split($1, p, "."); split($2, q, ".")
-        print ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4], ((q[1] * 256 + q[2]) * 256 + q[3]) * 256 + q[4] }' "$geo" | sort -n > "$rng"
+    src_rng "$k" "$rng"; rc=$?
+    if [ "$rc" -ne 0 ]; then rm -f "$rng"; [ "$rc" = 3 ] && echo '{"ok":false,"error":"no_asn_data"}' || echo '{"ok":false,"error":"no_list"}'; return 1; fi
+    svm=$(mktemp) && bl_svc_map "$svm"
+    local now; printf -v now '%(%s)T' -1
+    { [ -r "$EVENTS_FILE" ] && grep -F '"ips":[{' "$EVENTS_FILE" 2>/dev/null | awk '
+        { t = 0; ty = ""; if (match($0, /"t":[0-9]+/)) t = substr($0, RSTART + 4, RLENGTH - 4) + 0
+          if (match($0, /"type":"[a-z_0-9]+"/)) ty = substr($0, RSTART + 8, RLENGTH - 9)
+          r = $0; while (match(r, /\{"ip":"[0-9.]+"[^}]*\}/)) { o = substr(r, RSTART, RLENGTH); r = substr(r, RSTART + RLENGTH)
+              ip = o; sub(/^\{"ip":"/, "", ip); sub(/".*/, "", ip); w = ""
+              if (match(o, /"why":"([^"\\]|\\.)*"/)) w = substr(o, RSTART + 7, RLENGTH - 8)
+              print "E\t" ip "\t" t "\t" ty "\t" w } }'
+      awk '/^[[:space:]]*#/ || NF == 0 { next }
+        { c = $0; sub(/[ \t]*#.*/, "", c); cm = ""; if (index($0, "#")) { cm = $0; sub(/^[^#]*#[ \t]*/, "", cm) }
+          if (c ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) print "D\t" c "\t0\t\t" cm
+          else if (c ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\/[0-9]+$/) print "C\t" c }' "$DENY_FILE" 2>/dev/null
+      [ -r "$CSF_VAR/csf.tempban" ] && awk -F'|' -v now="$now" '$1 + $5 > now + 0 { k = ($2 ~ /\//) ? "R" : "T"; print k "\t" $2 "\t" $1 "\t" ($1 + $5) "\t" $6 }' "$CSF_VAR/csf.tempban"
+    } | awk -F'\t' -v rf="$rng" -v pc="$svm" "$AWK_CLS"'
+        function v4(x,  p) { split(x, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
+        function de(x,  a, k, M, i, h) { split("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec", M, " "); k = split(x, a, /[ \t]+/)
+            if (k < 4 || a[k] !~ /^[0-9][0-9][0-9][0-9]$/ || a[k - 1] !~ /^[0-9][0-9]:[0-9][0-9]:[0-9][0-9]$/) return 0
+            split(a[k - 1], h, ":"); for (i = 1; i <= 12; i++) if (M[i] == a[k - 3]) return mktime(a[k] " " i " " a[k - 2] " " h[1] " " h[2] " " h[3]); return 0 }
+        function js(x) { gsub(/\\./, "", x); gsub(/"/, "", x); gsub(/[[:cntrl:]]/, " ", x); return "\"" substr(x, 1, 140) "\"" }
+        function inr(v,  a, z, c, j) { a = 1; z = rn; j = 0; while (a <= z) { c = int((a + z) / 2); if (L[c] <= v) { j = c; a = c + 1 } else z = c - 1 }; return j && PM[j] >= v }
+        BEGIN { while ((getline l < rf) > 0) { split(l, x, " "); rn++; L[rn] = x[1] + 0; h = x[2] + 0; PM[rn] = (rn == 1 || h > PM[rn - 1]) ? h : PM[rn - 1] }
+                while ((getline l < pc) > 0) { split(l, x, " "); PC[x[1]] = x[2] } }
+        $1 == "C" || $1 == "R" { split($2, q, "/"); lo = v4(q[1]); cn++; CL[cn] = lo; CH[cn] = lo + 2 ^ (32 - q[2]) - 1; CK[cn] = $1; CC[cn] = $2; next }
+        { ip = $2; if (!(ip in IN)) IN[ip] = inr(v4(ip)); if (!IN[ip]) next
+          t = $3 + 0; if ($1 == "D") { t = de($5); D[ip] = 1 } else if ($1 == "T") TT[ip] = 1
+          if (!(ip in BT) || t > BT[ip]) { BT[ip] = t; BW[ip] = ($1 == "E" ? $5 : $5); BF[ip] = ($1 == "E" ? $4 : $1 == "D" ? "deny" : "temp") } }
+        END { n = 0
+            for (ip in BT) { n++; v = v4(ip); st = D[ip] ? "deny" : TT[ip] ? "temp" : ""
+                if (st == "") for (i = 1; i <= cn; i++) if (CL[i] <= v && CH[i] >= v) { st = (CK[i] == "C" ? "deny24:" : "temp24:") CC[i]; if (CK[i] == "C") break }
+                sv = cls(BW[ip]); if (sv == "repeat" && (ip in PC)) sv = PC[ip]
+                K[n] = BT[ip]; R[n] = "[" js(ip) "," js(sv) "," js(BW[ip]) "," BT[ip] "," js(BF[ip]) "," js(st) "]" }
+            o = ""; m = 0
+            for (j = 1; j <= n && m < 500; j++) { b = 0; bt = -1; for (i in K) if (K[i] > bt) { bt = K[i]; b = i }; if (!b) break; o = o (m++ ? "," : "") R[b]; delete K[b] }
+            printf "{\"ok\":true,\"n\":%d,\"ips\":[%s]}\n", n, o }'
+    rm -f "$rng" "$svm"
+}
+do_asn_impact() { # ANAHTAR (ASnnn | cl:ad) → son 24 saatin web günlüklerinde bu sağlayıcıdan / kiralık listeden gelen istekler
+    local a="$1" n="" dir="" d files rng rc
+    if [[ "${a^^}" =~ ^AS([0-9]{1,10})$ ]]; then a="${a^^}"; n="${BASH_REMATCH[1]}"
+    elif ! [[ "$a" =~ ^cl:[a-z0-9-]{1,63}([+][a-z0-9-]{1,63}){0,30}$ ]]; then echo '{"ok":false,"error":"bad_asn"}'; return 2; fi
+    for d in ${DOMLOGS:-} /var/log/apache2/domlogs /usr/local/apache/domlogs /etc/apache2/logs/domlogs; do [ -d "$d" ] && { dir="$d"; break; }; done
+    rng=$(mktemp) || return 1
+    src_rng "$a" "$rng"; rc=$?
+    if [ "$rc" -ne 0 ]; then rm -f "$rng"; [ "$rc" = 3 ] && echo '{"ok":false,"error":"no_asn_data"}' || echo '{"ok":false,"error":"no_list"}'; return 1; fi
+    [ -n "$dir" ] || { rm -f "$rng"; echo '{"ok":false,"error":"no_logs"}'; return 1; }
     local lst since alw; lst=$(mktemp) || { rm -f "$rng"; return 1; }
     # izinli adresler: CSF bunlara bandan önce izin verir; ölçümde ayrıca işaretlenir. İzinli servisler (services.allow, servis adıyla)
     # ve kendi tam izinleriniz (csf.allow ve Include'ları, GLOBAL_ALLOW, geçici izin; "csfallow"). Önce yalnız servisler sayılıyordu:
@@ -4831,7 +4893,7 @@ do_asn_impact() { # ASN → son 24 saatin web günlüklerinde bu sağlayıcıdan
           done
       fi
     } > "$xcf"
-    asn_banned; local ban="${ASB[$n]:-}" bsince=0 bkey=""
+    asn_banned; local ban="" bsince=0 bkey=""; [ -n "$n" ] && ban="${ASB[$n]:-}"   # kiralık listede sağlayıcı banı yok
     # banlıysa banın konduğu an: sağlayıcı olaylarında bu ASN'nin kesintisiz yer aldığı son dizinin ilk olayı;
     # ondan sonraki istekler ayrıca sayılır (ban işliyorsa web günlüğünde açık adreslerden istek kalmaz)
     # yalnız ban web portlarını kapatıyorsa (her şey ya da CSF'in port listesinde 80 ve 443) ölçülür
@@ -6439,6 +6501,7 @@ case "$MODE" in
     events) LOG_MODE=quiet; do_events "${ARGS[0]}" "${ARGS[1]}" "${ARGS[2]}"; exit $? ;;
     inside) LOG_MODE=quiet; do_inside "${ARGS[0]}"; exit $? ;;
     asnimpact) LOG_MODE=quiet; do_asn_impact "${ARGS[0]}"; exit $? ;;
+    srcips) LOG_MODE=quiet; do_src_ips "${ARGS[0]}"; exit $? ;;
     prov)   LOG_MODE=file; take_lock || { act_out 3 "$M_BUSY"; exit 3; }
             svc_enforce 0
             if [ "$ENABLED" = 0 ]; then ASN_BAN=0 asn_enforce; CLOUD_BAN=0 cloud_enforce 0; else asn_enforce; cloud_enforce 0; guard_update; fi

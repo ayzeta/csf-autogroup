@@ -622,6 +622,13 @@ restoring `config.env` is enough.
 - **Most blocked providers** sits next to it: **Ban…** on a row adds the
   provider to the list and measures its impact (nothing is applied until you
   save).
+- **Details** on a provider row (and on a rented-server box) opens one window
+  for both: whether and how the source is banned now, how many offending IPs
+  it has and on which services, a hint on which ports would cut them, and a
+  table of those IPs (IP, service, last record, where it was recorded, what
+  covers it now). The last 24 hours of web requests (**Measure impact**) are
+  read only when asked, because large logs can take a minute.
+  `csf_autogroup.sh --src-ips ASnnn` (or `cl:list`) prints the same IP list as JSON.
 - **Measure impact** before saving: the last 24 hours of web logs, for that
   provider — response codes, successful requests, successful POSTs (payment
   notifications, webhooks), examples of failed requests (403, 404, 5xx…: code,
@@ -738,8 +745,10 @@ pattern** (`*` matches anything) finds the list on it, as the built-in Azure
 box does on Microsoft's download page. With no filter every IPv4 range at the
 address is taken. `tools/src-filter.pl` does the filtering for both cards. `tools/filter-check.sh` checks the filters on a live server without touching the firewall: built-in boxes against hand-built copies, and other providers that publish the same ways. In `config.env` your own sources stay in
 `CLOUD_EXTRA` / `SVC_EXTRA` as `name|address`; `box--source|address` puts a
-source into a box. Boxes also show how many offending IPs from the event log
-fall in each rented-server list.
+source into a box. Boxes also show how many offending IPs fall in each
+rented-server list (event log, single bans in `csf.deny` and the temp list).
+Clicking that number opens the box's **details**, the same window as a
+provider's (see Provider ban).
 
 ## Development
 

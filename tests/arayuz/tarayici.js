@@ -417,6 +417,17 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
       kartlar: Array.from(document.querySelectorAll('#ag-app section[id]')).map(x => x.id).join(','), sayfa: document.querySelector('#ag-app').innerText.slice(0, 200) }));
     check('Sağlayıcılar: katmanlar açılınca kutular ve "Ekle" düğmeleri çizilir', hazir.add === 1 && hazir.sadd === 1 && !hazir.modal, JSON.stringify(hazir));
     if (hazir.modal) { await page.keyboard.press('Escape'); await page.waitForTimeout(300); }
+    // kaynak ayrıntısı: kutudaki satır açar; özet, IP bölümü ve "son 24 saat" (ölçüm aynı anahtarla) — sağlayıcı satırıyla aynı bileşen
+    await tik(page, '#ag-cloud-card [data-act="srcinfo"][data-v="cl:gcp"]');
+    await page.waitForSelector('#ag-srcd', { timeout: 15000 }).catch(() => {});
+    await page.waitForFunction(() => { const d = document.querySelector('#ag-srcd'); return d && !d.querySelector('.ag-spin'); }, null, { timeout: 30000 }).catch(() => {});
+    const sd = await page.evaluate(() => { const d = document.querySelector('#ag-srcd'); if (!d) return null;
+      return { b: (d.querySelector('.ag-srcd-h b') || {}).textContent, w: !!d.querySelector('.ag-srcd-w h4'), m: (d.querySelector('[data-act="asnimpact"]') || {}).getAttribute ? d.querySelector('[data-act="asnimpact"]').getAttribute('data-v') : null, ham: /\bx-[a-z]|\bcl:/.test(d.innerText) }; });
+    check('kaynak ayrıntısı: kiralık liste kutusundan açılır, başlık, son 24 saat bölümü, ölçüm kutunun anahtarıyla, ham ad yok', !!sd && /Google Cloud/.test(sd.b || '') && sd.w && sd.m === 'cl:gcp' && !sd.ham, JSON.stringify(sd));
+    for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(300); await layoutChecks(page, 'kaynak-ayrinti', w); }
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await tik(page, '#ag-srcd [data-act="srcinfo"]'); await page.waitForTimeout(300);
+    check('kaynak ayrıntısı: Kapat ile kapanır', !(await page.$('#ag-srcd')));
     const names = async (g) => page.$$eval(`${g} .ag-tile-m b`, L => L.map(b => b.textContent.trim()));
     const chips = async (g, nm) => page.$$eval(`${g} .ag-tile`, (L, nm) => { const x = L.find(e => (e.querySelector('.ag-tile-m b') || {}).textContent === nm);
       return x ? Array.from(x.querySelectorAll('.ag-tile-subs .ag-chip')).map(c => c.firstChild.textContent.trim()) : null; }, nm);
