@@ -17,5 +17,11 @@ const T = [
   [url, 'aws|https://ip-ranges.amazonaws.com/ip-ranges.json|j:service=EC2', true],
   [url, 'azure|https://www.microsoft.com/en-us/download/details.aspx?id=56519|-|-', true],
 ];
+// kiralık liste başına kip (CLOUD_MODES): panelin deseni + "svc::" ve geçersiz port aralığı reddi (motorun cfg_check'iyle aynı)
+const cmLine = s.slice(s.indexOf('var cmSv'), s.indexOf('\n', s.indexOf('var cmSv')));
+const cm = (() => { eval(cmLine); return { test: (x) => cmRe.test(x) && !/=svc::$/.test(x) }; })();
+T.push([cm, 'aws=exc:web:', true], [cm, 'azure=svc:web,ssh:8080,30000-35000', true], [cm, 'gcp=all::', true], [cm, 'x-kendi--alt=svc::2222', true],
+  [cm, 'aws=svc::', false], [cm, 'aws=hepsi::', false], [cm, 'aws=svc:mout:', false], [cm, 'aws=svc:web:80:90', false]);
+cm.source = 'CLOUD_MODES';
 let f = 0; for (const [re, v, want] of T) { const ok = re.test(v); if (ok !== want) { f++; console.log('✗', re.source.slice(0, 40), v, '→', ok); } }
 console.log(`düzenli ifade: ${T.length} örnek, ${f} beklenmeyen`);

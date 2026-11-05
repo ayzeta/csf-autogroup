@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.15.50 — 2026-11-06
+
+- **Rented servers: what to block, per list.** Each box has its own rule,
+  set with **What to block** — the same picker as a manual range ban:
+  *Everything*, *Selected services* or *Everything except* the services you
+  keep open (for example a list where only port 80 should stay reachable).
+  The chips show how many offending IPs from that list hit each service. The
+  former shared port list for all rented-server lists is gone; a list you
+  have not set keeps the ports it had, so nothing changes until you choose.
+  Only new incoming connections are dropped in every mode: connections this
+  server opens to those addresses are never cut, so the picker shows no
+  outgoing services here.
+- Every screen follows each list's own rule: the IP card, the range ban
+  window, Measure impact (requests from a list that leaves the web open are
+  not counted as already blocked), provider coverage, the weekly summary and
+  the source details. The details table now says when an IP is in the list
+  (or provider ban) but the service it hit is still open ("SSH open"), and
+  suggests changing the rule for those services.
+- The manual range ban window and the rented-server rule use one shared
+  picker (modes, service chips, summary, hints).
+- `tools/cloud-ban.sh`: lists with the same rule share one ipset; with more
+  than one rule each gets its own set (`ag_cl1`, `ag_cl2` …, while `ag_cloud`
+  stays the union), and *Everything except* runs in its own chain.
+  `tools/ban-leak.sh` reads the per-set rules.
+
 ## 1.15.49 — 2026-11-06
 
 - Measure impact, note under the results: a rented-server list no longer gets

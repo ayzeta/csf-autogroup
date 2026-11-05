@@ -17,7 +17,11 @@
 #   cloud-ban.sh --apply    indirmeden, son listelerle uygula (csfpost.sh bunu çağırır)
 #   cloud-ban.sh --sync     --apply + csfpost.sh satırını denetle
 #   cloud-ban.sh --remove   kuralı, ipset'i ve csfpost.sh satırını kaldır
-# Durum dosyaları CACHE altında: active (kaynak adları), ports (tcp=…, udp=…), self (sunucu IP'leri), <ad>.txt
+# Durum dosyaları CACHE altında: active (kaynak adları), ports (liste başına "p AD KİP TCP UDP"; eski biçim tcp=… / udp=… bütün
+# listeler için), self (sunucu IP'leri), <ad>.txt, groups (uygulanan küme başına "küme kip tcp udp"; tools/ban-leak.sh okur).
+# Kipler: svc = yalnız seçilen portlarda yeni bağlantı düşer · all = her yeni bağlantı düşer · exc = seçilen portlar dışında her yeni
+# bağlantı düşer. Aynı politikadaki listeler tek kümede; politika tekse küme ag_cloud, birden çoksa ag_cl1, ag_cl2 … (ag_cloud her
+# zaman bütün listelerin birleşimi: eklentinin sayım ve "bu IP listede mi" sorusu ondan okur)
 set -u
 CACHE="${CACHE:-/var/lib/csf_autogroup/cloud}"
 CSF_DIR="${CSF_DIR:-/etc/csf}"
@@ -110,7 +114,13 @@ rules_del() {
     M -F "$CHAIN" 2>/dev/null; M -X "$CHAIN" 2>/dev/null
     iptables -F "$CHAIN" 2>/dev/null; iptables -X "$CHAIN" 2>/dev/null     # eski sürüm (filter)
     ipset destroy "$SET" 2>/dev/null; ipset destroy "${SET}_t" 2>/dev/null
+    local x; for x in $(ipset list -n 2>/dev/null | grep -E '^ag_cl[0-9]+(_t)?$'); do ipset destroy "$x" 2>/dev/null; done
+    xchains_del
+    rm -f "$CACHE/groups"
     return 0
+}
+xchains_del() {  # "hariç" kiplerinin alt zincirleri (AG_CLX1 …); ana zincirden atlama kalmamış olmalı
+    local x; for x in $(M -S 2>/dev/null | awk '$1 == "-N" && $2 ~ /^AG_CLX[0-9]+$/ { print $2 }'); do M -F "$x" 2>/dev/null; M -X "$x" 2>/dev/null; done
 }
 # Yer: mangle PREROUTING, nat'tan önce. Imunify360 kendi zincirini INPUT'un başına yeniden koyuyor; kural INPUT'tayken
 # bir dakika içinde ikinci sıraya düşüyor ve gri listedeki adresler yine geçiyordu (sunucuda ölçüldü 2026-10-11).
@@ -137,49 +147,102 @@ order_fix() {
 # geçer (zincirde kümeden önce RETURN) — müşteriye SSH için açılan satır, listedeki adresin web'ine yol açmasın.
 allow_sum() { ag_allow_sum; }
 apply() {        # son listelerle ipset'i doldur, zinciri kur (değişmiş olsa da boşluk olmadan: ipset swap)
-    local names tcp="" udp="" list n s
+    local names tcp="" udp="" list n s k v pk pt pu g gk
     command -v ipset >/dev/null 2>&1 && command -v iptables >/dev/null 2>&1 || { log "ipset ya da iptables yok"; return 1; }
     names=$(cat "$CACHE/active" 2>/dev/null)
-    [ -r "$CACHE/ports" ] && while IFS='=' read -r k v; do case "$k" in tcp) tcp="$v" ;; udp) udp="$v" ;; esac; done < "$CACHE/ports"
+    # politika: liste başına "p AD KİP TCP UDP" (boş "-"); eski biçim (tcp=… / udp=…) bütün listeler için "svc" kipi
+    local -A PK=() PT=() PU=() GI=(); local -a GK=() GL=()
+    if [ -r "$CACHE/ports" ]; then
+        while read -r k n pk pt pu; do
+            case "$k" in
+                p) [[ "$n" =~ ^[a-z0-9-]+$ && "$pk" =~ ^(svc|all|exc|none)$ ]] || continue
+                   [ "$pt" = - ] && pt=""; [ "$pu" = - ] && pu=""
+                   [[ "$pt" =~ ^[0-9,:]*$ && "$pu" =~ ^[0-9,:]*$ ]] || continue
+                   PK[$n]="$pk"; PT[$n]="$pt"; PU[$n]="$pu" ;;
+                tcp=*) tcp="${k#tcp=}" ;;
+                udp=*) udp="${k#udp=}" ;;
+            esac
+        done < "$CACHE/ports"
+    fi
     [[ "$tcp" =~ ^[0-9,:]*$ && "$udp" =~ ^[0-9,:]*$ ]] || { tcp=""; udp=""; }
+    for n in $names; do
+        [[ "$n" =~ ^[a-z0-9-]+$ ]] || continue
+        if [ -n "${PK[$n]:-}" ]; then pk="${PK[$n]}"; pt="${PT[$n]}"; pu="${PU[$n]}"; else pk=svc; pt="$tcp"; pu="$udp"; fi
+        [ "$pk" = svc ] && [ -z "$pt$pu" ] && pk=none
+        [ "$pk" = none ] && continue                      # bu liste hiçbir şeyi kapatmıyor
+        [ -s "$CACHE/$n.txt" ] || continue
+        gk="$pk ${pt:--} ${pu:--}"
+        if [ -z "${GI[$gk]:-}" ]; then GK+=("$gk"); GL+=(""); GI[$gk]=${#GK[@]}; fi
+        g=$(( ${GI[$gk]} - 1 )); GL[g]+="${GL[g]:+ }$n"
+    done
     list=$(for n in $names; do [[ "$n" =~ ^[a-z0-9-]+$ ]] && cat "$CACHE/$n.txt" 2>/dev/null; done | grep -E '^[0-9.]+(/[0-9]+)?$' | sort -u)
-    if [ -z "$names" ] || [ -z "$list" ] || [ -z "$tcp$udp" ]; then rules_del; return 0; fi
+    if [ -z "$names" ] || [ -z "$list" ] || [ ${#GK[@]} -eq 0 ]; then rules_del; return 0; fi
     # izinli adresler (csf.allow + Include, izinli servisler; Googlebot'un bir kısmı Google Cloud aralıklarında): kural
     # CSF'in izin listesinden önce çalıştığı için kümede muaf. İzinli bir aralığın tamamen içinde kalan liste aralığı
     # hiç eklenmez; izinli adres daha darsa nomatch olarak eklenir (hash:net'te en dar eşleşme geçerli)
-    local ents allow; ents=$(ag_allow_entries); allow=$(printf '%s\n' "$ents" | awk '$1 == "F" { print $2 }')
-    if [ -n "$allow" ]; then
-        # izinli aralıklar başlangıca göre sıralı ve birleşik; her liste aralığı için ikili arama
-        local alr; alr=$(printf '%s\n' "$allow" | awk -F'[./]' '{ b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%.0f %.0f\n", lo, lo + 2 ^ (32 - b) - 1 }' | sort -n -k1,1)
-        list=$(printf '%s\n' "$list" | awk -v al="$alr" '
+    local ents allow alr=""; ents=$(ag_allow_entries); allow=$(printf '%s\n' "$ents" | awk '$1 == "F" { print $2 }')
+    # izinli aralıklar başlangıca göre sıralı ve birleşik; her liste aralığı için ikili arama
+    [ -n "$allow" ] && alr=$(printf '%s\n' "$allow" | awk -F'[./]' '{ b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%.0f %.0f\n", lo, lo + 2 ^ (32 - b) - 1 }' | sort -n -k1,1)
+    al_cut() {   # stdin liste aralıkları → izinli bir aralığın tamamen içinde kalanlar atılmış
+        [ -n "$alr" ] || { cat; return; }
+        awk -v al="$alr" '
             BEGIN { k = split(al, A, "\n"); n = 0
                     for (i = 1; i <= k; i++) { split(A[i], x, " "); lo = x[1] + 0; hi = x[2] + 0
                         if (n && lo <= H[n] + 1) { if (hi > H[n]) H[n] = hi } else { n++; L[n] = lo; H[n] = hi } } }
             { split($1, s, "/"); split(s[1], p, "."); b = (s[2] == "" ? 32 : s[2] + 0)
               lo = ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4]; hi = lo + 2 ^ (32 - b) - 1
               a = 1; z = n; j = 0; while (a <= z) { c = int((a + z) / 2); if (L[c] <= lo) { j = c; a = c + 1 } else z = c - 1 }
-              if (j && H[j] >= hi) next; print }')
-    fi
-    ipset create "$SET" hash:net family inet hashsize 4096 maxelem 262144 -exist || return 1
-    ipset create "${SET}_t" hash:net family inet hashsize 4096 maxelem 262144 -exist || return 1
-    ipset flush "${SET}_t"
-    { printf '%s\n' "$list" | awk -v s="${SET}_t" 'NF { print "add " s " " $1 " -exist" }'
-      for s in $(cat "$CACHE/self" 2>/dev/null); do [[ "$s" =~ ^[0-9.]+$ ]] && echo "add ${SET}_t $s/32 nomatch -exist"; done
-      for s in $allow; do [[ "$s" == */* ]] || s="$s/32"; echo "add ${SET}_t $s nomatch -exist"; done
-    } | ipset restore -exist || { log "ipset doldurulamadı"; return 1; }
-    ipset swap "${SET}_t" "$SET" && ipset destroy "${SET}_t"
+              if (j && H[j] >= hi) next; print }'
+    }
+    fill_set() { # KÜME LİSTE_ADLARI → küme bu listelerin aralıklarıyla (izinliler ve sunucunun kendi IP'leri nomatch), boşluksuz (swap)
+        local S="$1" x
+        ipset create "$S" hash:net family inet hashsize 4096 maxelem 262144 -exist || return 1
+        ipset create "${S}_t" hash:net family inet hashsize 4096 maxelem 262144 -exist || return 1
+        ipset flush "${S}_t"
+        { for x in $2; do cat "$CACHE/$x.txt" 2>/dev/null; done | grep -E '^[0-9.]+(/[0-9]+)?$' | sort -u | al_cut | awk -v s="${S}_t" 'NF { print "add " s " " $1 " -exist" }'
+          for x in $(cat "$CACHE/self" 2>/dev/null); do [[ "$x" =~ ^[0-9.]+$ ]] && echo "add ${S}_t $x/32 nomatch -exist"; done
+          for x in $allow; do [[ "$x" == */* ]] || x="$x/32"; echo "add ${S}_t $x nomatch -exist"; done
+        } | ipset restore -exist || { log "ipset doldurulamadı ($S)"; return 1; }
+        ipset swap "${S}_t" "$S" && ipset destroy "${S}_t"
+    }
+    local all_l=""; for g in "${!GK[@]}"; do all_l+="${all_l:+ }${GL[g]}"; done
+    fill_set "$SET" "$all_l" || return 1                    # birleşim (sayım, IP sorgusu); politika tekse kural da bunu kullanır
+    local -a GS=()
+    if [ ${#GK[@]} -eq 1 ]; then GS=("$SET")
+    else for g in "${!GK[@]}"; do GS+=("ag_cl$((g + 1))"); fill_set "ag_cl$((g + 1))" "${GL[g]}" || return 1; done; fi
     M -N "$CHAIN" 2>/dev/null; M -F "$CHAIN" || return 1
-    # tek portluk izinler: yalnız kapatılan portlarla kesişenler (öteki portlarda zaten bu zincir yok)
-    local pr pa pp
+    xchains_del
+    # tek portluk izinler: kapatılan portlarla kesişenler (bir "her şey" ya da "hariç" kipi varsa hepsi: kapalı port kümesi geniş)
+    local pr pa pp wide=0 ctu="" cuu=""
+    for g in "${!GK[@]}"; do read -r pk pt pu <<< "${GK[g]}"; [ "$pt" = - ] && pt=""; [ "$pu" = - ] && pu=""
+        case "$pk" in svc) ctu+="${ctu:+,}$pt"; cuu+="${cuu:+,}$pu" ;; *) wide=1 ;; esac; done
     while read -r _ pr pa pp; do
         [ -n "$pa" ] || continue
         if [ "$pp" = all ]; then M -A "$CHAIN" -p "$pr" -s "$pa" -j RETURN || return 1; continue; fi
-        case "$pr" in tcp) ag_port_hit "$pp" "$tcp" || continue ;; udp) ag_port_hit "$pp" "$udp" || continue ;; esac
+        if [ "$wide" = 0 ]; then case "$pr" in tcp) ag_port_hit "$pp" "$ctu" || continue ;; udp) ag_port_hit "$pp" "$cuu" || continue ;; esac; fi
         M -A "$CHAIN" -p "$pr" -s "$pa" --dport "$pp" -j RETURN || return 1
     done < <(printf '%s\n' "$ents" | grep '^P ')
-    # her port (ya da a:b aralığı) için ayrı kural; mangle PREROUTING'te hedef port henüz asıl port (nat sonra gelir)
-    for s in ${tcp//,/ }; do M -A "$CHAIN" -p tcp --dport "$s" -m conntrack --ctstate NEW -m set --match-set "$SET" src -j DROP || return 1; done
-    for s in ${udp//,/ }; do M -A "$CHAIN" -p udp --dport "$s" -m conntrack --ctstate NEW -m set --match-set "$SET" src -j DROP || return 1; done
+    # küme başına kural. svc: her port (ya da a:b aralığı) için ayrı DROP; mangle PREROUTING'te hedef port henüz asıl port (nat sonra
+    # gelir). all: kümeden her yeni bağlantı. exc: alt zincir — açık portlar RETURN (ana zincirde öteki kümelere bakılmaya devam
+    # edilir), gerisi DROP. Yalnız ctstate NEW: sunucunun bu adreslere açtığı bağlantıların cevapları hiçbir kipte düşmez.
+    local S X; : > "$CACHE/groups.tmp"
+    for g in "${!GK[@]}"; do
+        read -r pk pt pu <<< "${GK[g]}"; [ "$pt" = - ] && pt=""; [ "$pu" = - ] && pu=""; S="${GS[g]}"
+        case "$pk" in
+            svc) for s in ${pt//,/ }; do M -A "$CHAIN" -p tcp --dport "$s" -m conntrack --ctstate NEW -m set --match-set "$S" src -j DROP || return 1; done
+                 for s in ${pu//,/ }; do M -A "$CHAIN" -p udp --dport "$s" -m conntrack --ctstate NEW -m set --match-set "$S" src -j DROP || return 1; done ;;
+            all) M -A "$CHAIN" -m conntrack --ctstate NEW -m set --match-set "$S" src -j DROP || return 1 ;;
+            exc) X="AG_CLX$((g + 1))"; M -N "$X" 2>/dev/null; M -F "$X" || return 1
+                 for s in ${pt//,/ }; do M -A "$X" -p tcp --dport "$s" -j RETURN || return 1; done
+                 for s in ${pu//,/ }; do M -A "$X" -p udp --dport "$s" -j RETURN || return 1; done
+                 M -A "$X" -j DROP || return 1
+                 M -A "$CHAIN" -m conntrack --ctstate NEW -m set --match-set "$S" src -j "$X" || return 1 ;;
+        esac
+        printf '%s %s %s %s\n' "$S" "$pk" "${pt:--}" "${pu:--}" >> "$CACHE/groups.tmp"
+    done
+    mv -f "$CACHE/groups.tmp" "$CACHE/groups"
+    # artık kullanılmayan grup kümeleri (politika sayısı azaldı)
+    for s in $(ipset list -n 2>/dev/null | grep -E '^ag_cl[0-9]+$'); do printf '%s\n' "${GS[@]}" | grep -qx "$s" || ipset destroy "$s" 2>/dev/null; done
     order_fix || return 1
     allow_sum > "$CACHE/.allowsum" 2>/dev/null
     return 0

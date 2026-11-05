@@ -76,19 +76,35 @@ awk -F'|' '$2 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\/[0-9]+)?$/ { k = ($2 ~ /\//) 
 # "küme lo hi" (kümeye ve başlangıca göre sıralı) + "küme|tür|portlar" tanımları; kiralık listenin nomatch girdileri ayrı küme
 adim "zamanlı ban: $(grep -c . "$W/bans")"
 adim "kümeler okunuyor (sağlayıcı/ülke, kiralık liste, Imunify gri listesi)"
+# kiralık liste kümeleri ve web portlarından (80, 443) hangilerini kapattıkları: cloud-ban.sh'ın groups dosyası ("küme kip tcp udp";
+# liste başına kip: svc = yalnız seçilen portlar, all = her şey, exc = seçilenler dışında her şey). Dosya yoksa (eski sürüm) ag_cloud ve
+# ports dosyasının tcp= satırı
+CGR=""
+if [ -r /var/lib/csf_autogroup/cloud/groups ]; then
+    while read -r gs gk gt gu; do
+        [[ "$gs" =~ ^ag_cl(oud|[0-9]+)$ ]] || continue; [ "$gt" = - ] && gt=""; w=""
+        for p in 80 443; do
+            case "$gk" in all) w+="${w:+,}$p" ;; svc) [[ ",$gt," == *",$p,"* ]] && w+="${w:+,}$p" ;; exc) [[ ",$gt," == *",$p,"* ]] || w+="${w:+,}$p" ;; esac
+        done
+        CGR+="$gs=${w:-0} "      # web portu kapatmayan küme: 0 (boş liste inport'ta "her port" sayılır)
+    done < /var/lib/csf_autogroup/cloud/groups
+fi
 CPT=$(sed -n 's/^tcp=//p' /var/lib/csf_autogroup/cloud/ports 2>/dev/null); [ -n "$CPT" ] || CPT="80,443"
+[ -n "$CGR" ] || CGR="ag_cloud=$CPT"
 # kiralık liste kuralının doğru yerde olduğu an (tools/cloud-ban.sh yazar): öncesindeki istekler eski durumdur, sayılmaz
 CSN=$(cat /var/lib/csf_autogroup/cloud/rule.since 2>/dev/null); [[ "$CSN" =~ ^[0-9]+$ ]] || CSN=0
 [ "$CSN" -gt 0 ] && adim "kiralık liste kuralı $(date -d "@$CSN" '+%d.%m %H:%M')'den beri yerinde: öncesindeki istekler sayılmaz"
-ipset save 2>/dev/null | grep -E '^add (cc_|ag_cloud |[^ ]*graylist )' > "$W/ipset"     # yalnız gereken kümeler, bir kez
-awk -v ccd="$CCD" -v ccp="$CCP" -v ccpt="$CCPT" -v cpt="$CPT" -v csn="$CSN" -v df="$W/setdef" '
+ipset save 2>/dev/null | grep -E '^add (cc_|ag_cloud |ag_cl[0-9]+ |[^ ]*graylist )' > "$W/ipset"     # yalnız gereken kümeler, bir kez
+awk -v ccd="$CCD" -v ccp="$CCP" -v ccpt="$CCPT" -v cgr="$CGR" -v csn="$CSN" -v df="$W/setdef" '
     function out(k, c,  s, p, b, lo) { split(c, s, "/"); split(s[1], p, "."); b = (s[2] == "" ? 32 : s[2] + 0); lo = ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4]
         printf "%s %.0f %.0f\n", k, lo, lo + 2 ^ (32 - b) - 1 }
     $1 == "add" && $2 ~ /^cc_/ { c = toupper(substr($2, 4))
         if (index(ccd, "," c ",")) { if (!D[$2]++) print $2 "|sağlayıcı / ülke banı (her şey): " c "|" > df; out($2, $3) }
         else if (index(ccp, "," c ",")) { if (!D[$2]++) print $2 "|sağlayıcı / ülke banı (port listesi): " c "|" substr(ccpt, 2, length(ccpt) - 2) > df; out($2, $3) } }
-    $1 == "add" && $2 == "ag_cloud" { k = ($4 == "nomatch") ? "ag_cloud_nomatch" : "ag_cloud"
-        if (!D[k]++) print k "|" (k == "ag_cloud" ? "kiralık sunucu listesi" : "muaf") "|" (k == "ag_cloud" ? cpt : "") "|" (k == "ag_cloud" ? csn : 0) > df; out(k, $3) }' "$W/ipset" | sort -k1,1 -k2,2n > "$W/sets"
+    BEGIN { n = split(cgr, g, " "); for (i = 1; i <= n; i++) { split(g[i], q, "="); GP[q[1]] = q[2] } }
+    # kural kümeleri (politika tekse ag_cloud, birden çoksa ag_cl1 …; o zaman ag_cloud yalnız birleşim, kural değil)
+    $1 == "add" && ($2 in GP) { k = ($4 == "nomatch") ? "ag_cloud_nomatch" : $2
+        if (!D[k]++) print k "|" (k == "ag_cloud_nomatch" ? "muaf" : "kiralık sunucu listesi") "|" (k == "ag_cloud_nomatch" ? "" : GP[$2]) "|" (k == "ag_cloud_nomatch" ? 0 : csn) > df; out(k, $3) }' "$W/ipset" | sort -k1,1 -k2,2n > "$W/sets"
 awk '$2 ~ /graylist$/ { print $3 }' "$W/ipset" > "$W/gray"
 adim "küme aralığı: $(grep -c . "$W/sets") · gri listede: $(grep -c . "$W/gray")"
 
@@ -129,7 +145,7 @@ awk -v since="$SINCE" -v skey="$SKEY" -v bf="$W/bans" -v sf="$W/sets" -v df="$W/
         v = v4(ip); o = EXB[ip]; m = split(OCT[int(v / 16777216)], cc, " ")
         for (i = 1; i <= m; i++) { k = cc[i] + 0; if (v >= BLO[k] && v <= BHI[k]) o = o " " k }
         if (SN["ag_cloud_nomatch"] && bs("ag_cloud_nomatch", v)) NOM[ip] = 1
-        for (i = 1; i <= kn; i++) { k = KN[i]; if (k == "ag_cloud_nomatch") continue; if (k == "ag_cloud" && NOM[ip]) continue; if (bs(k, v)) o = o " s:" k }
+        for (i = 1; i <= kn; i++) { k = KN[i]; if (k == "ag_cloud_nomatch") continue; if (k ~ /^ag_cl(oud|[0-9]+)$/ && NOM[ip]) continue; if (bs(k, v)) o = o " s:" k }
         return o }
     { if (substr($4, 1, 1) != "[") next
       split(substr($4, 2), a, /[\/:]/); tk = a[3] sprintf("%02d", MI[a[2]]) a[1] a[4] a[5] a[6]; if (tk < skey) next     # pencere dışı: hiçbir kontrol yok

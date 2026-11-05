@@ -428,7 +428,22 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     await page.setViewportSize({ width: 1280, height: 900 });
     await tik(page, '#ag-srcd [data-act="srcinfo"]'); await page.waitForTimeout(300);
     check('kaynak ayrıntısı: Kapat ile kapanır', !(await page.$('#ag-srcd')));
-    const names = async (g) => page.$$eval(`${g} .ag-tile-m b`, L => L.map(b => b.textContent.trim()));
+    // liste başına kip: kutudaki "Ne kapatılsın" aralık banıyla aynı bileşeni açar (kipler, servis çipleri, özet); giden servisler yok
+    // (kural yalnız gelen yeni bağlantıya). "Her şey, şunlar hariç" + Web → taslakta gcp=exc:web:, kutu yazısı yeni kurala göre
+    await tik(page, '#ag-cloud-card [data-act="clmode"][data-v="cl:gcp"]');
+    await page.waitForSelector('.ag-modal #ag-svcbox', { timeout: 10000 }).catch(() => {});
+    await page.click('.ag-modal [data-mode="exc"]').catch(() => {}); await page.waitForTimeout(200);
+    const cm0 = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); if (!m) return null;
+      return { out: !!m.querySelector('[data-svc="mout"],[data-svc="wout"]'), web: !!m.querySelector('[data-svc="web"]'), sum: (m.querySelector('#ag-sum') || {}).innerText || '',
+        ok: (m.querySelector('[data-m="ok"]') || {}).disabled, md: (m.querySelector('#ag-md') || {}).innerText || '' }; });
+    check('liste kipi: pencere ortak bileşenle (servis çipleri, özet), giden servis yok, seçimsiz "hariç" uygulanamaz', !!cm0 && cm0.web && !cm0.out && /listeden/.test(cm0.md) && cm0.ok === true, JSON.stringify(cm0));
+    for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(300); await layoutChecks(page, 'liste-kipi', w); }
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.click('.ag-modal [data-svc="web"]').catch(() => {}); await page.waitForTimeout(150);
+    await page.click('.ag-modal [data-m="ok"]').catch(() => {}); await page.waitForTimeout(400);
+    const cm1 = await page.evaluate(() => { const t = Array.from(document.querySelectorAll('#ag-cloud-card .ag-tile')).find(x => x.querySelector('[data-act="clmode"][data-v="cl:gcp"]'));
+      return { em: t ? (t.querySelector('em.cm span') || {}).textContent : null, modal: !!document.querySelector('.ag-modal') }; });
+    check('liste kipi: Uygula taslağa yazar, kutu yeni kuralı söyler ("Her şey kapalı, açık: Web"), kaydet çubuğu çıkar', !!cm1.em && /Her şey kapalı, açık: Web/.test(cm1.em) && !cm1.modal && !!(await page.$('.ag-savebar')), JSON.stringify(cm1));    const names = async (g) => page.$$eval(`${g} .ag-tile-m b`, L => L.map(b => b.textContent.trim()));
     const chips = async (g, nm) => page.$$eval(`${g} .ag-tile`, (L, nm) => { const x = L.find(e => (e.querySelector('.ag-tile-m b') || {}).textContent === nm);
       return x ? Array.from(x.querySelectorAll('.ag-tile-subs .ag-chip')).map(c => c.firstChild.textContent.trim()) : null; }, nm);
     // yeni kutu: başlık + kaynak satırları; kutunun içinden: kaynak başlığı + adres

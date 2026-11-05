@@ -706,9 +706,18 @@ server lists have the same two settings in their card.
 works by hand (`--check` shows what would change, `--remove` takes it out).
 
 **Rented servers (experimental).** Cloud providers publish the addresses they
-rent out to anyone (virtual servers); the Providers tab can block those on chosen ports
-(default web): Google Cloud, AWS (EC2), Azure, Oracle Cloud, DigitalOcean,
-Linode and Vultr. Unlike a provider ban, the providers' own services stay reachable — the
+rent out to anyone (virtual servers); the Providers tab can block those:
+Google Cloud, AWS (EC2), Azure, Oracle Cloud, DigitalOcean, Linode and Vultr.
+**What to block** is set per box with the same picker as a manual range ban:
+*Everything*, *Selected services* (web, SSH, FTP, cPanel, incoming mail, mail
+client, DNS, other ports) or *Everything except* the services you keep open
+(for example a list where only port 80 should stay reachable). The service
+chips show how many offending IPs from that list hit each service. Only new
+incoming connections are dropped in every mode, so connections this server
+opens to those addresses (backups, APIs, outgoing mail) keep working; that is
+why the picker has no outgoing services here. Lists with the same rule share
+one ipset; each list's rule is stored in `CLOUD_MODES`, and a list without one
+keeps the former shared `CLOUD_TCP` / `CLOUD_UDP` ports (web by default). Unlike a provider ban, the providers' own services stay reachable — the
 Google Cloud list has no Googlebot or Gmail. The lists go into an ipset with
 one rule in the `mangle` table's `PREROUTING`, ahead of CSF and of
 Imunify360: Imunify360 redirects greylisted addresses to its own WebShield

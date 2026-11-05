@@ -403,6 +403,20 @@ TL=$(LC_ALL=C date -d '-1 hour' '+%d/%b/%Y:%H:%M:%S +0000')
 printf '66.249.66.1 - - [%s] "GET /gizli HTTP/1.1" 403 10 "-" "Googlebot/2.1"\n66.249.66.1 - - [%s] "GET /gizli HTTP/1.1" 403 10 "-" "Googlebot/2.1"\n66.249.66.2 - - [%s] "GET / HTTP/1.1" 200 10 "-" "Googlebot/2.1"\n' "$TL" "$TL" "$TL" > "$R/domlogs/site.test"
 mcheck "Etkisini ölç: izinli servisin 403 aldığı istek örnekte (kod · site · istek ×2, servis, örnek IP); başarılı istek listede değil" "run --asn-impact AS15169 --json 2>/dev/null | grep -q '\"afails\":\[\[\"403 · site.test · GET /gizli\",2,0,\"googlebot\",\"66.249.66.1\"\]\]'"
 
+# Kiralık liste başına kip (CLOUD_MODES): her ekran listenin kendi kuralını söyler. gcp "her şeyi kapat, web hariç", oracle kipsiz
+# (eski ortak port listesi: web), vultr "her şey". IP kartı, aralık penceresi, Etkisini ölç (web istekleri yalnız web'i kapatan listede
+# "zaten kapalı") ve ayar doğrulaması
+mk clmode; mkdir -p "$R/var/lib/csf_autogroup/cloud" "$R/domlogs"
+printf '151.80.0.0/16\n' > "$R/var/lib/csf_autogroup/cloud/gcp.txt"; printf '152.70.0.0/16\n' > "$R/var/lib/csf_autogroup/cloud/oracle.txt"; printf '45.32.0.0/16\n' > "$R/var/lib/csf_autogroup/cloud/vultr.txt"
+printf '%s\n' CLOUD_BAN=1 CLOUD_SOURCES=gcp,oracle,vultr 'CLOUD_MODES="gcp=exc:web: vultr=all::"' "DOMLOGS=$R/domlogs" >> "$R/app/config.env"
+TL=$(LC_ALL=C date -d '-1 hour' '+%d/%b/%Y:%H:%M:%S +0000')
+printf '151.80.7.9 - - [%s] "GET / HTTP/1.1" 200 10 "-" "curl"\n152.70.1.1 - - [%s] "GET / HTTP/1.1" 200 10 "-" "curl"\n' "$TL" "$TL" > "$R/domlogs/site.test"
+LG=$(run --lookup 151.80.7.9 --json 2>/dev/null); LO=$(run --lookup 152.70.1.1 --json 2>/dev/null); LV=$(run --lookup 45.32.1.1 --json 2>/dev/null)
+mcheck "kip: IP kartında hariç listesi exc + açık kalan portlar, kipsiz liste eski ortak portlar, her şey kipi all" "printf '%s' '$LG' | grep -q '\"kind\":\"cloud\",\"what\":\"gcp\",\"mode\":\"exc\",\"tcp\":\"80,443\",\"udp\":\"443\"' && printf '%s' '$LO' | grep -q '\"kind\":\"cloud\",\"what\":\"oracle\",\"mode\":\"svc\",\"tcp\":\"80,443\",\"udp\":\"443\"' && printf '%s' '$LV' | grep -q '\"kind\":\"cloud\",\"what\":\"vultr\",\"mode\":\"all\",\"tcp\":\"\",\"udp\":\"\"'"
+mcheck "kip: aralık penceresi listenin kipini taşır" "run --inside 151.80.7.0/24 --json 2>/dev/null | grep -q '\"cloud\":\"gcp\",\"cloud_mode\":\"exc\",\"cloud_tcp\":\"80,443\",\"cloud_udp\":\"443\"'"
+mcheck "kip: Etkisini ölç — web'i kapatan listeler oracle ve vultr; web'i açık bırakan gcp'nin isteği 'zaten kapalı' sayılmaz (0), oracle'ınki sayılır (1)" "run --asn-impact cl:gcp --json 2>/dev/null | grep -q '\"cloud\":{\"web\":true,\"lists\":\"oracle vultr\",\"req\":0,' && run --asn-impact cl:oracle --json 2>/dev/null | grep -q '\"cloud\":{\"web\":true,\"lists\":\"oracle vultr\",\"req\":1,'"
+mcheck "kip: ayar doğrulaması (svc'de servis ya da port gerekir, bilinmeyen kip ve giden servis reddedilir)" "! run --config set 'CLOUD_MODES=gcp=svc::' >/dev/null 2>&1 && ! run --config set 'CLOUD_MODES=gcp=hepsi::' >/dev/null 2>&1 && ! run --config set 'CLOUD_MODES=gcp=svc:mout:' >/dev/null 2>&1 && run --config set 'CLOUD_MODES=gcp=svc:web,ssh:8080,30000-35000' >/dev/null 2>&1"
+
 # Kaynak ayrıntısı (--src-ips): kiralık liste kutusundaki ihlal eden IP sayısı (durumun prov.cloud.pot) ile ayrıntının tablosu aynı
 # kaynaklardan (olay kaydı, csf.deny tekilleri, geçici liste) ve aynı sayıda; her IP'nin şu anki durumu (kalıcı, geçici, aralık banı)
 mk srcips; mkdir -p "$R/var/lib/csf_autogroup/cloud/probe"; printf '151.80.0.0/16\n' > "$R/var/lib/csf_autogroup/cloud/probe/gcp.txt"

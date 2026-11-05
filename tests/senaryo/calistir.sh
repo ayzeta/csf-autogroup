@@ -87,6 +87,12 @@ if [ "${GERCEK:-0}" = 1 ]; then
     restore() { local f; for f in $CSFF; do [ -e "$BK/$f" ] && cp -a "$BK/$f" "/etc/csf/$f"; done; }
     cloud_off() { CACHE="${R:-/tmp}/var/lib/csf_autogroup/cloud" CSF_DIR=/etc/csf bash "$REPO/tools/cloud-ban.sh" --remove >/dev/null 2>&1; }
     trap 'cloud_off; restore; csf -tf >/dev/null 2>&1; csf -r >/dev/null 2>&1; rm -rf "$W" "$LST"' EXIT
+    # ön denetim: trafik bölümlerinin kullandığı portlarda başka bir süreç dinliyorsa (test makinesinde Apache, başka projenin
+    # php sunucusu) test sunucusu bağlanamaz; bağlantı ölçütü yine doğru sonuç verir ama baştan bilinsin. Önceki koşulardan kalan
+    # test sunucuları da burada kapatılır (desen başa bağlı: bu betiğin kendi satırına uymaz)
+    for _p in $(pgrep -f "^python3 -m http.server --bind 0.0.0.0 "); do kill "$_p" 2>/dev/null; done
+    _dolu=$(ss -ltnp 2>/dev/null | awk '{ split($4, a, ":"); p = a[length(a)] } p ~ /^(80|52224|8390|18391|18392)$/ { print p " (" $6 ")" }' | sort -u | paste -sd' ' -)
+    [ -n "$_dolu" ] && echo "ön denetim: şu portlar başka süreçte: $_dolu — bağlantı denetimleri cevap kodu değil bağlantı kurulup kurulmadığına bakar" >&2
     mk() {
         R="$W/r$N"; rm -rf "$R"; mkdir -p "$R/app/tools" "$R/var/lib/csf_autogroup/cloud"
         D=/etc/csf/csf.deny; T=/var/lib/csf/csf.tempban; A=/etc/csf/csf.allow; C="$R/var/lib/csf_autogroup/counter"; CF=/etc/csf/csf.conf
@@ -324,7 +330,9 @@ if [ "${GERCEK:-0}" = 1 ] && command -v ip >/dev/null 2>&1 && command -v python3
             iptables -A IMU_T -p tcp -m set --match-set agimu src -m multiport --dports 52223,52224 -j ACCEPT
             while iptables -D INPUT -j IMU_T 2>/dev/null; do :; done; iptables -I INPUT 1 -j IMU_T; }    # her seferinde en başa (Imunify gibi)
     # --noproxy: geliştirme oturumunun vekil ayarı (http_proxy) ağ alanındaki istemciye geçmesin
-    web() { [ "$(ip netns exec agcli curl -s --noproxy '*' -m 4 -o /dev/null -w '%{http_code}' http://$NS/ 2>/dev/null)" = 200 ] && echo G || echo -; }
+    # ölçüt: bağlantı kuruldu mu (cevap kodu önemsiz). 80'de başka bir web sunucusu dinliyorsa (test makinesinde Apache) test
+    # sunucusu bağlanamıyor, cevap 403 / 404 geliyordu ve "200" ölçütü geçen bağlantıyı kesilmiş sayıyordu (2026-11-06)
+    web() { local c; c=$(ip netns exec agcli curl -s --noproxy '*' -m 4 -o /dev/null -w '%{http_code}' http://$NS/ 2>/dev/null); [ -n "$c" ] && [ "$c" != 000 ] && echo G || echo -; }
     gstate() { STATE="$R/var/lib/csf_autogroup/guard.sum" CSF_DIR=/etc/csf bash "$REPO/tools/ban-guard.sh" "$@" >/dev/null 2>&1; }
     nsup
     mk; printf 'tcp|in|d=80,443|s=%s # csf_autogroup: test kısmi ban [svc=web] - %s\n' $NC "$DT" >> "$D"; csf -r >/dev/null 2>&1; NEEDR=0; imu
@@ -467,6 +475,58 @@ if [ "${GERCEK:-0}" = 1 ] && command -v ip >/dev/null 2>&1 && command -v python3
     check "izin yönü · dışarı çifti: IP kartı 'yalnız o portu açar' der (pair)" G "$([ "$(wle)" = pair ] && echo G || echo "-:$(wle)")"
     ip netns exec agcli pkill -f '^python3 -m http.server --bind 0.0.0.0 443' 2>/dev/null
     pkill -f "^python3 -m http.server --bind 0.0.0.0 $PT" 2>/dev/null; ip netns del agcli 2>/dev/null; ip link del agv0 2>/dev/null
+fi
+
+# ── 3l) Kiralık liste başına kip (yalnız gerçek CSF): her listenin kendi kuralı gerçek trafikle ──
+# svc = yalnız seçilen portlar kapalı, all = her yeni bağlantı, exc = seçilenler dışında her şey. Kural yalnız gelen YENİ bağlantıya:
+# "her şey" kipinde de sunucunun istemciye açtığı bağlantı geçer. İki politika → iki küme (ag_cl1, ag_cl2) ve ag_cloud birleşim.
+if [ "${GERCEK:-0}" = 1 ] && command -v ip >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+    NC=10.99.0.2; NS=10.99.0.1; P1=18391; P2=18392; PC=873   # P1, P2 boş portlar (test makinesinde 8392 php74 dinliyordu); PC: sunucudan istemciye; CSF'in TCP_OUT'unda olan bir port (8393 CSF'in kendisinde düşüyordu)
+    ip netns del agcli 2>/dev/null; ip link del agv0 2>/dev/null; ip netns add agcli; ip link add agv0 type veth peer name agv1
+    ip link set agv1 netns agcli; ip addr add $NS/24 dev agv0; ip link set agv0 up
+    ip netns exec agcli ip addr add $NC/24 dev agv1; ip netns exec agcli ip link set agv1 up; ip netns exec agcli ip link set lo up
+    (cd /tmp && nohup python3 -m http.server --bind 0.0.0.0 $P1 >/dev/null 2>&1 &); (cd /tmp && nohup python3 -m http.server --bind 0.0.0.0 $P2 >/dev/null 2>&1 &)
+    ip netns exec agcli bash -c "cd /tmp && (nohup python3 -m http.server --bind 0.0.0.0 $PC >/dev/null 2>&1 &)"
+    timeout 3 bash -c "until ss -ltn | grep -q ':$P2 ' && ip netns exec agcli ss -ltn | grep -q ':$PC '; do :; done"
+    tp() { local c; c=$(ip netns exec agcli curl -s --noproxy '*' -m 4 -o /dev/null -w '%{http_code}' http://$NS:$1/ 2>/dev/null); [ -n "$c" ] && [ "$c" != 000 ] && echo G || echo -; }   # bağlantı kuruldu mu (cevap kodu önemsiz)
+    tsrv() { [ "$(curl -s --noproxy '*' -m 4 -o /dev/null -w '%{http_code}' http://$NC:$PC/ 2>/dev/null)" = 200 ] && echo G || echo -; }
+    CA=""
+    clone() { printf 'p %s %s %s %s\n' "$1" "$2" "$3" "$4" >> "$CA/ports"; printf '%s ' "$1" >> "$CA/active"; }
+    clap() {   # "ad kip tcp udp" … — xa listesi istemciyi (10.99.0.0/24), xb başka bir aralığı içerir
+        local l; CA="$R/var/lib/csf_autogroup/cloud"; : > "$CA/ports"; : > "$CA/active"; echo "" > "$CA/self"
+        echo "10.99.0.0/24" > "$CA/xa.txt"; echo "198.51.100.0/24" > "$CA/xb.txt"
+        for l in "$@"; do clone $l; done
+        CACHE="$CA" CSF_DIR=/etc/csf LOG_FILE="$R/autogroup.log" bash "$R/app/tools/cloud-ban.sh" --sync >/dev/null 2>&1; }
+    kmk() { mk; addconf TCP_IN "$P1,$P2"; csf -r >/dev/null 2>&1; NEEDR=0; }
+    kmk; clap "xa exc $P1 -"
+    check "liste kipi · hariç: açık bırakılan port geçer" G "$(tp $P1)"
+    check "liste kipi · hariç: öteki port kesilir" - "$(tp $P2)"
+    kmk; clap "xa svc $P1 -"
+    check "liste kipi · seçilen servis: seçilen port kesilir" - "$(tp $P1)"
+    check "liste kipi · seçilen servis: öteki port geçer" G "$(tp $P2)"
+    kmk; clap "xa all - -"
+    check "liste kipi · her şey: iki port da kesilir" -- "$(tp $P1)$(tp $P2)"
+    check "liste kipi · her şey: sunucunun bu adrese açtığı bağlantı geçer (yalnız gelen yeni bağlantı)" G "$(tsrv)"
+    printf '%s # test müşterisi\n' $NC >> "$A"; clap "xa all - -"
+    check "liste kipi · her şey: csf.allow'daki adres geçer" G "$(tp $P1)"
+    kmk; clap "xa exc $P1 -" "xb all - -"
+    check "liste kipi · iki politika iki küme (ag_cl1, ag_cl2), ag_cloud birleşim" G "$(ipset list -n ag_cl1 >/dev/null 2>&1 && ipset list -n ag_cl2 >/dev/null 2>&1 && ipset test ag_cloud $NC >/dev/null 2>&1 && ipset test ag_cloud 198.51.100.9 >/dev/null 2>&1 && [ "$(grep -c . "$CA/groups")" = 2 ] && echo G || echo -)"
+    check "liste kipi · iki politikada istemcinin listesi kendi kuralıyla (açık port geçer, öteki kesilir)" G-- "$(tp $P1)$(tp $P2)$(ipset test ag_cl2 $NC >/dev/null 2>&1 && echo G || echo -)"
+    clap "xa exc $P1 -"                    # iki politikadan teke (kmk yok: önceki kurulumun üstüne)
+    check "liste kipi · politika teke inince grup kümeleri ve alt zincirler kalmaz (kural ag_cloud'da)" G "$(! ipset list -n ag_cl1 >/dev/null 2>&1 && iptables -t mangle -S AG_CLX1 >/dev/null 2>&1 && iptables -t mangle -S AG_CLOUD | grep -q -- '--match-set ag_cloud src -j AG_CLX1' && echo G || echo -)"
+    cloud_off
+    check "liste kipi · kaldırınca kümeler ve alt zincirler gider" - "$({ ipset list -n ag_cloud || iptables -t mangle -S AG_CLX1; } >/dev/null 2>&1 && echo G || echo -)"
+    # motor: CLOUD_MODES'tan aracın politika dosyası ve kural (kendi listesi x-test, "her şeyi kapat, web hariç")
+    kmk; echo "10.99.0.0/24" > "$LST"
+    printf '%s\n' CLOUD_BAN=1 CLOUD_SOURCES= "CLOUD_EXTRA=\"test|file://$LST\"" 'CLOUD_MODES="x-test=exc:web:"' >> "$R/app/config.env"
+    run --prov-apply >/dev/null 2>&1
+    check "liste kipi · motor politika dosyasını liste başına yazar" G "$(grep -qx 'p x-test exc 80,443 443' "$R/var/lib/csf_autogroup/cloud/ports" && echo G || echo "-:$(tr '\n' ' ' < "$R/var/lib/csf_autogroup/cloud/ports")")"
+    check "liste kipi · motor: web hariç her şey kapalı (öteki port kesilir)" - "$(tp $P1)"
+    check "liste kipi · motor: IP kartı listenin kipini söyler" G "$(run --lookup $NC --json 2>/dev/null | grep -q '"kind":"cloud","what":"x-test","mode":"exc","tcp":"80,443","udp":"443"' && echo G || echo -)"
+    cloud_off
+    ip netns exec agcli pkill -f "^python3 -m http.server --bind 0.0.0.0 $PC" 2>/dev/null
+    pkill -f "^python3 -m http.server --bind 0.0.0.0 $P1" 2>/dev/null; pkill -f "^python3 -m http.server --bind 0.0.0.0 $P2" 2>/dev/null
+    ip netns del agcli 2>/dev/null; ip link del agv0 2>/dev/null
 fi
 
 # ── 4) Sunucunun kendi sağlayıcısı (taklit: 203.0.113.10 → AS64500) hiçbir durumda banlanmaz ──

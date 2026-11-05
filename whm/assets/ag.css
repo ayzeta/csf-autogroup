@@ -1158,6 +1158,8 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-srcd-w h4 { margin: 0 0 6px; font-size: 13px; }
 .ag-srcd-w > .ag-btn svg { width: 13px; height: 13px; }
 .ag-tile .ag-tile-m em.pot .ag-link { font: inherit; color: inherit; padding: 0; border: 0; background: none; text-align: left; cursor: pointer; }
+.ag-tile .ag-tile-m em.cm { color: var(--ag-text-2); margin-top: 1px; }   /* kiralık listenin kuralı: ne kapalı + "Ne kapatılsın" */
+.ag-tile .ag-tile-m em.cm .ag-link { font: inherit; padding: 0; }
 .ag-urled-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; font-size: 12.5px; }
 .ag-urled-r { padding: 4px 0; font-size: 12px; }
 .ag-urled .ag-url-in { display: flex; align-items: center; gap: 8px; }

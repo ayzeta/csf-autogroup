@@ -57,7 +57,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.49"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.50"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -161,6 +161,10 @@ CLOUD_BAN="${CLOUD_BAN:-0}"             # 1 = açık
 CLOUD_SOURCES="${CLOUD_SOURCES-gcp}"    # virgüllü: gcp aws azure oracle digitalocean linode vultr
 CLOUD_TCP="${CLOUD_TCP-80,443}"
 CLOUD_UDP="${CLOUD_UDP-443}"
+# liste başına ne kapatılsın (panel yazar): "ad=kip:servisler:portlar", boşlukla. kip svc = seçilen servisler ve portlar kapalı,
+# all = her yeni bağlantı kapalı, exc = seçilenler dışında her şey kapalı. Ad CLOUD_ACTIVE'deki gibi (kendi listeleri x- önekli).
+# Ayarı olmayan liste CLOUD_TCP / CLOUD_UDP ile (eski ortak port listesi; geçiş bunun üstünden kendiliğinden olur)
+CLOUD_MODES="${CLOUD_MODES:-}"
 CLOUD_URLS="${CLOUD_URLS:-}"            # değiştirilmiş kaynak adresleri: "gcp|https://… aws|https://…"
 SRC_LABELS="${SRC_LABELS:-}"            # kendi kutu ve kaynaklarınızın görünen başlıkları (panel yazar): "tür:ad=başlık", "tür:kutu:d=açıklama", başlık kodlu (%20)
 CLOUD_EXTRA="${CLOUD_EXTRA:-}"          # kendi listeleriniz: "ad|https://liste" (düz IP listesi ya da JSON), boşlukla
@@ -387,6 +391,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_SVC_FAIL_OK="İzinli servis listeleri yeniden indirilebiliyor"
   M_CFG_ASN="AS ile başlayan numaralar, virgülle (en çok 50)"
   M_CFG_PORTS="virgüllü portlar ya da aralıklar (30000:35000), en çok 15"
+  M_CFG_CLM="ad=kip:servisler:portlar (kip svc, all ya da exc; svc'de servis ya da port), en çok 100 liste"
   M_ASN_APPLIED="Sağlayıcı banı CSF'e uygulandı: %s"
   M_ASN_REMOVED="Sağlayıcı banı CSF'ten kaldırıldı: %s"
   M_ASN_CONFLICT="Sağlayıcı banı uygulanmadı: CC_DENY_PORTS'taki %s aynı port listesini kullanıyor (TCP %s, UDP %s); değiştirmek onları da etkilerdi"
@@ -400,7 +405,10 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_CLOUD_FAIL_SUBJ="kiralık sunucu listesi indirilemiyor (%s)"
   M_CLOUD_FAIL_BODY="Şu kiralık sunucu listeleri uyarı süresinden uzun süredir indirilemiyor: %s. Eski listeler kullanılıyor; adresi Sağlayıcılar → Kiralık sunucular → Adres düğmesinden düzeltebilirsiniz."
   M_CLOUD_FAIL_OK="Kiralık sunucu listeleri yeniden indirilebiliyor"
-  M_DG_CLOUD="Kiralık sunucular: %s · kapalı %s"
+  M_DG_CLOUD="Kiralık sunucular: %s"
+  M_CL_ALL="her şey"
+  M_CL_EXC="her şey, açık kalan: %s"
+  M_CL_NONE="hiçbir şey"
   M_ASN_REFRESH="CSF'in ASN verisi %s günlüktü; yenilensin diye lfd yeniden başlatıldı (ASN banı: %s)"
   M_ASN_REFRESH_FAIL="CSF'in ASN verisi eski (%s gün) ama lfd yeniden başlatılamadı; ASN banı eski adreslerle çalışıyor"
   M_ORPHANS="Banı CSF ekranından kaldırılmış %s eski kayıt temizlendi (kurtarma kopyası / izin satırı)"
@@ -641,6 +649,7 @@ else
   M_SVC_FAIL_OK="Allowed service lists download again"
   M_CFG_ASN="numbers starting with AS, comma separated (at most 50)"
   M_CFG_PORTS="comma separated ports or ranges (30000:35000), at most 15"
+  M_CFG_CLM="name=mode:services:ports (mode svc, all or exc; svc needs a service or a port), at most 100 lists"
   M_ASN_APPLIED="Provider ban applied to CSF: %s"
   M_ASN_REMOVED="Provider ban removed from CSF: %s"
   M_ASN_CONFLICT="Provider ban not applied: %s in CC_DENY_PORTS share the port list (TCP %s, UDP %s); changing it would affect them too"
@@ -654,7 +663,10 @@ else
   M_CLOUD_FAIL_SUBJ="rented-server list can't be downloaded (%s)"
   M_CLOUD_FAIL_BODY="These rented-server lists haven't downloaded for longer than the warning period: %s. The old lists are still used; fix the address under Providers → Rented servers → the Address button."
   M_CLOUD_FAIL_OK="Rented-server lists download again"
-  M_DG_CLOUD="Rented servers: %s · blocked %s"
+  M_DG_CLOUD="Rented servers: %s"
+  M_CL_ALL="everything"
+  M_CL_EXC="everything, left open: %s"
+  M_CL_NONE="nothing"
   M_ASN_REFRESH="CSF's ASN data was %s days old; lfd restarted to refresh it (ASN ban: %s)"
   M_ASN_REFRESH_FAIL="CSF's ASN data is old (%s days) but lfd couldn't be restarted; the ASN ban uses old addresses"
   M_ORPHANS="Cleaned up %s leftover entries of bans removed outside the plugin (restore copies / allow lines)"
@@ -797,7 +809,7 @@ mail() {
 # ── Settings: validation (panel + --config set + --dry-run --set) ──────────
 # Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
 CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST IC_REVIEW IE_REVIEW THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_KEEP_DAYS EVENTS_DAYS RUN_DAYS PERM_WINDOW_DAYS BANLOG_DAYS LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_URLS CLOUD_EXTRA SRC_LABELS ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS OWNER_TTL_DAYS IMUNIFY_REFRESH_MIN BLOCK_ACTIVE_DAYS"
-PROV_KEYS="SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_URLS CLOUD_EXTRA ENABLED"
+PROV_KEYS="SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_MODES CLOUD_URLS CLOUD_EXTRA ENABLED"
 SVC_CATALOG="google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake microsoft365"
 CLOUD_CATALOG="gcp aws azure oracle digitalocean linode vultr"
 CFG_TRY_KEYS="THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 PERM_WINDOW_DAYS LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS"
@@ -889,6 +901,17 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
             for x in $v; do
                 n=$((n + 1))
                 if [ "$n" -gt 300 ] || ! [[ "$x" =~ $re ]]; then CFG_ERR=$(m "$M_CFG_BAD" "$k" "$x" "tür:ad=başlık"); return 1; fi
+                CFG_VAL+="${CFG_VAL:+ }$x"
+            done
+            return 0 ;;
+        CLOUD_MODES)              # "ad=svc|all|exc:servisler:portlar"; svc kipinde servis ya da port gerekir
+            local x n=0 sv='(web|ssh|ftp|cp|min|sync|dns)' re pp; CFG_VAL=""
+            re="^[a-z0-9-]{1,66}=(svc|all|exc):($sv(,$sv){0,6})?:([0-9]{1,5}(-[0-9]{1,5})?(,[0-9]{1,5}(-[0-9]{1,5})?){0,14})?\$"
+            for x in $v; do
+                n=$((n + 1)); pp="${x##*:}"
+                if [ "$n" -gt 100 ] || ! [[ "$x" =~ $re ]] || [[ "$x" =~ =svc::$ ]] || ! split_ports "$pp"; then
+                    CFG_ERR=$(m "$M_CFG_BAD" "$k" "$x" "$M_CFG_CLM"); return 1
+                fi
                 CFG_VAL+="${CFG_VAL:+ }$x"
             done
             return 0 ;;
@@ -3546,7 +3569,7 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
         if [ "$CLOUD_ON" = 1 ] && cqf=$(mktemp); then
             echo "r $clo $chi" > "$cqf"; csrc=$(cloud_cover "$cqf" | awk '{ print $2; exit }'); rm -f "$cqf"
         fi
-        o+=",\"cloud\":\"$csrc\",\"cloud_tcp\":\"$CLOUD_TCP\",\"cloud_udp\":\"$CLOUD_UDP\""
+        if [ -n "$csrc" ]; then cl_pol "$csrc"; o+=",\"cloud\":\"$csrc\",\"cloud_mode\":\"$CP_K\",\"cloud_tcp\":\"$CP_T\",\"cloud_udp\":\"$CP_U\""; else o+=",\"cloud\":\"\""; fi
         jstr "$WL_HIT"; o+=",\"wl\":$REPLY,\"wl_retry\":$([ "$WL_RETRY" = 1 ] && echo true || echo false)"
         jstr "$OWN_LONG"; o+=",\"owner\":$REPLY"
         cidr_range "$c" && self_overlap "$R_LO" "$R_HI"; o+=",\"self\":\"$SELF_HIT\""
@@ -3715,7 +3738,7 @@ do_lookup() {
         fi
         [[ "$ccp" == *" $w "* ]] && covers+=("4294967298|{\"kind\":\"ccport\",\"what\":\"$w\",\"tcp\":\"$cpt\",\"udp\":\"$cpu\"}")
     done
-    if cloud_has "$ip"; then covers+=("4294967299|{\"kind\":\"cloud\",\"what\":\"$REPLY\",\"tcp\":\"$CLOUD_TCP\",\"udp\":\"$CLOUD_UDP\"}"); fi
+    if cloud_has "$ip"; then local cwn="$REPLY"; cl_desc "$cwn"; covers+=("4294967299|{\"kind\":\"cloud\",\"what\":\"$cwn\",$REPLY}"); fi
     cvj=$(printf '%s\n' "${covers[@]}" | grep . | sort -t'|' -k1,1n | cut -d'|' -f2- | paste -sd, -)
     if [ -r "$CSF_VAR/csf.tempban" ]; then
         while IFS='|' read -r t tip port dir to note; do
@@ -4338,7 +4361,9 @@ cloud_enforce() { # FORCE(1 = listeleri şimdi indir) → bulut listesi banını
         [ "$WL_LOADED" = 1 ] || load_whitelist
         for i in "${!WL_TXT[@]}"; do [[ "${WL_TXT[i]}" == "$M_WL_SELF: "* ]] && self+="${WL_TXT[i]#*: } "; done   # sunucunun kendi IP'leri listeden çıkarılır
         act="$CLOUD_ACTIVE"
-        printf '%s\n' "$act" > "$CLOUD_DIR/active"; printf 'tcp=%s\nudp=%s\n' "$CLOUD_TCP" "$CLOUD_UDP" > "$CLOUD_DIR/ports"; printf '%s\n' "$self" > "$CLOUD_DIR/self"
+        printf '%s\n' "$act" > "$CLOUD_DIR/active"; printf '%s\n' "$self" > "$CLOUD_DIR/self"
+        # liste başına politika (tools/cloud-ban.sh: "p AD KİP TCP UDP", boş "-"); aynı politikadaki listeler tek kümede
+        for n in $act; do cl_pol "$n"; printf 'p %s %s %s %s\n' "$n" "$CP_K" "${CP_T:--}" "${CP_U:--}"; done > "$CLOUD_DIR/ports"
         cloud_srclist; sig=$(printf '%s' "$REPLY" | cksum | cut -d' ' -f1)
         for n in $act; do [ -s "$CLOUD_DIR/$n.txt" ] || need=1; done
         [ "${1:-0}" = 1 ] && need=1
@@ -4492,6 +4517,64 @@ cls_of() {       # SEBEP → REPLY = servis; rakamları atılmış sebep metnine
     local k="${1//[0-9]/}"
     [ -n "${CLSR[$k]+x}" ] || CLSR[$k]=$(awk -v r="$1" "$AWK_CLS"' BEGIN { print cls(r) }')
     REPLY="${CLSR[$k]}"
+}
+# ── Kiralık liste politikası: liste başına ne kapatılır (CLOUD_MODES; ayarı olmayan liste eski CLOUD_TCP / CLOUD_UDP) ──
+# Kural yalnız sunucuya gelen YENİ bağlantıya uygulanır (mangle PREROUTING, ctstate NEW): giden servisler (mout, wout) ve sunucunun
+# açtığı bağlantıların cevapları hiçbir kipte kesilmez. Bütün ekranlar (IP kartı, ban penceresi, Etkisini ölç, kapsama, özet) buradan okur.
+declare -A CLP_C=()
+cl_pol() {       # AD → CP_K (svc | all | exc | none) · CP_T, CP_U = svc'de KAPANAN, exc'te AÇIK KALAN TCP / UDP portları ("80,443,30000:35000")
+    local n="$1" e="" k sv px x t="" u="" r BSVC BPORTS PART_UDPP PART_RNG PS_ONE PS_RNG   # elle banın seçimini ezmesin
+    if [ -n "${CLP_C[$n]+x}" ]; then IFS='|' read -r CP_K CP_T CP_U <<< "${CLP_C[$n]}"; return 0; fi
+    for x in $CLOUD_MODES; do [ "${x%%=*}" = "$n" ] && e="${x#*=}"; done
+    IFS=: read -r k sv px <<< "$e"
+    case "$k" in
+        all) CP_K=all ;;
+        svc) CP_K=svc; BSVC="$sv"; BPORTS="$px"
+             if part_ports; then t="$REPLY"; u="$PART_UDPP"; for r in $PART_RNG; do t+="${t:+,}$r"; done; fi ;;
+        exc) CP_K=exc
+             for x in ${sv//,/ }; do
+                 case "$x" in
+                     web|ssh|ftp|cp|min|sync) svc_ports "$x"; t+="${t:+,}$REPLY" ;;
+                     dns) t+="${t:+,}53"; u+="${u:+,}53" ;;
+                 esac
+                 [ "$x" = web ] && u+="${u:+,}443"                                   # HTTP/3 (QUIC)
+                 if [ "$x" = ftp ]; then ftp_passive; [ -n "$REPLY" ] && t+="${t:+,}$REPLY"; fi   # FTP aktarımı pasif portlardan
+             done
+             if split_ports "$px"; then t+="${t:+,}$PS_ONE"; for r in $PS_RNG; do t+="${t:+,}$r"; done; fi ;;
+        *)   CP_K=svc; t="${CLOUD_TCP// /}"; u="${CLOUD_UDP// /}"; t="${t//:/_}"; u="${u//:/_}" ;;
+    esac
+    t=$(uniq_ports "$t"); u=$(uniq_ports "$u"); CP_T="${t//_/:}"; CP_U="${u//_/:}"
+    [ "$CP_K" = all ] && { CP_T=""; CP_U=""; }
+    [ "$CP_K" = svc ] && [ -z "$CP_T$CP_U" ] && CP_K=none
+    CLP_C[$n]="$CP_K|$CP_T|$CP_U"
+}
+port_ovl() {     # PORT (a, a_b ya da a:b) ",liste," → 0: port listedeki bir portla ya da aralıkla kesişiyor
+    local p="${1//_/:}" lo hi x a b; lo="${p%%:*}"; hi="${p##*:}"
+    [[ "$lo" =~ ^[0-9]+$ && "$hi" =~ ^[0-9]+$ ]] || return 1
+    for x in ${2//,/ }; do a="${x%%:*}"; b="${x##*:}"; [[ "$a" =~ ^[0-9]+$ && "$b" =~ ^[0-9]+$ ]] || continue; (( lo <= b && hi >= a )) && return 0; done
+    return 1
+}
+cl_port_closed() { # AD tcp|udp PORT → 0: listenin kuralı bu portu (aralığın tamamını) kapatıyor
+    local l; cl_pol "$1"; [ "$2" = udp ] && l="$CP_U" || l="$CP_T"
+    case "$CP_K" in all) return 0 ;; svc) port_in "$3" ",$l," ;; exc) ! port_ovl "$3" ",$l," ;; *) return 1 ;; esac
+}
+cl_ports_closed() { # AD PORTLAR (virgüllü TCP; a_b ya da a:b) → 0: hepsi kapalı
+    local p; for p in ${2//,/ }; do cl_port_closed "$1" tcp "$p" || return 1; done
+}
+cl_svc_closed() { # AD SERVİS → 0: kural servisin bütün TCP portlarını kapatıyor. Giden servisler (mout, wout) hiç kapanmaz; servisi belli
+    # olmayan ihlal (diğer, tekrar ban, tarama, kayıtsız) yalnız "her şey" kipinde kapanmış sayılır
+    case "$2" in mout|wout) return 1 ;; esac
+    cl_pol "$1"; [ "$CP_K" = all ] && return 0
+    svc_ports "$2" || return 1
+    cl_ports_closed "$1" "$REPLY"
+}
+cl_desc() {      # AD → REPLY = JSON alanları: "mode","tcp","udp" (exc'te tcp / udp açık kalanlar)
+    cl_pol "$1"; REPLY="\"mode\":\"$CP_K\",\"tcp\":\"$CP_T\",\"udp\":\"$CP_U\""
+}
+cl_text() {      # AD → REPLY = iletilerde kuralın kapattığı: "TCP 80, 443 · UDP 443" / "her şey" / "her şey, açık kalan: TCP 80"
+    local p; cl_pol "$1"
+    p="${CP_T:+TCP ${CP_T//,/, }}${CP_T:+${CP_U:+ · }}${CP_U:+UDP ${CP_U//,/, }}"
+    case "$CP_K" in all) REPLY="$M_CL_ALL" ;; exc) REPLY=$(m "$M_CL_EXC" "${p:--}") ;; svc) REPLY="$p" ;; *) REPLY="$M_CL_NONE" ;; esac
 }
 cloud_has() {    # IP → 0: etkin bir bulut listesinde (REPLY = kaynak adı)
     local IFS=$' \t\n' x ip="$1" v
@@ -4737,7 +4820,8 @@ prov_json() {    # → REPLY = durum JSON'u: izinli servisler (kaynak başına s
     prof prov_cloudlist
     local cpot; cloud_pot; cpot="$REPLY"
     prof prov_cloudpot
-    jstr "$CLOUD_EXTRA"; o+=",\"cloud\":{\"extra\":$REPLY,\"pot\":$cpot,\"on\":$([ "$CLOUD_BAN" = 1 ] && echo true || echo false),\"sources\":\"$CLOUD_SOURCES\",\"tcp\":\"$CLOUD_TCP\",\"udp\":\"$CLOUD_UDP\",\"urls\":\"$CLOUD_URLS\",\"src\":[$cs],\"cat\":{$ccat},\"fcat\":{$cflt},\"lcat\":{$clnk},\"n\":$cn}"
+    local CL_SSH CL_FTP; ssh_ports; CL_SSH="$REPLY"; ftp_passive; CL_FTP="$REPLY"   # kip penceresinin servis çipleri (SSH portu, FTP pasif aralığı)
+    jstr "$CLOUD_EXTRA"; o+=",\"cloud\":{\"extra\":$REPLY,\"pot\":$cpot,\"on\":$([ "$CLOUD_BAN" = 1 ] && echo true || echo false),\"sources\":\"$CLOUD_SOURCES\",\"tcp\":\"$CLOUD_TCP\",\"udp\":\"$CLOUD_UDP\",\"modes\":\"$CLOUD_MODES\",\"ssh\":\"$CL_SSH\",\"ftp_pasv\":\"$CL_FTP\",\"urls\":\"$CLOUD_URLS\",\"src\":[$cs],\"cat\":{$ccat},\"fcat\":{$cflt},\"lcat\":{$clnk},\"n\":$cn}"
     jstr "${ASN_MSG:-}"                     # yukarıdaki döngüler REPLY'yi ezdi: sağlayıcı banı iletisi burada hazırlanır
     o+=",\"asn\":{\"on\":$([ "$ASN_BAN" = 1 ] && echo true || echo false),\"list\":\"$ASN_LIST\",\"all\":\"$ASN_ALL\",\"mode\":\"$ASN_MODE\",\"tcp\":\"$ASN_TCP\",\"udp\":\"$ASN_UDP\",\"state\":\"${ASN_STATE:-}\",\"msg\":$REPLY,\"sets\":[$sets],\"geo_t\":$(num "$gt"),\"ipset\":$([ "$(conf_val LF_IPSET)" = 0 ] && echo false || echo true)}}"
     REPLY="$o"
@@ -4776,7 +4860,7 @@ asn_bans_json() { # RNG ALW CLF CWEB COK → stdout JSON: sağlayıcının aral�
                   gsub(/do not delete|[0-9]+ ip|[a-z][a-z][a-z] [a-z][a-z][a-z] +[0-9]+ [0-9:]+ [0-9]+/, "", nq)
                   if (nq !~ /[a-z]/) sv = "norec" } }
           cv = "open"; j = an ? bs(AL, AH, an, lo) : 0; if (j && AH[j] >= hi) cv = "allow:" AN[j]
-          else if (cweb == 1 && cn && k == "s" && index(cok, "," sv ",")) { j = bs(CL, CH, cn, lo); if (j && CH[j] >= hi) cv = "cloud:" CN[j] }
+          else if (cn && k == "s") { j = bs(CL, CH, cn, lo); if (j && CH[j] >= hi && index(cok, "," CN[j] ":" sv ",")) cv = "cloud:" CN[j] }
           t = de(cm); r = cm; sub(/^lfd: */, "", r); sub(/ - [A-Z][a-z][a-z] [A-Z][a-z][a-z] +[0-9]+ [0-9:]+ [0-9]+[[:space:]]*$/, "", r); r = substr(r, 1, 100)
           N++; K[k]++; if (t > LAST) LAST = t; SV[sv]++
           split(cv, w, ":"); CV[w[1]]++; if (w[2] != "") CS[w[1], w[2]]++
@@ -4879,12 +4963,15 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad) → son 24 saatin web günlüklerind
       while read -r wi wlo whi wix wff; do [ "$wff" = 1 ] || continue; [[ "${WL_TXT[wix]}" == *services.allow* ]] && continue; printf '%s %s csfallow\n' "$wlo" "$whi"; done < <(wl_ff_lines)
     } | sort -n -k1,1 > "$alw"
     # etkin kiralık sunucu listeleri: web portlarını (80 ve 443) kapatıyorsa bu adreslerden gelen istekler CSF'te zaten düşer
-    local clf cweb=0 x; clf=$(mktemp) || { rm -f "$rng" "$lst" "$alw"; return 1; }
-    if [ "$CLOUD_ON" = 1 ] && port_in 80 ",${CLOUD_TCP// /}," && port_in 443 ",${CLOUD_TCP// /},"; then
-        cweb=1
+    # (liste başına: kuralı 80 ve 443'ü kapatan listeler). Banların kapsaması için bütün etkin listeler ayrı dosyada (clfa)
+    local clf clfa cweb=0 cwl="" x; clf=$(mktemp) && clfa=$(mktemp) || { rm -f "$rng" "$lst" "$alw" "$clf"; return 1; }
+    if [ "$CLOUD_ON" = 1 ]; then
+        for x in $CLOUD_ACTIVE; do cl_port_closed "$x" tcp 80 && cl_port_closed "$x" tcp 443 && cwl+="${cwl:+ }$x"; done
+        [ -n "$cwl" ] && cweb=1
         for x in $CLOUD_ACTIVE; do
             [ -r "$CLOUD_DIR/$x.txt" ] && awk -F'[./]' -v s="$x" 'NF >= 4 { b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%.0f %.0f %s\n", lo, lo + 2 ^ (32 - b) - 1, s }' "$CLOUD_DIR/$x.txt"
-        done | sort -n -k1,1 > "$clf"
+        done | sort -n -k1,1 > "$clfa"
+        awk -v w=" $cwl " 'index(w, " " $3 " ")' "$clfa" > "$clf"
     fi
     # adresi kapsayan öteki banlar (IP kartının "Bu IP'yi kapsayan banlar" listesiyle aynı türler): ülke banı (CSF'in bölge
     # dosyası, CC_DENY ya da CC_DENY_PORTS) ve etkin kiralık listeler (web portlarını kapatmasalar da); csf.deny port satırları awk içinde
@@ -4917,14 +5004,15 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad) → son 24 saatin web günlüklerind
         [[ "$bsince" =~ ^[0-9]+$ ]] || bsince=0
         [ "$bsince" -gt 0 ] && bkey=$(date -d "@$bsince" +%Y%m%d%H%M%S 2>/dev/null)
     fi
-    local cok="," cs; for cs in web ssh ftp cp min sync mout wout dns; do pc_ports "$cs" ",${CLOUD_TCP// /}," && cok+="$cs,"; done
+    # liste başına kapalı servisler (",ad:servis,"): tekil ban ancak servisini o listenin kuralı kapatıyorsa "listede, zaten kapalı"
+    local cok="," cs; for x in $CLOUD_ACTIVE; do for cs in web ssh ftp cp min sync dns; do cl_svc_closed "$x" "$cs" && cok+="$x:$cs,"; done; done
     local bjf svm; svm=$(mktemp) && bl_svc_map "$svm"
     local bsm; bsm=$(mktemp) && blk_svc_map "$bsm"
-    bjf=$(mktemp) && PERM_SVM="$svm" BLK_SVM="$bsm" asn_bans_json "$rng" "$alw" "$clf" "$cweb" "$cok" > "$bjf" 2>/dev/null; rm -f "$svm" "$bsm"
+    bjf=$(mktemp) && PERM_SVM="$svm" BLK_SVM="$bsm" asn_bans_json "$rng" "$alw" "$clfa" "$cweb" "$cok" > "$bjf" 2>/dev/null; rm -f "$svm" "$bsm"
     find -L "$dir" -type f -mmin -1440 ! -name '*bytes_log*' ! -name '*.offset*' ! -name '*.gz' 2>/dev/null > "$lst"
     since=$(date -d '24 hours ago' +%Y%m%d%H%M%S)
     # dosyalar tek awk'a verilir (xargs çok dosyada gruplara bölüp yalnız son grubun sonucunu bırakıyordu)
-    awk -v rf="$rng" -v lf="$lst" -v since="$since" -v af="$alw" -v cf="$clf" -v cdf="$CDN_FILE" -v cweb="$cweb" -v cact="${CLOUD_ACTIVE# }" -v ban="$ban" -v bkey="$bkey" -v bkey2="$([ -n "$bkey" ] && date -d "@$(( bsince + 120 ))" +%Y%m%d%H%M%S)" -v bsince="$bsince" -v bweb="$bweb" -v tbf="$CSF_VAR/csf.tempban" -v dnf="$DENY_FILE" -v wf="$SAYAC_FILE" -v wcut="$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')" -v imf="$IMUNIFY_FILE" -v xf="$xcf" -v now="$(date +%s)" '
+    awk -v rf="$rng" -v lf="$lst" -v since="$since" -v af="$alw" -v cf="$clf" -v cdf="$CDN_FILE" -v cweb="$cweb" -v cact="$cwl" -v ban="$ban" -v bkey="$bkey" -v bkey2="$([ -n "$bkey" ] && date -d "@$(( bsince + 120 ))" +%Y%m%d%H%M%S)" -v bsince="$bsince" -v bweb="$bweb" -v tbf="$CSF_VAR/csf.tempban" -v dnf="$DENY_FILE" -v wf="$SAYAC_FILE" -v wcut="$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')" -v imf="$IMUNIFY_FILE" -v xf="$xcf" -v now="$(date +%s)" '
         BEGIN { while ((getline l < rf) > 0) { split(l, x, " "); m++; LO[m] = x[1] + 0; HI[m] = x[2] + 0 }
                 while ((getline l < cf) > 0) { split(l, x, " "); cn++; CL[cn] = x[1] + 0; h = x[2] + 0
                     if (cn == 1 || h > CP[cn - 1]) { CP[cn] = h; CN[cn] = x[3] } else { CP[cn] = CP[cn - 1]; CN[cn] = CN[cn - 1] } }
@@ -5073,7 +5161,7 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad) → son 24 saatin web günlüklerind
               printf "\"after\":{\"web\":%d,\"since\":%d,\"req\":%d,\"ips\":%d,\"ok\":%d,\"last\":\"%s\",\"late\":%d,\"ex\":[%s]},", bweb, bsince, btot, nbip, bok, blast, blate, aex
               printf "\"open\":{\"req\":%d,\"ips\":%d,\"ok\":%d,\"codes\":%s,\"last\":\"%s\",\"top\":%s},\"ban\":%s}\n",
                   otot, noip, ook, obj(OC), olast, topip(OR, 10, OOK, OSM), js(ban) }' /dev/null | grep . | { IFS= read -r L; b=$(cat "$bjf" 2>/dev/null); [ -n "$b" ] && L="${L%\}},\"bans\":$b}"; printf '%s\n' "$L"; } || echo '{"ok":true,"total":0,"ips":0,"ok2xx":0,"codes":{},"posts":[],"bots":[],"sites":[]}'
-    rm -f "$rng" "$lst" "$alw" "$clf" "$bjf" "$xcf"
+    rm -f "$rng" "$lst" "$alw" "$clf" "$clfa" "$bjf" "$xcf"
 }
 svc_health() {   # izinli servis kaynaklarından uyarı süresinden uzun süredir indirilemeyenler → bildirim
     local st="$(dirname "$SAYAC_FILE")/services/status" n c t e f bad="" now; now=$(date +%s)
@@ -5793,7 +5881,7 @@ prov_cover() {   # stdin "ip|sebep|asn" → 0: her IP CSF'te banlı bir sağlay�
             n=$((n + 1)); [[ " $PC_ASN " == *" $hit "* ]] || PC_ASN+="${PC_ASN:+ }$hit"; continue
         fi
         # sağlayıcı banı yoksa bulut listesi (kendi port listesiyle)
-        cloud_has "$ip" && pc_ports "$k" ",${CLOUD_TCP// /}," || { pa "pcov · kapsama"; return 1; }
+        cloud_has "$ip" && cl_svc_closed "$REPLY" "$k" && cloud_has "$ip" || { pa "pcov · kapsama"; return 1; }
         cloud_label "$REPLY"; n=$((n + 1)); [[ " $PC_ASN " == *" $REPLY "* ]] || PC_ASN+="${PC_ASN:+, }$REPLY"
         pa "pcov · kapsama"
     done
@@ -5807,7 +5895,7 @@ prov_covmap() {  # "CIDR:TÜR:TCP:SERVİS" … → PCOV[CIDR]=ASNNN (çağıran 
     asn_banned
     { [ ${#ASB_A[@]} -gt 0 ] && command -v ipset >/dev/null 2>&1; } || [ "$CLOUD_ON" = 1 ] || return 0
     dt=",$(conf_val CC_DENY_PORTS_TCP | tr -d ' '),"; du=",$(conf_val CC_DENY_PORTS_UDP | tr -d ' '),"
-    local ct=",${CLOUD_TCP// /}," cu=",${CLOUD_UDP// /}," cx
+    local cx
     for x in "$@"; do
         IFS=: read -r c k tp sv <<< "$x"
         cidr_range "$c" || continue
@@ -5823,10 +5911,11 @@ prov_covmap() {  # "CIDR:TÜR:TCP:SERVİS" … → PCOV[CIDR]=ASNNN (çağıran 
         done
         # bulut listesi (kendi port listesiyle; yalnız kısmi banlar — tam ban her şeyi kapatır, liste yalnız seçilen portları)
         if [ "$CLOUD_ON" = 1 ] && [ "$k" = partial ] && [ -n "$tp" ]; then
-            ok=1
-            for pt in ${tp//,/ }; do port_in "$pt" "$ct" || { ok=0; break; }; done
-            [[ ",$sv," == *,web,* && "$cu" != *,443,* ]] && ok=0
-            [ "$ok" = 1 ] && for cx in $CLOUD_ACTIVE; do el+="${el:+,}c_$cx"; done
+            for cx in $CLOUD_ACTIVE; do
+                cl_ports_closed "$cx" "$tp" || continue
+                [[ ",$sv," == *,web,* ]] && ! cl_port_closed "$cx" udp 443 && continue   # web kısmi banı UDP 443'ü de kapatır
+                el+="${el:+,}c_$cx"
+            done
         fi
         [ -n "$el" ] && q+="$c $R_LO $R_HI $el"$'\n'
     done
@@ -5854,7 +5943,7 @@ prov_covmap() {  # "CIDR:TÜR:TCP:SERVİS" … → PCOV[CIDR]=ASNNN (çağıran 
 prov_near() {    # stdin "ip|sebep|asn" → 0: her IP banlı bir sağlayıcıda ya da bulut listesinde ama bazı saldırılar
     # kapalı olmayan portlara (PN_SRC = kapsayanlar, PN_SVC = kapanmayan servisler; panel "port listesine ekleyin" der)
     local IFS=$' \t\n' ip r a k n=0 tcp ct lab pl
-    tcp=",$(conf_val CC_DENY_PORTS_TCP | tr -d ' '),"; ct=",${CLOUD_TCP// /},"
+    tcp=",$(conf_val CC_DENY_PORTS_TCP | tr -d ' '),"; ct=""
     PN_SRC=""; PN_SVC=""
     pa "pnear · başı"
     local -a pnl=(); mapfile -t pnl; cloud_prefill $(printf '%s\n' "${pnl[@]}" | cut -d'|' -f1)
@@ -5870,12 +5959,12 @@ prov_near() {    # stdin "ip|sebep|asn" → 0: her IP banlı bir sağlayıcıda 
         if [ -n "$a" ] && [ -n "${ASB[$a]}" ]; then
             n=$((n + 1)); [ "${ASB[$a]}" = all ] && continue
             lab="AS$a"; pl="$tcp"
-        elif cloud_has "$ip"; then cloud_label "$REPLY"; lab="$REPLY"; pl="$ct"; n=$((n + 1))
+        elif cloud_has "$ip"; then ct="$REPLY"; cloud_label "$REPLY"; lab="$REPLY"; pl="cl:$ct"; n=$((n + 1))
         else return 1; fi
         [[ ", $PN_SRC, " == *", $lab, "* ]] || PN_SRC+="${PN_SRC:+, }$lab"
         # sağlayıcının port listesi bu servisi kapatmıyorsa kiralık liste kapatıyor olabilir (ikisi birden geçerli)
-        if [ "$pl" = "$tcp" ] && ! pc_ports "$k" "$pl" && cloud_has "$ip" && pc_ports "$k" "$ct"; then continue; fi
-        if ! pc_ports "$k" "$pl"; then case "$k" in other|repeat|scan) ;; *) [[ ",$PN_SVC," == *",$k,"* ]] || PN_SVC+="${PN_SVC:+,}$k" ;; esac; fi
+        if [ "$pl" = "$tcp" ] && ! pc_ports "$k" "$pl" && cloud_has "$ip" && cl_svc_closed "$REPLY" "$k"; then continue; fi
+        if { [ "$pl" = "$tcp" ] && ! pc_ports "$k" "$pl"; } || { [[ "$pl" == cl:* ]] && ! cl_svc_closed "${pl#cl:}" "$k"; }; then case "$k" in other|repeat|scan) ;; *) [[ ",$PN_SVC," == *",$k,"* ]] || PN_SVC+="${PN_SVC:+,}$k" ;; esac; fi
         pa "pnear · kapsama"
     done
     [ "$n" -gt 0 ] && [ -n "$PN_SVC" ]
@@ -5945,8 +6034,8 @@ asn_top() {      # [N] [evidence|blocks] → ASN_TOP satırları: "ASN|KURUM|CC|
         for c in "${!ASG[@]}"; do
             [ -n "${CCOV[$c]}" ] || continue
             cl="${SCL[$c]}"
-            [ -n "${CLS_OK[$cl]}" ] || { pc_ports "$cl" ",${CLOUD_TCP// /}," && CLS_OK[$cl]=1 || CLS_OK[$cl]=0; }
-            [ "${CLS_OK[$cl]}" = 1 ] || unset "CCOV[$c]"
+            [ -n "${CLS_OK[${CCOV[$c]}:$cl]}" ] || { cl_svc_closed "${CCOV[$c]}" "$cl" && CLS_OK[${CCOV[$c]}:$cl]=1 || CLS_OK[${CCOV[$c]}:$cl]=0; }
+            [ "${CLS_OK[${CCOV[$c]}:$cl]}" = 1 ] || unset "CCOV[$c]"
         done
     fi
     pa "asn bulut kapsaması"
@@ -6220,9 +6309,8 @@ digest_build() { # → DG_SUBJ, DG_BODY
     local cll=""
     if [ "$CLOUD_BAN" = 1 ] && [ -r "$CLOUD_DIR/status" ]; then
         local cnn ccc cpk
-        while IFS='|' read -r cnn ccc hk; do cloud_label "$cnn"; cll+="${cll:+, }$REPLY $ccc"; done < "$CLOUD_DIR/status"
-        cpk="${CLOUD_TCP:+TCP ${CLOUD_TCP//,/, }}${CLOUD_TCP:+${CLOUD_UDP:+ · }}${CLOUD_UDP:+UDP ${CLOUD_UDP//,/, }}"
-        [ -n "$cll" ] && cll=$(m "$M_DG_CLOUD" "$cll" "${cpk:--}")
+        while IFS='|' read -r cnn ccc hk; do cloud_label "$cnn"; cpk="$REPLY"; cl_text "$cnn"; cll+="${cll:+, }$cpk $ccc ($REPLY)"; done < "$CLOUD_DIR/status"
+        [ -n "$cll" ] && cll=$(m "$M_DG_CLOUD" "$cll")
     fi
     if [ -n "$ASB_ORD" ] || [ -n "$svl" ] || [ -n "$cll" ]; then
         DG_BODY+="$M_DG_PB$NL"
