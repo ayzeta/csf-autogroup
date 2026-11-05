@@ -57,7 +57,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.47"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.48"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -4813,6 +4813,11 @@ do_src_ips() {   # ANAHTAR (ASnnn | cl:ad) → JSON: o sağlayıcıya / kiralık
     src_rng "$k" "$rng"; rc=$?
     if [ "$rc" -ne 0 ]; then rm -f "$rng"; [ "$rc" = 3 ] && echo '{"ok":false,"error":"no_asn_data"}' || echo '{"ok":false,"error":"no_list"}'; return 1; fi
     svm=$(mktemp) && bl_svc_map "$svm"
+    # bütün portlara izinli adresler (IP kartı ve Etkisini ölç ile aynı ölçüt: wl_ff_lines ff 1): CSF izni her bandan önce uygular,
+    # bu IP'lerin banı işlemez → durum "alw" (tablo "kalıcı banlı" diyordu, IP kartı "banı işlemiyor")
+    local alw wi wlo whi wix wff; alw=$(mktemp) || { rm -f "$rng" "$svm"; return 1; }
+    load_whitelist >/dev/null 2>&1
+    while read -r wi wlo whi wix wff; do [ "$wff" = 1 ] && printf '%s %s\n' "$wlo" "$whi"; done < <(wl_ff_lines) | sort -n -k1,1 > "$alw"
     local now; printf -v now '%(%s)T' -1
     { [ -r "$EVENTS_FILE" ] && grep -F '"ips":[{' "$EVENTS_FILE" 2>/dev/null | awk '
         { t = 0; ty = ""; if (match($0, /"t":[0-9]+/)) t = substr($0, RSTART + 4, RLENGTH - 4) + 0
@@ -4826,14 +4831,16 @@ do_src_ips() {   # ANAHTAR (ASnnn | cl:ad) → JSON: o sağlayıcıya / kiralık
           if (c ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) print "D\t" c "\t0\t\t" cm
           else if (c ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\/[0-9]+$/) print "C\t" c }' "$DENY_FILE" 2>/dev/null
       [ -r "$CSF_VAR/csf.tempban" ] && awk -F'|' -v now="$now" '$1 + $5 > now + 0 { k = ($2 ~ /\//) ? "R" : "T"; print k "\t" $2 "\t" $1 "\t" ($1 + $5) "\t" $6 }' "$CSF_VAR/csf.tempban"
-    } | awk -F'\t' -v rf="$rng" -v pc="$svm" "$AWK_CLS"'
+    } | awk -F'\t' -v rf="$rng" -v pc="$svm" -v af="$alw" "$AWK_CLS"'
         function v4(x,  p) { split(x, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
         function de(x,  a, k, M, i, h) { split("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec", M, " "); k = split(x, a, /[ \t]+/)
             if (k < 4 || a[k] !~ /^[0-9][0-9][0-9][0-9]$/ || a[k - 1] !~ /^[0-9][0-9]:[0-9][0-9]:[0-9][0-9]$/) return 0
             split(a[k - 1], h, ":"); for (i = 1; i <= 12; i++) if (M[i] == a[k - 3]) return mktime(a[k] " " i " " a[k - 2] " " h[1] " " h[2] " " h[3]); return 0 }
         function js(x) { gsub(/\\./, "", x); gsub(/"/, "", x); gsub(/[[:cntrl:]]/, " ", x); return "\"" substr(x, 1, 140) "\"" }
         function inr(v,  a, z, c, j) { a = 1; z = rn; j = 0; while (a <= z) { c = int((a + z) / 2); if (L[c] <= v) { j = c; a = c + 1 } else z = c - 1 }; return j && PM[j] >= v }
+        function ina(v,  a, z, c, j) { a = 1; z = an; j = 0; while (a <= z) { c = int((a + z) / 2); if (AL[c] <= v) { j = c; a = c + 1 } else z = c - 1 }; return j && AM[j] >= v }
         BEGIN { while ((getline l < rf) > 0) { split(l, x, " "); rn++; L[rn] = x[1] + 0; h = x[2] + 0; PM[rn] = (rn == 1 || h > PM[rn - 1]) ? h : PM[rn - 1] }
+                while ((getline l < af) > 0) { split(l, x, " "); an++; AL[an] = x[1] + 0; h = x[2] + 0; AM[an] = (an == 1 || h > AM[an - 1]) ? h : AM[an - 1] }
                 while ((getline l < pc) > 0) { split(l, x, " "); PC[x[1]] = x[2] } }
         $1 == "C" || $1 == "R" { split($2, q, "/"); lo = v4(q[1]); cn++; CL[cn] = lo; CH[cn] = lo + 2 ^ (32 - q[2]) - 1; CK[cn] = $1; CC[cn] = $2; next }
         { ip = $2; if (!(ip in IN)) IN[ip] = inr(v4(ip)); if (!IN[ip]) next
@@ -4841,13 +4848,14 @@ do_src_ips() {   # ANAHTAR (ASnnn | cl:ad) → JSON: o sağlayıcıya / kiralık
           if (!(ip in BT) || t > BT[ip]) { BT[ip] = t; BW[ip] = ($1 == "E" ? $5 : $5); BF[ip] = ($1 == "E" ? $4 : $1 == "D" ? "deny" : "temp") } }
         END { n = 0
             for (ip in BT) { n++; v = v4(ip); st = D[ip] ? "deny" : TT[ip] ? "temp" : ""
+                if (an && ina(v)) st = "alw"
                 if (st == "") for (i = 1; i <= cn; i++) if (CL[i] <= v && CH[i] >= v) { st = (CK[i] == "C" ? "deny24:" : "temp24:") CC[i]; if (CK[i] == "C") break }
                 sv = cls(BW[ip]); if (sv == "repeat" && (ip in PC)) sv = PC[ip]
                 K[n] = BT[ip]; R[n] = "[" js(ip) "," js(sv) "," js(BW[ip]) "," BT[ip] "," js(BF[ip]) "," js(st) "]" }
             o = ""; m = 0
             for (j = 1; j <= n && m < 500; j++) { b = 0; bt = -1; for (i in K) if (K[i] > bt) { bt = K[i]; b = i }; if (!b) break; o = o (m++ ? "," : "") R[b]; delete K[b] }
             printf "{\"ok\":true,\"n\":%d,\"ips\":[%s]}\n", n, o }'
-    rm -f "$rng" "$svm"
+    rm -f "$rng" "$svm" "$alw"
 }
 do_asn_impact() { # ANAHTAR (ASnnn | cl:ad) → son 24 saatin web günlüklerinde bu sağlayıcıdan / kiralık listeden gelen istekler
     local a="$1" n="" dir="" d files rng rc

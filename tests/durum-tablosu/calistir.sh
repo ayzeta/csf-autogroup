@@ -414,6 +414,9 @@ printf '{"t":%s,"type":"warn16","cidr":"151.80.0.0/16","n":1,"ips":[{"ip":"151.8
 SI=$(run --src-ips cl:gcp --json 2>/dev/null); PO=$(run --status --json 2>/dev/null | grep -o '"pot":{[^}]*}' | grep -o '"gcp":[0-9]*' | cut -d: -f2)
 mcheck "kaynak ayrıntısı: kutudaki sayı (pot) = ayrıntının IP sayısı, listenin dışındaki IP sayılmaz" "[ \"\$(printf '%s' '$SI' | grep -o '\"n\":[0-9]*')\" = '\"n\":4' ] && [ '$PO' = 4 ] && ! printf '%s' '$SI' | grep -q 198.51.100.5"
 mcheck "kaynak ayrıntısı: şu anki durum — tekil kalıcı, geçici, aralık banı içinde, banlı değil" "printf '%s' '$SI' | grep -q '\"151.80.7.10\",\"ssh\",[^]]*,\"deny\",\"deny\"\]' && printf '%s' '$SI' | grep -q '\"151.80.7.11\",\"sync\",[^]]*,\"temp\",\"temp\"\]' && printf '%s' '$SI' | grep -q '\"151.80.9.20\",[^]]*\"deny24:151.80.9.0/24\"\]' && printf '%s' '$SI' | grep -q '\"151.80.7.9\",\"ssh\",[^]]*,\"temp24\",\"\"\]'"
+printf '%s\n' "151.80.7.10 # ofis" "tcp|in|d=22|s=151.80.7.11" >> "$A"
+SI=$(run --src-ips cl:gcp --json 2>/dev/null)
+mcheck "kaynak ayrıntısı: bütün portlara izinli IP'nin banı 'izinli' (IP kartı: ban işlemiyor); tek portluk izin banı bozmaz" "printf '%s' '$SI' | grep -q '\"151.80.7.10\",[^]]*,\"alw\"\]' && printf '%s' '$SI' | grep -q '\"151.80.7.11\",[^]]*,\"temp\"\]' && run --lookup 151.80.7.10 --json 2>/dev/null | grep -q '\"wl\":\"csf.allow: 151.80.7.10'"
 mcheck "kaynak ayrıntısı: hatalı anahtar reddedilir" "run --src-ips 'cl:../x' --json 2>/dev/null | grep -q bad_key"
 
 # Imunify360 8.15 "port bilen" beyaz listesi (v3/imunify360-csf.txt, csf.allow'a Include ile): satırlar tek yönlü ve tek portlu

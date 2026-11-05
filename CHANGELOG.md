@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.15.48 — 2026-11-06
+
+- **Fix (source details):** an IP that is allowed on every port (an allowed
+  service such as GPTBot, or your own full allow in `csf.allow`) showed as
+  "banned permanently", while its IP card said the ban does not apply. CSF
+  applies the allow before every ban, so the table now says
+  "allowed: bans do not apply".
+- Source details for a rented-server list: the request measurement speaks of
+  the list, not of a provider, and no longer suggests banning (the list rule
+  is already set on the box). The ban breakdown under the measurement is gone
+  from the details window; the IP table above it already shows every ban and
+  its current state, and the two breakdowns counted different things (IPs and
+  bans).
+- The service column of the details table uses the same names as the count
+  line above it.
+
 ## 1.15.47 — 2026-11-06
 
 - **Source details, one window for providers and rented-server lists.**
