@@ -57,7 +57,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.44"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.45"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -162,6 +162,7 @@ CLOUD_SOURCES="${CLOUD_SOURCES-gcp}"    # virgüllü: gcp aws azure oracle digit
 CLOUD_TCP="${CLOUD_TCP-80,443}"
 CLOUD_UDP="${CLOUD_UDP-443}"
 CLOUD_URLS="${CLOUD_URLS:-}"            # değiştirilmiş kaynak adresleri: "gcp|https://… aws|https://…"
+SRC_LABELS="${SRC_LABELS:-}"            # kendi kutu ve kaynaklarınızın görünen başlıkları (panel yazar): "tür:ad=başlık", "tür:kutu:d=açıklama", başlık kodlu (%20)
 CLOUD_EXTRA="${CLOUD_EXTRA:-}"          # kendi listeleriniz: "ad|https://liste" (düz IP listesi ya da JSON), boşlukla
 CLOUD_ACTIVE="${CLOUD_SOURCES//,/ }"; for _x in $CLOUD_EXTRA; do CLOUD_ACTIVE+=" x-${_x%%|*}"; done   # etkin listelerin adları (ek listeler x- önekli)
 # Kapsama kararları (uyarı gizleme, gereksizleşen ban, sıralama, IP kartı, ban penceresi) için: liste gerçekten etkin mi.
@@ -794,7 +795,7 @@ mail() {
 
 # ── Settings: validation (panel + --config set + --dry-run --set) ──────────
 # Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
-CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST IC_REVIEW IE_REVIEW THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_KEEP_DAYS EVENTS_DAYS RUN_DAYS PERM_WINDOW_DAYS BANLOG_DAYS LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_URLS CLOUD_EXTRA ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS OWNER_TTL_DAYS IMUNIFY_REFRESH_MIN BLOCK_ACTIVE_DAYS"
+CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST IC_REVIEW IE_REVIEW THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_KEEP_DAYS EVENTS_DAYS RUN_DAYS PERM_WINDOW_DAYS BANLOG_DAYS LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_URLS CLOUD_EXTRA SRC_LABELS ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS OWNER_TTL_DAYS IMUNIFY_REFRESH_MIN BLOCK_ACTIVE_DAYS"
 PROV_KEYS="SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_URLS CLOUD_EXTRA ENABLED"
 SVC_CATALOG="google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake microsoft365"
 CLOUD_CATALOG="gcp aws azure oracle digitalocean linode vultr"
@@ -879,6 +880,14 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
             local x u re='^[a-z0-9-]{1,40}[|]https://[A-Za-z0-9._~:/?#@=%+&-]{4,255}$'; CFG_VAL=""
             for x in $v; do
                 [[ "$x" =~ $re ]] || { CFG_ERR=$(m "$M_CFG_BAD" "$k" "$x" "$M_CFG_SVCU"); return 1; }
+                CFG_VAL+="${CFG_VAL:+ }$x"
+            done
+            return 0 ;;
+        SRC_LABELS)               # panelin başlık sözlüğü: listeleri etkilemez, yalnız biçimi denetlenir
+            local x n=0 re='^(cl|svc):[A-Za-z0-9._-]{1,60}(:d)?=[A-Za-z0-9%._~-]{1,600}$'; CFG_VAL=""
+            for x in $v; do
+                n=$((n + 1))
+                if [ "$n" -gt 300 ] || ! [[ "$x" =~ $re ]]; then CFG_ERR=$(m "$M_CFG_BAD" "$k" "$x" "tür:ad=başlık"); return 1; fi
                 CFG_VAL+="${CFG_VAL:+ }$x"
             done
             return 0 ;;

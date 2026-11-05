@@ -90,6 +90,8 @@ async function layoutChecks(page, label, width) {
       if (E[i].contains(E[j]) || E[j].contains(E[i])) continue;
       // döşemenin köşesindeki Adres düğmesi bilerek döşemenin üstünde (metin ona yer bırakır)
       if ([E[i], E[j]].some(e => e.matches('.ag-tile-ed')) && [E[i], E[j]].some(e => e.matches('.ag-tile-m'))) continue;
+      // kaydet çubuğu bilerek içeriğin üstünde yüzer (position: fixed): altındaki düğmeyle binmesi yerleşim hatası değil
+      if ([E[i], E[j]].filter(e => e.closest('.ag-savebar')).length === 1) continue;
       const a = R[i], b = R[j];
       if (a.left < b.right - 2 && b.left < a.right - 2 && a.top < b.bottom - 2 && b.top < a.bottom - 2) { out.push(E[i].textContent.trim().slice(0, 15) + ' ↔ ' + E[j].textContent.trim().slice(0, 15)); break; }
     }
@@ -418,7 +420,11 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     const names = async (g) => page.$$eval(`${g} .ag-tile-m b`, L => L.map(b => b.textContent.trim()));
     const chips = async (g, nm) => page.$$eval(`${g} .ag-tile`, (L, nm) => { const x = L.find(e => (e.querySelector('.ag-tile-m b') || {}).textContent === nm);
       return x ? Array.from(x.querySelectorAll('.ag-tile-subs .ag-chip')).map(c => c.firstChild.textContent.trim()) : null; }, nm);
-    const addForm = async (n, u) => { await page.waitForSelector('.ag-modal #ag-an', { timeout: 10000 }); await page.fill('#ag-an', n); await page.fill('#ag-au', u);
+    // yeni kutu: başlık + kaynak satırları; kutunun içinden: kaynak başlığı + adres
+    const addForm = async (n, u, rows) => { await page.waitForSelector('.ag-modal [data-row]', { timeout: 10000 });
+      if (await page.$('.ag-modal #ag-an')) await page.fill('#ag-an', n); else await page.fill('.ag-modal [data-row="0"] [data-f="t"]', n);
+      if (rows) for (let i = 0; i < rows.length; i++) { if (i) await page.click('#ag-addrow'); await page.fill(`.ag-modal [data-row="${i}"] [data-f="t"]`, rows[i][0]); await page.fill(`.ag-modal [data-row="${i}"] [data-f="u"]`, rows[i][1]); }
+      else await page.fill('.ag-modal [data-row="0"] [data-f="u"]', u);
       await page.click('.ag-modal [data-m="ok"]'); await page.waitForTimeout(400); };
     // yeni kutu
     await tik(page, `${G} .ag-tile-add`); await addForm('deneme', 'https://ornek.com/liste.txt');
@@ -459,6 +465,13 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
       await page.keyboard.press('Escape'); await page.waitForTimeout(200);
       check('izinli servis: hazır alt kaynak × ile kalkar, "Servis ekle"de geri getirilecekler arasında', !!s2 && s2.length === s1.length - 1 && back.some(t => t.indexOf(sub || '?') >= 0), JSON.stringify({ s1, s2, back }));
     } else check('izinli servis: hazır kutuya kendi kaynağınız çip olarak eklenir', false, 'Google kutusu yok');
+    // sıfırdan Google / OpenAI gibi kutu: serbest başlık (Türkçe, boşluklu), açıklama, başlıklı kaynaklar
+    await tik(page, `${SG} .ag-tile-add`); await page.waitForSelector('.ag-modal #ag-an', { timeout: 10000 });
+    await page.fill('#ag-ad', 'Yapay zekâ tarayıcıları');
+    await addForm('Yapay Zekâ Botları', '', [['Arama botu', 'https://ornek.com/arama.json'], ['Kullanıcı istekleri', 'https://ornek.com/kullanici.json']]);
+    const yz = await chips(SG, 'Yapay Zekâ Botları');
+    const yzd = await page.evaluate(() => { const x = Array.from(document.querySelectorAll('#ag-svc-card .ag-tile')).find(e => (e.querySelector('.ag-tile-m b') || {}).textContent === 'Yapay Zekâ Botları'); return x ? x.querySelector('.ag-tile-m small').textContent : null; });
+    check('izinli servis: sıfırdan kutu serbest başlık, açıklama ve başlıklı kaynaklarla kurulur (OpenAI gibi)', !!yz && yz.join('|') === 'Arama botu|Kullanıcı istekleri' && yzd === 'Yapay zekâ tarayıcıları', JSON.stringify({ yz, yzd }));
     // ham liste adı ekranda görünmez (x-…, extra-…, kutu--kaynak)
     const ham = await page.evaluate(() => (document.querySelector('#ag-app').innerText.match(/\b(x-[a-z0-9-]+|extra-[A-Za-z0-9._-]+|[a-z0-9]+--[a-z0-9-]+)\b/g) || []).slice(0, 5));
     check('kutular: ekranda ham liste adı yok', ham.length === 0, ham.join(', '));

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.15.45 — 2026-11-05
+
+- **Build a box like the built-in ones.** A new box now takes a title (any
+  text), an optional description and as many sources as you like, each with its
+  own title, in one step (**Add a source row**). Titles and the description can
+  be changed later under **Address**. Internal names are made from the titles
+  and are never shown. Titles are kept in the new `SRC_LABELS` setting.
+- **Measure impact, is the ban working:** when the ban is older than the 24
+  hours of logs the check reads, the text now says so ("The ban was set 5 days
+  ago; in the last 24 hours no requests …") instead of implying the whole time
+  since the ban was checked. The hint explains what an open address is.
+
 ## 1.15.44 — 2026-11-05
 
 - **Rented servers and allowed services: every list is a box you can shape.**

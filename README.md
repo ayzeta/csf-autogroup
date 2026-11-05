@@ -726,8 +726,10 @@ a box holds one or more sources (download addresses), shown as chips when there
 is more than one. On every box you can add a source, remove one (built-in ones
 too), change a source's address (**Address**; a built-in one can go back to its
 default) or remove the whole box. **Add list** / **Add service** brings back a
-removed built-in box or source, or starts a new box from a name and an address,
-to which more sources can be added. A source you add to the rented-server card
+removed built-in box or source, or starts a new box: a title (any text), an
+optional description and one or more sources, each with its own title, so a box
+of your own can have the same shape as the built-in Google or OpenAI boxes.
+Titles are kept in `SRC_LABELS`; internal names are made from them. A source you add to the rented-server card
 takes every IPv4 range in the file; only the built-in AWS and Azure boxes filter
 the provider's file to rented servers. In `config.env` your own sources stay in
 `CLOUD_EXTRA` / `SVC_EXTRA` as `name|address`; `box--source|address` puts a

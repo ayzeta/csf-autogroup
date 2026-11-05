@@ -27,7 +27,8 @@ SVC=$(cat_of SVC_CATALOG); CLD=$(cat_of CLOUD_CATALOG)
     done | awk -F'\t' -v svc=" $SVC " '{ n = $2; sub(/\|.*/, "", n); b = n; sub(/-.*/, "", b); if (index(svc, " " b " ")) print }'
     sed -n 's/^ *\([a-z]*\)) *REPLY="\(https:[^"]*\)".*/\1|\2/p' "$ENG" | awk -F'|' -v c=" $CLD " 'index(c, " " $1 " ") { print "CLOUD_URLS\t" $0 }'
     printf 'SVC_EXTRA\t%s\n' 'odeme|https://ornek.com/ips.txt?a=1&b=2 ofis|203.0.113.10 ag|203.0.113.0/24'
-    printf 'CLOUD_EXTRA\t%s\n' 'hetzner|https://ornek.com/liste.txt ovh-2|https://ornek.com/a.json?x=1'
+    printf 'CLOUD_EXTRA\t%s\n' 'hetzner|https://ornek.com/liste.txt ovh-2|https://ornek.com/a.json?x=1' 'aws2--eu-north-1|https://ornek.com/eu.txt'
+    printf 'SRC_LABELS\t%s\n' 'svc:odeme=%C3%96deme%20servisleri svc:odeme:d=webhook%20adresleri svc:yz--arama-botu=Arama%20botu cl:aws2=AWS%20b%C3%B6lgeleri' ''
     # alt liste kapatma: hazır kaynakların bütün alt liste adları (tek tek ve hepsi birden), boş değer
     SUB=$(grep -oE '[a-z0-9-]+\|(https://[A-Za-z0-9.-]+\.[A-Za-z]{2,}|\$[A-Z]+/)' "$ENG" | sed 's/|.*//' | awk -v svc=" $SVC " '{ b = $0; sub(/-.*/, "", b) } index(svc, " " b " ") && $0 ~ /-/' | sort -u)
     for x in $SUB; do printf 'SVC_SKIP\t%s\n' "$x"; done
