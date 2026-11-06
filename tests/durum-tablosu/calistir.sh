@@ -425,6 +425,10 @@ LP=$(run --lookup 151.80.7.52 --json 2>/dev/null)
 mcheck "tek IP: IP kartı kısmi tek IP banını kendi satırı olarak gösterir (Banı kaldır düğmesi için)" "printf '%s' '$LP' | grep -q '\"kind\":\"port\"[^}]*\"cidr\":\"151.80.7.52\"'"
 quiet --action unban 151.80.7.50; quiet --action unban 151.80.7.51; quiet --action unban 151.80.7.52
 mcheck "tek IP: Banı kaldır kalıcı, geçici ve kısmi tek IP banlarını kaldırır" "! grep -q '151.80.7.5[012]' '$D' && ! grep -q '|151.80.7.51|' '$T'"
+# iki tur arasında konup kaldırılan elle ban ban geçmişinde kalır (canlıda geçmişten tamamen kayboluyordu): bitiş = kaldırma anı,
+# geçicide asıl bitiş lfd süresiyle (süresi dolmadan kaldırıldı); kısmi /32 servis banı tekil ban değil
+quiet; BLF="$R/var/lib/csf_autogroup/banlog"
+mcheck "tek IP: tur görmeden konup kaldırılan elle banlar ban geçmişinde (kalıcı ve geçici, bitişleri kaldırma anı)" "awk -F'|' '\$1 == \"151.80.7.50\" && \$2 == \"p\" && \$4 >= \$3 && \$4 > 0 && \$5 ~ /elle tekil ban \\(root\\)\$/' '$BLF' | grep -q . && awk -F'|' '\$1 == \"151.80.7.51\" && \$2 == \"t\" && \$4 - \$3 < 600 && \$6 - \$3 >= 3590 && \$5 ~ /elle geçici tekil ban/' '$BLF' | grep -q . && ! grep -q '^151.80.7.52|' '$BLF'"
 
 # Kiralık liste başına kip (CLOUD_MODES): her ekran listenin kendi kuralını söyler. gcp "her şeyi kapat, web hariç", oracle kipsiz
 # (eski ortak port listesi: web), vultr "her şey". IP kartı, aralık penceresi, Etkisini ölç (web istekleri yalnız web'i kapatan listede

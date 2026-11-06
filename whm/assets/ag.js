@@ -95,7 +95,7 @@
       no_events: 'Henüz kayıt yok. İlk turdan sonra burada görünecek.', no_match: 'Eşleşen kayıt yok.',
       c_t24: 'Blok banı (/24)', c_t24p: 'Silinmez ban eşiği', c_t16: 'Şüpheli ağ (/16)', c_tt24: 'Geçici blok banı (/24)',
       c_ret: 'İzleme süresi', c_lookup: 'Sahip / hostname sorgusu', c_on: 'açık', c_off: 'kapalı', c_days: '{0} gün', c_days0: '1 günden az', c_forever: 'Süresiz', ign_change: 'Süreyi değiştir', rewatch: 'İzlemeyi yeniden başlat', m_rewatch_t: '{0} izlemesi yeniden başlasın mı?', m_rewatch_b: 'İzleme süresi bugünden itibaren yeniden sayılır (Ayarlar → Ban kuralları → İzleme süresi kadar). Bu sürede aynı bloktan yeni geçici ban gelirse blok kalıcı banlanır.', w_rewatch: 'İzleme yeniden başlatılıyor…', ev_manual_rewatch: 'İzleme yeniden başladı', ign_forever: 'süresiz', ign_who: '{0} susturdu, {1}', ign_forever_l: 'süresiz susturuldu', st_ign_f: 'susturuldu (süresiz)', c_singles: '≥ {0} tekil', c_gloss: 'tekil = tek IP banı · blok = /24 · ağ = /16 · silinmez = CSF liste dolsa da silmez',
-      now: 'az önce', min_ago: '{0} dk önce', h_ago: '{0} sa önce', d_ago: '{0} gün önce', dur_h: '{0} sa {1} dk', dur_m: '{0} dk',
+      now: 'az önce', min_ago: '{0} dk önce', h_ago: '{0} sa önce', d_ago: '{0} gün önce', dur_h: '{0} sa {1} dk', dur_h0: '{0} sa', dur_d: '{0} gün', dur_m: '{0} dk',
       cancel: 'Vazgeç', confirm: 'Onayla', close: 'Kapat', reload: 'Sayfayı yenile', type_to_confirm: 'Onaylamak için {0} yazın',
       m_ban16_t: '{0} kalıcı olarak banlansın mı?', m_ban16_b: 'Bu, ağdaki 65.536 adresin tamamını engeller. Ban silinmez olarak eklenir (CSF\'in "do not delete" işareti): liste dolsa da kendiliğinden kalkmaz.',
       m_force_t: 'Beyaz listeye rağmen banlansın mı?', m_force_b: 'Bu blok CSF beyaz listelerinden biriyle çakışıyor:',
@@ -187,7 +187,7 @@
       no_events: 'Nothing recorded yet. Runs will show up here.', no_match: 'No matching entries.',
       c_t24: 'Block ban (/24)', c_t24p: 'Do not delete threshold', c_t16: 'Suspicious network (/16)', c_tt24: 'Temp block ban (/24)',
       c_ret: 'Watch period', c_lookup: 'Owner / hostname lookups', c_on: 'on', c_off: 'off', c_days: '{0} days', c_days0: 'under a day', c_forever: 'Indefinitely', ign_change: 'Change duration', rewatch: 'Restart the watch', m_rewatch_t: 'Restart the watch on {0}?', m_rewatch_b: 'The watch period starts again from today (the watch period under Settings → Ban rules → Watching). A new temporary ban from this block within that period makes the block permanent.', w_rewatch: 'Restarting the watch…', ev_manual_rewatch: 'Watch restarted', ign_forever: 'no end date', ign_who: '{0} muted it {1}', ign_forever_l: 'muted indefinitely', st_ign_f: 'muted (indefinitely)', c_singles: '≥ {0} singles', c_gloss: 'single = one-IP ban · block = /24 · network = /16 · do not delete = CSF keeps it even when the list is full',
-      now: 'just now', min_ago: '{0} min ago', h_ago: '{0} h ago', d_ago: '{0} d ago', dur_h: '{0} h {1} min', dur_m: '{0} min',
+      now: 'just now', min_ago: '{0} min ago', h_ago: '{0} h ago', d_ago: '{0} d ago', dur_h: '{0} h {1} min', dur_h0: '{0} h', dur_d: '{0} d', dur_m: '{0} min',
       cancel: 'Cancel', confirm: 'Confirm', close: 'Close', reload: 'Reload page', type_to_confirm: 'Type {0} to confirm',
       m_ban16_t: 'Permanently ban {0}?', m_ban16_b: 'This blocks all 65,536 addresses in the network. The ban is added as "do not delete" and is kept even when the list is full.',
       m_force_t: 'Ban despite the whitelist?', m_force_b: 'This block overlaps a CSF whitelist entry:',
@@ -324,8 +324,10 @@
   function dur(s) {
     s = Math.max(0, s | 0);
     var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
-    return h > 0 ? t('dur_h', h, m) : t('dur_m', m);
+    return h > 0 ? (m ? t('dur_h', h, m) : t('dur_h0', h)) : t('dur_m', m);
   }
+  // seçilecek süre adı (tam gün → "N gün", tam saat → "N sa")
+  function ttlName(s) { s = +s || 0; return s >= 86400 && s % 86400 === 0 ? t('dur_d', s / 86400) : dur(s); }
   function pfx(cidr) { return String(cidr).replace(/\.0\/24$/, '').replace(/\.0\.0\/16$/, ''); }
 
   /* ── API ───────────────────────────────────────────────────────── */
@@ -1277,7 +1279,7 @@
   }
   function lookupCard() {
     var rec = recentGet();
-    return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.search + t('s_lookup') + '</h2></div>' +
+    return '<section class="ag-card ag-lkcard"><div class="ag-card-h"><h2>' + IC.search + t('s_lookup') + '</h2></div>' +
       '<div class="ag-lookup"><form id="ag-lk"><input class="ag-input ag-mono" id="ag-lk-ip" inputmode="url" autocomplete="off" value="' + esc(UI.lk || '') + '" placeholder="' + esc(t('lookup_ph')) + '">' +
       '<button class="ag-btn ag-btn-primary" type="submit">' + t('lookup_btn') + '</button></form>' +
       (rec.length ? '<div class="ag-recent"><span>' + t('lk_recent') + '</span>' + rec.map(function (ip) { return '<button class="ag-rc" data-ip="' + esc(ip) + '">' + esc(ip) + '</button>'; }).join('') + '</div>'
@@ -2667,7 +2669,7 @@
     return modal({ icon: 'ban', tone: 'bad', title: t('ip_ban_t', ip), okText: t('ban_btn'), okClass: 'ag-btn-danger-solid',
       html: (wl ? '<div class="ag-warnbox">' + esc(t('in_wl')) + ' <b>' + esc(wlShort(wl)) + '</b></div>' : '') + '<p>' + esc(t('ip_ban_b')) + '</p>' + pickerHtml(['all', 'svc']) +
         '<div class="ag-mode" id="ag-ttl"><div class="ag-mode-h">' + esc(t('ip_ttl_h')) + '</div><div class="ag-chips">' +
-        TT.map(function (x) { return '<button type="button" class="ag-chip" data-ttl="' + x + '">' + esc(x ? dur(x) : t('ip_ttl0')) + '</button>'; }).join('') + '</div></div>',
+        TT.map(function (x) { return '<button type="button" class="ag-chip" data-ttl="' + x + '">' + esc(x ? ttlName(x) : t('ip_ttl0')) + '</button>'; }).join('') + '</div></div>',
       onOpen: function (w) {
         W = w; draw();
         w.addEventListener('click', function (ev) {

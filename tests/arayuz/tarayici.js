@@ -187,6 +187,11 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
         // başlık düğmeleri telefonda tek sırada (sağda alt alta dizilince başlık iki kat yükseliyordu)
         const tops = await page.$$eval('.ag-head-actions .ag-btn', L => L.map(b => Math.round(b.getBoundingClientRect().top)));
         check('390: başlık düğmeleri aynı satırda', tops.length >= 3 && Math.max(...tops) - Math.min(...tops) <= 2, tops.join(','));
+        // IP sorgula telefonda özet kartlarının hemen altında, listelerden önce (önce iki sütun alt alta dizilince en alta düşüyordu)
+        const lk = await page.evaluate(() => { const g = document.querySelector('.ag-grid:not(.ag-provtab)'); const c = document.querySelector('.ag-lkcard'); if (!g || !c) return null;
+          const ust = Array.from(g.querySelectorAll('.ag-card')).filter(x => x !== c && x.offsetParent).map(x => Math.round(x.getBoundingClientRect().top));
+          const k = document.querySelector('.ag-kpis'); return { lk: Math.round(c.getBoundingClientRect().top), ilk: Math.min(...ust), kpiAlt: k ? Math.round(k.getBoundingClientRect().bottom) : 0 }; });
+        check('390: IP sorgula özet kartlarının altında, öteki kartlardan önce', !!lk && lk.lk < lk.ilk && lk.lk > lk.kpiAlt, JSON.stringify(lk));
       }
       if (width === 1280 && tab === 'history') {
         // zaman sütunu bütün satırlarda aynı sağ kenarda (menüsüz satırlar 42 px sağa kayıyordu); her satırda menü hücresi var
@@ -337,8 +342,11 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
       const ib = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); if (!m) return null;
         const modes = Array.from(m.querySelectorAll('[data-mode]')).map(b => b.getAttribute('data-mode')).join(',');
         const ttlAll = m.querySelector('#ag-ttl').style.display !== 'none'; m.querySelector('[data-mode="svc"]').click();
-        return { modes, ttlAll, ttlSvc: m.querySelector('#ag-ttl').style.display !== 'none', sure: m.querySelectorAll('[data-ttl]').length, cikis: !!m.querySelector('[data-svc="mout"]') }; });
+        return { modes, ttlAll, ttlSvc: m.querySelector('#ag-ttl').style.display !== 'none', sure: m.querySelectorAll('[data-ttl]').length, cikis: !!m.querySelector('[data-svc="mout"]'),
+          adlar: Array.from(m.querySelectorAll('[data-ttl]')).map(b => b.textContent.trim()) }; });
       check('tek IP banı: pencere kipleri "Her şey" ve "Seçilen servisler", süre yalnız "Her şey"de, giden servis yok', !!ib && ib.modes === 'all,svc' && ib.ttlAll && !ib.ttlSvc && ib.sure === 5 && !ib.cikis, JSON.stringify(ib));
+      // süre adı "1 sa 0 dk" / "168 sa 0 dk" değil: sıfır dakika yazılmaz, tam gün gün olarak
+      check('tek IP banı: süre adlarında "0 dk / 0 min" yok, tam gün gün olarak', !!ib && !ib.adlar.some(a => /\b0 (dk|min)\b/.test(a)) && ib.adlar.some(a => /^(7 gün|7 d)$/.test(a)), ib ? ib.adlar.join(' | ') : '');
       for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(250); await layoutChecks(page, 'ip-banla', w); }
       await page.setViewportSize({ width: 1280, height: 900 });
       await page.keyboard.press('Escape'); await page.waitForTimeout(400);
@@ -377,8 +385,10 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
       const ib = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); if (!m) return null;
         const modes = Array.from(m.querySelectorAll('[data-mode]')).map(b => b.getAttribute('data-mode')).join(',');
         const ttlAll = m.querySelector('#ag-ttl').style.display !== 'none'; m.querySelector('[data-mode="svc"]').click();
-        return { modes, ttlAll, ttlSvc: m.querySelector('#ag-ttl').style.display !== 'none', sure: m.querySelectorAll('[data-ttl]').length, cikis: !!m.querySelector('[data-svc="mout"]') }; });
+        return { modes, ttlAll, ttlSvc: m.querySelector('#ag-ttl').style.display !== 'none', sure: m.querySelectorAll('[data-ttl]').length, cikis: !!m.querySelector('[data-svc="mout"]'),
+          adlar: Array.from(m.querySelectorAll('[data-ttl]')).map(b => b.textContent.trim()) }; });
       check('tek IP banı: pencere kipleri "Her şey" ve "Seçilen servisler", süre yalnız "Her şey"de, giden servis yok', !!ib && ib.modes === 'all,svc' && ib.ttlAll && !ib.ttlSvc && ib.sure === 5 && !ib.cikis, JSON.stringify(ib));
+      check('tek IP banı: süre adlarında "0 dk / 0 min" yok, tam gün gün olarak', !!ib && !ib.adlar.some(a => /\b0 (dk|min)\b/.test(a)) && ib.adlar.some(a => /^(7 gün|7 d)$/.test(a)), ib ? ib.adlar.join(' | ') : '');
       for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(250); await layoutChecks(page, 'ip-banla', w); }
       await page.setViewportSize({ width: 1280, height: 900 });
       await page.keyboard.press('Escape'); await page.waitForTimeout(400);

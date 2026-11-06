@@ -57,7 +57,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.54"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.55"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -2428,7 +2428,19 @@ bl_load() {      # → BLV (birleşik ban geçmişi, satırlar "ip|k|başlangı�
                   o = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
                   ip = o; sub(/^\{"ip":"/, "", ip); sub(/".*/, "", ip)
                   w = ""; if (match(o, /"why":"([^"\\]|\\.)*"/)) w = substr(o, RSTART + 7, RLENGTH - 8)
-                  gsub(/\\"/, "\"", w); gsub(/\|/, " ", w); print "V|" ip "|" k "|" t "|" t "|" w } }' 
+                  gsub(/\\"/, "\"", w); gsub(/\|/, " ", w); print "V|" ip "|" k "|" t "|" t "|" w } }'
+        # eklentinin kendi tek IP banı ve kaldırması (olay kaydında anı ve süresi kesin): iki tur arasında konup kaldırılan ban
+        # geçici listede de günlükte de görünmüyordu (elle csf -td günlüğe girmez), geçmişten tamamen kayboluyordu
+        [ -r "$EVENTS_FILE" ] && grep -E '"type":"manual_(un)?ban","cidr":"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"' "$EVENTS_FILE" 2>/dev/null | LC_ALL=C awk \
+            -v rt="$(m "$M_A1_TCOMMENT" '%s')" -v rp="$(m "${M_A1_COMMENT% - do not delete}" '%s')" '
+            { t = 0; if (match($0, /"t":[0-9]+/)) t = substr($0, RSTART + 4, RLENGTH - 4) + 0; if (!t) next
+              match($0, /"cidr":"[0-9.]+"/); ip = substr($0, RSTART + 8, RLENGTH - 9)
+              if (index($0, "\"type\":\"manual_unban\"")) { print "U|" ip "|" t; next }
+              if (!index($0, "\"kind\":\"ip\"") || index($0, "\"mode\":\"svc\"")) next      # kısmi (/32 servis) banı tekil ban değil
+              by = ""; if (match($0, /"by":"[^"]*"/)) by = substr($0, RSTART + 6, RLENGTH - 7)
+              d = 0; if (match($0, /"ttl":[0-9]+/)) d = substr($0, RSTART + 6, RLENGTH - 6) + 0
+              r = (d > 0 ? rt : rp); sub(/%s/, by, r); gsub(/\|/, " ", r)
+              print "M|" ip "|" (d > 0 ? "t" : "p") "|" t "|" (d > 0 ? t + d : 0) "|" r }'
         [ -r "$DENY_FILE" ] && LC_ALL=C awk '
             BEGIN { split("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec", A, " "); for (i = 1; i <= 12; i++) MO[A[i]] = i }
             $1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && !S[$1]++ { c = $0; sub(/^[^#]*#[ \t]*/, "", c); if (c == $0) c = ""; e = 0
@@ -2438,6 +2450,11 @@ bl_load() {      # → BLV (birleşik ban geçmişi, satırlar "ip|k|başlangı�
                 gsub(/\|/, " ", c); print "D|" $1 "|p|" (e > 0 ? e : 0) "|0|" c }' "$DENY_FILE"
       } | LC_ALL=C awk -F'|' -v now="$now" -v mark="${mark:-0}" -v cut=$(( now - keep * 86400 )) -v tbok="$tbok" '
         ($1 == "V" || ($1 == "B" && $8 == "e")) { if ($4 + 0 >= VT[$2] + 0) { VT[$2] = $4 + 0; VK[$2] = $3; VR[$2] = $6 }; next }   # olay kaydından: IP başına en son
+        $1 == "U" { UB[$2] = UB[$2] " " $3; next }                                       # panelden kaldırma anları
+        function unb(ip, s, e,   n, P, i, u, b) {   # s sonrası (e öncesi; e 0 = süren) ilk kaldırma anı, yoksa 0
+            b = 0; n = split(UB[ip], P, " ")
+            for (i = 1; i <= n; i++) { u = P[i] + 0; if (u >= s && (e == 0 || u < e) && (b == 0 || u < b)) b = u }
+            return b }
         { ip = $2; k = $3; s = $4 + 0; e = $5 + 0; r = $6; ne = ($7 != "" ? $7 + 0 : e)
           if ($1 == "T") TB[ip] = 1; if ($1 == "D") DN[ip] = 1
           K = ip "|" k; n = ++N[K]; S[K, n] = s; E[K, n] = e; R[K, n] = r; F[K, n] = $1; X[K, n] = ne }
@@ -2463,6 +2480,10 @@ bl_load() {      # → BLV (birleşik ban geçmişi, satırlar "ip|k|başlangı�
                     c++; OS[c] = s; OE[c] = e; OR[c] = r; OF[c] = f; OT[c] = (f == "T" || f == "D"); OG[c] = ""; OX[c] = ne
                     if (match(r, /\[[A-Z_]+\]$/)) OG[c] = substr(r, RSTART, RLENGTH) }
                 for (i = 1; i <= c; i++) { s = OS[i]; e = OE[i]
+                    # şu an listede değil ve panelden kaldırıldı: bitiş = kaldırma anı (asıl bitişten ve aynı adresin sonraki banından önce)
+                    if (s > 0 && ((k == "t" && !OT[i]) || (k == "p" && !(ip in DN)))) {
+                        hi = (k == "t" ? (OX[i] > e ? OX[i] : e) : 0); if (i < c && OS[i + 1] > 0 && (hi == 0 || OS[i + 1] < hi)) hi = OS[i + 1]
+                        u = unb(ip, s, hi); if (u) { e = u; OE[i] = u; if (k == "t") OT[i] = 1 } }
                     if (k == "t") {
                         # süresi bitmemiş ama geçici listede yok: elle kaldırıldı, kalıcıya alındı ya da aralık banı temizledi
                         # (ilk kurulumda — işaret yok — ne zaman kalktığı bilinmez: başladığı anda bitmiş sayılır, eşik onu saymaz)

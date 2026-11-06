@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.15.55 — 2026-11-06
+
+- On phones the *IP lookup* card now sits right under the summary cards on the
+  Overview, instead of below all the lists.
+- Durations no longer end in "0 min" ("1 h" instead of "1 h 0 min"), and the
+  ban length choices of the IP ban window read "1 d" and "7 d" instead of
+  "24 h 0 min" and "168 h 0 min".
+- Fixed: a single-IP ban placed and removed from the panel between two runs
+  disappeared from the IP's ban history. The plugin's own ban and unban events
+  now go into the history with their exact times, and a ban removed from the
+  panel ends at the moment it was removed ("removed before it expired").
+
 ## 1.15.54 — 2026-11-06
 
 - Fixed: the IP card stopped with "shortName is not defined" for any IP whose
