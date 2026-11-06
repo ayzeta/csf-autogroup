@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.15.58 — 2026-11-06
+
+- The *IP lookup* card also moves right under the summary cards on tablets and
+  narrow windows (wherever the Overview drops to one column), not only on
+  phones. On wide screens it stays at the top of the right column.
+
 ## 1.15.57 — 2026-11-06
 
 - Fixed: the ban history could record a temporary ban as one second longer

@@ -192,6 +192,14 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
           const ust = Array.from(g.querySelectorAll('.ag-card')).filter(x => x !== c && x.offsetParent).map(x => Math.round(x.getBoundingClientRect().top));
           const k = document.querySelector('.ag-kpis'); return { lk: Math.round(c.getBoundingClientRect().top), ilk: Math.min(...ust), kpiAlt: k ? Math.round(k.getBoundingClientRect().bottom) : 0 }; });
         check('390: IP sorgula özet kartlarının altında, öteki kartlardan önce', !!lk && lk.lk < lk.ilk && lk.lk > lk.kpiAlt, JSON.stringify(lk));
+        // tablet (tek sütun) de aynı; masaüstünde (iki sütun) sağ sütunun başında, listelerle aynı hizada
+        const lkW = async (w) => { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(300);
+          return page.evaluate(() => { const g = document.querySelector('.ag-grid:not(.ag-provtab)'); const c = document.querySelector('.ag-lkcard'); if (!g || !c) return null;
+            const r = c.getBoundingClientRect(), L = Array.from(g.querySelectorAll('.ag-card')).filter(x => x !== c && x.offsetParent).map(x => x.getBoundingClientRect());
+            return { lk: Math.round(r.top), x: Math.round(r.left), ilk: Math.min(...L.map(q => Math.round(q.top))), ilkX: Math.round(L[0].left), sw: document.documentElement.scrollWidth, w: innerWidth }; }); };
+        const t9 = await lkW(900), t12 = await lkW(1280); await page.setViewportSize({ width: 390, height: 900 }); await page.waitForTimeout(300);
+        check('900 (tablet): IP sorgula öteki kartlardan önce, taşma yok', !!t9 && t9.lk < t9.ilk && t9.sw <= t9.w, JSON.stringify(t9));
+        check('1280: IP sorgula sağ sütunun başında (listelerle aynı hiza)', !!t12 && Math.abs(t12.lk - t12.ilk) <= 2 && t12.x > t12.ilkX, JSON.stringify(t12));
       }
       if (width === 1280 && tab === 'history') {
         // zaman sütunu bütün satırlarda aynı sağ kenarda (menüsüz satırlar 42 px sağa kayıyordu); her satırda menü hücresi var
