@@ -46,7 +46,8 @@ for (const s of scen) {
   const scr = {};
   // IP kartı
   const mb = AG.coverBits(lk);
-  scr['IP kartı ' + IP] = htmlActs(AG.drActs(IP, mb)).map(a => [a[0], a[0] === 'ban16' ? NET : BLK, a[2]]);
+  // kartın verisiyle (kendi banı varsa "Banı kaldır"); tek IP düğmelerinin hedefi IP'nin kendisi
+  scr['IP kartı ' + IP] = htmlActs(AG.drActs(IP, mb, lk.pfx, '', lk)).map(a => [a[0], a[0] === 'ban16' ? NET : /^(un)?ban1$/.test(a[0]) ? IP : BLK, a[2]]);
   // Dikkat edilecekler
   const rv = AG.review();
   rv.split('<div class="ag-item"').slice(1).forEach(row => {

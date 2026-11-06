@@ -184,8 +184,11 @@ settings, with no prompts. `config.env` is left untouched.
 - **Suggestions where decisions are made** — the ban window suggests a partial
   ban when violations hit only one or two services; the remove window shows when
   and why the ban was added (and, for partial bans, violations on other services
-  since then); the IP card shows how far the block is from its threshold and
-  what the address tried in each service (*Attempts*);
+  since then); the IP card has three parts: *This IP* (result, its own ban,
+  whitelist, ban history and what the address tried in each service,
+  *Attempts*), *Wider levels* (one row each for the block, announced range,
+  network, country, provider and rented-server list, with its state, how far it
+  is from its threshold and its ban button) and *Who*;
   changing a threshold shows its effect on the current entries; suspicious
   networks show the services hit and suggest a single block when most
   singles sit in one.

@@ -57,7 +57,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.52"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.53"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -184,7 +184,7 @@ TODAY=$(date '+%Y-%m-%d')
 NL=$'\n'
 
 # ── Command line ────────────────────────────────────────────────────────────
-MODE=run; JSON=0; FORCE=0; DRY=0; ACT=""; ARGS=(); SETS=(); SEND=0; CLEAN=1; RESTORE=0; BMODE=all; BSVC=""; BPORTS=""; REPLACE=0; BTTL=0
+MODE=run; JSON=0; FORCE=0; DRY=0; ACT=""; ARGS=(); SETS=(); SEND=0; CLEAN=1; RESTORE=0; BMODE=all; BSVC=""; BPORTS=""; REPLACE=0; BTTL=0; IMP_STATES=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --dry-run) MODE=run; DRY=1 ;;
@@ -202,6 +202,7 @@ while [ $# -gt 0 ]; do
         --ports)   BPORTS="${2:-}"; shift ;;
         --replace) REPLACE=1 ;;          # eklentinin kendi banının kipini değiştir
         --ttl)     BTTL="${2:-0}"; shift ;;  # tek IP banı: geçici ban süresi (saniye; 0 = kalıcı)
+        --states)  IMP_STATES="${2:-}"; shift ;;  # Etkisini ölç: günlük okumadan yalnız bu IP'lerin şu anki durumu (eylemden sonra ekran)
         --action)  MODE=action; ACT="${2:-}"; shift ;;
         --config)  MODE=config ;;
         --set)     SETS+=("${2:-}"); shift ;;
@@ -3420,7 +3421,7 @@ restore_file() { REPLY="$RESTORE_DIR/${1//\//_}"; }   # CIDR → saklanan satır
 # Ban sebebinden servis: LFD sebebi servisi söyler ("(sshd) … [LF_SSHD]"); tanınmayanlar "other", port taraması "scan",
 # LFD'nin tekrar eden saldırganı kalıcıya alması (PERMBLOCK) "repeat" — servis değil, öneri oranına girmez.
 # Panelde aynı kural ag.js'teki svcOfReason'da (Kontrol edilecekler için) — birini değiştirirsen ötekini de değiştir.
-AWK_CLS='function cls(r) {
+AWK_CLS='function cls(r,  lf) {
     r = tolower(r)
     gsub(/ \([a-z][a-z]\/[^)]*\)/, "", r)          # "(us/united states/mail.smtp.example)" — ülke ve rDNS servis değildir
     if (r ~ /permblock/) return "repeat"         # LFD: çok geçici ban almış IP kalıcıya alındı (servisi söylemez)
@@ -3434,9 +3435,16 @@ AWK_CLS='function cls(r) {
     if (r ~ /ftpd|lf_ftpd|lf_distftp/) return "ftp"
     if (r ~ /cpanel|cpaneld|whm|webmail|lf_cpanel|webmin|lf_webmin|directadmin/) return "cp"
     if (r ~ /smtpauth|lf_smtpauth|lf_distsmtp|sasl|imapd|pop3d|lf_pop3d|lf_imapd|dovecot|courier/) return "sync"
-    if (r ~ /exim|lf_eximsyntax|smtp|relay|spam/) return "min"
-    if (r ~ /named|lf_dns|dns/) return "dns"
-    if (r ~ /mod_?security|htpasswd|lf_htaccess|lf_modsec|apache|nginx|litespeed|http|wordpress|wp-|xmlrpc|joomla|login\.php|lf_apache|404/) return "web"
+    if (r ~ /exim|lf_eximsyntax/) return "min"
+    if (r ~ /named|lf_dns/) return "dns"
+    # yazılım adları web olduğunu kendisi söyler (elle yazılmış "WordPress user enumeration attack" da web)
+    if (r ~ /htpasswd|lf_htaccess|lf_apache|apache|nginx|litespeed|wordpress|wp-|xmlrpc|joomla|login\.php/) return "web"
+    # iki anlamlı sözcükler (spam, smtp, relay, dns, http, 404) yalnız lfd satırında servis söyler ("lfd:" ön eki, "(sshd)" gibi
+    # uygulama etiketi, [LF_…]); elle yazılmış "spam" açıklaması posta da web formu da olabilir: "diğer" (önce "Gelen posta")
+    lf = (r ~ /lfd|lf_[a-z]|\([a-z0-9_]+\)/)
+    if (lf && r ~ /smtp|relay|spam/) return "min"
+    if (lf && r ~ /dns/) return "dns"
+    if (lf && r ~ /http|404/) return "web"
     return "other"
 }
 function datekey(n,  a, k, M, i, h) {   # "… - Sat Sep 26 12:00:00 2026" → 20260926120000 (yoksa 0)
@@ -3828,6 +3836,26 @@ do_lookup() {
         fi
         local bold=(${ipsold24[$bp]:-})     # kalıcı tekil penceresinden eski (eşiğe sayılmayan) tekiller
         o+=",\"blk\":{\"s\":${count24[$bp]:-0},\"o\":${#bold[@]},\"t\":$btc,\"ts\":$THRESHOLD_24,\"tt\":$THRESHOLD_TEMP_24,\"pw\":$PERM_WINDOW_DAYS}"
+        # ağ (/16): turun şüpheli ağ sayımıyla aynı — ağdaki kalıcı tekiller ve süren geçici banlar; izinli (işlemeyen), kalıcı tekil
+        # penceresinden eski ve kendi bloğu eşiği aşmış (blok banına gidecek) IP'ler sayılmaz. Eşik THRESHOLD_16 ve en az 2 farklı blok
+        local p16="${bp%.*}" n16=0 x px tb_t tb_ip tb_p tb_d tb_ttl; local -A S16=() TA16=() TC24=()
+        if [ -r "$CSF_VAR/csf.tempban" ]; then
+            local tnow; printf -v tnow '%(%s)T' -1
+            while IFS='|' read -r tb_t tb_ip tb_p tb_d tb_ttl _; do
+                [[ "$tb_t" =~ ^[0-9]+$ && "$tb_ttl" =~ ^[0-9]+$ && "$tb_ip" == "$p16".* && "$tb_ip" != */* ]] || continue
+                [ $(( tb_t + tb_ttl )) -gt "$tnow" ] || continue
+                [ -n "${TA16[$tb_ip]}" ] || TC24[${tb_ip%.*}]=$(( ${TC24[${tb_ip%.*}]:-0} + 1 )); TA16[$tb_ip]=1
+            done < "$CSF_VAR/csf.tempban"
+        fi
+        local -A SEEN16=()
+        for x in "${!SINGLE_NOTE[@]}" "${!TA16[@]}"; do
+            [[ "$x" == "$p16".* ]] || continue; [ -n "${SEEN16[$x]}" ] && continue; SEEN16[$x]=1
+            [ -n "${INEFF[$x]+x}" ] && continue; [ -n "${OLD_SGL[$x]+x}" ] && continue
+            px="${x%.*}"
+            [ "${count24[$px]:-0}" -ge "$THRESHOLD_24" ] && continue; [ "${TC24[$px]:-0}" -ge "$THRESHOLD_TEMP_24" ] && continue
+            n16=$((n16 + 1)); S16[$px]=1
+        done
+        o+=",\"net\":{\"n\":$n16,\"b\":${#S16[@]},\"t\":$THRESHOLD_16}"
         o+=",\"covers\":[$cvj],\"asn\":\"$asn\",\"fwd\":$fwd,\"lookup\":$([ "$LOOK_INIT" = 1 ] && echo true || echo false)}"
         echo "$o"; return 0
     fi
@@ -4972,6 +5000,7 @@ do_src_ips() {   # ANAHTAR (ASnnn | cl:ad) → JSON: o sağlayıcıya / kiralık
 }
 do_asn_impact() { # ANAHTAR (ASnnn | cl:ad) → son 24 saatin web günlüklerinde bu sağlayıcıdan / kiralık listeden gelen istekler
     local a="$1" n="" dir="" d files rng rc
+    [ -z "$IMP_STATES" ] || [[ "$IMP_STATES" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}(,[0-9]{1,3}(\.[0-9]{1,3}){3}){0,299}$ ]] || { echo '{"ok":false,"error":"bad_states"}'; return 2; }
     if [[ "${a^^}" =~ ^AS([0-9]{1,10})$ ]]; then a="${a^^}"; n="${BASH_REMATCH[1]}"
     elif ! [[ "$a" =~ ^cl:[a-z0-9-]{1,63}([+][a-z0-9-]{1,63}){0,30}$ ]]; then echo '{"ok":false,"error":"bad_asn"}'; return 2; fi
     for d in ${DOMLOGS:-} /var/log/apache2/domlogs /usr/local/apache/domlogs /etc/apache2/logs/domlogs; do [ -d "$d" ] && { dir="$d"; break; }; done
@@ -5041,11 +5070,13 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad) → son 24 saatin web günlüklerind
     local cok="," cs; for x in $CLOUD_ACTIVE; do for cs in web ssh ftp cp min sync dns; do cl_svc_closed "$x" "$cs" && cok+="$x:$cs,"; done; done
     local bjf svm; svm=$(mktemp) && bl_svc_map "$svm"
     local bsm; bsm=$(mktemp) && blk_svc_map "$bsm"
-    bjf=$(mktemp) && PERM_SVM="$svm" BLK_SVM="$bsm" asn_bans_json "$rng" "$alw" "$clfa" "$cweb" "$cok" > "$bjf" 2>/dev/null; rm -f "$svm" "$bsm"
-    find -L "$dir" -type f -mmin -1440 ! -name '*bytes_log*' ! -name '*.offset*' ! -name '*.gz' 2>/dev/null > "$lst"
+    if [ -n "$IMP_STATES" ]; then bjf=$(mktemp)                       # yalnız durumlar: banlar dökümü gerekmez
+    else bjf=$(mktemp) && PERM_SVM="$svm" BLK_SVM="$bsm" asn_bans_json "$rng" "$alw" "$clfa" "$cweb" "$cok" > "$bjf" 2>/dev/null; fi; rm -f "$svm" "$bsm"
+    if [ -n "$IMP_STATES" ]; then : > "$lst"
+    else find -L "$dir" -type f -mmin -1440 ! -name '*bytes_log*' ! -name '*.offset*' ! -name '*.gz' 2>/dev/null > "$lst"; fi
     since=$(date -d '24 hours ago' +%Y%m%d%H%M%S)
     # dosyalar tek awk'a verilir (xargs çok dosyada gruplara bölüp yalnız son grubun sonucunu bırakıyordu)
-    awk -v rf="$rng" -v lf="$lst" -v since="$since" -v af="$alw" -v cf="$clf" -v cdf="$CDN_FILE" -v cweb="$cweb" -v cact="$cwl" -v ban="$ban" -v bkey="$bkey" -v bkey2="$([ -n "$bkey" ] && date -d "@$(( bsince + 120 ))" +%Y%m%d%H%M%S)" -v bsince="$bsince" -v bweb="$bweb" -v tbf="$CSF_VAR/csf.tempban" -v dnf="$DENY_FILE" -v wf="$SAYAC_FILE" -v wcut="$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')" -v imf="$IMUNIFY_FILE" -v xf="$xcf" -v now="$(date +%s)" '
+    awk -v sts="$IMP_STATES" -v rf="$rng" -v lf="$lst" -v since="$since" -v af="$alw" -v cf="$clf" -v cdf="$CDN_FILE" -v cweb="$cweb" -v cact="$cwl" -v ban="$ban" -v bkey="$bkey" -v bkey2="$([ -n "$bkey" ] && date -d "@$(( bsince + 120 ))" +%Y%m%d%H%M%S)" -v bsince="$bsince" -v bweb="$bweb" -v tbf="$CSF_VAR/csf.tempban" -v dnf="$DENY_FILE" -v wf="$SAYAC_FILE" -v wcut="$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')" -v imf="$IMUNIFY_FILE" -v xf="$xcf" -v now="$(date +%s)" '
         BEGIN { while ((getline l < rf) > 0) { split(l, x, " "); m++; LO[m] = x[1] + 0; HI[m] = x[2] + 0 }
                 while ((getline l < cf) > 0) { split(l, x, " "); cn++; CL[cn] = x[1] + 0; h = x[2] + 0   # 4. alan: kapattığı web portları (8 = 80, 4 = 443)
                     if (cn == 1 || h > CP[cn - 1]) { CP[cn] = h; CN[cn] = x[3]; CF[cn] = x[4] } else { CP[cn] = CP[cn - 1]; CN[cn] = CN[cn - 1]; CF[cn] = CF[cn - 1] } }
@@ -5184,7 +5215,9 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad) → son 24 saatin web günlüklerind
             o = ""; for (n = 0; n < 6; n++) { b = 0; k = ""; for (i in XP) if (XP[i] > b) { b = XP[i]; k = i }; if (k == "") break
                 o = o (o == "" ? "" : ",") "[" js(substr(k, 1, 80)) "," XP[k] "]"; delete XP[k] }
             return "{" x ",\"multi\":[" mi + 0 "," mr + 0 "],\"pageonly\":[" pi + 0 "," pr + 0 "],\"api\":[" o "],\"flag\":[" fi + 0 "," fr + 0 "," fo + 0 "]}" }
-        END { nip = 0; for (i in IPS) nip++; naip = 0; for (i in AIP) naip++; ncip = 0; for (i in CIP) ncip++; noip = 0; for (i in OIPS) noip++
+        END { if (sts != "") { ns = split(sts, Q, ","); so = ""; for (i = 1; i <= ns; i++) so = so (so == "" ? "" : ",") js(Q[i]) ":" js(ipst(Q[i]))
+                  printf "{\"ok\":true,\"st\":{%s}}\n", so; exit }
+              nip = 0; for (i in IPS) nip++; naip = 0; for (i in AIP) naip++; ncip = 0; for (i in CIP) ncip++; noip = 0; for (i in OIPS) noip++
               printf "{\"ok\":true,\"total\":%d,\"ips\":%d,\"ok2xx\":%d,\"areq\":%d,\"aips\":%d,\"codes\":%s,\"ocodes\":%s,\"acodes\":%s,\"asvc\":%s,\"posts\":%s,\"bots\":%s,\"sites\":%s,\"fails\":%s,\"afails\":%s,",
                   tot, nip, ok, atot, naip, obj(C), obj(OC), obj(AC), obj(AS), topp(P, 15, PA, PN, PI), top(B, 15, BA, BN), top(S, 10), top(FQ, 12, FX, FN, FI), top(AQ, 8, AX, AWN, AI)
               printf "\"cloud\":{\"web\":%s,\"lists\":%s,\"req\":%d,\"ips\":%d,\"ok\":%d,\"codes\":%s,\"src\":%s,\"last\":\"%s\",\"pt\":%s,\"ex\":%s},",

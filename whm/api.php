@@ -193,6 +193,11 @@ switch ($a) {
         } elseif (!preg_match('/^cl:[a-z0-9-]{1,63}(\+[a-z0-9-]{1,63}){0,30}$/', $key)) {
             ag_json(['ok' => false, 'error' => 'bad_asn']);
         }
+        $st = trim((string) ($_POST['states'] ?? ''));   // ölçümdeki IP'lerin yalnız şu anki durumu (eylemden sonra; günlük okunmaz)
+        if ($a === 'asn_impact' && $st !== '') {
+            if (!preg_match('/^([0-9]{1,3}\.){3}[0-9]{1,3}(,([0-9]{1,3}\.){3}[0-9]{1,3}){0,299}$/', $st)) { ag_json(['ok' => false, 'error' => 'bad_states']); }
+            ag_json(ag_run_json(['--asn-impact', $key, '--states', $st, '--json'], 60));
+        }
         ag_json($a === 'src_ips' ? ag_run_json(['--src-ips', $key, '--json'], 60) : ag_run_json(['--asn-impact', $key, '--json'], 180));
 
     case 'config_test_mail':

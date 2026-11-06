@@ -15,6 +15,15 @@ CASES=(
   "lfd: (pop3d) Failed POP3 login from 1.2.3.4 (IN/India/http.example.in): 5 in the last 3600 secs|sync"
   "lfd: *Port Scan* detected from 1.2.3.4 (CN/China/-). 11 hits in the last 39 seconds|scan"
   "Failed IMAP login from 1.2.3.4 - ignored|sync"
+  # elle yazılmış serbest açıklama (csf -d IP "spam"): servis değil → diğer; önce "spam" sözcüğü "Gelen posta" yapıyordu (2026-11-06)
+  "spam|other"
+  "spam - Fri Nov  6 04:46:00 2026|other"
+  "http flood dns abuse|other"
+  # sunucudaki elle konmuş satırların biçimleri (csf.deny, 2026-11-06): yazılım adı web söyler, "spam" söylemez
+  "SPAM REQUEST - DO NOT DELETE|other"
+  "WordPress user enumeration attack - Sat Apr 25 01:17:55 2026|web"
+  # lfd'nin kendi satırında aynı sözcükler servis söyler
+  "lfd: (eximsyntax) Exim syntax errors from 1.2.3.4 (US/United States/-): 10 in the last 3600 secs|min"
 )
 F=0
 for c in "${CASES[@]}"; do

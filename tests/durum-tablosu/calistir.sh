@@ -445,6 +445,9 @@ mcheck "kip: ek portta /udp — yalnız UDP 443 kapatan liste ve hariç kipinde 
 quiet --config set 'CLOUD_MODES=gcp=svc::443'
 printf '151.80.7.9 - - [%s] "GET /s HTTP/1.1" 200 10 "-" "curl"\n' "$TL" > "$R/domlogs/site.test-ssl_log"
 mcheck "kip: Etkisini ölç 80 ve 443'ü ayrı sayar (443'ü kapatan listede ssl isteği kapalı, 80 isteği açık)" "run --asn-impact cl:gcp --json 2>/dev/null | grep -q '\"cloud\":{\"web\":true,\"lists\":\"gcp[^\"]*\",\"req\":1,.*\"pt\":{\"443\":1}' && run --asn-impact cl:gcp --json 2>/dev/null | grep -q '\"open\":{\"req\":1,.*\"pt\":{\"80\":1}'"
+# eylemden sonra ekran: ölçümdeki IP'lerin durumu günlük okumadan (--states), ölçümün "open.top" durumuyla aynı; ban konunca değişir
+ST0=$(run --asn-impact cl:gcp --json 2>/dev/null | grep -o '\[\"151.80.7.9\",[0-9]*,[0-9]*,\"[^\"]*\",\"[^\"]*\"\]' | head -1 | sed 's/.*,"\([^"]*\)"\]$/\1/')
+mcheck "durum kipi: ölçümle aynı durum; ban konunca yeni durum; hatalı girdi reddedilir" "run --asn-impact cl:gcp --states 151.80.7.9 --json 2>/dev/null | grep -q '^{\"ok\":true,\"st\":{\"151.80.7.9\":\"$ST0\"}}$' && run --action ban1 151.80.7.9 >/dev/null 2>&1 && run --asn-impact cl:gcp --states 151.80.7.9 --json 2>/dev/null | grep -q '\"151.80.7.9\":\"[^\"]*deny' && run --asn-impact cl:gcp --states 'x;y' --json 2>/dev/null | grep -q bad_states"
 
 # Kaynak ayrıntısı (--src-ips): kiralık liste kutusundaki ihlal eden IP sayısı (durumun prov.cloud.pot) ile ayrıntının tablosu aynı
 # kaynaklardan (olay kaydı, csf.deny tekilleri, geçici liste) ve aynı sayıda; her IP'nin şu anki durumu (kalıcı, geçici, aralık banı)

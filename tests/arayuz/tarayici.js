@@ -340,6 +340,18 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     await page.waitForFunction(() => { const d = document.querySelector('.ag-drawer'); return d && d.innerText.length > 40 && !d.querySelector('.ag-spin'); }, null, { timeout: 20000 }).catch(() => {});
     const var1 = !!(await page.$('.ag-drawer [data-dr="ban1"]'));
     check('tek IP banı: banlı olmayan IP\'nin kartında "IP\'yi banla" var', var1);
+    // IP kartının düzeni: Bu IP · Üst seviyeler (tablo: blok, ağ… her seviyenin aralığı tıklanır, ban düğmesi kendi satırında) · Kim;
+    // eski "Bloğun durumu" paragrafı ve kapsayan banların karışık listesi yok
+    const kd = await page.evaluate(() => { const d = document.querySelector('.ag-drawer'); if (!d) return null;
+      const sec = Array.from(d.querySelectorAll('.ag-dr-sec')).map(x => x.textContent.trim());
+      const rows = Array.from(d.querySelectorAll('.ag-lv-t tbody tr')).map(tr => ({ l: tr.cells[0].textContent.trim(), c: !!tr.cells[1].querySelector('[data-ip]'), b: Array.from(tr.querySelectorAll('[data-dr]')).map(b => b.getAttribute('data-dr')).join(',') }));
+      return { sec, rows, eski: /Bloğun durumu|Bu IP'yi kapsayan banlar/.test(d.innerText), th: d.querySelectorAll('.ag-lv-t thead th').length }; });
+    const r24 = kd && kd.rows.filter(r => r.l === 'Blok')[0], r16 = kd && kd.rows.filter(r => r.l === 'Ağ')[0];
+    check('IP kartı düzeni: Bu IP · Üst seviyeler · Kim; tabloda Blok ve Ağ satırı, aralık tıklanır, Bloğu / Ağı banla kendi satırında; eski bölümler yok',
+      !!kd && kd.sec[0] === 'Bu IP' && kd.sec.indexOf('Üst seviyeler') > 0 && kd.sec.indexOf('Kim') > kd.sec.indexOf('Üst seviyeler') && kd.th === 3 &&
+      !!r24 && r24.c && r24.b === 'ban24' && !!r16 && r16.c && r16.b === 'ban16' && !kd.eski, JSON.stringify(kd));
+    for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(250); await layoutChecks(page, 'ip-karti', w); }
+    await page.setViewportSize({ width: 1280, height: 900 });
     if (var1) {
       await page.click('.ag-drawer [data-dr="ban1"]'); await page.waitForSelector('.ag-modal #ag-ttl', { timeout: 8000 }).catch(() => {});
       const ib = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); if (!m) return null;
@@ -491,6 +503,8 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
       if (rows) for (let i = 0; i < rows.length; i++) { if (i) await page.click('#ag-addrow'); await page.fill(`.ag-modal [data-row="${i}"] [data-f="t"]`, rows[i][0]); await page.fill(`.ag-modal [data-row="${i}"] [data-f="u"]`, rows[i][1]);
         if (rows[i][2]) await page.fill(`.ag-modal [data-row="${i}"] [data-f="f"]`, rows[i][2]); }
       else await page.fill('.ag-modal [data-row="0"] [data-f="u"]', u);
+      // düğme alanlar dolunca açılır: açılmasını bekle (bir koşuda kapalıyken basılıp 30 sn'de zaman aşımına düştü)
+      await page.waitForSelector('.ag-modal [data-m="ok"]:not([disabled])', { timeout: 10000 }).catch(() => {});
       await page.click('.ag-modal [data-m="ok"]'); await page.waitForTimeout(400); };
     // yeni kutu
     await tik(page, `${G} .ag-tile-add`); await addForm('deneme', 'https://ornek.com/liste.txt');

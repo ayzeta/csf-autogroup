@@ -280,6 +280,7 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-drawer-b { padding: 6px 22px 22px; overflow-y: auto; flex: 1; }
 .ag-drawer-f { padding: 14px 22px; border-top: 1px solid var(--ag-line-soft); display: flex; gap: 8px; flex-wrap: wrap; }
 .ag-fact { padding: 12px 0; border-top: 1px solid var(--ag-line-soft); }
+.ag-fact.ag-fact-top { border-top: 0; padding-top: 6px; }   /* bölüm başlığının hemen altındaki sonuç kutusu (ikinci çizgi yok) */
 .ag-fact:first-child { border-top: 0; }
 .ag-fact-l { font-size: 11.5px; font-weight: 650; color: var(--ag-text-3); text-transform: uppercase; letter-spacing: .04em; }
 .ag-fact-v { margin-top: 4px; font-size: 13.5px; word-break: break-word; }
@@ -1008,6 +1009,14 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
 .ag-under { margin-left: 6px; font-size: 11px; }
 .ag-td-stack .ag-under { margin-left: 0; align-self: flex-start; }
 .ag-dr-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+/* IP kartı: üst seviyeler tablosu (blok, ağ, duyurulan aralık, ülke, sağlayıcı, kiralık liste) */
+.ag-lv-t td:first-child { white-space: nowrap; width: 1%; }
+.ag-lv-t .ag-lv-c { white-space: nowrap; }
+.ag-lv-st.ban { color: var(--ag-d-ban-t); font-weight: 600; }
+.ag-lv-st.part { color: var(--ag-d-part-t); font-weight: 600; }
+.ag-lv-st.watch { color: var(--ag-d-temp-t); font-weight: 600; }
+.ag-lv-x { margin-top: 2px; font-size: 12px; }
+.ag-lv-act { margin-top: 6px; }
 @media (max-width: 560px) { .ag-in-l { flex-basis: 108px; } }
 
 /* Elle ban: "Ne kapatılsın" (her şey / seçilen servisler / her şey, şunlar hariç) */

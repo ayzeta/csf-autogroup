@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.15.53 — 2026-11-06
+
+- **IP card, new layout:** *This IP* (result, its own ban, Ban IP / Remove
+  ban, To check, whitelist, mute, ban history, attempts) · *Wider levels* — a
+  table with one row per level the IP is in: block (/24), announced range,
+  network (/16), country, provider and rented-server list, each with its state
+  (banned how, or how far from the threshold: permanent singles, temp bans at
+  the same time, bans counted in the network) and its own ban button · *Who*.
+  Before, only the block's threshold was shown and the bans covering the IP
+  were one mixed list.
+- **Screens refresh after an action.** After a ban, an unban, a mute or saving
+  provider settings, the current state of every IP in an open Measure impact
+  result and in open source details is read again (the same calculation,
+  without reading the logs again). Before, the result kept showing the old
+  state until the page was reloaded and measured again.
+- **Fix:** a ban added by hand with a free comment such as "spam" was shown
+  as an incoming mail violation. General words (spam, smtp, dns, http…) now
+  count only in lfd's own lines; a hand-written comment is "other", and the
+  source details table shows the comment itself.
+
 ## 1.15.52 — 2026-11-06
 
 - **Ban a single IP from its IP card.** **Ban IP** opens the same picker as
