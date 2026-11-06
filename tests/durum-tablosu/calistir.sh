@@ -410,6 +410,22 @@ TL=$(LC_ALL=C date -d '-1 hour' '+%d/%b/%Y:%H:%M:%S +0000')
 printf '66.249.66.1 - - [%s] "GET /gizli HTTP/1.1" 403 10 "-" "Googlebot/2.1"\n66.249.66.1 - - [%s] "GET /gizli HTTP/1.1" 403 10 "-" "Googlebot/2.1"\n66.249.66.2 - - [%s] "GET / HTTP/1.1" 200 10 "-" "Googlebot/2.1"\n' "$TL" "$TL" "$TL" > "$R/domlogs/site.test"
 mcheck "Etkisini ölç: izinli servisin 403 aldığı istek örnekte (kod · site · istek ×2, servis, örnek IP); başarılı istek listede değil" "run --asn-impact AS15169 --json 2>/dev/null | grep -q '\"afails\":\[\[\"403 · site.test · GET /gizli\",2,0,\"googlebot\",\"66.249.66.1\"\]\]'"
 
+# Tek IP banı (IP kartı, --action ban1): kalıcı, geçici (iki yönlü, süre), seçilen servisler (kalıcı kısmi satır, /udp dahil); aynı IP
+# ikinci kez banlanmaz, geçici ban servisle konmaz, sunucunun kendi IP'si ve beyaz liste (onaysız) reddedilir; kaldırma (unban) üçünde de
+mk ip1; EVF="$R/var/lib/csf_autogroup/events.jsonl"
+quiet --action ban1 151.80.7.50; quiet --action ban1 151.80.7.51 --ttl 3600; quiet --action ban1 151.80.7.52 --mode svc --svc ssh --ports 443/udp
+mcheck "tek IP: kalıcı ban csf.deny'de kendi yorumuyla (do not delete), olay kind=ip" "grep -q '^151.80.7.50 # csf_autogroup: elle tekil ban (root) - do not delete' '$D' && grep -q '\"type\":\"manual_ban\",\"cidr\":\"151.80.7.50\".*\"kind\":\"ip\".*\"mode\":\"all\",\"ttl\":0' '$EVF'"
+mcheck "tek IP: geçici ban iki yönlü ve süreli (csf -td … -d inout)" "grep -q '|151.80.7.51||inout|3600|csf_autogroup: elle geçici tekil ban (root)' '$T'"
+mcheck "tek IP: seçilen servisler kalıcı kısmi satır (SSH TCP, UDP 443), tam ban satırı yok" "grep -q '^tcp|in|d=22|s=151.80.7.52 # csf_autogroup: elle /32 kısmi ban' '$D' && grep -q '^udp|in|d=443|s=151.80.7.52 ' '$D' && ! grep -q '^151.80.7.52 ' '$D'"
+quiet --action ban1 151.80.7.50; quiet --action ban1 151.80.7.53 --mode svc --svc web --ttl 600; quiet --action ban1 203.0.113.10
+mcheck "tek IP: banlı IP ikinci kez banlanmaz, geçici ban servisle konmaz, sunucunun kendi IP'si banlanmaz" "[ \"\$(grep -c '^151.80.7.50 ' '$D')\" = 1 ] && ! grep -q '151.80.7.53' '$D' '$T' && ! grep -q '203.0.113.10' '$D' '$T'"
+printf '151.80.7.54 # müşteri\n' >> "$A"
+mcheck "tek IP: beyaz listedeki IP onaysız banlanmaz (kod 4)" "run --action ban1 151.80.7.54 --json 2>/dev/null | grep -q '\"code\":4' && ! grep -q '^151.80.7.54 ' '$D'"
+LP=$(run --lookup 151.80.7.52 --json 2>/dev/null)
+mcheck "tek IP: IP kartı kısmi tek IP banını kendi satırı olarak gösterir (Banı kaldır düğmesi için)" "printf '%s' '$LP' | grep -q '\"kind\":\"port\"[^}]*\"cidr\":\"151.80.7.52\"'"
+quiet --action unban 151.80.7.50; quiet --action unban 151.80.7.51; quiet --action unban 151.80.7.52
+mcheck "tek IP: Banı kaldır kalıcı, geçici ve kısmi tek IP banlarını kaldırır" "! grep -q '151.80.7.5[012]' '$D' && ! grep -q '|151.80.7.51|' '$T'"
+
 # Kiralık liste başına kip (CLOUD_MODES): her ekran listenin kendi kuralını söyler. gcp "her şeyi kapat, web hariç", oracle kipsiz
 # (eski ortak port listesi: web), vultr "her şey". IP kartı, aralık penceresi, Etkisini ölç (web istekleri yalnız web'i kapatan listede
 # "zaten kapalı") ve ayar doğrulaması
@@ -425,6 +441,10 @@ mcheck "kip: Etkisini ölç — web'i kapatan listeler oracle ve vultr; web'i a�
 mcheck "kip: ayar doğrulaması (svc'de servis ya da port gerekir, bilinmeyen kip ve giden servis reddedilir)" "! run --config set 'CLOUD_MODES=gcp=svc::' >/dev/null 2>&1 && ! run --config set 'CLOUD_MODES=gcp=hepsi::' >/dev/null 2>&1 && ! run --config set 'CLOUD_MODES=gcp=svc:mout:' >/dev/null 2>&1 && run --config set 'CLOUD_MODES=gcp=svc:web,ssh:8080,30000-35000' >/dev/null 2>&1 && grep -q '^CLOUD_MODES=\"\{0,1\}gcp=svc:web,ssh:8080,30000-35000\"\{0,1\}$' '$R/app/config.env'"
 quiet --config set 'CLOUD_MODES=gcp=svc::443/udp oracle=exc:ssh:443/udp'
 mcheck "kip: ek portta /udp — yalnız UDP 443 kapatan liste ve hariç kipinde UDP 443 açık kalan liste" "run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"what\":\"gcp\",\"mode\":\"svc\",\"tcp\":\"\",\"udp\":\"443\"' && run --lookup 152.70.1.1 --json 2>/dev/null | grep -q '\"what\":\"oracle\",\"mode\":\"exc\",\"tcp\":\"22\",\"udp\":\"443\"'"
+# Etkisini ölç port port: yalnız 443'ü kapatan listede (AWS'deki gibi) -ssl_log'daki istek "zaten kapalı", 80'deki "açık"
+quiet --config set 'CLOUD_MODES=gcp=svc::443'
+printf '151.80.7.9 - - [%s] "GET /s HTTP/1.1" 200 10 "-" "curl"\n' "$TL" > "$R/domlogs/site.test-ssl_log"
+mcheck "kip: Etkisini ölç 80 ve 443'ü ayrı sayar (443'ü kapatan listede ssl isteği kapalı, 80 isteği açık)" "run --asn-impact cl:gcp --json 2>/dev/null | grep -q '\"cloud\":{\"web\":true,\"lists\":\"gcp[^\"]*\",\"req\":1,.*\"pt\":{\"443\":1}' && run --asn-impact cl:gcp --json 2>/dev/null | grep -q '\"open\":{\"req\":1,.*\"pt\":{\"80\":1}'"
 
 # Kaynak ayrıntısı (--src-ips): kiralık liste kutusundaki ihlal eden IP sayısı (durumun prov.cloud.pot) ile ayrıntının tablosu aynı
 # kaynaklardan (olay kaydı, csf.deny tekilleri, geçici liste) ve aynı sayıda; her IP'nin şu anki durumu (kalıcı, geçici, aralık banı)

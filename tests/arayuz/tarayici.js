@@ -286,7 +286,8 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
   const terms = await page.$('[data-act="terms"]');
   if (terms) { await terms.click(); await page.waitForTimeout(600); check('Terimler penceresi açılıyor', await page.$('.ag-terms') !== null); const no = await page.$('[data-m="no"], [data-m="ok"]'); if (no) await no.click(); await page.waitForTimeout(400); }
   // Kontrol edilecekler satırları: IP kartı ve menü
-  const rows = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-item[data-row] .ag-tr-r')).map(r => ({
+  let ipBanSinandi = false;
+  const rows =await page.evaluate(() => Array.from(document.querySelectorAll('.ag-item[data-row] .ag-tr-r')).map(r => ({
     cidr: r.closest('.ag-item').getAttribute('data-row'), ip: (r.querySelector('.ag-cidr') || {}).getAttribute ? r.querySelector('.ag-cidr').getAttribute('data-ip') : '' })));
   console.log(`  Kontrol edilecekler: ${rows.length} satır`);
   for (const r of rows) {
@@ -308,6 +309,20 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
       check(`IP kartındaki Sustur / kaldır tıklanınca pencere açılır: ${r.cidr}`, await page.$('.ag-modal') !== null);
       await page.keyboard.press('Escape'); await page.waitForTimeout(400);   // onaylamadan kapat
     }
+    // tek IP banı: kartta "IP'yi banla" (ya da kendi banı varsa "Banı kaldır"); pencere aralık banının bileşeniyle, yalnız "Her şey" ve
+    // "Seçilen servisler" kipleri, süre seçimi yalnız "Her şey"de; onaylamadan kapatılır (bir satırda yeter)
+    if (!ipBanSinandi && await page.$('.ag-drawer [data-dr="ban1"]')) {
+      ipBanSinandi = true;
+      await page.click('.ag-drawer [data-dr="ban1"]'); await page.waitForSelector('.ag-modal #ag-ttl', { timeout: 8000 }).catch(() => {});
+      const ib = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); if (!m) return null;
+        const modes = Array.from(m.querySelectorAll('[data-mode]')).map(b => b.getAttribute('data-mode')).join(',');
+        const ttlAll = m.querySelector('#ag-ttl').style.display !== 'none'; m.querySelector('[data-mode="svc"]').click();
+        return { modes, ttlAll, ttlSvc: m.querySelector('#ag-ttl').style.display !== 'none', sure: m.querySelectorAll('[data-ttl]').length, cikis: !!m.querySelector('[data-svc="mout"]') }; });
+      check('tek IP banı: pencere kipleri "Her şey" ve "Seçilen servisler", süre yalnız "Her şey"de, giden servis yok', !!ib && ib.modes === 'all,svc' && ib.ttlAll && !ib.ttlSvc && ib.sure === 5 && !ib.cikis, JSON.stringify(ib));
+      for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(250); await layoutChecks(page, 'ip-banla', w); }
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.keyboard.press('Escape'); await page.waitForTimeout(400);
+    }
     await page.keyboard.press('Escape');   // üst katmanı (IP kartı) kapatır
     await page.waitForFunction(() => !document.querySelector('.ag-drawer'), null, { timeout: 5000 }).catch(function () {});
     await page.waitForTimeout(300);
@@ -318,6 +333,25 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
       check(`menüde Sustur var: ${r.cidr}`, acts.includes('ignore'), acts.join(','));
       await page.keyboard.press('Escape'); await page.waitForTimeout(300);
     }
+  }
+  // Kontrol edilecekler satırları çoğunlukla aralık (aralık kartı açılır); tek IP banı IP sorgula'dan banlı olmayan bir IP'de sınanır
+  if (!ipBanSinandi && await page.$('#ag-lk-ip')) {
+    await page.fill('#ag-lk-ip', '198.51.100.77'); await page.press('#ag-lk-ip', 'Enter');
+    await page.waitForFunction(() => { const d = document.querySelector('.ag-drawer'); return d && d.innerText.length > 40 && !d.querySelector('.ag-spin'); }, null, { timeout: 20000 }).catch(() => {});
+    const var1 = !!(await page.$('.ag-drawer [data-dr="ban1"]'));
+    check('tek IP banı: banlı olmayan IP\'nin kartında "IP\'yi banla" var', var1);
+    if (var1) {
+      await page.click('.ag-drawer [data-dr="ban1"]'); await page.waitForSelector('.ag-modal #ag-ttl', { timeout: 8000 }).catch(() => {});
+      const ib = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); if (!m) return null;
+        const modes = Array.from(m.querySelectorAll('[data-mode]')).map(b => b.getAttribute('data-mode')).join(',');
+        const ttlAll = m.querySelector('#ag-ttl').style.display !== 'none'; m.querySelector('[data-mode="svc"]').click();
+        return { modes, ttlAll, ttlSvc: m.querySelector('#ag-ttl').style.display !== 'none', sure: m.querySelectorAll('[data-ttl]').length, cikis: !!m.querySelector('[data-svc="mout"]') }; });
+      check('tek IP banı: pencere kipleri "Her şey" ve "Seçilen servisler", süre yalnız "Her şey"de, giden servis yok', !!ib && ib.modes === 'all,svc' && ib.ttlAll && !ib.ttlSvc && ib.sure === 5 && !ib.cikis, JSON.stringify(ib));
+      for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(250); await layoutChecks(page, 'ip-banla', w); }
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.keyboard.press('Escape'); await page.waitForTimeout(400);
+    }
+    await page.keyboard.press('Escape'); await page.waitForTimeout(400);
   }
   // Yoksay akışı: ilk satır yoksayılır, Yoksayılanlar'da görünür, geri alınır
   if (rows.length) {
@@ -439,6 +473,11 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     check('liste kipi: pencere ortak bileşenle (servis çipleri, özet), giden servis yok, seçimsiz "hariç" uygulanamaz', !!cm0 && cm0.web && !cm0.out && /listeden/.test(cm0.md) && cm0.ok === true, JSON.stringify(cm0));
     for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(300); await layoutChecks(page, 'liste-kipi', w); }
     await page.setViewportSize({ width: 1280, height: 900 });
+    // ek portta /udp: özet "UDP 443" yazar (panelin geri kalanıyla aynı; bir kez "port 443, 443/udp" yazıyordu)
+    await page.fill('.ag-modal #ag-xports', '8443, 443/udp').catch(() => {}); await page.waitForTimeout(200);
+    const cmU = await page.evaluate(() => (document.querySelector('.ag-modal #ag-sum') || {}).innerText || '');
+    check('liste kipi: ek portta /udp özetde "port 8443, UDP 443" diye yazılır', /port 8443, UDP 443/.test(cmU) && !/443\/udp/.test(cmU), cmU);
+    await page.fill('.ag-modal #ag-xports', '').catch(() => {}); await page.waitForTimeout(150);
     await page.click('.ag-modal [data-svc="web"]').catch(() => {}); await page.waitForTimeout(150);
     await page.click('.ag-modal [data-m="ok"]').catch(() => {}); await page.waitForTimeout(400);
     const cm1 = await page.evaluate(() => { const t = Array.from(document.querySelectorAll('#ag-cloud-card .ag-tile')).find(x => x.querySelector('[data-act="clmode"][data-v="cl:gcp"]'));

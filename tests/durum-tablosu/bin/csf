@@ -18,8 +18,10 @@ case "$cmd" in
   -td) ip="$1"; to="$2"
       if grep -qE "^${ip//./\.}\b" "$DENY"; then echo "csf: $ip is already permanently blocked"; exit 0; fi
       if grep -qF "|$ip||" "$TB"; then echo "csf: $ip is already temporarily blocked"; exit 0; fi
-      shift 2; note="$*"; [ -z "$note" ] && note="Manually added: $ip"
-      echo "$(date +%s)|$ip||in|$to|$note" >> "$TB"; echo "csf: $ip blocked on port * for $to seconds inbound" ;;
+      shift 2; port=""; dir="in"                       # csf -td IP SÜRE [-p port] [-d in|out|inout] [yorum]
+      while [ $# -gt 0 ]; do case "$1" in -p) port="$2"; shift 2 ;; -d) dir="$2"; shift 2 ;; *) break ;; esac; done
+      note="$*"; [ -z "$note" ] && note="Manually added: $ip"
+      echo "$(date +%s)|$ip|$port|$dir|$to|$note" >> "$TB"; echo "csf: $ip blocked on port ${port:-*} for $to seconds $dir" ;;
   -tr) ip="$1"; grep -vF "|$ip|" "$TB" > "$TB.new"; mv "$TB.new" "$TB"; echo "DENY $ip removed" ;;
   -t) [ -s "$TB" ] || { echo "csf: There are no temporary IP entries"; exit 0; }
       echo; echo "A/D   IP address                               Port   Dir   Time To Live     Comment"

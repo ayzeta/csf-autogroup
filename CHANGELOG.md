@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.15.52 — 2026-11-06
+
+- **Ban a single IP from its IP card.** **Ban IP** opens the same picker as
+  a range ban, with *Everything* (permanent, or temporary for 1 hour, 6 hours,
+  1 day or 7 days, both directions) and *Selected services* (permanent partial
+  line, UDP ports included). The same checks as a range ban apply: not this
+  server's own IP, not an IP that is already banned or covered by a permanent
+  range ban, and a whitelisted IP only after confirming. The service chips
+  show the services in the IP's ban history. An IP with its own ban (single,
+  temporary or partial, whoever set it) gets **Remove ban** instead.
+- Measure impact shows per bucket how many requests came on TCP 80 and 443,
+  so it is visible what a rule stops and what still gets through.
+
+- The summary in **What to block** wrote UDP extra ports as "port 443,
+  443/udp"; it now says "port 443, UDP 443" like the rest of the panel.
+- **Measure impact counts ports 80 and 443 apart** (`-ssl_log` files are
+  443). A rented-server list that closes only 443 had all its requests shown
+  as "open now"; requests on a port the list closes now count as already
+  blocked.
+- The save confirmation showed the rented-server rule as its raw setting
+  (`CLOUD_MODES`, `aws=svc::443,443/udp`); it now has a name and reads
+  "AWS: Blocked: port 443, UDP 443".
+
 ## 1.15.51 — 2026-11-06
 
 - **UDP in "Other ports".** Everywhere ports are picked (manual range ban,

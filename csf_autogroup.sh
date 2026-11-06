@@ -57,7 +57,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.51"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.52"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -184,7 +184,7 @@ TODAY=$(date '+%Y-%m-%d')
 NL=$'\n'
 
 # ── Command line ────────────────────────────────────────────────────────────
-MODE=run; JSON=0; FORCE=0; DRY=0; ACT=""; ARGS=(); SETS=(); SEND=0; CLEAN=1; RESTORE=0; BMODE=all; BSVC=""; BPORTS=""; REPLACE=0
+MODE=run; JSON=0; FORCE=0; DRY=0; ACT=""; ARGS=(); SETS=(); SEND=0; CLEAN=1; RESTORE=0; BMODE=all; BSVC=""; BPORTS=""; REPLACE=0; BTTL=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --dry-run) MODE=run; DRY=1 ;;
@@ -201,6 +201,7 @@ while [ $# -gt 0 ]; do
         --svc)     BSVC="${2:-}"; shift ;;
         --ports)   BPORTS="${2:-}"; shift ;;
         --replace) REPLACE=1 ;;          # eklentinin kendi banının kipini değiştir
+        --ttl)     BTTL="${2:-0}"; shift ;;  # tek IP banı: geçici ban süresi (saniye; 0 = kalıcı)
         --action)  MODE=action; ACT="${2:-}"; shift ;;
         --config)  MODE=config ;;
         --set)     SETS+=("${2:-}"); shift ;;
@@ -364,6 +365,13 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_A_BANNED="%s kalıcı banlandı (do not delete)"
   M_A_BANFAIL="%s eklenemedi: %s"
   M_A_COMMENT="csf_autogroup: elle /%s ban (%s) - do not delete"
+  M_A1_COMMENT="csf_autogroup: elle tekil ban (%s) - do not delete"
+  M_A1_TCOMMENT="csf_autogroup: elle geçici tekil ban (%s)"
+  M_A1_BANNED="%s kalıcı banlandı"
+  M_A1_TBANNED="%s geçici banlandı (%s)"
+  M_A1_EXISTS="%s zaten banlı (önce mevcut banı kaldırın)"
+  M_A1_TSVC="geçici ban yalnız \"Her şey\" ile konabilir"
+  M_DUR_D="%s gün"; M_DUR_H="%s saat"; M_DUR_S="%s sn"
   M_A_CLEANED="%s · %s kayıt kaldırıldı"
   M_IN_COVER="Zaten kapsanıyor: %s"
   M_IN_SUM="İçinde: %s blok banı, %s tekil (%s do not delete), %s geçici ban, %s izlenen blok, %s başka aralık"
@@ -622,6 +630,13 @@ else
   M_A_BANNED="%s permanently banned (do not delete)"
   M_A_BANFAIL="%s could not be added: %s"
   M_A_COMMENT="csf_autogroup: manual /%s ban (%s) - do not delete"
+  M_A1_COMMENT="csf_autogroup: manual single ban (%s) - do not delete"
+  M_A1_TCOMMENT="csf_autogroup: manual temporary single ban (%s)"
+  M_A1_BANNED="%s permanently banned"
+  M_A1_TBANNED="%s temporarily banned (%s)"
+  M_A1_EXISTS="%s is already banned (remove the current ban first)"
+  M_A1_TSVC="a temporary ban can only block \"Everything\""
+  M_DUR_D="%s days"; M_DUR_H="%s h"; M_DUR_S="%s s"
   M_A_CLEANED="%s · %s entries removed"
   M_IN_COVER="Already covered: %s"
   M_IN_SUM="Inside: %s block bans, %s singles (%s do not delete), %s temp bans, %s watched blocks, %s other ranges"
@@ -3845,6 +3860,12 @@ do_lookup() {
 # Çıkış kodu: 0 tamam · 1 başarısız · 2 geçersiz girdi · 3 meşgul · 4 ek onay gerekiyor (beyaz liste)
 declare -A CSF_TN=() CSF_TMS=()   # csf çağrı sayısı ve süresi (ms), komut başına
 ms_s() { printf '%d,%d' $(( $1 / 1000 )) $(( $1 % 1000 / 100 )); }   # 14230 → "14,2"
+dur_text() {     # SANİYE → "1 gün" / "6 saat" / "90 sn" (iletilerde)
+    local s="$1"
+    if [ $(( s % 86400 )) -eq 0 ]; then m "$M_DUR_D" $(( s / 86400 ))
+    elif [ $(( s % 3600 )) -eq 0 ]; then m "$M_DUR_H" $(( s / 3600 ))
+    else m "$M_DUR_S" "$s"; fi
+}
 act_out() {      # CODE MESAJ
     local ok=false k tl=""; [ "$1" = 0 ] && ok=true
     # elle işlem uzun sürerse nerede geçtiği görülsün: "Süre: 14,2 sn · csf -r 1× 9,1 sn · csf -tr 5× 4,0 sn"
@@ -4974,12 +4995,16 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad) → son 24 saatin web günlüklerind
     # (liste başına: kuralı 80 ve 443'ü kapatan listeler). Banların kapsaması için bütün etkin listeler ayrı dosyada (clfa)
     local clf clfa cweb=0 cwl="" x; clf=$(mktemp) && clfa=$(mktemp) || { rm -f "$rng" "$lst" "$alw" "$clf"; return 1; }
     if [ "$CLOUD_ON" = 1 ]; then
-        for x in $CLOUD_ACTIVE; do cl_port_closed "$x" tcp 80 && cl_port_closed "$x" tcp 443 && cwl+="${cwl:+ }$x"; done
+        local cwf=" " cf8 cf4
+        for x in $CLOUD_ACTIVE; do
+            cf8=""; cf4=""; cl_port_closed "$x" tcp 80 && cf8=8; cl_port_closed "$x" tcp 443 && cf4=4
+            [ -n "$cf8$cf4" ] && { cwl+="${cwl:+ }$x"; cwf+="$x:$cf8$cf4 "; }
+        done
         [ -n "$cwl" ] && cweb=1
         for x in $CLOUD_ACTIVE; do
             [ -r "$CLOUD_DIR/$x.txt" ] && awk -F'[./]' -v s="$x" 'NF >= 4 { b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%.0f %.0f %s\n", lo, lo + 2 ^ (32 - b) - 1, s }' "$CLOUD_DIR/$x.txt"
         done | sort -n -k1,1 > "$clfa"
-        awk -v w=" $cwl " 'index(w, " " $3 " ")' "$clfa" > "$clf"
+        awk -v w="$cwf" '{ i = index(w, " " $3 ":"); if (!i) next; f = substr(w, i + length($3) + 2); sub(/ .*/, "", f); print $1, $2, $3, f }' "$clfa" > "$clf"
     fi
     # adresi kapsayan öteki banlar (IP kartının "Bu IP'yi kapsayan banlar" listesiyle aynı türler): ülke banı (CSF'in bölge
     # dosyası, CC_DENY ya da CC_DENY_PORTS) ve etkin kiralık listeler (web portlarını kapatmasalar da); csf.deny port satırları awk içinde
@@ -5022,8 +5047,8 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad) → son 24 saatin web günlüklerind
     # dosyalar tek awk'a verilir (xargs çok dosyada gruplara bölüp yalnız son grubun sonucunu bırakıyordu)
     awk -v rf="$rng" -v lf="$lst" -v since="$since" -v af="$alw" -v cf="$clf" -v cdf="$CDN_FILE" -v cweb="$cweb" -v cact="$cwl" -v ban="$ban" -v bkey="$bkey" -v bkey2="$([ -n "$bkey" ] && date -d "@$(( bsince + 120 ))" +%Y%m%d%H%M%S)" -v bsince="$bsince" -v bweb="$bweb" -v tbf="$CSF_VAR/csf.tempban" -v dnf="$DENY_FILE" -v wf="$SAYAC_FILE" -v wcut="$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')" -v imf="$IMUNIFY_FILE" -v xf="$xcf" -v now="$(date +%s)" '
         BEGIN { while ((getline l < rf) > 0) { split(l, x, " "); m++; LO[m] = x[1] + 0; HI[m] = x[2] + 0 }
-                while ((getline l < cf) > 0) { split(l, x, " "); cn++; CL[cn] = x[1] + 0; h = x[2] + 0
-                    if (cn == 1 || h > CP[cn - 1]) { CP[cn] = h; CN[cn] = x[3] } else { CP[cn] = CP[cn - 1]; CN[cn] = CN[cn - 1] } }
+                while ((getline l < cf) > 0) { split(l, x, " "); cn++; CL[cn] = x[1] + 0; h = x[2] + 0   # 4. alan: kapattığı web portları (8 = 80, 4 = 443)
+                    if (cn == 1 || h > CP[cn - 1]) { CP[cn] = h; CN[cn] = x[3]; CF[cn] = x[4] } else { CP[cn] = CP[cn - 1]; CN[cn] = CN[cn - 1]; CF[cn] = CF[cn - 1] } }
                 # şu anki banlar: geçici (kalan saniye), csf.deny içindeki tek IP ve /24 blok satırları, Imunify360 kara listesi
                 # aralık banları da (kalıcı ve geçici; /24, /16, …): adresi kapsayan ban şu anki durumda söylenir. İzlenen bloklar sayaçtan
                 # (geçici blok banından sonra izleme süresi içinde): kartı açmadan görülsün
@@ -5068,7 +5093,7 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad) → son 24 saatin web günlüklerind
             if (!cn || split(ip, p, ".") != 4) return ""
             v = ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4]; a = 1; b = cn; k = 0
             while (a <= b) { c = int((a + b) / 2); if (CL[c] <= v) { k = c; a = c + 1 } else b = c - 1 }
-            return (k && CP[k] >= v) ? CN[k] : "" }
+            return (k && CP[k] >= v) ? CN[k] "|" CF[k] : "" }
         function v4(a,  q) { split(a, q, "."); return ((q[1] * 256 + q[2]) * 256 + q[3]) * 256 + q[4] }
         function ipst(ip,  o, p, v, i, rg, tr) {   # "temp:SANİYE,deny,deny24,tempr:SANİYE,imunify,watch" (şu an hangi listelerde)
             o = ""; p = ip; sub(/\.[0-9]+$/, "", p); v = v4(ip)
@@ -5098,14 +5123,16 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad) → son 24 saatin web günlüklerind
           split(req, rq3, " "); rqs = substr(rq3[1], 1, 6) " " substr(rq3[2], 1, 70)
           # dört grup: CDN arkasındaki site (güvenlik duvarı ziyaretçiyi görmez, ban etkilemez) / izinli servis (CSF bandan önce
           # geçirir) / etkin kiralık listede (CSF zaten keser) / açık (ban bunları keser)
-          cl = ""; if (w == "") { if (!(ip in CW)) CW[ip] = cld(ip); cl = CW[ip] }
+          cl = ""; if (w == "") { if (!(ip in CW)) CW[ip] = cld(ip)          # listenin kuralı bu isteğin portunu kapatıyorsa (-ssl_log 443, öteki 80)
+              if (CW[ip] != "") { split(CW[ip], cz, "|"); if (index(cz[2], FILENAME ~ /-ssl_log$/ ? "4" : "8")) cl = cz[1] } }
+          prt = (FILENAME ~ /-ssl_log$/) ? 443 : 80                         # isteğin portu (cPanel: -ssl_log 443, öteki 80)
           if (site in CDN) { dtot++; DIP[ip] = 1; DC[code]++; DS[site]++; if (code ~ /^2/) dok++ }
           else if (w != "") { AC[code]++; AS[w]++
               if (code !~ /^[23]/) { ak = code " · " site " · " rqs; AQ[ak]++; AWN[ak] = w; if (!(ak in AI)) AI[ak] = ip } }   # izinli servisin reddedilen istek örnekleri
-          else if (cl != "") { ctot++; CIP[ip] = 1; CC[code]++; CS[cl]++; if (k > clast) clast = k; if (code ~ /^2/) { cok++; COK[ip]++ }
+          else if (cl != "") { ctot++; CPT[prt]++; CIP[ip] = 1; CC[code]++; CS[cl]++; if (k > clast) clast = k; if (code ~ /^2/) { cok++; COK[ip]++ }
               CR[ip]++; if (!(ip in CSM)) CSM[ip] = cl " · " site " · " rqs
               ck = code " · " site " · " rqs; CQ[ck]++; if (!(ck in CI)) CI[ck] = ip }
-          else { otot++; OIPS[ip] = 1; OC[code]++; OR[ip]++; if (k > olast) olast = k; if (code ~ /^2/) { ook++; OOK[ip]++ }
+          else { otot++; OPT[prt]++; OIPS[ip] = 1; OC[code]++; OR[ip]++; if (k > olast) olast = k; if (code ~ /^2/) { ook++; OOK[ip]++ }
               if (bkey != "" && k >= bkey) { btot++; BIP[ip] = 1; if (code ~ /^2/) bok++; if (k > blast) blast = k   # ban konduktan sonra
                   if (k >= bkey2) blate++                                          # kaydedildikten 2 dakika sonra ve sonrası
                   # en yeni 8 istek, yeniden eskiye (AK zaman, AE satır; dosyalar karışık sırayla okunur). Yalnız ilk 2 dakikadan
@@ -5160,15 +5187,15 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad) → son 24 saatin web günlüklerind
         END { nip = 0; for (i in IPS) nip++; naip = 0; for (i in AIP) naip++; ncip = 0; for (i in CIP) ncip++; noip = 0; for (i in OIPS) noip++
               printf "{\"ok\":true,\"total\":%d,\"ips\":%d,\"ok2xx\":%d,\"areq\":%d,\"aips\":%d,\"codes\":%s,\"ocodes\":%s,\"acodes\":%s,\"asvc\":%s,\"posts\":%s,\"bots\":%s,\"sites\":%s,\"fails\":%s,\"afails\":%s,",
                   tot, nip, ok, atot, naip, obj(C), obj(OC), obj(AC), obj(AS), topp(P, 15, PA, PN, PI), top(B, 15, BA, BN), top(S, 10), top(FQ, 12, FX, FN, FI), top(AQ, 8, AX, AWN, AI)
-              printf "\"cloud\":{\"web\":%s,\"lists\":%s,\"req\":%d,\"ips\":%d,\"ok\":%d,\"codes\":%s,\"src\":%s,\"last\":\"%s\",\"ex\":%s},",
-                  (cweb == 1 ? "true" : "false"), js(cact), ctot, ncip, cok, obj(CC), obj(CS), clast, topip(CR, 10, COK, CSM)
+              printf "\"cloud\":{\"web\":%s,\"lists\":%s,\"req\":%d,\"ips\":%d,\"ok\":%d,\"codes\":%s,\"src\":%s,\"last\":\"%s\",\"pt\":%s,\"ex\":%s},",
+                  (cweb == 1 ? "true" : "false"), js(cact), ctot, ncip, cok, obj(CC), obj(CS), clast, obj(CPT), topip(CR, 10, COK, CSM)
               ndip = 0; for (i in DIP) ndip++; dsv = ""; for (i in DS) dsv = dsv (dsv == "" ? "" : ",") js(i) ":[" DS[i] "," js(CDN[i]) "]"
               printf "\"cdn\":{\"req\":%d,\"ips\":%d,\"ok\":%d,\"codes\":%s,\"sites\":{%s}},", dtot, ndip, dok, obj(DC), dsv
               nbip = 0; for (i in BIP) nbip++; aex = ""; for (i = 1; i <= nae; i++) aex = aex (i > 1 ? "," : "") AE[i]
               printf "\"crawl\":%s,", crawl()
               printf "\"after\":{\"web\":%d,\"since\":%d,\"req\":%d,\"ips\":%d,\"ok\":%d,\"last\":\"%s\",\"late\":%d,\"ex\":[%s]},", bweb, bsince, btot, nbip, bok, blast, blate, aex
-              printf "\"open\":{\"req\":%d,\"ips\":%d,\"ok\":%d,\"codes\":%s,\"last\":\"%s\",\"top\":%s},\"ban\":%s}\n",
-                  otot, noip, ook, obj(OC), olast, topip(OR, 10, OOK, OSM), js(ban) }' /dev/null | grep . | { IFS= read -r L; b=$(cat "$bjf" 2>/dev/null); [ -n "$b" ] && L="${L%\}},\"bans\":$b}"; printf '%s\n' "$L"; } || echo '{"ok":true,"total":0,"ips":0,"ok2xx":0,"codes":{},"posts":[],"bots":[],"sites":[]}'
+              printf "\"open\":{\"req\":%d,\"ips\":%d,\"ok\":%d,\"codes\":%s,\"last\":\"%s\",\"pt\":%s,\"top\":%s},\"ban\":%s}\n",
+                  otot, noip, ook, obj(OC), olast, obj(OPT), topip(OR, 10, OOK, OSM), js(ban) }' /dev/null | grep . | { IFS= read -r L; b=$(cat "$bjf" 2>/dev/null); [ -n "$b" ] && L="${L%\}},\"bans\":$b}"; printf '%s\n' "$L"; } || echo '{"ok":true,"total":0,"ips":0,"ok2xx":0,"codes":{},"posts":[],"bots":[],"sites":[]}'
     rm -f "$rng" "$lst" "$alw" "$clf" "$clfa" "$bjf" "$xcf"
 }
 svc_health() {   # izinli servis kaynaklarından uyarı süresinden uzun süredir indirilemeyenler → bildirim
@@ -5246,6 +5273,46 @@ do_action() {    # NAME TARGET [DAYS]
     take_lock || { act_out 3 "$M_BUSY"; return 3; }
     parse_deny "$DENY_FILE" 1
     case "$name" in
+        ban1)
+            # tek IP: "Her şey" kalıcı (csf -d) ya da geçici (csf -td, iki yönlü; süre --ttl) · "Seçilen servisler" kalıcı kısmi satır
+            # (tcp|in|d=…|s=IP, aralık banıyla aynı yazım). Aralık banının denetimleri: sunucunun kendi IP'si, mevcut ban, kapsayan
+            # kalıcı ban, beyaz liste (yine de banla = --force; CSF izin dosyasındaki IP'yi csf -d yine reddeder, ileti onu söyler)
+            [[ "$t" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] && ip2int "$t" || { act_out 2 "$(m "$M_BAD_TARGET" "$t")"; return; }
+            local lo="$REPLY" hi="$REPLY" pp="" cm
+            [[ "$BTTL" =~ ^[0-9]{1,8}$ ]] || { act_out 2 "$(m "$M_BAD_TARGET" "$BTTL")"; return; }
+            case "$BMODE" in
+                all) ;;
+                svc) [ "$BTTL" -gt 0 ] && { act_out 2 "$M_A1_TSVC"; return; }
+                     split_ports "$BPORTS" || { act_out 2 "$(m "$M_A_BADPORTS" "$BPORTS")"; return; }
+                     part_ports || { act_out 2 "$M_A_NOSVC"; return; }; pp="$REPLY" ;;
+                *)   act_out 2 "$(m "$M_BAD_TARGET" "$BMODE")"; return ;;
+            esac
+            self_overlap "$lo" "$hi" && { act_out 1 "$(m "$M_A_SELF" "$t" "$SELF_HIT")"; return; }
+            if deny_has "$t" || grep -qF "|s=$t # " "$DENY_FILE" 2>/dev/null || { [ -r "$CSF_VAR/csf.tempban" ] && grep -qF "|$t|" "$CSF_VAR/csf.tempban"; }; then
+                act_out 1 "$(m "$M_A1_EXISTS" "$t")"; return
+            fi
+            perm_covers "$lo" "$hi" && { act_out 1 "$(m "$M_A_EXISTS" "$t")"; return; }
+            WL_HIT=""; wl_overlap "$lo" "$hi"
+            if [ -n "$WL_HIT" ] && [ "$FORCE" != 1 ]; then act_out 4 "$(m "$M_A_WL" "$t" "$WL_HIT")"; return; fi
+            if [ "$BMODE" = svc ]; then
+                partial_write "$t" 32 "$pp" || { act_out 1 "$(m "$M_A_BANFAIL" "$t" "csf.deny")"; return; }
+                csf_run -r
+                cm="$(m "$M_A_PBANNED" "$t" "$(part_shown "$pp")")"
+            elif [ "$BTTL" -gt 0 ]; then
+                csf_run -td "$t" "$BTTL" -d inout "$(m "$M_A1_TCOMMENT" "$AG_BY")"
+                grep -qF "|$t|" "$CSF_VAR/csf.tempban" 2>/dev/null || { act_out 1 "$(m "$M_A_BANFAIL" "$t" "${CSF_OUT%%$NL*}")"; return; }
+                cm="$(m "$M_A1_TBANNED" "$t" "$(dur_text "$BTTL")")"
+            else
+                csf_run -d "$t" "$(m "$M_A1_COMMENT" "$AG_BY")"
+                deny_has "$t" || { act_out 1 "$(m "$M_A_BANFAIL" "$t" "${CSF_OUT%%$NL*}")"; return; }
+                cm="$(m "$M_A1_BANNED" "$t")"
+            fi
+            jstr "$WL_HIT"; jw="$REPLY"
+            owners_load; inside_owner "${t%.*}" "$t"; owner_kv
+            log "$(m "$M_A_LOG" "$AG_BY" "$cm")"
+            ev manual_ban "$t" "by=\"$AG_BY\"" "kind=\"ip\"" "wl=$jw" "force=$([ "$FORCE" = 1 ] && echo true || echo false)" "${OKV[@]}" \
+               "mode=\"$BMODE\"" "ttl=$BTTL" $([ "$BMODE" = svc ] && echo "svc=\"$BSVC\" extra=\"$BPORTS\" ports=\"$pp\"")
+            act_out 0 "$cm" ;;
         ban16|ban24|banpfx)
             bits="${name#ban}"
             if [ "$name" = banpfx ]; then       # duyurulan aralık: /17–/23, ağ adresiyle verilmeli (176.88.120.0/21)

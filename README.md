@@ -239,6 +239,13 @@ settings, with no prompts. `config.env` is left untouched.
 Every action asks for confirmation. Risky ones (banning a `/16`, overriding a
 whitelist, removing a `do not delete` block) make you type the target.
 
+A single IP can be banned from its IP card (**Ban IP**): *Everything*, permanent
+or temporary (1 hour to 7 days, both directions, CSF's temp list), or
+*Selected services* (a permanent partial line). It is refused for this
+server's own IP, an IP that is already banned or inside a permanent range ban,
+and a whitelisted IP needs a confirmation. An IP with its own ban, whoever set
+it, gets **Remove ban**.
+
 Manual bans run the same whitelist checks as automatic ones (for a `/16`, the
 blocks inside with single bans are checked too), including Imunify360's own
 whitelist. Manual `/24` and `/16` bans open the same window: it first lists what is inside

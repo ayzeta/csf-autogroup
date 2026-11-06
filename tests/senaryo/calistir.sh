@@ -91,7 +91,7 @@ if [ "${GERCEK:-0}" = 1 ]; then
     # php sunucusu) test sunucusu bağlanamaz; bağlantı ölçütü yine doğru sonuç verir ama baştan bilinsin. Önceki koşulardan kalan
     # test sunucuları da burada kapatılır (desen başa bağlı: bu betiğin kendi satırına uymaz)
     for _p in $(pgrep -f "^python3 -m http.server --bind 0.0.0.0 "); do kill "$_p" 2>/dev/null; done
-    _dolu=$(ss -ltnp 2>/dev/null | awk '{ split($4, a, ":"); p = a[length(a)] } p ~ /^(80|52224|8390|18391|18392)$/ { print p " (" $6 ")" }' | sort -u | paste -sd' ' -)
+    _dolu=$(ss -ltnp 2>/dev/null | awk '{ split($4, a, ":"); p = a[length(a)] } p ~ /^(80|52224|18390|18391|18392)$/ { print p " (" $6 ")" }' | sort -u | paste -sd' ' -)
     [ -n "$_dolu" ] && echo "ön denetim: şu portlar başka süreçte: $_dolu — bağlantı denetimleri cevap kodu değil bağlantı kurulup kurulmadığına bakar" >&2
     mk() {
         R="$W/r$N"; rm -rf "$R"; mkdir -p "$R/app/tools" "$R/var/lib/csf_autogroup/cloud"
@@ -434,12 +434,12 @@ fi
 # CSF banı gelen yöne, iki yönlüyse giden yöne de yazar; kurulmuş bağlantıların kabulü LOCALINPUT'tan sonra gelir. Tek yönlü
 # satırın açtığı bağlantının cevabı öbür yönde düşer: iki yönlü banı yalnız karşı yön satırıyla birlikte aşar.
 if [ "${GERCEK:-0}" = 1 ] && command -v ip >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
-    NC=10.99.0.2; NS=10.99.0.1; PT=8390
+    NC=10.99.0.2; NS=10.99.0.1; PT=18390   # boş port (test makinesinde 8390 başka bir projenin php sunucusunda)
     ip netns del agcli 2>/dev/null; ip link del agv0 2>/dev/null; ip netns add agcli; ip link add agv0 type veth peer name agv1
     ip link set agv1 netns agcli; ip addr add $NS/24 dev agv0; ip link set agv0 up
     ip netns exec agcli ip addr add $NC/24 dev agv1; ip netns exec agcli ip link set agv1 up; ip netns exec agcli ip link set lo up
     (cd /tmp && nohup python3 -m http.server --bind 0.0.0.0 $PT >/dev/null 2>&1 &)
-    tin() { [ "$(ip netns exec agcli curl -s --noproxy '*' -m 4 -o /dev/null -w '%{http_code}' http://$NS:$PT/ 2>/dev/null)" = 200 ] && echo G || echo -; }
+    tin() { local c; c=$(ip netns exec agcli curl -s --noproxy '*' -m 4 -o /dev/null -w '%{http_code}' http://$NS:$PT/ 2>/dev/null); [ -n "$c" ] && [ "$c" != 000 ] && echo G || echo -; }
     wle() { run --lookup $NC --json 2>/dev/null | grep -o '"wle":"[a-z_]*"' | cut -d'"' -f4; }
     ineff() { run --status --json 2>/dev/null | grep -o '"review":\[.*\],"ignored"' | sed 's/,{"t":/\n{"t":/g' | grep -F "\"type\":\"allow_ban\",\"cidr\":\"$NC\"" | grep -q '"full":1' && echo G || echo -; }
     yn() { mk; addconf TCP_IN $PT; run >/dev/null 2>&1; }
@@ -526,6 +526,37 @@ if [ "${GERCEK:-0}" = 1 ] && command -v ip >/dev/null 2>&1 && command -v python3
     cloud_off
     ip netns exec agcli pkill -f "^python3 -m http.server --bind 0.0.0.0 $PC" 2>/dev/null
     pkill -f "^python3 -m http.server --bind 0.0.0.0 $P1" 2>/dev/null; pkill -f "^python3 -m http.server --bind 0.0.0.0 $P2" 2>/dev/null
+    ip netns del agcli 2>/dev/null; ip link del agv0 2>/dev/null
+fi
+
+# ── 3m) Tek IP banı (yalnız gerçek CSF): IP kartındaki "IP'yi banla" — kalıcı (iki yön), geçici (csf -td -d inout, iki yön),
+# seçilen servisler (yalnız o port); her birinde "Banı kaldır" bağlantıyı geri açar ──
+if [ "${GERCEK:-0}" = 1 ] && command -v ip >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+    NC=10.99.0.2; NS=10.99.0.1; P1=18391; P2=18392; PC=873
+    ip netns del agcli 2>/dev/null; ip link del agv0 2>/dev/null; ip netns add agcli; ip link add agv0 type veth peer name agv1
+    ip link set agv1 netns agcli; ip addr add $NS/24 dev agv0; ip link set agv0 up
+    ip netns exec agcli ip addr add $NC/24 dev agv1; ip netns exec agcli ip link set agv1 up; ip netns exec agcli ip link set lo up
+    (cd /tmp && nohup python3 -m http.server --bind 0.0.0.0 $P1 >/dev/null 2>&1 &); (cd /tmp && nohup python3 -m http.server --bind 0.0.0.0 $P2 >/dev/null 2>&1 &)
+    ip netns exec agcli bash -c "cd /tmp && (nohup python3 -m http.server --bind 0.0.0.0 $PC >/dev/null 2>&1 &)"
+    timeout 3 bash -c "until ss -ltn | grep -q ':$P2 ' && ip netns exec agcli ss -ltn | grep -q ':$PC '; do :; done"
+    tp() { local c; c=$(ip netns exec agcli curl -s --noproxy '*' -m 4 -o /dev/null -w '%{http_code}' http://$NS:$1/ 2>/dev/null); [ -n "$c" ] && [ "$c" != 000 ] && echo G || echo -; }
+    tsrv() { local c; c=$(curl -s --noproxy '*' -m 4 -o /dev/null -w '%{http_code}' http://$NC:$PC/ 2>/dev/null); [ -n "$c" ] && [ "$c" != 000 ] && echo G || echo -; }
+    mk; addconf TCP_IN "$P1,$P2"; csf -r >/dev/null 2>&1; NEEDR=0
+    check "tek IP · başta istemci ve sunucu yönü açık" GG "$(tp $P1)$(tsrv)"
+    run --action ban1 $NC >/dev/null 2>&1
+    check "tek IP · kalıcı ban: gelen ve sunucudan giden kesilir" -- "$(tp $P1)$(tsrv)"
+    run --action unban $NC >/dev/null 2>&1
+    check "tek IP · kalıcı banı kaldır: ikisi de açılır, csf.deny'de satır kalmaz" GGG "$(tp $P1)$(tsrv)$(grep -q "^$NC " "$D" && echo - || echo G)"
+    run --action ban1 $NC --ttl 600 >/dev/null 2>&1
+    check "tek IP · geçici ban iki yönlü (geçici listede inout)" G-- "$(grep -q "|$NC||inout|600|" "$T" && echo G || echo -)$(tp $P1)$(tsrv)"
+    run --action unban $NC >/dev/null 2>&1
+    check "tek IP · geçici banı kaldır: açılır" GG "$(tp $P1)$(tsrv)"
+    run --action ban1 $NC --mode svc --ports "$P1" >/dev/null 2>&1
+    check "tek IP · seçilen port: yalnız o port kesilir, öteki port ve sunucu yönü açık" -GG "$(tp $P1)$(tp $P2)$(tsrv)"
+    run --action unban $NC >/dev/null 2>&1
+    check "tek IP · kısmi banı kaldır: açılır" G "$(tp $P1)"
+    ip netns exec agcli pkill -f "^python3 -m http.server --bind 0.0.0.0 $PC" 2>/dev/null
+    for _p in $(pgrep -f "^python3 -m http.server --bind 0.0.0.0 1839"); do kill "$_p" 2>/dev/null; done
     ip netns del agcli 2>/dev/null; ip link del agv0 2>/dev/null
 fi
 
