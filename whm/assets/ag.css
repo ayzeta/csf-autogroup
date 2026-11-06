@@ -598,6 +598,7 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
   .ag-kpi-m { white-space: normal; margin-top: 6px; font-size: 11.5px; line-height: 1.4; }
   .ag-kpi-d { margin-left: 5px; }
   .ag-kpi-dl { display: none; }
+  .ag-kpi-d.eq { display: none; }   /* "değişmedi" sözü gizliyken tek başına kalan "—" anlamsızdı */
 }
 
 /* ── Telefon ───────────────────────────────────────────────────── */
@@ -1123,6 +1124,7 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-tile-subs .ag-chip-xs .ag-muted { font-size: 11px; }
 .ag-tile .ag-tile-m em.bad { color: var(--ag-warn); }
 .ag-tile .ag-tile-m em.pot { color: var(--ag-d-warn-t); margin-top: 1px; }
+.ag-tile .ag-tile-m em.pot.pot0 { color: var(--ag-accent); }   /* ihlal yokken yalnız "Ayrıntı": uyarı rengi değil */
 .ag-tile-acts { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; }
 .ag-tile-rm { width: 26px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--ag-line); background: var(--ag-card); color: var(--ag-text-3); border-radius: 6px; padding: 0; cursor: pointer; }
 .ag-tile-rm svg { width: 13px; height: 13px; }
@@ -1311,7 +1313,7 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 @container agprows (max-width: 460px) {
   .ag-prow { grid-template-columns: minmax(0, 1fr) auto auto; }
   .ag-prow-st, .ag-prow > .ag-chips { grid-column: 1 / -1; justify-self: start; }
-  .ag-prow [data-act="asnimpact"] { grid-column: 2; justify-self: end; }
+  .ag-prow > [data-act="srcinfo"] { grid-column: 2; justify-self: end; }   /* 1.15.47: düğme Etkisini ölç (asnimpact) değil Ayrıntı; eski seçici tutmuyordu, düğme satır boyu uzuyordu */
 }
 /* kart tablolarındaki IP'ler tıklanınca IP kartını açar: bağlantı görünümü (altı çizili), bölünmeden */
 .ag-im-t td[data-ip] { color: var(--ag-accent); cursor: pointer; white-space: nowrap; text-decoration: underline; text-decoration-color: var(--ag-accent-line); text-underline-offset: 3px; }

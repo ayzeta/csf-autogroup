@@ -93,6 +93,23 @@ async function layoutChecks(page, label, width) {
   const ipb = await page.evaluate(() => window.agIpBagsiz(document.getElementById('ag-app')));
   check(`${label} · ${width} px · IP / aralık yazan her öğe tıklanıyor`, ipb.length === 0, ipb.slice(0, 4).join(' | '));
   check(`${label} · ${width} px · tıklanabilir öğeler tıklanabilir görünüyor`, gor.length === 0, gor.slice(0, 4).join(' | '));
+  // kısa yazılı düğme satır boyu gerilmez (sağlayıcı satırındaki "Ayrıntı" eski bir seçici yüzünden telefonda kartın enine uzuyordu)
+  const ger = await page.evaluate(() => Array.from(document.querySelectorAll('#ag-app .ag-btn, .ag-modal .ag-btn')).filter(b => {
+    if (!b.offsetWidth || b.closest('.ag-head-actions, .ag-modal-f, .ag-lookup, .ag-savebar')) return false;
+    const tx = b.textContent.trim(), cs = getComputedStyle(b);
+    const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight), ic = b.querySelector('svg') ? 24 : 0;
+    const need = (() => { const s = document.createElement('span'); s.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font:' + cs.font; s.textContent = tx; document.body.appendChild(s); const w = s.offsetWidth; s.remove(); return w; })();
+    return tx.length > 0 && tx.length <= 24 && b.offsetWidth > (need + pad + ic) * 1.8 + 40;
+  }).map(b => b.textContent.trim() + ' ' + b.offsetWidth + 'px'));
+  check(`${label} · ${width} px · kısa yazılı düğme gerilmiyor`, ger.length === 0, ger.slice(0, 4).join(' | '));
+  // tarih ham ISO biçiminde yazılmaz (IP kartında "izleniyor · 2026-11-06"); CSF satırı, komut çıktısı ve giriş kutuları hariç
+  const iso = await page.evaluate(() => { const R = [];
+    const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); let n;
+    while ((n = w.nextNode())) { const e = n.parentElement; if (!e || !e.offsetWidth || e.closest('pre, code, details, .ag-mono, textarea, .ag-out, .ag-commits')) continue;
+      if (!e.closest('#ag-app, .ag-modal, .ag-drawer')) continue;
+      const m = n.textContent.match(/\b20\d\d-\d\d-\d\d\b|\b\d{1,2}\.\d{1,2}\.20\d\d\b/); if (m) R.push(n.textContent.trim().slice(0, 60)); }
+    return R; });
+  check(`${label} · ${width} px · tarih ham (YYYY-AA-GG / GG.AA.YYYY) yazılmıyor`, iso.length === 0, iso.slice(0, 3).join(' | '));
   // tıklanan iki öğe üst üste binmez (dar ekranda sığmayan düğmenin yanındakinin üstüne taşması)
   const lapB = await page.evaluate(() => {
     const E = Array.from(document.querySelectorAll('#ag-app button, #ag-app a, #ag-app input, #ag-app select, #ag-app .ag-chip')).filter(e => e.offsetWidth > 0);

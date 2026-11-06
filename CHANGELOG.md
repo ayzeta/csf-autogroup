@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.15.59 — 2026-11-06
+
+- Port lists are written by service name on every screen ("Web", "Web, SSH",
+  "port 8080, UDP 53"): banned providers, the IP card's result and wider
+  levels, range cards, country and CSF port lines. Some places still printed
+  raw "TCP 80,443 · UDP 443" while others said "Web".
+- Fixed: a partial-ban result said "Other connections (SSH, mail…) are open"
+  even when SSH was among the closed services.
+- Dates in the IP card ("watched since") and range cards ("added") use the same
+  format as the rest of the panel instead of "2026-11-06" / "15.05.2026".
+- On phones, the provider row's *Details* button no longer stretches across
+  the card (a style rule still pointed at the button's old name).
+- A rented-server list with no offending IPs shows *Details* in the link
+  colour, not the warning colour used for violation counts.
+- On phones, a summary card with no change no longer shows a lone "—".
+
 ## 1.15.58 — 2026-11-06
 
 - The *IP lookup* card also moves right under the summary cards on tablets and
