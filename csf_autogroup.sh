@@ -1627,11 +1627,16 @@ ptr_lookup() {   # IP → REPLY = hostname ya da boş; PTR_UNK=1 ise sorulamadı
 owner_lookup() { # IP → OWN_LONG ("AS60729 ARTIKEL10, DE"), OWN_SHORT ("AS60729 DE"), OWN_ASN, OWN_CC; OWN_UNK=1 ise sorulamadı
     local p="${1%.*}" a b c d txt asn cc name
     OWN_UNK=0
-    if [ -z "${OWN_L[$p]+x}" ]; then
+    # süresi geçmiş kayıt yalnız tur tazelerken (OWN_REFRESH=1, backfill_owners) yeniden sorulur; panel istekleri eskisini gösterir
+    if [ -z "${OWN_L[$p]+x}" ] || { [ "${OWN_REFRESH:-0}" = 1 ] && [ -n "${OWN_OLD[$p]+x}" ]; }; then
         IFS=. read -r a b c d <<< "$1"
         if ! dns_q TXT "$d.$c.$b.$a.origin.asn.cymru.com"; then
-            OWN_UNK=1; OWN_LONG=""; OWN_SHORT=""; OWN_ASN=""; OWN_CC=""; return
+            OWN_UNK=1
+            # sorulamadı: eski kayıt varsa o kalır (silinmez, "—" olmaz)
+            [ -n "${OWN_L[$p]+x}" ] && { OWN_LONG="${OWN_L[$p]}"; OWN_SHORT="${OWN_S[$p]}"; OWN_ASN="${OWN_A[$p]}"; OWN_CC="${OWN_C[$p]}"; return; }
+            OWN_LONG=""; OWN_SHORT=""; OWN_ASN=""; OWN_CC=""; return
         fi
+        unset 'OWN_OLD[$p]'
         txt="${REPLY%%$NL*}"
         # "60729 | 185.220.101.0/24 | DE | ripencc | 2017-09-12"
         asn=$(printf '%s' "$txt" | cut -d'|' -f1 | awk '{print $1}')
@@ -1654,8 +1659,10 @@ owner_lookup() { # IP → OWN_LONG ("AS60729 ARTIKEL10, DE"), OWN_SHORT ("AS6072
     OWN_LONG="${OWN_L[$p]}"; OWN_SHORT="${OWN_S[$p]}"; OWN_ASN="${OWN_A[$p]}"; OWN_CC="${OWN_C[$p]}"
 }
 # Önbellek satırı: "a.b.c|ASN|CC|KURUM|zaman". Sorgulanıp bilgi çıkmayan blok da (boş ASN) saklanır,
-# her turda boşuna yeniden sorulmasın. OWNER_TTL_DAYS'ten eski kayıt okunmaz, yeniden sorulur.
-declare -A OWN_N OWN_T OWN_NEW OWN_P      # OWN_P: /24'ün sahibinin duyurduğu aralık (Team Cymru)
+# her turda boşuna yeniden sorulmasın. OWNER_TTL_DAYS'ten eski kayıt da okunur ve gösterilir (OWN_OLD); tur onu yeniden sorar,
+# sorgu başarısızsa eski bilgi kalır. Önce eski kayıt hiç okunmuyor ve dosyadan siliniyordu: aynı günlerde sorulmuş binlerce blok
+# aynı günlerde "—" oluyor, tur 50'şer yenileyene kadar listelerde kimi satırın sahibi var kiminin yok görünüyordu.
+declare -A OWN_N OWN_T OWN_NEW OWN_P OWN_OLD      # OWN_P: /24'ün sahibinin duyurduğu aralık (Team Cymru)
 owners_load() {  # sahip önbelleği → OWN_A/C/N/T/P/L/S (geçerli ve süresi dolmamış satırlar). Satırlar awk'ta süzülüp atamaya çevrilir,
     # tek eval ile yüklenir: banlı tekillerin her /24'ü bir satır, binlerce satırda satır başına bash read + düzenli ifade durum
     # çıktısını ~1 sn uzatıyordu. Değerler çift tırnak içinde, \ " $ ` kaçışlı.
@@ -1664,8 +1671,9 @@ owners_load() {  # sahip önbelleği → OWN_A/C/N/T/P/L/S (geçerli ve süresi 
     pa "own_önce"
     ows="$(LC_ALL=C awk -F'|' -v min="$min" '
         function q(x) { gsub(/[\\"$`]/, "\\\\&", x); return "\"" x "\"" }
-        $1 ~ /^[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?$/ && $5 ~ /^[0-9]+$/ && $5 + 0 >= min + 0 {
+        $1 ~ /^[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?$/ && $5 ~ /^[0-9]+$/ {
             k = $1; l = ""; o = ""
+            if ($5 + 0 < min + 0) printf "OWN_OLD[%s]=1;", k        # süresi geçmiş: gösterilir, tur yeniden sorar (backfill_owners)
             if ($2 != "") { l = "AS" $2 " " ($4 != "" ? $4 : "?"); if ($4 == "" && $3 != "") l = "AS" $2 ", " $3; o = "AS" $2 ($3 != "" ? " " $3 : "") }
             printf "OWN_A[%s]=%s;OWN_C[%s]=%s;OWN_N[%s]=%s;OWN_T[%s]=%s;OWN_P[%s]=%s;OWN_L[%s]=%s;OWN_S[%s]=%s\n", k, q($2), k, q($3), k, q($4), k, q($5), k, q($6), k, q(l), k, q(o) }' "$OWNERS_FILE")"
     pa "own_awk"; [ -n "${AG_PROF:-}" ] && pc "own_satır" "$(wc -l < "$OWNERS_FILE")"
@@ -1680,6 +1688,8 @@ owners_save() {  # yalnız yeni sorgu olduysa; atomik
     for p in "${!OWN_A[@]}"; do
         [ -n "${OWN_NEW[$p]+x}" ] && OWN_T[$p]="$now"
         [ -n "${OWN_T[$p]}" ] || continue
+        # süresi geçmiş ve tazelenmemiş kayıt gösterim için kalır; yenileme süresinin 4 katından eskisi (artık hiçbir listede değil) atılır
+        [ -n "${OWN_OLD[$p]+x}" ] && [ "${OWN_T[$p]}" -lt $(( now - OWNER_TTL_DAYS * 4 * 86400 )) ] && continue
         printf '%s|%s|%s|%s|%s|%s\n' "$p" "${OWN_A[$p]}" "${OWN_C[$p]}" "${OWN_N[$p]//|/ }" "${OWN_T[$p]}" "${OWN_P[$p]}"
     done > "$tmp" && mv -f "$tmp" "$OWNERS_FILE"
 }
@@ -1687,6 +1697,15 @@ deny_prefixes() {   # csf.deny'deki grupların ve tekillerin /24 önekleri (tekr
     local i c
     for c in "${!SINGLE_NOTE[@]}"; do echo "${c%.*}"; done
     for i in "${!DC_TXT[@]}"; do c="${DC_TXT[i]%/*}"; echo "${c%.*}"; done
+}
+listed_prefixes() { # tekil ve csf.deny aralıkları dışında listelerde görünen satırların /24 önekleri → stdout: kısmi banlar (elle /32
+    # dahil; csf.deny gelişmiş satırları), geçici aralık banları (csf.tempban), susturulanlar. Sahip sorgusu (backfill_owners) ve durum
+    # çıktısının sahip haritası aynı listeyi kullanır: önce ikisi de bunları atlıyordu, Aktif aralık banları / Susturulanlar'da "—"
+    local c i
+    pb_load; for c in "${!PB_P[@]}"; do c="${c%/*}"; echo "${c%.*}"; done
+    [ -r "$CSF_VAR/csf.tempban" ] && awk -F'|' '$2 ~ /^[0-9.]+\/[0-9]+$/ { c = $2; sub(/\/.*/, "", c); sub(/\.[0-9]+$/, "", c); print c }' "$CSF_VAR/csf.tempban"
+    ign_load; for i in "${!IGN_C[@]}"; do c="${IGN_C[i]%/*}"; echo "${c%.*}"; done
+    return 0
 }
 pending_prefixes() { # sayaçta izlenen /24 önekleri → stdout
     [ -r "$SAYAC_FILE" ] && awk '$1 ~ /^[0-9]+\.[0-9]+\.[0-9]+$/ { print $1 }' "$SAYAC_FILE"
@@ -1700,15 +1719,34 @@ backfill_owners() { # sahibi bilinmeyen blokları bu turda sorgula (en fazla BAC
     # Önce CSF Auto-Group'un kendi grupları (tabloda görünenler), sonra csf.deny'deki diğer
     # bloklar, en son tekiller. csf.deny'de başka kaynaklı çok sayıda CIDR olabiliyor (sunucuda
     # ölçüldü: 31 grup varken bir ASN'de 36 blok) — onlar grupların önüne geçmesin.
+    # tablodaki kısmi banlar (elle /32 dahil; csf.deny gelişmiş satırları) ve geçici aralık banları da: önce sorgulanmıyorlardı,
+    # Aktif aralık banları'nda sahipleri "—" kalıyordu (IP kartı aynı adresin sahibini gösterirken)
     order=$( { for c in "${AGG[@]}"; do c="${c%/*}"; echo "${c%.*}"; done
+               listed_prefixes
                pending_prefixes
                for i in "${!DC_TXT[@]}"; do c="${DC_TXT[i]%/*}"; echo "${c%.*}"; done
                for c in "${!SINGLE_NOTE[@]}"; do echo "${c%.*}"; done; } | awk '!seen[$0]++')
-    for p in $order; do
-        [ -n "${OWN_L[$p]+x}" ] && continue
-        [ "$n" -ge "$BACKFILL_MAX" ] && break
-        owner_lookup "$p.1"; n=$((n + 1))
-        [ "$LOOK_OK" = 1 ] || break
+    # IP kartının taze sorgusu sahibin değiştiğini gördüyse (owners.stale): o bloklar eskimiş sayılır ve en önce sorulur
+    local stale=""
+    if [ -s "$OWNERS_FILE.stale" ]; then
+        stale=$(awk '/^[0-9]+\.[0-9]+\.[0-9]+$/ && !s[$0]++' "$OWNERS_FILE.stale")
+        for p in $stale; do [ -n "${OWN_L[$p]+x}" ] && OWN_OLD[$p]=1; done
+        [ "$DRY" = 1 ] || : > "$OWNERS_FILE.stale"
+        order=$(printf '%s\n%s\n' "$stale" "$order" | awk 'NF && !s[$0]++')
+    fi
+    # sıra: sahibinin değiştiği görülenler, hiç bilinmeyenler, süresi geçmiş olanlar (gösterilmeye devam ederler; burada tazelenir)
+    local OWN_REFRESH=1 p2
+    for p2 in st new old; do
+        for p in $order; do
+            case "$p2" in
+                st)  case "$NL$stale$NL" in *"$NL$p$NL"*) ;; *) continue ;; esac; [ -n "${OWN_OLD[$p]+x}" ] || continue ;;
+                new) [ -n "${OWN_L[$p]+x}" ] && continue ;;
+                old) [ -n "${OWN_OLD[$p]+x}" ] || continue ;;
+            esac
+            [ "$n" -ge "$BACKFILL_MAX" ] && break 2
+            owner_lookup "$p.1"; n=$((n + 1))
+            [ "$LOOK_OK" = 1 ] || break 2
+        done
     done
     BF_N=$n
 }
@@ -3110,7 +3148,7 @@ do_status() {
     prof recent_loghist
     # Sahipler (önbellekten; yukarıda yüklendi), en çok saldıran ağlar, son 30 günün günlük etkinliği
     local owners=() pfx_seen=() dstart daily=""
-    for p in $( { deny_prefixes; pending_prefixes; } | sort -u); do
+    for p in $( { deny_prefixes; pending_prefixes; listed_prefixes; } | sort -u); do
         [ -n "${OWN_A[$p]}" ] || continue
         jstr "${OWN_N[$p]}"; owners+=("\"$p\":[\"${OWN_A[$p]}\",\"${OWN_C[$p]}\",$REPLY]")
     done
@@ -3734,6 +3772,13 @@ do_lookup() {
         alloc=$(printf '%s' "$txt" | cut -d'|' -f5 | tr -d ' ')
         if [[ "$asn" =~ ^[0-9]+$ ]] && dns_q TXT "AS$asn.asn.cymru.com"; then
             asname=$(printf '%s' "${REPLY%%$NL*}" | cut -d'|' -f5- | sed 's/^ *//')
+        fi
+        # önbellekteki sahip bu taze cevaptan farklıysa blok "eskimiş" işaretlenir; tur onu önce yeniden sorar (backfill_owners).
+        # Kart taze sahibi, listeler önbelleği gösteriyordu: blok başka ASN'ye geçince ikisi çelişiyordu (173.46.80: liste AS47007,
+        # kart AS212238). Panel sahip dosyasına yazmaz (turla yarışmasın): yalnız işaret dosyasına satır ekler
+        if [[ "$asn" =~ ^[0-9]+$ ]]; then
+            owners_load
+            [ -n "${OWN_A[$a.$b.$c]+x}" ] && [ "${OWN_A[$a.$b.$c]}" != "$asn" ] && [ "$DRY" != 1 ] && echo "$a.$b.$c" >> "$OWNERS_FILE.stale" 2>/dev/null
         fi
     fi
     [ -n "${DENY_IP[$ip]+x}" ] && deny="$(deny_line "$ip")"

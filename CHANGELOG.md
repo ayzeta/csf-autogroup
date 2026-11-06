@@ -15,6 +15,19 @@
 - A rented-server list with no offending IPs shows *Details* in the link
   colour, not the warning colour used for violation counts.
 - On phones, a summary card with no change no longer shows a lone "—".
+- Owners: a cached owner past its refresh time is still shown and refreshed by
+  the next runs (it used to be dropped, so blocks looked up around the same
+  days all showed "—" until refreshed 50 per run). Partial bans (manual /32
+  included), temporary range bans and muted entries now get their owner looked
+  up and shown; *Muted* rows show the owner. When the IP card's live lookup
+  finds a different owner than the cache, that block is refreshed first.
+- IP card *Wider levels*: zero counters are not written ("0/3"), the country
+  badge is only on the *Country* row, the provider row has *Ban provider…*
+  like the block and network rows (or *Open on the Providers tab* when it is
+  already banned), the rented-server row opens the Providers tab, and the
+  registry date uses the panel's date format.
+- No horizontal scrolling: tables wrap long text in narrow cards instead of
+  becoming sideways-scrolling boxes, and the level names in the IP card wrap.
 
 ## 1.15.58 — 2026-11-06
 

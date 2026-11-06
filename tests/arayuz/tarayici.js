@@ -54,6 +54,26 @@ window.agUlkeTekrar = function (root) {
     return new RegExp('(^|[^A-Za-z])' + cc + '($|[^A-Za-z])').test(s) ? cc + ': ' + p.textContent.replace(/\\s+/g, ' ').trim().slice(0, 60) : null;
   }).filter(Boolean);
 };
+// kardeş satır tutarlılığı ve dolgu (kullanıcının gözüyle bulduğu sınıflar, 2026-11-06): banlanabilen seviye (blok, ağ, sağlayıcı)
+// banlı değilse düğmesi olur (yalnız Blok ve Ağ'da vardı); ülke rozeti yalnız Ülke satırında (Duyurulan aralık'ta da vardı);
+// sıfır sayaç yazılmaz ("0/3"); bir cümle kapattığı servisi "açık" diye örneklemez
+window.agKardes = function (root) {
+  const R = [], self = /kendi adresi|own address/.test(root.innerText || '');   // sunucunun kendi IP'si: hiçbir seviye banlanmaz
+  root.querySelectorAll('.ag-lv-t tbody tr').forEach(tr => {
+    if (self) return;
+    const c = tr.children, lab = (c[0] || {}).textContent.trim(), st = tr.querySelector('.ag-lv-st');
+    if (/^(Blok|Block|Ağ|Network|Sağlayıcı|Provider)$/.test(lab) && st && !/\\b(ban|part)\\b/.test(st.className) && !tr.querySelector('.ag-lv-act button'))
+      R.push(lab + ': banlı değil ama ban düğmesi yok');
+    if (!/^(Ülke|Country)$/.test(lab) && c[1] && c[1].querySelector('.ag-flag')) R.push(lab + ': ülke rozeti ülke satırı dışında');
+  });
+  const tx = root.innerText || '';
+  (tx.match(/(^|[^0-9.\\/])0\\/\\d+\\b[^\\n]{0,30}/g) || []).forEach(m => R.push('sıfır sayaç: ' + m.trim()));
+  (tx.match(/[^.\\n]*kapalı[^.\\n]*\\.[^.\\n]*\\([^)\\n]*\\)\\s*açık/g) || []).forEach(s => {
+    const kap = s.split('.')[0], ac = (s.match(/\\(([^)]*)\\)\\s*açık/) || [])[1] || '';
+    ac.split(/[,…]/).map(x => x.trim()).filter(x => x && new RegExp('(^|[^A-Za-zçğıöşü])' + x + '($|[^A-Za-zçğıöşü])', 'i').test(kap)).forEach(x => R.push('çelişen cümle (' + x + ' hem kapalı hem açık): ' + s.trim().slice(0, 80)));
+  });
+  return R;
+};
 window.agBasliksiz = function (root) {
   return Array.from(root.querySelectorAll('table')).filter(tb => tb.offsetWidth > 0 && tb.querySelector('tbody tr'))
     .filter(tb => { const h = tb.querySelector('thead'); return !h || h.offsetHeight === 0; })
@@ -65,7 +85,7 @@ window.agKart = function () {
   const kendi = ((d.querySelector('.ag-drawer-h h3') || {}).textContent || '').trim();
   const n = {}; d.querySelectorAll('[data-ip]').forEach(e => { const k = e.textContent.trim(); if (k !== kendi) n[k] = (n[k] || 0) + 1; });
   const say = {}; (d.querySelector('.ag-drawer-b') || d).textContent.replace(/(\\d+)\\s+(tekil|geçici|kalıcı)(?![a-zçğıöşü])/g, (m, x, w) => { (say[w] = say[w] || new Set()).add(x); return m; });
-  return { ulke: window.agUlkeTekrar(d), bas: window.agBasliksiz(d), ipb: window.agIpBagsiz(d), hiz: window.agHizaKayik(d), gor: window.agGorunmez(d), cok: Object.keys(n).filter(k => n[k] > 1).map(k => k + ' × ' + n[k]),
+  return { kardes: window.agKardes(d), ulke: window.agUlkeTekrar(d), bas: window.agBasliksiz(d), ipb: window.agIpBagsiz(d), hiz: window.agHizaKayik(d), gor: window.agGorunmez(d), cok: Object.keys(n).filter(k => n[k] > 1).map(k => k + ' × ' + n[k]),
     celis: Object.keys(say).filter(w => say[w].size > 1).map(w => w + ': ' + Array.from(say[w]).join(' / ')) };
 };`;
 // sayfa yeniden çizilse de (veri geç geldi, yoklama) tıklama anında öğeyi yeniden bulur; page.$ tutamacı geçersiz kalıyordu
@@ -79,6 +99,7 @@ async function kartKurallari(page, ad) {
   check(`kart ${ad} · aynı IP bir kez`, k.cok.length === 0, k.cok.slice(0, 4).join(' | '));
   check(`kart ${ad} · çelişen sayı yok`, k.celis.length === 0, k.celis.join(' | '));
   check(`kart ${ad} · tablolar başlıklı`, k.bas.length === 0, k.bas.join(' | '));
+  check(`kart ${ad} · kardeş satırlar tutarlı, sıfır dolgu ve çelişen cümle yok`, k.kardes.length === 0, k.kardes.slice(0, 4).join(' | '));
   check(`kart ${ad} · ülke kodu rozetin yanında yinelenmiyor`, k.ulke.length === 0, k.ulke.slice(0, 3).join(' | '));
   check(`kart ${ad} · IP / aralık yazan her öğe tıklanıyor`, k.ipb.length === 0, k.ipb.slice(0, 4).join(' | '));
   check(`kart ${ad} · sütun başlıkları hücrelerle aynı hizada`, k.hiz.length === 0, k.hiz.slice(0, 4).join(' | '));
@@ -93,6 +114,14 @@ async function layoutChecks(page, label, width) {
   const ipb = await page.evaluate(() => window.agIpBagsiz(document.getElementById('ag-app')));
   check(`${label} · ${width} px · IP / aralık yazan her öğe tıklanıyor`, ipb.length === 0, ipb.slice(0, 4).join(' | '));
   check(`${label} · ${width} px · tıklanabilir öğeler tıklanabilir görünüyor`, gor.length === 0, gor.slice(0, 4).join(' | '));
+  const kd = await page.evaluate(() => [].concat(window.agKardes(document.getElementById('ag-app')), ...Array.from(document.querySelectorAll('.ag-drawer, .ag-modal')).map(x => window.agKardes(x))));
+  check(`${label} · ${width} px · kardeş satırlar tutarlı, sıfır dolgu ve çelişen cümle yok`, kd.length === 0, kd.slice(0, 4).join(' | '));
+  // hiçbir yerde yatay kaydırma yok (kullanıcı kararı: kartta / pencerede / tabloda yatay çubuk istenmiyor); komut çıktısı hariç
+  const yk = await page.evaluate(() => Array.from(document.querySelectorAll('#ag-app *, .ag-drawer *, .ag-modal *')).filter(e => {
+    if (!e.offsetWidth || e.closest('pre, .ag-out, textarea')) return false;
+    const ox = getComputedStyle(e).overflowX; return /auto|scroll/.test(ox) && e.scrollWidth > e.clientWidth + 1;
+  }).map(e => (e.className || e.tagName) + ' ' + e.scrollWidth + '>' + e.clientWidth));
+  check(`${label} · ${width} px · yatay kaydırma yok`, yk.length === 0, yk.slice(0, 4).join(' | '));
   // kısa yazılı düğme satır boyu gerilmez (sağlayıcı satırındaki "Ayrıntı" eski bir seçici yüzünden telefonda kartın enine uzuyordu)
   const ger = await page.evaluate(() => Array.from(document.querySelectorAll('#ag-app .ag-btn, .ag-modal .ag-btn')).filter(b => {
     if (!b.offsetWidth || b.closest('.ag-head-actions, .ag-modal-f, .ag-lookup, .ag-savebar')) return false;

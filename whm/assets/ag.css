@@ -369,6 +369,8 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-t-warn { color: var(--ag-warn); font-size: 12px; font-weight: 600; white-space: nowrap; }
 .ag-th { overflow: hidden; white-space: nowrap; }
 .ag-td-own { display: flex; align-items: center; gap: 7px; overflow: hidden; white-space: nowrap; }
+.ag-own-s { display: flex; align-items: center; gap: 6px; margin-top: 4px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 12px; }   /* Susturulanlar: sahip adresin altında (dar kart) */
+.ag-own-s .ag-org { overflow: hidden; text-overflow: ellipsis; }
 .ag-asn { font-family: var(--ag-mono); font-size: 11px; font-weight: 600; color: var(--ag-accent); background: var(--ag-accent-soft); padding: 2px 6px; border-radius: 5px; flex: none; }
 .ag-org { overflow: hidden; text-overflow: ellipsis; color: var(--ag-text); }
 .ag-num-c { text-align: right; font-variant-numeric: tabular-nums; color: var(--ag-text-2); justify-content: flex-end; }
@@ -815,9 +817,10 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
 .ag-im-note { margin: 12px 0 0; color: var(--ag-text-3); font-size: 12.5px; }
 .ag-im-foot { margin: 10px 0 0; color: var(--ag-text-3); font-size: 12.5px; }
 .ag-im-stm { display: none; }
+/* tablolar yatay kaydırılmaz (kullanıcı kararı 2026-11-06): dar alanda hücre içindeki uzun metin (istek yolu, sebep, ad) kırılır;
+   IP / aralık hücreleri bölünmez. Önce ≤600 px'te tablo kaydırılabilir bloğa dönüyordu, kartta yatay çubuk çıkıyordu */
+.ag-im-t td { overflow-wrap: anywhere; }
 @media (max-width: 600px) {
-  .ag-im-t { display: block; overflow-x: auto; }
-  .ag-im-t tr > :first-child { position: sticky; left: 0; background: var(--ag-card); }
   /* Etkisini ölç IP tablosu: durum rozetleri ayrı sütunda istek metnini 45 px'e sıkıştırıyordu ("site1.e / xample"): metnin altında */
   .ag-im-t:not(.ag-rg-ipt) .ag-im-st { display: none; }
   .ag-im-t:not(.ag-rg-ipt) .ag-im-stm { display: block; margin-top: 4px; }
@@ -1011,10 +1014,10 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
 .ag-td-stack .ag-under { margin-left: 0; align-self: flex-start; }
 .ag-dr-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 /* IP kartı: üst seviyeler tablosu (blok, ağ, duyurulan aralık, ülke, sağlayıcı, kiralık liste) */
-.ag-lv-t td:first-child { white-space: nowrap; width: 1%; }
+.ag-lv-t td:first-child { width: 1%; }   /* seviye adı kırılabilir: kart hep 460 px, "Duyurulan aralık" kırılmayınca tablo kartı 11 px aşıp yatay kaydırma çıkarıyordu */
 /* kimlik (aralık, AS numarası, ülke) bölünmez; kurum / liste adı satır atlar (telefonda tabloyu genişletip düğmeyi taşırıyordu) */
 .ag-lv-t .ag-lv-c .ag-cidr, .ag-lv-t .ag-lv-c b, .ag-lv-t .ag-lv-c .ag-flag { white-space: nowrap; }
-@media (max-width: 600px) { .ag-lv-t td:first-child { white-space: normal; width: auto; } }
+/* (eski: yalnız ekran ≤600 px iken kırılıyordu; kartın genişliği ekrandan bağımsız) */
 .ag-lv-st.ban { color: var(--ag-d-ban-t); font-weight: 600; }
 .ag-lv-st.part { color: var(--ag-d-part-t); font-weight: 600; }
 .ag-lv-st.watch { color: var(--ag-d-temp-t); font-weight: 600; }
