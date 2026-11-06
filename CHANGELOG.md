@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.15.57 — 2026-11-06
+
+- Fixed: the ban history could record a temporary ban as one second longer
+  than it was (7201 s for a 2-hour ban) when lfd wrote its log line a second
+  after the temp-list entry: the start came from the log and the end from the
+  list. When the ban is in CSF's temp list, both now come from the list.
+- Fixed: the rented-server layer summary at the top of the Providers tab still
+  read the old shared ports ("Web only") although each list has its own rule
+  since 1.15.50. It now shows the lists' saved rule, or "The lists have
+  different rules".
+
 ## 1.15.56 — 2026-11-06
 
 - The provider ban's shared port list is now picked as services (Web, SSH,

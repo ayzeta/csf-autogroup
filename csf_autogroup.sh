@@ -57,7 +57,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.56"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.57"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -2472,7 +2472,9 @@ bl_load() {      # → BLV (birleşik ban geçmişi, satırlar "ip|k|başlangı�
                     same = c && ((s - OS[c] <= 15 && s - OS[c] >= -15 && !(s == 0 || OS[c] == 0)) || (k == "p" && (s == 0 || OS[c] == 0) && OE[c] == 0))
                     if (same) {
                         if (OS[c] == 0 || (s > 0 && s < OS[c])) OS[c] = s
-                        if (k == "t") { if (f == "T") { OE[c] = e; OT[c] = 1 } else if (!OT[c] && e > OE[c]) OE[c] = e; if (ne > OX[c]) OX[c] = ne }
+                        # geçici listedeki satır CSF in kendi kaydı: başlangıç da bitiş de ondan (lfd günlüğü bir saniye sonra yazabilir;
+                        # başlangıç günlükten, bitiş listeden alınınca süre 7201 sn çıkıyordu)
+                        if (k == "t") { if (f == "T") { OS[c] = s; OE[c] = e; OT[c] = 1 } else if (!OT[c] && e > OE[c]) OE[c] = e; if (ne > OX[c]) OX[c] = ne }
                         if (match(r, /\[[A-Z_]+\]$/)) OG[c] = substr(r, RSTART, RLENGTH)      # lfd satırının tetik etiketi
                         if (r != "" && (OR[c] == "" || better(f, OF[c]))) { OR[c] = r; OF[c] = f }
                         if (f == "T" || f == "D") OT[c] = 1

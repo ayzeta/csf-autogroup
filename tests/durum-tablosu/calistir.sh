@@ -609,7 +609,9 @@ mcheck "geçici eşik: sonradan kalıcıya alınmış IP geçici sayıma girmez"
 # ban geçmişi (banlog): lfd günlüğü + geçici liste + csf.deny; erken kaldırma; saklama; IP kartı; PERMBLOCK'un servisi
 BL="var/lib/csf_autogroup/banlog"
 tw blog 1800 151.80.9.1:1500:600 151.80.9.2:900:7200; single 151.80.8.5 sshd
-printf '%s|151.80.9.2||inout|7200|lfd: (sshd) Failed SSH login from 151.80.9.2 (FR/France/-): 10 in the last 3600 secs\n' "$(( $(date +%s) - 900 ))" >> "$T"   # süren ban listede de durur
+# süren ban listede de durur; liste satırı günlükten 1 sn sonra (lfd ikisini ayrı anlarda yazar; süre yine 7200 olmalı — iki ayrı date
+# çağrısı saniye sınırına düşünce test ara sıra düşüyordu: başlangıç günlükten, bitiş listeden alınıyordu)
+printf '%s|151.80.9.2||inout|7200|lfd: (sshd) Failed SSH login from 151.80.9.2 (FR/France/-): 10 in the last 3600 secs\n' "$(( $(date +%s) - 899 ))" >> "$T"
 printf '%s lin lfd[1]: (PERMBLOCK) 151.80.8.6 (FR/France/-) has had more than 3 temp blocks in the last 259200 secs - *Blocked in csf* [LF_TRIGGER]\n' "$(LC_ALL=C date -d '-10 min' '+%b %e %H:%M:%S')" >> "$R/lfd.log"
 quiet
 mcheck "ban geçmişi: lfd günlüğündeki geçici banlar süreleriyle yazılır" "grep -q '^151.80.9.1|t|' '$R/$BL' && awk -F'|' '\$1 == \"151.80.9.2\" && \$4 - \$3 == 7200' '$R/$BL' | grep -q ."
