@@ -46,6 +46,14 @@ window.agGorunmez = function (root) {
     return true;
   }).map(e => (typeof e.className === 'string' && e.className ? e.className : e.tagName) + ': ' + e.textContent.trim().replace(/\\s+/g, ' ').slice(0, 30));
 };
+window.agUlkeTekrar = function (root) {
+  // ülke rozetinin (US) yanındaki metin aynı kodu yeniden yazmaz ("Amazon.com, Inc., US US" gibi)
+  return Array.from(root.querySelectorAll('.ag-flag')).filter(f => f.offsetWidth > 0).map(f => {
+    const cc = f.textContent.trim(), p = f.parentElement; if (!/^[A-Z]{2}$/.test(cc) || !p) return null;
+    const s = Array.from(p.childNodes).filter(n => n !== f).map(n => n.textContent).join(' ');
+    return new RegExp('(^|[^A-Za-z])' + cc + '($|[^A-Za-z])').test(s) ? cc + ': ' + p.textContent.replace(/\\s+/g, ' ').trim().slice(0, 60) : null;
+  }).filter(Boolean);
+};
 window.agBasliksiz = function (root) {
   return Array.from(root.querySelectorAll('table')).filter(tb => tb.offsetWidth > 0 && tb.querySelector('tbody tr'))
     .filter(tb => { const h = tb.querySelector('thead'); return !h || h.offsetHeight === 0; })
@@ -57,7 +65,7 @@ window.agKart = function () {
   const kendi = ((d.querySelector('.ag-drawer-h h3') || {}).textContent || '').trim();
   const n = {}; d.querySelectorAll('[data-ip]').forEach(e => { const k = e.textContent.trim(); if (k !== kendi) n[k] = (n[k] || 0) + 1; });
   const say = {}; (d.querySelector('.ag-drawer-b') || d).textContent.replace(/(\\d+)\\s+(tekil|geçici|kalıcı)(?![a-zçğıöşü])/g, (m, x, w) => { (say[w] = say[w] || new Set()).add(x); return m; });
-  return { bas: window.agBasliksiz(d), ipb: window.agIpBagsiz(d), hiz: window.agHizaKayik(d), gor: window.agGorunmez(d), cok: Object.keys(n).filter(k => n[k] > 1).map(k => k + ' × ' + n[k]),
+  return { ulke: window.agUlkeTekrar(d), bas: window.agBasliksiz(d), ipb: window.agIpBagsiz(d), hiz: window.agHizaKayik(d), gor: window.agGorunmez(d), cok: Object.keys(n).filter(k => n[k] > 1).map(k => k + ' × ' + n[k]),
     celis: Object.keys(say).filter(w => say[w].size > 1).map(w => w + ': ' + Array.from(say[w]).join(' / ')) };
 };`;
 // sayfa yeniden çizilse de (veri geç geldi, yoklama) tıklama anında öğeyi yeniden bulur; page.$ tutamacı geçersiz kalıyordu
@@ -71,6 +79,7 @@ async function kartKurallari(page, ad) {
   check(`kart ${ad} · aynı IP bir kez`, k.cok.length === 0, k.cok.slice(0, 4).join(' | '));
   check(`kart ${ad} · çelişen sayı yok`, k.celis.length === 0, k.celis.join(' | '));
   check(`kart ${ad} · tablolar başlıklı`, k.bas.length === 0, k.bas.join(' | '));
+  check(`kart ${ad} · ülke kodu rozetin yanında yinelenmiyor`, k.ulke.length === 0, k.ulke.slice(0, 3).join(' | '));
   check(`kart ${ad} · IP / aralık yazan her öğe tıklanıyor`, k.ipb.length === 0, k.ipb.slice(0, 4).join(' | '));
   check(`kart ${ad} · sütun başlıkları hücrelerle aynı hizada`, k.hiz.length === 0, k.hiz.slice(0, 4).join(' | '));
 }
@@ -79,6 +88,8 @@ async function layoutChecks(page, label, width) {
   const gor = await page.evaluate(() => window.agGorunmez(document.getElementById('ag-app')));
   const bas = await page.evaluate(() => window.agBasliksiz(document.getElementById('ag-app')));
   check(`${label} · ${width} px · tablolar başlıklı`, bas.length === 0, bas.slice(0, 3).join(' | '));
+  const ulke = await page.evaluate(() => window.agUlkeTekrar(document.getElementById('ag-app')));
+  check(`${label} · ${width} px · ülke kodu rozetin yanında yinelenmiyor`, ulke.length === 0, ulke.slice(0, 3).join(' | '));
   const ipb = await page.evaluate(() => window.agIpBagsiz(document.getElementById('ag-app')));
   check(`${label} · ${width} px · IP / aralık yazan her öğe tıklanıyor`, ipb.length === 0, ipb.slice(0, 4).join(' | '));
   check(`${label} · ${width} px · tıklanabilir öğeler tıklanabilir görünüyor`, gor.length === 0, gor.slice(0, 4).join(' | '));
@@ -153,6 +164,15 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
   page.on('pageerror', e => errs.push(e.message));
   page.on('console', m => { var u = (m.location && m.location().url) || ''; if (m.type() === 'error' && !/favicon/.test(m.text() + u)) errs.push(m.text() + (u ? ' (' + u + ')' : '')); });
   const shot = async (name) => { if (OUT) await page.screenshot({ path: `${OUT}/${name}.png`, fullPage: true }); };
+  // test makinesinde ASN sorgusu cevapsız kalır, IP kartının sağlayıcı satırları hiç çizilmezdi (canlıda "shortName is not
+  // defined" yalnız ASN gelince düştü): sorgu ASN döndürmediyse belgeleme ASN'si ve Cymru biçiminde ad eklenir
+  await page.route('**/api.php', async route => {
+    if (!/^a=lookup(&|$)/.test(route.request().postData() || '')) return route.continue();
+    const r = await route.fetch(); let j = null;
+    try { j = await r.json(); } catch (e) { return route.fulfill({ response: r }); }
+    if (j && j.ok && !j.asn) { j.asn = '64500'; j.asname = 'TEST-AS - Example Network, US'; j.cc = j.cc || 'US'; }
+    return route.fulfill({ response: r, json: j });
+  });
   console.log('Arayüz');
   await page.goto(URL, { waitUntil: 'networkidle', timeout: 90000 }); await ready(page);
   check('sayfa açıldı, durum yüklendi', await page.$('.ag-head') !== null);
@@ -504,7 +524,15 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
         if (rows[i][2]) await page.fill(`.ag-modal [data-row="${i}"] [data-f="f"]`, rows[i][2]); }
       else await page.fill('.ag-modal [data-row="0"] [data-f="u"]', u);
       // düğme alanlar dolunca açılır: açılmasını bekle (bir koşuda kapalıyken basılıp 30 sn'de zaman aşımına düştü)
-      await page.waitForSelector('.ag-modal [data-m="ok"]:not([disabled])', { timeout: 10000 }).catch(() => {});
+      const on = await page.waitForSelector('.ag-modal [data-m="ok"]:not([disabled])', { timeout: 10000 }).then(() => true, () => false);
+      if (!on) {                     // açılmadı: sebebi (pencere sayısı, hata satırı, alanlar) sonuçta görünsün, 30 sn tıklama beklenmesin
+        const why = await page.evaluate(() => ({ modals: document.querySelectorAll('.ag-modal').length,
+          title: Array.from(document.querySelectorAll('.ag-modal h3, .ag-modal .ag-modal-t')).map(e => e.textContent.trim()),
+          err: (document.querySelector('.ag-modal #ag-aerr') || {}).textContent || '',
+          rows: Array.from(document.querySelectorAll('.ag-modal [data-row]')).map(r => Array.from(r.querySelectorAll('input')).map(i => i.value).join('|')) }));
+        check(`ekleme penceresi (${n}): Ekle düğmesi alanlar dolunca açılır`, false, JSON.stringify(why));
+        await page.keyboard.press('Escape'); await page.waitForTimeout(300); return;
+      }
       await page.click('.ag-modal [data-m="ok"]'); await page.waitForTimeout(400); };
     // yeni kutu
     await tik(page, `${G} .ag-tile-add`); await addForm('deneme', 'https://ornek.com/liste.txt');

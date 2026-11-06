@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.15.54 — 2026-11-06
+
+- Fixed: the IP card stopped with "shortName is not defined" for any IP whose
+  provider (ASN) was known, so the card showed only its error line.
+- The *Wider levels* table always has a *Country* row (with "no country ban"
+  when there is none), like the provider row.
+- The country code is no longer written twice (the badge plus ", US" at the
+  end of the name) in the IP card's owner line, the country row and owner cells
+  whose name came in the raw "HANDLE - Name, CC" form.
+- Errors caught while drawing a card or a list are also written to the
+  browser console, so they are not lost behind the on-screen message.
+
 ## 1.15.53 — 2026-11-06
 
 - **IP card, new layout:** *This IP* (result, its own ban, Ban IP / Remove

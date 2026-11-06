@@ -1011,7 +1011,9 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
 .ag-dr-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 /* IP kartı: üst seviyeler tablosu (blok, ağ, duyurulan aralık, ülke, sağlayıcı, kiralık liste) */
 .ag-lv-t td:first-child { white-space: nowrap; width: 1%; }
-.ag-lv-t .ag-lv-c { white-space: nowrap; }
+/* kimlik (aralık, AS numarası, ülke) bölünmez; kurum / liste adı satır atlar (telefonda tabloyu genişletip düğmeyi taşırıyordu) */
+.ag-lv-t .ag-lv-c .ag-cidr, .ag-lv-t .ag-lv-c b, .ag-lv-t .ag-lv-c .ag-flag { white-space: nowrap; }
+@media (max-width: 600px) { .ag-lv-t td:first-child { white-space: normal; width: auto; } }
 .ag-lv-st.ban { color: var(--ag-d-ban-t); font-weight: 600; }
 .ag-lv-st.part { color: var(--ag-d-part-t); font-weight: 600; }
 .ag-lv-st.watch { color: var(--ag-d-temp-t); font-weight: 600; }
