@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.15.56 — 2026-11-06
+
+- The provider ban's shared port list is now picked as services (Web, SSH,
+  FTP, cPanel, mail, DNS) plus other ports, in the same picker as range bans
+  and rented-server lists, with a badge for how many IPs from the port-list
+  providers hit each service. The card shows the list by service name and the
+  exact value written to CSF. When those providers hit a service the list does
+  not block, the card offers to add it in one click.
+- The shared port list can hold up to 50 entries per protocol (was 15): CSF
+  adds one rule per entry, and cPanel alone has 10 ports.
+- Fixed: the panel's service-to-port map had 6 cPanel ports and 4 mail sync
+  ports, while the engine blocks 10 and 6. A service could be shown as blocked
+  while some of its ports (2077–2080, POP3 110, IMAP 143) were open.
+- The provider hints ("violations outside the web too") now compare against
+  what the shared port list actually blocks, not against web only.
+
 ## 1.15.55 — 2026-11-06
 
 - On phones the *IP lookup* card now sits right under the summary cards on the

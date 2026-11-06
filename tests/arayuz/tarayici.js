@@ -605,6 +605,24 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     // ham liste adı ekranda görünmez (x-…, extra-…, kutu--kaynak)
     const ham = await page.evaluate(() => (document.querySelector('#ag-app').innerText.match(/\b(x-[a-z0-9-]+|extra-[A-Za-z0-9._-]+|[a-z0-9]+--[a-z0-9-]+)\b/g) || []).slice(0, 5));
     check('kutular: ekranda ham liste adı yok', ham.length === 0, ham.join(', '));
+    // sağlayıcı banının ortak port listesi: servis adlarıyla özet ve CSF'e yazılan değer; "Değiştir" servis çipli pencere (hariç kipi
+    // yok); SSH seçilince CSF değeri TCP 22,80,443 olur, Uygula taslağa yazar
+    await ac('ASN_BAN'); await page.waitForSelector('#ag-asn-add', { timeout: 10000 }).catch(() => {});
+    await page.fill('#ag-asn-add', 'AS64500').catch(() => {}); await tik(page, '[data-act="asnaddin"]'); await page.waitForTimeout(600);
+    const ap0 = await page.evaluate(() => { const b = document.querySelector('#ag-prov-card [data-act="asnports"]'); const s = b ? b.closest('.ag-sec') : null; return s ? s.innerText : null; });
+    check('sağlayıcı port listesi: servis adıyla özet ve CSF\'e yazılan değer', !!ap0 && /Kapalı: Web/.test(ap0) && /TCP 80,443 · UDP 443/.test(ap0), JSON.stringify(ap0));
+    await tik(page, '#ag-prov-card [data-act="asnports"]'); await page.waitForSelector('.ag-modal #ag-svcbox [data-svc="ssh"]', { timeout: 10000 }).catch(() => {});
+    const ap1 = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); if (!m) return null;
+      return { web: !!m.querySelector('[data-svc="web"].on'), modes: m.querySelectorAll('[data-mode]').length, out: !!m.querySelector('[data-svc="mout"],[data-svc="wout"]') }; });
+    check('sağlayıcı port listesi: pencere servis çipleriyle, Web seçili, kip ve giden servis yok', !!ap1 && ap1.web && ap1.modes === 0 && !ap1.out, JSON.stringify(ap1));
+    await page.click('.ag-modal [data-svc="ssh"]').catch(() => {}); await page.waitForTimeout(200);
+    const ap2 = await page.evaluate(() => (document.querySelector('.ag-modal #ag-hints') || {}).innerText || '');
+    check('sağlayıcı port listesi: SSH seçilince CSF değeri TCP 22,80,443 · UDP 443', /TCP 22,80,443 · UDP 443/.test(ap2), ap2);
+    for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(300); await layoutChecks(page, 'port-listesi', w); }
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.click('.ag-modal [data-m="ok"]').catch(() => {}); await page.waitForTimeout(400);
+    const ap3 = await page.evaluate(() => { const b = document.querySelector('#ag-prov-card [data-act="asnports"]'); const s = b ? b.closest('.ag-sec') : null; return s ? s.innerText : null; });
+    check('sağlayıcı port listesi: Uygula taslağa yazar, özet "Kapalı: Web, SSH", kaydet çubuğu çıkar', !!ap3 && /Kapalı: Web, SSH/.test(ap3) && /TCP 22,80,443/.test(ap3) && !!(await page.$('.ag-savebar')), JSON.stringify(ap3));
     for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(400); await layoutChecks(page, 'prov-kutular', w); await shot(`prov-kutular-${w}`); }
     await page.setViewportSize({ width: 1280, height: 900 });
     await tik(page, '[data-act="cfgdiscard"]'); await page.waitForTimeout(400);

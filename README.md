@@ -627,8 +627,14 @@ restoring `config.env` is enough.
 - **What to block, per provider (up to 50):** *Port list* (`CC_DENY_PORTS`) or
   *Everything* (`CC_DENY` — this also breaks this server's connections to that
   provider, because CSF applies it before replies). CSF has a single port list
-  for `CC_DENY_PORTS`, so it is shared: *Web only* (TCP 80, 443 and UDP 443 for
-  HTTP/3) or *Selected ports*. If another country or provider there uses
+  for `CC_DENY_PORTS`, so it is shared. You pick it as services (Web — TCP 80,
+  443 and UDP 443 for HTTP/3 —, SSH, FTP, cPanel, mail, DNS) plus other ports,
+  each with a badge for how many IPs from the port-list providers hit it; the
+  screen also shows the exact value written to CSF. If those providers hit a
+  service the list does not block, the card offers to add it. There is no
+  "everything except" choice here: CSF blocks these ports without looking at
+  the connection state, so blocking the complement would also drop the replies
+  to this server's own connections. If another country or provider there uses
   different ports, the list isn't changed and the screen says why.
 - **Most blocked providers** sits next to it: **Ban…** on a row adds the
   provider to the list and measures its impact (nothing is applied until you

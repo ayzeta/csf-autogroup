@@ -57,7 +57,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.55"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.56"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -954,7 +954,7 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
             [[ "$v" =~ ^(AS[0-9]{1,10}(,AS[0-9]{1,10}){0,49})?$ ]] && { CFG_VAL="$v"; return 0; }
             CFG_ERR=$(m "$M_CFG_BAD" "$k" "$v" "$M_CFG_ASN"); return 1 ;;
         ASN_TCP|ASN_UDP|CLOUD_TCP|CLOUD_UDP)
-            [[ "$v" =~ ^([0-9]{1,5}(:[0-9]{1,5})?(,[0-9]{1,5}(:[0-9]{1,5})?){0,14})?$ ]] && return 0
+            [[ "$v" =~ ^([0-9]{1,5}(:[0-9]{1,5})?(,[0-9]{1,5}(:[0-9]{1,5})?){0,49})?$ ]] && return 0
             CFG_ERR=$(m "$M_CFG_BAD" "$k" "$v" "$M_CFG_PORTS"); return 1 ;;
         *) CFG_ERR=$(m "$M_CFG_UNKNOWN" "$k"); return 1 ;;
     esac
