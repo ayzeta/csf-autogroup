@@ -57,6 +57,13 @@ R="$W/roots/b24part"
 mcheck "web kısmi banı UDP 443'ü de kapatır (HTTP/3)" "grep -q '^udp|in|d=443|s=151.80.7.0/24 ' '$R/etc/csf/csf.deny'"
 mk b24exc; quiet --action ban24 151.80.7 --mode exc --svc web
 mcheck "istisnada Web açıkken UDP 443 iki yönde açık" "grep -q '^udp|in|d=443|s=151.80.7.0/24 ' '$A' && grep -q '^udp|out|s=443|d=151.80.7.0/24 ' '$A'"
+# "Başka portlar"da /udp: son eksiz TCP, "443/udp" ve "5000-5010/udp" UDP (kısmi ban, istisna satırları, kiralık liste kuralı)
+mk b24udp; quiet --action ban24 151.80.7 --mode svc --svc ftp --ports '8080,443/udp,5000-5010/udp'
+mcheck "kısmi ban: ek portta /udp → UDP satırı (tekil ve aralık), son eksiz TCP; yorumda ports= işareti korunur" "grep -q '^tcp|in|d=21,8080|s=151.80.7.0/24 ' '$R/etc/csf/csf.deny' && grep -q '^udp|in|d=443|s=151.80.7.0/24 ' '$R/etc/csf/csf.deny' && grep -q '^udp|in|d=5000_5010|s=151.80.7.0/24 ' '$R/etc/csf/csf.deny' && grep -q ';ports=8080,443/udp,5000-5010/udp\]' '$R/etc/csf/csf.deny' && ! grep -q '^tcp|in|d=[0-9,_]*443[0-9,_]*|' '$R/etc/csf/csf.deny'"
+mk b24exu; quiet --action ban24 151.80.7 --mode exc --svc ssh --ports '53/udp'
+mcheck "istisna: ek portta /udp → UDP iki yönlü izin (TCP 53 açılmaz)" "grep -q '^udp|in|d=53|s=151.80.7.0/24 ' '$A' && grep -q '^udp|out|s=53|d=151.80.7.0/24 ' '$A' && ! grep -q '^tcp|in|d=53|s=151.80.7.0/24' '$A'"
+mk b24udpx; quiet --action ban24 151.80.7 --mode svc --ports '443/xyz'
+mcheck "ek port deseni: bilinmeyen son ek reddedilir (ban konmaz)" "! grep -q 's=151.80.7.0/24' '$R/etc/csf/csf.deny' && ! grep -q '^151.80.7.0/24' '$R/etc/csf/csf.deny'"
 mk oldpart;    for x in 7.1 7.2 8.1 8.2 9.1 10.1; do single 151.80.$x sshd; done; quiet --action ban16 151.80 --mode svc --svc web --keep; quiet
 mcheck "kısmi bandan önceki tekiller şüpheli ağ uyarısı üretmez" "! grep -q '\"type\":\"warn16\",\"cidr\":\"151.80.0.0/16\"' '$R/var/lib/csf_autogroup/events.jsonl'"
 printf 'WARN16_151.80 %s\n' "$(date +%F)" >> "$C"          # bugün bandan önce bildirilmiş say
@@ -415,7 +422,9 @@ LG=$(run --lookup 151.80.7.9 --json 2>/dev/null); LO=$(run --lookup 152.70.1.1 -
 mcheck "kip: IP kartında hariç listesi exc + açık kalan portlar, kipsiz liste eski ortak portlar, her şey kipi all" "printf '%s' '$LG' | grep -q '\"kind\":\"cloud\",\"what\":\"gcp\",\"mode\":\"exc\",\"tcp\":\"80,443\",\"udp\":\"443\"' && printf '%s' '$LO' | grep -q '\"kind\":\"cloud\",\"what\":\"oracle\",\"mode\":\"svc\",\"tcp\":\"80,443\",\"udp\":\"443\"' && printf '%s' '$LV' | grep -q '\"kind\":\"cloud\",\"what\":\"vultr\",\"mode\":\"all\",\"tcp\":\"\",\"udp\":\"\"'"
 mcheck "kip: aralık penceresi listenin kipini taşır" "run --inside 151.80.7.0/24 --json 2>/dev/null | grep -q '\"cloud\":\"gcp\",\"cloud_mode\":\"exc\",\"cloud_tcp\":\"80,443\",\"cloud_udp\":\"443\"'"
 mcheck "kip: Etkisini ölç — web'i kapatan listeler oracle ve vultr; web'i açık bırakan gcp'nin isteği 'zaten kapalı' sayılmaz (0), oracle'ınki sayılır (1)" "run --asn-impact cl:gcp --json 2>/dev/null | grep -q '\"cloud\":{\"web\":true,\"lists\":\"oracle vultr\",\"req\":0,' && run --asn-impact cl:oracle --json 2>/dev/null | grep -q '\"cloud\":{\"web\":true,\"lists\":\"oracle vultr\",\"req\":1,'"
-mcheck "kip: ayar doğrulaması (svc'de servis ya da port gerekir, bilinmeyen kip ve giden servis reddedilir)" "! run --config set 'CLOUD_MODES=gcp=svc::' >/dev/null 2>&1 && ! run --config set 'CLOUD_MODES=gcp=hepsi::' >/dev/null 2>&1 && ! run --config set 'CLOUD_MODES=gcp=svc:mout:' >/dev/null 2>&1 && run --config set 'CLOUD_MODES=gcp=svc:web,ssh:8080,30000-35000' >/dev/null 2>&1"
+mcheck "kip: ayar doğrulaması (svc'de servis ya da port gerekir, bilinmeyen kip ve giden servis reddedilir)" "! run --config set 'CLOUD_MODES=gcp=svc::' >/dev/null 2>&1 && ! run --config set 'CLOUD_MODES=gcp=hepsi::' >/dev/null 2>&1 && ! run --config set 'CLOUD_MODES=gcp=svc:mout:' >/dev/null 2>&1 && run --config set 'CLOUD_MODES=gcp=svc:web,ssh:8080,30000-35000' >/dev/null 2>&1 && grep -q '^CLOUD_MODES=\"\{0,1\}gcp=svc:web,ssh:8080,30000-35000\"\{0,1\}$' '$R/app/config.env'"
+quiet --config set 'CLOUD_MODES=gcp=svc::443/udp oracle=exc:ssh:443/udp'
+mcheck "kip: ek portta /udp — yalnız UDP 443 kapatan liste ve hariç kipinde UDP 443 açık kalan liste" "run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"what\":\"gcp\",\"mode\":\"svc\",\"tcp\":\"\",\"udp\":\"443\"' && run --lookup 152.70.1.1 --json 2>/dev/null | grep -q '\"what\":\"oracle\",\"mode\":\"exc\",\"tcp\":\"22\",\"udp\":\"443\"'"
 
 # Kaynak ayrıntısı (--src-ips): kiralık liste kutusundaki ihlal eden IP sayısı (durumun prov.cloud.pot) ile ayrıntının tablosu aynı
 # kaynaklardan (olay kaydı, csf.deny tekilleri, geçici liste) ve aynı sayıda; her IP'nin şu anki durumu (kalıcı, geçici, aralık banı)

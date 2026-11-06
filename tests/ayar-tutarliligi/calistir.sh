@@ -44,7 +44,7 @@ SVC=$(cat_of SVC_CATALOG); CLD=$(cat_of CLOUD_CATALOG)
     for k in ASN_TCP CLOUD_TCP; do printf '%s\t%s\n' "$k" '80,443' "$k" '22,80,443,465,587' "$k" '30000:35000,8080' "$k" ''; done
     for k in ASN_UDP CLOUD_UDP; do printf '%s\t%s\n' "$k" '443' "$k" ''; done
     # kiralık liste başına kip (svc / all / exc; servisler; portlar tire aralıklı)
-    printf 'CLOUD_MODES\t%s\n' 'aws=exc:web:' 'azure=svc:web,ssh:8080,30000-35000 gcp=all::' 'x-kendi--alt=svc::2222' 'oracle=exc::' ''
+    printf 'CLOUD_MODES\t%s\n' 'aws=exc:web:' 'azure=svc:web,ssh:8080,30000-35000 gcp=all::' 'x-kendi--alt=svc::2222' 'oracle=exc::' 'aws=svc::443/udp' 'aws=exc:web:53/udp,30000-30100/udp' ''
     for k in ASN_BAN SVC_ALLOW CLOUD_BAN ENABLED LOOKUP DIGEST BLOCK_EXPIRE_AUTO IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST IC_REVIEW IE_REVIEW; do printf '%s\t0\n%s\t1\n' "$k" "$k"; done
     printf 'ASN_MODE\t%s\n' web ports
     printf 'MSG_LANG\t%s\n' tr en
@@ -76,6 +76,16 @@ while IFS=$'\t' read -r key val; do
     out=$(env SIM_ROOT="$R" PATH="$W/bin:/usr/bin:/bin" AG_BY=test bash "$R/app/csf_autogroup.sh" --config set "$key=$val" --json 2>&1)
     [[ "$out" == *'"ok":true'* ]] || printf 'MOTOR\t%s\t%s\t%s\n' "$key" "$val" "$(printf '%s' "$out" | tr '\n' ' ' | cut -c1-200)" >> "$W/engine.out"
 done < "$W/values.tsv"
+# yazılabilir mi: --config set yalnız CFG_KEYS'tekileri yazar, öteki anahtar için "Değişiklik yok" (ok) der. CLOUD_MODES bir kez
+# yalnız PROV_KEYS'e eklenmişti: panel kaydı motor tarafından sessizce atılıyordu (2026-11-06). Her anahtar ayar listesinde olmalı
+cl=$(env SIM_ROOT="$R" PATH="$W/bin:/usr/bin:/bin" AG_BY=test bash "$R/app/csf_autogroup.sh" --config get 2>/dev/null | awk '{ print $1 }')
+for key in $(cut -f1 "$W/values.tsv" | sort -u); do
+    printf '%s\n' "$cl" | grep -qx "$key" || printf 'MOTOR\t%s\t-\tayar listesinde (CFG_KEYS) yok: --config set bu anahtarı yazmaz\n' "$key" >> "$W/engine.out"
+done
+# panelin kaydettiği her anahtar (api.php izin listesi) motorun ayar listesinde
+for key in $(php -r '$s = file_get_contents($argv[1]); $i = strpos($s, "case '"'"'config_set'"'"'"); $j = strpos($s, "\$re", $i); preg_match_all("/'"'"'([A-Z][A-Z0-9_]+)'"'"'/", substr($s, $i, $j - $i), $m); echo implode(" ", array_unique($m[1]));' "$(wp "$API")"); do
+    printf '%s\n' "$cl" | grep -qx "$key" || printf 'PANEL\t%s\t-\tapi.php kaydediyor ama motorun ayar listesinde (CFG_KEYS) yok\n' "$key" >> "$W/engine.out"
+done
 
 n=$(grep -c . "$W/values.tsv"); bad=$(cat "$W/panel.out" "$W/engine.out" | grep -c .)
 if [ "$bad" -eq 0 ]; then echo "Ayar tutarlılığı: $n değerin hepsi panelden ve motordan geçiyor"; exit 0; fi

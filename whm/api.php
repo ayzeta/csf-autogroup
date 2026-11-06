@@ -119,7 +119,7 @@ switch ($a) {
             $svc   = (string) ($_POST['svc'] ?? '');
             $ports = (string) ($_POST['ports'] ?? '');
             if (!in_array($mode, ['all', 'svc', 'exc'], true) || ($svc !== '' && !preg_match('/^[a-z]+(,[a-z]+){0,9}$/', $svc))
-                || ($ports !== '' && !preg_match('/^[0-9]{1,5}(-[0-9]{1,5})?(,[0-9]{1,5}(-[0-9]{1,5})?){0,29}$/', $ports))) {
+                || ($ports !== '' && !preg_match('/^[0-9]{1,5}(-[0-9]{1,5})?(\/(tcp|udp))?(,[0-9]{1,5}(-[0-9]{1,5})?(\/(tcp|udp))?){0,29}$/', $ports))) {
                 ag_json(['ok' => false, 'code' => 2, 'message' => 'bad_mode']);
             }
             if (($_POST['replace'] ?? '') === '1') {   // eklentinin kendi banının kipini değiştir
@@ -161,7 +161,7 @@ switch ($a) {
                  'CLOUD_REFRESH_DAYS', 'CLOUD_FAIL_DAYS', 'SVC_REFRESH_DAYS', 'SVC_FAIL_DAYS', 'GEO_REFRESH_DAYS', 'OWNER_TTL_DAYS', 'IMUNIFY_REFRESH_MIN', 'BLOCK_ACTIVE_DAYS'];
         // listeler virgül, elle eklenen servisler boşluk ve "ad|adres" içerir; diğerleri tek değer
         $re = ['SVC_EXTRA' => '/^[A-Za-z0-9._~:\/?#@=%+&|*, -]{0,16000}$/', 'SVC_SOURCES' => '/^[a-z0-9,]{0,300}$/', 'SVC_SKIP' => '/^[a-z0-9,-]{0,400}$/', 'SVC_EXCEPT' => '/^[0-9.\/, ]{0,4000}$/', 'SVC_URLS' => '/^[A-Za-z0-9._~:\/?#@=%+&|*, -]{0,6000}$/', 'ASN_LIST' => '/^[A-Za-z0-9, ]{0,800}$/', 'ASN_ALL' => '/^[A-Za-z0-9, ]{0,800}$/',
-               'ASN_TCP' => '/^[0-9,:]{0,200}$/', 'ASN_UDP' => '/^[0-9,:]{0,200}$/', 'CLOUD_TCP' => '/^[0-9,:]{0,200}$/', 'CLOUD_UDP' => '/^[0-9,:]{0,200}$/', 'CLOUD_MODES' => '/^[a-z0-9=:, -]{0,12000}$/',
+               'ASN_TCP' => '/^[0-9,:]{0,200}$/', 'ASN_UDP' => '/^[0-9,:]{0,200}$/', 'CLOUD_TCP' => '/^[0-9,:]{0,200}$/', 'CLOUD_UDP' => '/^[0-9,:]{0,200}$/', 'CLOUD_MODES' => '/^[a-z0-9=:,\/ -]{0,12000}$/',
                'CLOUD_SOURCES' => '/^[a-z0-9,]{0,300}$/', 'CLOUD_URLS' => '/^[A-Za-z0-9._~:\/?#@=%+&|*, -]{0,3000}$/', 'CLOUD_EXTRA' => '/^[A-Za-z0-9._~:\/?#@=%+&|*, -]{0,6000}$/', 'SRC_LABELS' => '/^[A-Za-z0-9._~%:= -]{0,40000}$/'];
         $args = ['--config', 'set'];
         foreach ((array) ($_POST['v'] ?? []) as $k => $v) {

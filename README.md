@@ -271,7 +271,8 @@ removal is there to free space in the list.
 - **Selected services** — only connections *from* the range to the services you
   pick are blocked (Web, SSH on this server's real SSH port, FTP, cPanel · WHM ·
   Webmail, incoming mail, mail client (sending, IMAP, POP3), DNS, plus any
-  other ports or ranges such as `8080, 30000-35000`). Everything else stays open, and connections from this
+  other ports or ranges such as `8080, 30000-35000`; add `/udp` for UDP, e.g.
+  `443/udp`, a port without a suffix is TCP). Everything else stays open, and connections from this
   server to the range are not affected. Web includes UDP 443 (HTTP/3) and DNS
   includes UDP 53. It is one `csf.deny` line (split per 15
   ports), shown as *partial* in Active range bans; it doesn't cover the range, so

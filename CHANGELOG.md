@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.15.51 — 2026-11-06
+
+- **UDP in "Other ports".** Everywhere ports are picked (manual range ban,
+  *Everything except*, rented-server lists) the extra ports box now takes
+  UDP too: `443/udp`, `30000-30100/udp`; a port without a suffix stays TCP
+  (`443, 443/udp` is both). HTTP/3 runs on UDP 443, so closing only TCP 443
+  left it open. The **Web** chip already covered TCP 80, 443 and UDP 443, and
+  **DNS** both TCP and UDP 53. Summaries and the IP card show them as
+  "UDP 443".
+- **Fix:** saving **What to block** for a rented-server list did nothing in
+  1.15.50 — the engine did not take the new `CLOUD_MODES` setting and replied
+  "Nothing changed". A check now makes sure every setting the panel saves is
+  one the engine writes.
+- **Fix (source details):** a rented-server list brought back only in the
+  draft, not saved, said "the rented-server rule is on". It now says the list
+  is not saved and blocks nothing yet, with the rule it will get; a saved list
+  with an unsaved rule change shows both.
+
 ## 1.15.50 — 2026-11-06
 
 - **Rented servers: what to block, per list.** Each box has its own rule,

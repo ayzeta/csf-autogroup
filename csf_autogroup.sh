@@ -57,7 +57,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.50"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.51"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -808,7 +808,7 @@ mail() {
 
 # ── Settings: validation (panel + --config set + --dry-run --set) ──────────
 # Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
-CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST IC_REVIEW IE_REVIEW THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_KEEP_DAYS EVENTS_DAYS RUN_DAYS PERM_WINDOW_DAYS BANLOG_DAYS LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_URLS CLOUD_EXTRA SRC_LABELS ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS OWNER_TTL_DAYS IMUNIFY_REFRESH_MIN BLOCK_ACTIVE_DAYS"
+CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST IC_REVIEW IE_REVIEW THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_KEEP_DAYS EVENTS_DAYS RUN_DAYS PERM_WINDOW_DAYS BANLOG_DAYS LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_MODES CLOUD_URLS CLOUD_EXTRA SRC_LABELS ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS OWNER_TTL_DAYS IMUNIFY_REFRESH_MIN BLOCK_ACTIVE_DAYS"
 PROV_KEYS="SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_MODES CLOUD_URLS CLOUD_EXTRA ENABLED"
 SVC_CATALOG="google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake microsoft365"
 CLOUD_CATALOG="gcp aws azure oracle digitalocean linode vultr"
@@ -906,7 +906,7 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
             return 0 ;;
         CLOUD_MODES)              # "ad=svc|all|exc:servisler:portlar"; svc kipinde servis ya da port gerekir
             local x n=0 sv='(web|ssh|ftp|cp|min|sync|dns)' re pp; CFG_VAL=""
-            re="^[a-z0-9-]{1,66}=(svc|all|exc):($sv(,$sv){0,6})?:([0-9]{1,5}(-[0-9]{1,5})?(,[0-9]{1,5}(-[0-9]{1,5})?){0,14})?\$"
+            re="^[a-z0-9-]{1,66}=(svc|all|exc):($sv(,$sv){0,6})?:([0-9]{1,5}(-[0-9]{1,5})?(/(tcp|udp))?(,[0-9]{1,5}(-[0-9]{1,5})?(/(tcp|udp))?){0,14})?\$"
             for x in $v; do
                 n=$((n + 1)); pp="${x##*:}"
                 if [ "$n" -gt 100 ] || ! [[ "$x" =~ $re ]] || [[ "$x" =~ =svc::$ ]] || ! split_ports "$pp"; then
@@ -2682,7 +2682,7 @@ do_status() {
     # eklentinin kısmi banları (gelişmiş satırlar; bölünmüş olanlar tek kayıt) ve tam banların izin istisnaları
     pb_load
     local -A EXC_S=() EXC_X=()
-    local pl re_ex='exception for ([0-9./]+) \[svc=([a-z,]*)(;ports=([0-9,-]+))?\]'
+    local pl re_ex='exception for ([0-9./]+) \[svc=([a-z,]*)(;ports=([0-9a-z,/-]+))?\]'
     while IFS= read -r pl; do
         [[ "$pl" =~ $re_ex ]] && { EXC_S[${BASH_REMATCH[1]}]="${BASH_REMATCH[2]}"; EXC_X[${BASH_REMATCH[1]}]="${BASH_REMATCH[4]}"; }
     done < <(grep -F 'csf_autogroup: exception for' "$CSF_DIR/csf.allow" 2>/dev/null)
@@ -3612,7 +3612,7 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
         local ownf=false opn="" rcn=0
         if [ "$IN_COVER" = "$c" ] && [[ "$(deny_line "$c")" == *"csf_autogroup:"* ]]; then
             ownf=true
-            opn=$(grep -F "csf_autogroup: exception for $c [" "$CSF_DIR/csf.allow" 2>/dev/null | head -n 1 | sed -n 's/.*\[svc=\([a-z,]*\)\(;ports=\([0-9,-]*\)\)\{0,1\}\].*/\1|\3/p')
+            opn=$(grep -F "csf_autogroup: exception for $c [" "$CSF_DIR/csf.allow" 2>/dev/null | head -n 1 | sed -n 's#.*\[svc=\([a-z,]*\)\(;ports=\([0-9a-z,/-]*\)\)\{0,1\}\].*#\1|\3#p')
             restore_file "$c"; [ -s "$REPLY" ] && rcn=$(grep -vc -e '^#' -e '^$' -e '^cnt|' "$REPLY")
         fi
         o+=",\"own_full\":$ownf,\"open\":\"${opn%%|*}\",\"open_extra\":\"$([ -n "$opn" ] && echo "${opn#*|}")\",\"restore\":$rcn"
@@ -3698,7 +3698,7 @@ do_lookup() {
     for i in "${!DC_LO[@]}"; do
         (( DC_LO[i] <= n && DC_HI[i] >= n )) || continue
         ln="$(deny_line "${DC_TXT[i]}")"
-        op=$(grep -F "csf_autogroup: exception for ${DC_TXT[i]} [" "$CSF_DIR/csf.allow" 2>/dev/null | head -n 1 | sed -n 's/.*\[svc=\([a-z,]*\)\(;ports=\([0-9,-]*\)\)\{0,1\}\].*/\1|\3/p')
+        op=$(grep -F "csf_autogroup: exception for ${DC_TXT[i]} [" "$CSF_DIR/csf.allow" 2>/dev/null | head -n 1 | sed -n 's#.*\[svc=\([a-z,]*\)\(;ports=\([0-9a-z,/-]*\)\)\{0,1\}\].*#\1|\3#p')
         jstr "${ln:-${DC_TXT[i]}}"
         covers+=("$(( DC_HI[i] - DC_LO[i] ))|{\"kind\":\"cidr\",\"cidr\":\"${DC_TXT[i]}\",\"line\":$REPLY${op:+,\"open\":\"${op%%|*}\",\"open_extra\":\"${op#*|}\"}}")
     done
@@ -3870,7 +3870,7 @@ strip_dnd() {    # CIDR → satırdaki "do not delete" ifadesini kaldır (csf -d
     rc=$?; rm -f "$tmp"; return $rc
 }
 SSHD_CONFIG="${SSHD_CONFIG:-/etc/ssh/sshd_config}"
-RE_SV='\[svc=([a-z,]*)'; RE_PO=';ports=([0-9,-]+)'
+RE_SV='\[svc=([a-z,]*)'; RE_PO=';ports=([0-9a-z,/-]+)'
 RE_DATE='- ([A-Z][a-z]{2} [A-Z][a-z]{2} +[0-9]{1,2} [0-9:]{8} [0-9]{4})[[:space:]]*$'
 SSH_PORTS_MEMO=""
 ssh_ports() {    # sunucunun SSH port(lar)ı → REPLY ("22" ya da "33330"); süreç başına bir kez (sshd -T pahalı, kapsama denetimi IP başına sorar)
@@ -3897,19 +3897,21 @@ svc_ports() {    # SERVİS → REPLY = TCP portları (elle bandaki servis seçim
 uniq_ports() {   # "443,80,80,30000_35000" → "80,443,30000_35000" (tekil portlar ve CSF aralıkları, tekrarsız)
     tr ',' '\n' <<< "$1" | awk '($1 ~ /^[0-9]+$/ && $1 >= 1 && $1 <= 65535) || $1 ~ /^[0-9]+_[0-9]+$/' | sort -t_ -k1,1n -k2,2n -u | paste -sd, -
 }
-split_ports() {  # "8080, 30000-35000" → PS_ONE (tekil portlar, virgüllü) · PS_RNG (CSF aralıkları "A_B", boşluklu); 1 = geçersiz
-    local x a b
-    PS_ONE=""; PS_RNG=""
+split_ports() {  # "8080, 30000-35000, 443/udp" → PS_ONE (TCP tekil portlar, virgüllü) · PS_RNG (TCP CSF aralıkları "A_B", boşluklu) ·
+    # PS_UONE / PS_URNG (aynısı UDP: "/udp" son ekli olanlar; son eksiz ya da "/tcp" TCP); 1 = geçersiz
+    local x a b u
+    PS_ONE=""; PS_RNG=""; PS_UONE=""; PS_URNG=""
     [ -z "$1" ] && return 0
-    [[ "$1" =~ ^[0-9]{1,5}(-[0-9]{1,5})?(,[0-9]{1,5}(-[0-9]{1,5})?)*$ ]] || return 1
+    [[ "$1" =~ ^[0-9]{1,5}(-[0-9]{1,5})?(/(tcp|udp))?(,[0-9]{1,5}(-[0-9]{1,5})?(/(tcp|udp))?)*$ ]] || return 1
     for x in ${1//,/ }; do
+        u=0; case "$x" in */udp) u=1 ;; esac; x="${x%/*}"
         if [[ "$x" == *-* ]]; then
             a=$((10#${x%-*})); b=$((10#${x#*-}))
             [ "$a" -ge 1 ] && [ "$b" -le 65535 ] && [ "$a" -lt "$b" ] || return 1
-            PS_RNG+="${PS_RNG:+ }${a}_${b}"
+            if [ "$u" = 1 ]; then PS_URNG+="${PS_URNG:+ }${a}_${b}"; else PS_RNG+="${PS_RNG:+ }${a}_${b}"; fi
         else
             a=$((10#$x)); [ "$a" -ge 1 ] && [ "$a" -le 65535 ] || return 1
-            PS_ONE+="${PS_ONE:+,}$a"
+            if [ "$u" = 1 ]; then PS_UONE+="${PS_UONE:+,}$a"; else PS_ONE+="${PS_ONE:+,}$a"; fi
         fi
     done
     return 0
@@ -3928,7 +3930,7 @@ chunks15() {     # "1,2,…" → 15'erlik gruplar (iptables multiport tek kurald
 part_ports() {   # BSVC + BPORTS → REPLY = kapatılacak TCP portları; PART_UDPP = UDP'de de kapanacaklar; 1 = boş ya da geçersiz
     # UDP: DNS 53; web 443 — HTTP/3 (QUIC) UDP 443'ten çalışır, LiteSpeed ve yeni Apache/nginx'te açık olabilir
     local x all=""
-    PART_UDPP=""
+    PART_UDPP=""; PART_URNG=""
     for x in ${BSVC//,/ }; do
         case "$x" in
             web) svc_ports web; all+="${all:+,}$REPLY"; PART_UDPP+="${PART_UDPP:+,}443" ;;
@@ -3939,8 +3941,9 @@ part_ports() {   # BSVC + BPORTS → REPLY = kapatılacak TCP portları; PART_UD
     done
     split_ports "$BPORTS" || return 1
     all+="${all:+,}$PS_ONE"; PART_RNG="$PS_RNG"
+    PART_UDPP+="${PART_UDPP:+${PS_UONE:+,}}$PS_UONE"; PART_URNG="$PS_URNG"   # "Başka portlar"daki /udp olanlar
     REPLY=$(uniq_ports "$all")
-    [ -n "$REPLY$PART_RNG" ]
+    [ -n "$REPLY$PART_RNG$PART_UDPP$PART_URNG" ]
 }
 exc_lines() {    # CIDR → EXC_LINES: tam banın yanına csf.allow'a girecek izin satırları; 1 = boş ya da geçersiz seçim
     local c="$1" x tin="" tout="" uin="" uout="" mk ch rng=""
@@ -3959,9 +3962,9 @@ exc_lines() {    # CIDR → EXC_LINES: tam banın yanına csf.allow'a girecek iz
         esac
     done
     split_ports "$BPORTS" || return 1
-    tin+="${tin:+,}$PS_ONE"; rng="$PS_RNG"
+    tin+="${tin:+,}$PS_ONE"; rng="$PS_RNG"; uin+="${uin:+${PS_UONE:+,}}$PS_UONE"; local urng="$PS_URNG"
     if [[ ",$BSVC," == *,ftp,* ]]; then ftp_passive; [ -n "$REPLY" ] && rng+="${rng:+ }$REPLY"; fi   # FTP aktarımı pasif portlardan
-    [ -n "$tin$tout$rng" ] || return 1
+    [ -n "$tin$tout$rng$uin$urng" ] || return 1
     mk="csf_autogroup: exception for $c [svc=$BSVC${BPORTS:+;ports=$BPORTS}] - do not delete"
     tin=$(uniq_ports "$tin"); tout=$(uniq_ports "$tout"); uin=$(uniq_ports "$uin"); uout=$(uniq_ports "$uout")
     # CSF önce izin, sonra ban zincirine bakar; ban "kurulmuş bağlantı" kuralından da önce geldiği için her
@@ -3971,6 +3974,7 @@ exc_lines() {    # CIDR → EXC_LINES: tam banın yanına csf.allow'a girecek iz
     for ch in $rng; do EXC_LINES+="tcp|in|d=$ch|s=$c # $mk"$'\n'"tcp|out|s=$ch|d=$c # $mk"$'\n'; done
     for ch in $(chunks15 "$uin"); do EXC_LINES+="udp|in|d=$ch|s=$c # $mk"$'\n'"udp|out|s=$ch|d=$c # $mk"$'\n'; done
     for ch in $(chunks15 "$uout"); do EXC_LINES+="udp|out|d=$ch|d=$c # $mk"$'\n'"udp|in|s=$ch|s=$c # $mk"$'\n'; done
+    for ch in $urng; do EXC_LINES+="udp|in|d=$ch|s=$c # $mk"$'\n'"udp|out|s=$ch|d=$c # $mk"$'\n'; done
     EXC_LINES="${EXC_LINES%$'\n'}"
     [ -n "$EXC_LINES" ]
 }
@@ -4010,9 +4014,11 @@ own_partials_inside() { # LO HI → eklentinin bu aralıktaki kısmi banlarını
         adv_parse "$l" && cidr_range "$ADV_CIDR" && (( R_LO >= $1 && R_HI <= $2 )) && echo "$ADV_CIDR"
     done | sort -u
 }
-part_shown() {   # PORTLAR → iletide gösterilecek liste (CSF aralıkları 30000-35000 biçiminde)
-    local x="$1${PART_RNG:+${1:+,}${PART_RNG// /,}}"
-    printf '%s' "${x//_/-}"
+part_shown() {   # PORTLAR → iletide gösterilecek liste (CSF aralıkları 30000-35000 biçiminde; UDP olanlar " · UDP …")
+    local x="$1${PART_RNG:+${1:+,}${PART_RNG// /,}}" u="$PART_UDPP${PART_URNG:+${PART_UDPP:+,}${PART_URNG// /,}}"
+    [ -n "$u" ] && u=$(uniq_ports "${u//-/_}")
+    x="${x//_/-}${u:+${x:+ · }UDP ${u//_/-}}"
+    printf '%s' "$x"
 }
 partial_write() { # CIDR BITS PORTLAR → kısmi ban satırları; aynı aralığın önceki kısmi banının yerine, tek yazımda
     local c="$1" b="$2" pp="$3" dt mk lines="" ch sf rc
@@ -4020,7 +4026,8 @@ partial_write() { # CIDR BITS PORTLAR → kısmi ban satırları; aynı aralığ
     mk="csf_autogroup: $(m "$M_A_PCOMMENT" "$b" "$AG_BY") [svc=$BSVC${BPORTS:+;ports=$BPORTS}] - do not delete - $dt"
     for ch in $(chunks15 "$pp"); do lines+="tcp|in|d=$ch|s=$c # $mk"$'\n'; done
     for ch in $PART_RNG; do lines+="tcp|in|d=$ch|s=$c # $mk"$'\n'; done      # CSF'te aralık tek başına satır ister
-    [ -n "$PART_UDPP" ] && lines+="udp|in|d=$(uniq_ports "$PART_UDPP")|s=$c # $mk"$'\n'
+    [ -n "$PART_UDPP" ] && for ch in $(chunks15 "$(uniq_ports "$PART_UDPP")"); do lines+="udp|in|d=$ch|s=$c # $mk"$'\n'; done
+    for ch in $PART_URNG; do lines+="udp|in|d=$ch|s=$c # $mk"$'\n'; done
     sf=$(mktemp) || return 1
     printf '%s\n' "|s=$c # csf_autogroup:" > "$sf"
     file_rewrite "$DENY_FILE" /dev/null "$sf" "$lines"; rc=$?; rm -f "$sf"; return $rc
@@ -4523,14 +4530,14 @@ cls_of() {       # SEBEP → REPLY = servis; rakamları atılmış sebep metnine
 # açtığı bağlantıların cevapları hiçbir kipte kesilmez. Bütün ekranlar (IP kartı, ban penceresi, Etkisini ölç, kapsama, özet) buradan okur.
 declare -A CLP_C=()
 cl_pol() {       # AD → CP_K (svc | all | exc | none) · CP_T, CP_U = svc'de KAPANAN, exc'te AÇIK KALAN TCP / UDP portları ("80,443,30000:35000")
-    local n="$1" e="" k sv px x t="" u="" r BSVC BPORTS PART_UDPP PART_RNG PS_ONE PS_RNG   # elle banın seçimini ezmesin
+    local n="$1" e="" k sv px x t="" u="" r BSVC BPORTS PART_UDPP PART_RNG PART_URNG PS_ONE PS_RNG PS_UONE PS_URNG   # elle banın seçimini ezmesin
     if [ -n "${CLP_C[$n]+x}" ]; then IFS='|' read -r CP_K CP_T CP_U <<< "${CLP_C[$n]}"; return 0; fi
     for x in $CLOUD_MODES; do [ "${x%%=*}" = "$n" ] && e="${x#*=}"; done
     IFS=: read -r k sv px <<< "$e"
     case "$k" in
         all) CP_K=all ;;
         svc) CP_K=svc; BSVC="$sv"; BPORTS="$px"
-             if part_ports; then t="$REPLY"; u="$PART_UDPP"; for r in $PART_RNG; do t+="${t:+,}$r"; done; fi ;;
+             if part_ports; then t="$REPLY"; u="$PART_UDPP"; for r in $PART_RNG; do t+="${t:+,}$r"; done; for r in $PART_URNG; do u+="${u:+,}$r"; done; fi ;;
         exc) CP_K=exc
              for x in ${sv//,/ }; do
                  case "$x" in
@@ -4540,7 +4547,8 @@ cl_pol() {       # AD → CP_K (svc | all | exc | none) · CP_T, CP_U = svc'de K
                  [ "$x" = web ] && u+="${u:+,}443"                                   # HTTP/3 (QUIC)
                  if [ "$x" = ftp ]; then ftp_passive; [ -n "$REPLY" ] && t+="${t:+,}$REPLY"; fi   # FTP aktarımı pasif portlardan
              done
-             if split_ports "$px"; then t+="${t:+,}$PS_ONE"; for r in $PS_RNG; do t+="${t:+,}$r"; done; fi ;;
+             if split_ports "$px"; then t+="${t:+,}$PS_ONE"; for r in $PS_RNG; do t+="${t:+,}$r"; done
+                 u+="${u:+${PS_UONE:+,}}$PS_UONE"; for r in $PS_URNG; do u+="${u:+,}$r"; done; fi ;;
         *)   CP_K=svc; t="${CLOUD_TCP// /}"; u="${CLOUD_UDP// /}"; t="${t//:/_}"; u="${u//:/_}" ;;
     esac
     t=$(uniq_ports "$t"); u=$(uniq_ports "$u"); CP_T="${t//_/:}"; CP_U="${u//_/:}"
