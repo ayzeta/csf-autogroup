@@ -713,7 +713,8 @@ restoring `config.env` is enough.
 running there. Services that publish their own addresses can be allowed:
 Google (Googlebot, AdsBot, Storebot, Gmail images, site verification), Bing,
 Apple, DuckDuckGo, OpenAI, Stripe, Mollie, Microsoft 365 (Outlook, Exchange
-Online) and the site monitors UptimeRobot, Pingdom and StatusCake, plus your own entries
+Online), the site monitors UptimeRobot, Pingdom and StatusCake, and QUIC.cloud
+(LiteSpeed's CDN and optimization service), plus your own entries
 (`name|https://list` or `name|IP`). They are written to a file included from
 `csf.allow` (plain addresses, kept in an ipset); CSF checks the allow list
 first, so they pass country and provider bans, on every port. Lists are

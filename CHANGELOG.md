@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.15.63 — 2026-11-08
+
+- **QUIC.cloud is a built-in allowed service.** LiteSpeed's CDN and
+  optimization service publishes its addresses at
+  `https://www.quic.cloud/ips-v4`; choosing it keeps them allowed and up to
+  date, instead of a hand-pasted list in `csf.allow` that goes stale.
+
 ## 1.15.62 — 2026-11-07
 
 - **No firewall gap on the daily allowed-services update.** `csf -r` flushes

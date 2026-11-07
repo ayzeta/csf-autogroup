@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.62"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.63"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -148,7 +148,7 @@ DIGEST_DAY="${DIGEST_DAY:-1}"           # 1 = pazartesi … 7 = pazar (09:00'dan
 # "auto": ayar hiç kaydedilmemişse CSF'teki mevcut duruma göre (elle kurulmuş olanı devralır).
 SVC_SOURCES_SET="${SVC_SOURCES+x}"
 SVC_ALLOW="${SVC_ALLOW:-auto}"          # 1 = yayımlanmış servis adresleri csf.allow'a yazılır (Include)
-SVC_SOURCES="${SVC_SOURCES-google}"    # virgüllü: google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake microsoft365
+SVC_SOURCES="${SVC_SOURCES-google}"    # virgüllü: google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake microsoft365 quiccloud
 SVC_EXTRA="${SVC_EXTRA:-}"              # boşlukla ayrılmış "ad|https://liste" ya da "ad|1.2.3.0/24"
 SVC_URLS="${SVC_URLS:-}"                # hazır kaynakların değiştirilmiş adresleri: "google-common|https://… bing|https://…"
 SVC_SKIP="${SVC_SKIP:-}"                # seçili kaynakların alınmayan alt listeleri (virgüllü): ör. "openai-user,openai-gptbot"
@@ -861,7 +861,7 @@ mail() {
 # Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
 CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST IC_REVIEW IE_REVIEW THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_KEEP_DAYS EVENTS_DAYS RUN_DAYS PERM_WINDOW_DAYS BANLOG_DAYS LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_MODES CLOUD_URLS CLOUD_EXTRA SRC_LABELS ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS OWNER_TTL_DAYS IMUNIFY_REFRESH_MIN BLOCK_ACTIVE_DAYS"
 PROV_KEYS="SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_MODES CLOUD_URLS CLOUD_EXTRA ENABLED"
-SVC_CATALOG="google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake microsoft365"
+SVC_CATALOG="google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake microsoft365 quiccloud"
 CLOUD_CATALOG="gcp aws azure oracle digitalocean linode vultr"
 CFG_TRY_KEYS="THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 PERM_WINDOW_DAYS LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS"
 logrotate_write() { # [MB] [ARŞİV] → /etc/logrotate.d/csf_autogroup (geçici dosya + mv)
@@ -4497,6 +4497,8 @@ svc_urls() {     # KAYNAK → REPLY = "ad|adres" kayıtları (boşlukla); kaynak
         statuscake) REPLY="statuscake|https://www.statuscake.com/API/Locations/txt" ;;
         # Outlook / Exchange Online: yeni Outlook ve Outlook mobil, IMAP hesaplarını bu sunucular üzerinden eşitler ve gönderir
         microsoft365) REPLY="microsoft365|https://endpoints.office.com/endpoints/worldwide?ServiceAreas=Exchange&clientrequestid=b10c5ed1-bad1-445f-b386-b919946339a7" ;;
+        # QUIC.cloud (LiteSpeed CDN, görsel / CSS optimizasyonu): düz metin, satır başına bir IPv4 (2026-11-08: 151 adres)
+        quiccloud)  REPLY="quiccloud|https://www.quic.cloud/ips-v4" ;;
         *)          REPLY="" ;;
     esac
 }
