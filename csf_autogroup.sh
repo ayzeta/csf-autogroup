@@ -1959,6 +1959,7 @@ wl_add() {       # CIDR LABEL [YORUM] — yorum: dosyadaki satırın # sonrası 
 # 80 karakteri aşan yorum sözcük sınırında "…" ile kısalır. Önce yorum 80. karakterde kesiliyordu, tarih yarım kalıyordu ("… - S").
 AWK_SCM='function scm(x,  y) {
     sub(/[ \t]*-[ \t]*(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) +[0-9]+ [0-9:]+ [0-9]+[ \t]*$/, "", x)
+    gsub(/^[ \t]+|[ \t]+$/, "", x)
     if (length(x) <= 80) return x
     y = substr(x, 1, 79); if (match(y, / [^ ]*$/) && RSTART > 40) y = substr(y, 1, RSTART - 1)
     sub(/[ ,;:(-]+$/, "", y); return y "…" }'
