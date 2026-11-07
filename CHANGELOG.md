@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.15.62 — 2026-11-07
+
+- **No firewall gap on the daily allowed-services update.** `csf -r` flushes
+  and rebuilds every CSF rule; for a few seconds no ban works (measured with
+  CSF 16.33). The allowed-services update ran `csf -r` whenever its list
+  changed, so banned providers could reach the sites for those seconds. The
+  changes are now applied to CSF's allow set (`chain_ALLOW`) directly: new
+  addresses are added, removed ones taken out (unless another allow entry still
+  lists them). `csf -r` is used only the first time the list is included, or
+  when CSF does not use ipsets.
+- Partial bans, removing a permanent or partial ban, changing a ban and saving
+  the provider ban still need `csf -r`; their windows now say that no ban works
+  for a few seconds while it runs.
+- Fixed: `tools/services-allow.sh` failed when run by hand (an unset variable).
+- Phone: the "Last 30 days" chart is right under the summary cards again
+  (it had been moved to the very bottom), and the cards have one even gap.
+- Phone: the IP card no longer scrolls sideways when it shows an announced
+  range; each level's state and button sit under its range. The Watched list
+  shows the owner on its own line instead of cutting it next to the time-left
+  bar, "Show more / Show all" stay together, and durations no longer break
+  between the number and the unit.
+- Very narrow phones (320–360 px, or larger text): the tabs and the run chart
+  fit, the review list puts the state badge under the address instead of
+  cutting the address, and long allow comments wrap instead of widening the
+  card.
+- Fixed: the Settings save bar was drawn shifted to the right for a moment
+  each time it appeared (its opening animation dropped the centring), going
+  off-screen on phones.
+
 ## 1.15.61 — 2026-11-07
 
 - Fixed: on the Overview, the Muted list pushed each row's end date and its

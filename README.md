@@ -50,6 +50,13 @@ a banned `/24`, can lock people out.
   `/var/log/csf_autogroup.log`) for a few days before trusting it. *Try before
   saving* in the Settings tab shows what new thresholds would do.
 - `/16` is warn-only by design; only `/24`s are auto-banned.
+- **Every `csf -r` leaves a short gap.** While CSF reloads, it flushes its
+  rules and rebuilds them; for a few seconds no ban works (more with large
+  country / provider lists). This is CSF's behaviour, whoever runs the reload
+  (CSF's own UI, a cPanel update, a script). The plugin avoids it where it can:
+  the daily update of the allowed services is applied to CSF's allow set
+  directly, without a reload. Partial bans, removing a permanent ban and saving
+  the provider ban still need `csf -r`; their windows say so.
 
 ## Install
 

@@ -185,7 +185,7 @@ async function layoutChecks(page, label, width) {
       const q = a.getBoundingClientRect(); return r.right > q.right + 1 || r.left < q.left - 1;
     }
     return false;
-  }).map(e => e.textContent.trim().slice(0, 20)));
+  }).map(e => e.textContent.trim().slice(0, 20) + ' (' + String(e.className || e.tagName).slice(0, 20) + ' ⊂ ' + String((e.closest('.ag-item, .ag-card, .ag-drawer, .ag-modal') || {}).className || '').slice(0, 30) + ')'));
   check(`${label} · ${width} px · IP / aralık adı kesilmiyor`, cut.length === 0, cut.slice(0, 4).join(' | '));
   const sw = await page.evaluate(() => document.documentElement.scrollWidth);
   check(`${label} · ${width} px · yatay taşma yok`, sw <= width, `belge ${sw}px`);
@@ -239,6 +239,9 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     const r = await route.fetch(); let j = null;
     try { j = await r.json(); } catch (e) { return route.fulfill({ response: r }); }
     if (/^a=lookup/.test(pd) && j && j.ok && !j.asn) { j.asn = '64500'; j.asname = 'TEST-AS - Example Network, US'; j.cc = j.cc || 'US'; }
+    // duyurulan aralık da (canlıda sahip sorgusu açıkken her kartta): "Duyurulan aralığı banla (/17)" düğmesi çizilsin — testte
+    // yoktu, telefonda o düğmenin kartı 61 px yatay kaydırdığını göremedi
+    if (/^a=lookup/.test(pd) && j && j.ok && !j.pfx && /^\d+\.\d+\.\d+\.\d+$/.test(j.ip || '')) { const o = j.ip.split('.'); j.pfx = o[0] + '.' + o[1] + '.' + (o[2] & 128) + '.0/17'; }
     if (/^a=status/.test(pd) && j && j.ok) {
       // boş harita PHP'den [] gelir (json_encode boş diziyi nesne yapmaz); diziye eklenen anahtar JSON'a yazılmaz
       if (!j.owners || Array.isArray(j.owners)) j.owners = {};
@@ -429,7 +432,7 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
           adlar: Array.from(m.querySelectorAll('[data-ttl]')).map(b => b.textContent.trim()) }; });
       check('tek IP banı: pencere kipleri "Her şey" ve "Seçilen servisler", süre yalnız "Her şey"de, giden servis yok', !!ib && ib.modes === 'all,svc' && ib.ttlAll && !ib.ttlSvc && ib.sure === 5 && !ib.cikis, JSON.stringify(ib));
       // süre adı "1 sa 0 dk" / "168 sa 0 dk" değil: sıfır dakika yazılmaz, tam gün gün olarak
-      check('tek IP banı: süre adlarında "0 dk / 0 min" yok, tam gün gün olarak', !!ib && !ib.adlar.some(a => /\b0 (dk|min)\b/.test(a)) && ib.adlar.some(a => /^(7 gün|7 d)$/.test(a)), ib ? ib.adlar.join(' | ') : '');
+      check('tek IP banı: süre adlarında "0 dk / 0 min" yok, tam gün gün olarak', !!ib && !ib.adlar.some(a => /\b0[\s ](dk|min)\b/.test(a)) && ib.adlar.some(a => /^7[\s ](gün|d)$/.test(a)), ib ? ib.adlar.join(' | ') : '');
       for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(250); await layoutChecks(page, 'ip-banla', w); }
       await page.setViewportSize({ width: 1280, height: 900 });
       await page.keyboard.press('Escape'); await page.waitForTimeout(400);
@@ -461,7 +464,8 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     check('IP kartı düzeni: Bu IP · Üst seviyeler · Kim; tabloda Blok ve Ağ satırı, aralık tıklanır, Bloğu / Ağı banla kendi satırında; eski bölümler yok',
       !!kd && kd.sec[0] === 'Bu IP' && kd.sec.indexOf('Üst seviyeler') > 0 && kd.sec.indexOf('Kim') > kd.sec.indexOf('Üst seviyeler') && kd.th === 3 &&
       !!r24 && r24.c && r24.b === 'ban24' && !!r16 && r16.c && r16.b === 'ban16' && !kd.eski, JSON.stringify(kd));
-    for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(250); await layoutChecks(page, 'ip-karti', w); }
+    // telefonlar 320–390 arası (büyük yazı boyutu da dar genişlik gibi davranır): kart her birinde yatay kaymamalı
+    for (const w of [1280, 390, 360, 320]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(250); await layoutChecks(page, 'ip-karti', w); }
     await page.setViewportSize({ width: 1280, height: 900 });
     if (var1) {
       await page.click('.ag-drawer [data-dr="ban1"]'); await page.waitForSelector('.ag-modal #ag-ttl', { timeout: 8000 }).catch(() => {});
@@ -471,7 +475,7 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
         return { modes, ttlAll, ttlSvc: m.querySelector('#ag-ttl').style.display !== 'none', sure: m.querySelectorAll('[data-ttl]').length, cikis: !!m.querySelector('[data-svc="mout"]'),
           adlar: Array.from(m.querySelectorAll('[data-ttl]')).map(b => b.textContent.trim()) }; });
       check('tek IP banı: pencere kipleri "Her şey" ve "Seçilen servisler", süre yalnız "Her şey"de, giden servis yok', !!ib && ib.modes === 'all,svc' && ib.ttlAll && !ib.ttlSvc && ib.sure === 5 && !ib.cikis, JSON.stringify(ib));
-      check('tek IP banı: süre adlarında "0 dk / 0 min" yok, tam gün gün olarak', !!ib && !ib.adlar.some(a => /\b0 (dk|min)\b/.test(a)) && ib.adlar.some(a => /^(7 gün|7 d)$/.test(a)), ib ? ib.adlar.join(' | ') : '');
+      check('tek IP banı: süre adlarında "0 dk / 0 min" yok, tam gün gün olarak', !!ib && !ib.adlar.some(a => /\b0[\s ](dk|min)\b/.test(a)) && ib.adlar.some(a => /^7[\s ](gün|d)$/.test(a)), ib ? ib.adlar.join(' | ') : '');
       for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(250); await layoutChecks(page, 'ip-banla', w); }
       await page.setViewportSize({ width: 1280, height: 900 });
       await page.keyboard.press('Escape'); await page.waitForTimeout(400);

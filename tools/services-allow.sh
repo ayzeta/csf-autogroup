@@ -9,7 +9,8 @@
 # Adresler ayrı bir dosyaya yazılır ve csf.allow'a Include edilir (ilk çalıştırmada satır eklenir). Düz IP
 # aralığı olarak yazıldıkları için CSF onları ipset'e koyar: sayıları ne olursa olsun paket başına tek sorgu.
 # Kaynak indirilemezse ya da beklenenden çok az adres dönerse o kaynağın önceki listesi korunur (Googlebot bir
-# indirme hatası yüzünden kesilmesin). Dosya değiştiyse csf -r çalışır, değişmediyse hiçbir şey yapılmaz.
+# indirme hatası yüzünden kesilmesin). Dosya değiştiyse fark CSF'in izin kümesine (chain_ALLOW) doğrudan uygulanır;
+# csf -r yalnız ilk kurulumda ya da küme kullanılamıyorsa çalışır (csf -r sırasında güvenlik duvarı birkaç saniye açık kalır).
 #
 # Normalde eklenti yönetir (Ayarlar → Sağlayıcı banı → İzinli servisler): seçilen kaynakları SRC ile verir,
 # günde bir kez yeniler, kapatılınca --remove ile kaldırır. Elle de çalışır:
@@ -26,6 +27,7 @@ EXTRA="${EXTRA:-/etc/csf/csf_autogroup.services.extra}"
 CACHE="${CACHE:-/var/lib/csf_autogroup/services}"
 CSF_BIN="${CSF_BIN:-/usr/sbin/csf}"
 LOG_FILE="${LOG_FILE:-/var/log/csf_autogroup.log}"
+EXCEPT="${EXCEPT:-}"     # eklenti verir; elle çalıştırmada boş (set -u altında tanımsızdı: elle çalıştırma liste üretemiyordu)
 SOURCES=(
     "google-common|https://developers.google.com/static/crawling/ipranges/common-crawlers.json"
     "google-special|https://developers.google.com/static/crawling/ipranges/special-crawlers.json"
@@ -62,15 +64,42 @@ except_filter() {
         { split($1, q, "/"); b = (q[2] == "" ? 32 : q[2] + 0); lo = v4(q[1]); lo = lo - lo % (2 ^ (32 - b)); part(lo, b) }'
 }
 
+# Güvenlik duvarını açmadan uygulama: csf -r bütün kuralları silip yeniden kurar; o sürede (ölçüldü, CSF 16.33: 4,2 sn'lik yeniden
+# yüklemenin ~2,7 sn'si) INPUT ilkesi ACCEPT ve CSF zincirleri yok, hiçbir ban işlemez. CSF, Include edilen izin dosyalarındaki düz
+# IP / CIDR satırlarını chain_ALLOW kümesine (hash:net) koyar (ölçüldü): dosyanın eski ve yeni hâli arasındaki fark kümeye doğrudan
+# uygulanır. Bir adres başka bir izin kaynağında da varsa (csf.allow, öteki Include'lar) kümeden silinmez. Küme yoksa, LF_IPSET
+# kapalıysa ya da ipset bir adımı yapamazsa 1 döner: çağıran eskisi gibi csf -r çalıştırır. Sonraki her csf -r kümeyi dosyalardan
+# yeniden kurar, sonuç aynıdır.
+ents() { [ -r "$1" ] && awk '{ sub(/#.*/, ""); sub(/^[ \t]+/, ""); sub(/[ \t].*/, "") } /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\/[0-9]+)?$/' "$1" | sort -u; }
+other_allow() {   # csf.allow ve (bu dosya dışındaki) Include'larının düz IP / CIDR kayıtları
+    local f; { ents "$ALLOW"; for f in $(awk '$1 == "Include" { print $2 }' "$ALLOW" 2>/dev/null); do [ "$f" = "$OUT" ] || ents "$f"; done; } | sort -u
+}
+live_apply() {    # ESKİ_DOSYA YENİ_DOSYA → 0: fark kümeye uygulandı
+    local conf; conf="$(dirname "$ALLOW")/csf.conf"
+    [ "${SVC_LIVE:-1}" = 1 ] || return 1
+    command -v ipset >/dev/null 2>&1 && ipset list -n chain_ALLOW >/dev/null 2>&1 || return 1
+    grep -qE '^[[:space:]]*LF_IPSET[[:space:]]*=[[:space:]]*"?1"?' "$conf" 2>/dev/null || return 1
+    local a d oth x na=0 nd=0
+    a=$(comm -13 <(ents "$1") <(ents "$2")); oth=$(other_allow)
+    d=$(comm -23 <(ents "$1") <(ents "$2") | comm -23 - <(printf '%s\n' "$oth" | sed '/^$/d'))
+    for x in $a; do ipset add chain_ALLOW "$x" -exist 2>/dev/null || return 1; na=$((na + 1)); done
+    for x in $d; do ipset del chain_ALLOW "$x" -exist 2>/dev/null || return 1; nd=$((nd + 1)); done
+    LIVE_MSG="+$na −$nd"
+}
+
 if [ "${1:-}" = "--remove" ]; then
-    ch=0
+    ch=0; lv=1
     if grep -qE "^Include[[:space:]]+$OUT([[:space:]]|$)" "$ALLOW" 2>/dev/null; then
+        live_apply "$OUT" /dev/null || lv=0                    # kümeden önce: Include satırı silinince "öteki kaynak" hesabı doğru kalır
         cp -p "$ALLOW" "$ALLOW.autogroup.bak" 2>/dev/null
         grep -vE "^Include[[:space:]]+$OUT([[:space:]]|$)|^# CSF Auto-Group: yayımlanmış servis adresleri" "$ALLOW" > "$ALLOW.tmp" && cat "$ALLOW.tmp" > "$ALLOW"; rm -f "$ALLOW.tmp"; ch=1
     fi
     [ -e "$OUT" ] && { rm -f "$OUT"; ch=1; }
     rm -f "$CACHE/status"
-    [ "$ch" = 1 ] && { "$CSF_BIN" -r >/dev/null 2>&1; log "kaldırıldı (Include satırı ve liste)"; }
+    if [ "$ch" = 1 ]; then
+        if [ "$lv" = 1 ]; then log "kaldırıldı (Include satırı ve liste; izin kümesinden ${LIVE_MSG:-}, csf -r gerekmedi)"
+        else "$CSF_BIN" -r >/dev/null 2>&1; log "kaldırıldı (Include satırı ve liste)"; fi
+    fi
     exit 0
 fi
 mkdir -p "$CACHE" 2>/dev/null
@@ -138,9 +167,17 @@ if ! grep -qE "^Include[[:space:]]+$OUT([[:space:]]|$)" "$ALLOW" 2>/dev/null; th
     printf '\n# CSF Auto-Group: yayımlanmış servis adresleri (tools/services-allow.sh)\nInclude %s\n' "$OUT" >> "$ALLOW" || exit 1
     inc=1; log "csf.allow'a Include satırı eklendi: $OUT"
 fi
+prevf=""
 if [ "$changed" = 1 ]; then
-    { printf '# güncellendi %s — elle düzenlemeyin, tools/services-allow.sh yeniden yazar\n' "$(date '+%Y-%m-%d %H:%M')"; printf '%s' "$body"; } > "$OUT.tmp" && mv -f "$OUT.tmp" "$OUT" || exit 1
+    prevf=$(mktemp) && { cat "$OUT" > "$prevf" 2>/dev/null || :; }   # fark için eski hâl (yoksa boş)
+    { printf '# güncellendi %s — elle düzenlemeyin, tools/services-allow.sh yeniden yazar\n' "$(date '+%Y-%m-%d %H:%M')"; printf '%s' "$body"; } > "$OUT.tmp" && mv -f "$OUT.tmp" "$OUT" || { rm -f "$prevf"; exit 1; }
     log "izin listesi güncellendi: $total adres"
 fi
-if [ "$changed" = 1 ] || [ "$inc" = 1 ]; then "$CSF_BIN" -r >/dev/null 2>&1 && log "csf -r çalıştı"; fi
+# Include satırı yeni eklendiyse CSF dosyayı ancak yeniden yüklemede okur (ilk kurulum); yalnız içerik değiştiyse fark kümeye uygulanır
+if [ "$inc" = 1 ]; then "$CSF_BIN" -r >/dev/null 2>&1 && log "csf -r çalıştı"
+elif [ "$changed" = 1 ]; then
+    if live_apply "$prevf" "$OUT"; then log "izin kümesine uygulandı ($LIVE_MSG), csf -r gerekmedi"
+    else "$CSF_BIN" -r >/dev/null 2>&1 && log "csf -r çalıştı"; fi
+fi
+rm -f "$prevf"
 exit 0
