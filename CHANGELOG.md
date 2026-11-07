@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.15.61 — 2026-11-07
+
+- Fixed: on the Overview, the Muted list pushed each row's end date and its
+  ⋯ menu out of the card once the owner was shown. The owner now sits on its
+  own line under the row.
+- Fixed: the IP card split level names in the middle of a word ("Announced
+  range", "Provider" in Turkish).
+- Fixed: the "Singles" column header did not line up with its numbers (the
+  empty sort arrow took space on the right).
+- Fixed: "Most blocked providers" could show a cut reason such as
+  "1206) triggered" for bans from CSF's temp list.
+- Allow comments: CSF's date suffix is dropped and long comments are
+  shortened at a word with "…" (they were cut at 80 characters, leaving
+  "… - S").
+- A block that Team Cymru returns no provider for (the range is not announced)
+  now says "no provider" instead of a bare "—" that looked like "not looked up
+  yet".
+- Provider names are the same on every list (banned providers, the provider
+  ban list and its history now use the same name as the other lists, with the
+  country flag); History shows the owner on manual bans and removals too.
+- The IP card no longer offers *Ban IP* for an IP allowed on every port (CSF
+  refuses the permanent ban and a temporary one would not work); *Remove allow*
+  is shown instead.
+- The timed range ban window says "for 1 hour" etc. in its title and text
+  instead of "permanently" and "do not delete".
+- The range card's owner uses the same flag / AS badge / name layout as the
+  lists; a partial ban result no longer mentions single bans when there are
+  none.
+- The note help in the Allow window shows the characters that can not be used
+  in a readable, spaced form.
+
 ## 1.15.60 — 2026-11-06
 
 - **Allow an IP** from its IP card (Whitelist → *Allow…*): with no end

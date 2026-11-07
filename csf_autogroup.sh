@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.60"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.61"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1955,6 +1955,13 @@ wl_add() {       # CIDR LABEL [YORUM] — yorum: dosyadaki satırın # sonrası 
     cidr_range "$1" || return
     WL_LO+=("$R_LO"); WL_HI+=("$R_HI"); WL_TXT+=("$2"); WL_CM+=("${3:-}")
 }
+# İzin satırı yorumu ekranda (IP kartı, Kontrol edilecekler, mail): CSF'in sona eklediği tarih (" - Sat Nov  1 12:00:00 2026") atılır,
+# 80 karakteri aşan yorum sözcük sınırında "…" ile kısalır. Önce yorum 80. karakterde kesiliyordu, tarih yarım kalıyordu ("… - S").
+AWK_SCM='function scm(x,  y) {
+    sub(/[ \t]*-[ \t]*(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) +[0-9]+ [0-9:]+ [0-9]+[ \t]*$/, "", x)
+    if (length(x) <= 80) return x
+    y = substr(x, 1, 79); if (match(y, / [^ ]*$/) && RSTART > 40) y = substr(y, 1, RSTART - 1)
+    sub(/[ ,;:(-]+$/, "", y); return y "…" }'
 wl_load() {      # FILE LABEL [DEPTH] — IP, CIDR, gelişmiş satır (tcp|in|d=22|s=IP), Include
     # Dosya awk'ta bir kez okunur ve atama betiğine çevrilir, bash onu tek eval ile çalıştırır. Düz "IP[/n] [# yorum]" satırları
     # (izinli servis listelerinde binlerce) doğrudan WL_* ataması olur; Include, gelişmiş satır, hostname ve birden çok IP'li
@@ -1966,6 +1973,7 @@ wl_load() {      # FILE LABEL [DEPTH] — IP, CIDR, gelişmiş satır (tcp|in|d=
     pa "wl_önce"
     wls="$(awk -v lab="$label" -v dep="$depth" '
         function q(x) { gsub(/[\\"$`]/, "\\\\&", x); return "\"" x "\"" }
+        '"$AWK_SCM"'
         { l = $0; sub(/\r$/, "", l)
           if (index(l, "csf_autogroup: exception")) next
           svn = ""; if (match(l, /csf_autogroup: service [A-Za-z0-9_-]+/)) svn = substr(l, RSTART + 23, RLENGTH - 23)
@@ -1974,7 +1982,7 @@ wl_load() {      # FILE LABEL [DEPTH] — IP, CIDR, gelişmiş satır (tcp|in|d=
                    # panelden verilen izin ("csf_autogroup: elle izin (kim) - not - <CSF tarihi>"): yorum yalnız kullanıcının notu
                    if (cm ~ /^csf_autogroup: (elle izin|manual allow) \(/) { sub(/ - [A-Z][a-z][a-z] [A-Z][a-z][a-z] +[0-9]+ [0-9:]+ [0-9]+$/, "", cm); if (!sub(/^[^)]*\) - /, "", cm)) cm = "" }
                    else if (cm ~ /csf_autogroup:/ || cm ~ /^do not delete/) cm = ""
-                   cm = substr(cm, 1, 80); r = substr(l, 1, k - 1) } else r = l
+                   cm = scm(cm); r = substr(l, 1, k - 1) } else r = l
           sub(/^[ \t]+/, "", r); if (r == "") next
           tok = r; sub(/[ \t].*$/, "", tok)
           if (tok ~ /^[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?(\/[0-9][0-9]?)?$/) {
@@ -2022,7 +2030,7 @@ wl_line() {      # ETİKET DERİNLİK SATIR → wl_load'ın awk'ta doğrudan ç�
     if [[ "$line" == *"#"* ]]; then
         cm="${line#*#}"; cm="${cm#"${cm%%[![:space:]]*}"}"; cm="${cm%"${cm##*[![:space:]]}"}"
         case "$cm" in *csf_autogroup:*|"do not delete"*|"") cm="" ;; esac
-        cm="${cm:0:80}"
+        [ -n "$cm" ] && cm=$(printf '%s\n' "$cm" | awk "$AWK_SCM"' { print scm($0) }')   # awk yoluyla aynı kısaltma
     fi
     line="${line%%#*}"; line="${line#"${line%%[![:space:]]*}"}"
     [ -z "$line" ] && return
@@ -2095,6 +2103,7 @@ load_whitelist() {
     if [ -r "$CSF_VAR/csf.tempallow" ]; then
         eval "$(awk -F'|' -v now="$(date +%s)" '
             function q(x) { gsub(/[\\"$`]/, "\\\\&", x); return "\"" x "\"" }
+            '"$AWK_SCM"'
             $1 ~ /^[0-9]+$/ && $5 ~ /^[0-9]+$/ && $2 ~ /^[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?(\/[0-9][0-9]?)?$/ {
                 if ($1 + $5 <= now + 0) next
                 ip = $2; bits = 32; k = index(ip, "/"); if (k) { bits = substr(ip, k + 1) + 0; ip = substr(ip, 1, k - 1) }
@@ -2103,7 +2112,7 @@ load_whitelist() {
                 v = ((o[1] * 256 + o[2]) * 256 + o[3]) * 256 + o[4]; size = 2 ^ (32 - bits); lo = v - v % size
                 cm = $6; for (j = 7; j <= NF; j++) cm = cm "|" $j
                 if (cm ~ /^csf_autogroup: /) { if (!sub(/^[^)]*\) - /, "", cm)) cm = "" }   # eklentinin izni: yalnız kullanıcının notu
-                cm = substr(cm, 1, 80)
+                cm = scm(cm)
                 if ($3 == "" || $3 == "*") lab = "csf.tempallow: " $2
                 else { pr = "tcp"; pt = $3; k = index(pt, ";"); if (k) { pr = substr(pt, k + 1); pt = substr(pt, 1, k - 1) }
                        if (pr !~ /^[a-z]+$/) pr = "?"; if (pt !~ /^[0-9,:_*-]*$/) pt = ""
@@ -3212,7 +3221,8 @@ do_status() {
     # Sahipler (önbellekten; yukarıda yüklendi), en çok saldıran ağlar, son 30 günün günlük etkinliği
     local owners=() pfx_seen=() dstart daily=""
     for p in $( { deny_prefixes; pending_prefixes; listed_prefixes; } | sort -u); do
-        [ -n "${OWN_A[$p]}" ] || continue
+        # sorgulanıp sağlayıcı çıkmayan blok (Team Cymru boş cevap: aralık duyurulmuyor) "-" ile: panel "henüz bilinmiyor"dan ayırır
+        if [ -z "${OWN_A[$p]}" ]; then [ -n "${OWN_L[$p]+x}" ] && [ -z "${OWN_OLD[$p]+x}" ] && owners+=("\"$p\":[\"-\",\"\",\"\"]"); continue; fi
         jstr "${OWN_N[$p]}"; owners+=("\"$p\":[\"${OWN_A[$p]}\",\"${OWN_C[$p]}\",$REPLY]")
     done
     prof owners
@@ -6380,7 +6390,9 @@ asn_top() {      # [N] [evidence|blocks] → ASN_TOP satırları: "ASN|KURUM|CC|
     # en sık ban sebebi: lfd notunun "(sshd) Failed SSH login" / "(mod_security) … (id:2008) triggered" kısmı (panel ModSecurity mesajını ekler)
     AWHY=()
     while IFS='|' read -r a k; do AWHY[$a]="$k"; done < <(for c in "${!ASG[@]}"; do p="${c%.*}"; [ -n "${OWN_A[$p]}" ] && printf '%s|%s\n' "${OWN_A[$p]}" "${ASG[$c]}"; done |
-        awk -F'|' '{ r = $2; sub(/^[^:]*lfd[^:]*: */, "", r); sub(/^lfd - */, "", r); sub(/ (from|by) [0-9].*$/, "", r); gsub(/[|"\\]/, " ", r); if (r == "") next
+        # lfd ön eki yalnız başta ("lfd: " ya da geçici listedeki "lfd - "): önce [^:]*lfd[^:]*: "lfd - (mod_security) … (id:1206)"
+        # satırını "(id:"e kadar siliyordu, panelde "en sık: 1206) triggered" kalıyordu
+        awk -F'|' '{ r = $2; sub(/^[# \t]*lfd(:| -) */, "", r); sub(/ (from|by) [0-9].*$/, "", r); gsub(/[|"\\]/, " ", r); if (r == "") next
                      C[$1, r]++; if (C[$1, r] > B[$1]) { B[$1] = C[$1, r]; W[$1] = r } } END { for (a in W) print a "|" substr(W[a], 1, 120) }')
     pa "asn en sık sebep"
     # bütün banları bulut listesinde kalan sağlayıcı sıralamaya girmez, "banlı" satırında listeyle görünür

@@ -122,6 +122,25 @@ async function layoutChecks(page, label, width) {
     const ox = getComputedStyle(e).overflowX; return /auto|scroll/.test(ox) && e.scrollWidth > e.clientWidth + 1;
   }).map(e => (e.className || e.tagName) + ' ' + e.scrollWidth + '>' + e.clientWidth));
   check(`${label} · ${width} px · yatay kaydırma yok`, yk.length === 0, yk.slice(0, 4).join(' | '));
+  // sağa yaslı (sayı) sütunun başlık metni sütundaki değerlerle aynı yerde biter (Tekil: başlık sağındaki boş sıralama oku yeri
+  // metni sayıların 12 px solunda bitiriyordu)
+  const hz = await page.evaluate(() => { const R = [], txr = e => { const s = document.createRange(); s.selectNodeContents(e); const r = s.getBoundingClientRect(); return r.width ? r.right : null; };
+    document.querySelectorAll('#ag-app .ag-thead .ag-th.ag-num-c').forEach(h => { if (!h.offsetWidth) return;
+      const tn = Array.from(h.childNodes).find(n => n.nodeType === 3 && n.textContent.trim()); if (!tn) return;
+      const s = document.createRange(); s.selectNodeContents(tn); const hr = s.getBoundingClientRect().right;
+      const tb = h.parentElement.parentElement, c = tb && tb.querySelector('.ag-tr .ag-td.ag-num-c'); if (!c || !c.offsetWidth) return;
+      const cr = txr(c); if (cr != null && Math.abs(cr - hr) > 3) R.push(tn.textContent.trim() + ' başlık ' + Math.round(hr) + ' / değer ' + Math.round(cr)); });
+    return R; });
+  check(`${label} · ${width} px · sayı sütununun başlığı değerlerle hizalı`, hz.length === 0, hz.slice(0, 3).join(' | '));
+  // harflerden oluşan sözcük ortadan bölünmez (IP kartı seviye sütununda "Duyur-ulan", "Sağlay-ıcı"); IP / adres / kod sayılmaz
+  const bol = await page.evaluate(() => { const R = [], roots = [document.getElementById('ag-app')].concat(Array.from(document.querySelectorAll('.ag-drawer, .ag-modal')));
+    roots.forEach(root => { if (!root) return; const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); let n;
+      while ((n = w.nextNode()) && R.length < 6) { const p = n.parentElement; if (!p || !p.offsetWidth || p.closest('pre, .ag-mono, .ag-raw, input, textarea')) continue;
+        const re = /[A-Za-zÇĞİÖŞÜçğıöşü]{5,}/g; let m;
+        while ((m = re.exec(n.textContent))) { const r = document.createRange(); r.setStart(n, m.index); r.setEnd(n, m.index + m[0].length);
+          const rs = Array.from(r.getClientRects()).filter(x => x.width > 0); if (rs.length > 1 && Math.abs(rs[0].top - rs[rs.length - 1].top) > 4) { R.push(m[0]); break; } } } });
+    return R; });
+  check(`${label} · ${width} px · sözcük ortadan bölünmüyor`, bol.length === 0, bol.join(' | '));
   // kısa yazılı düğme satır boyu gerilmez (sağlayıcı satırındaki "Ayrıntı" eski bir seçici yüzünden telefonda kartın enine uzuyordu)
   const ger = await page.evaluate(() => Array.from(document.querySelectorAll('#ag-app .ag-btn, .ag-modal .ag-btn')).filter(b => {
     if (!b.offsetWidth || b.closest('.ag-head-actions, .ag-modal-f, .ag-lookup, .ag-savebar')) return false;
@@ -212,12 +231,22 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
   const shot = async (name) => { if (OUT) await page.screenshot({ path: `${OUT}/${name}.png`, fullPage: true }); };
   // test makinesinde ASN sorgusu cevapsız kalır, IP kartının sağlayıcı satırları hiç çizilmezdi (canlıda "shortName is not
   // defined" yalnız ASN gelince düştü): sorgu ASN döndürmediyse belgeleme ASN'si ve Cymru biçiminde ad eklenir
+  // Susturulanlar'daki adreslerin sahibi de yoksa (test makinesinde sorgu cevapsız) uzun bir ad eklenir: 1.15.59'da sahip satırı dar
+  // kartta bitişi ve ⋯ menüsünü kartın dışına itiyordu, sahipsiz test verisinde görünmedi
   await page.route('**/api.php', async route => {
-    if (!/^a=lookup(&|$)/.test(route.request().postData() || '')) return route.continue();
+    const pd = route.request().postData() || '';
+    if (!/^a=(lookup|status)(&|$)/.test(pd)) return route.continue();
     const r = await route.fetch(); let j = null;
     try { j = await r.json(); } catch (e) { return route.fulfill({ response: r }); }
-    if (j && j.ok && !j.asn) { j.asn = '64500'; j.asname = 'TEST-AS - Example Network, US'; j.cc = j.cc || 'US'; }
-    return route.fulfill({ response: r, json: j });
+    if (/^a=lookup/.test(pd) && j && j.ok && !j.asn) { j.asn = '64500'; j.asname = 'TEST-AS - Example Network, US'; j.cc = j.cc || 'US'; }
+    if (/^a=status/.test(pd) && j && j.ok) {
+      // boş harita PHP'den [] gelir (json_encode boş diziyi nesne yapmaz); diziye eklenen anahtar JSON'a yazılmaz
+      if (!j.owners || Array.isArray(j.owners)) j.owners = {};
+      (j.ignored || []).forEach(g => { const p = String(g.cidr).replace(/\/\d+$/, '').split('.').slice(0, 3).join('.');
+        if (!j.owners[p] || j.owners[p][0] === '-') j.owners[p] = ['64500', 'TR', 'TEST-AS - Turk Telekomunikasyon Anonim Sirketi Uzun Bir Kurum Adi Ornegi, TR']; });
+    }
+    // gövde açıkça verilir: { response, json } birlikte verilince özgün gövde gidiyordu (enjeksiyon hiç işlemiyordu; ölçüldü)
+    return route.fulfill({ status: r.status(), contentType: 'application/json', body: JSON.stringify(j) });
   });
   console.log('Arayüz');
   await page.goto(URL, { waitUntil: 'networkidle', timeout: 90000 }); await ready(page);
@@ -521,6 +550,17 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     const untilOf = () => page.evaluate(c => { const r = document.querySelector(`.ag-item[data-row="${c}"] .ag-td-until`); return r ? r.textContent : ''; }, c);
     const openIm = async () => { await page.click(`[data-act="menu"][data-key="im:${c}"]`); await page.waitForTimeout(400); };
     if (listed) {
+      // satırın bitişi, ⋯ düğmesi ve sahibi kartın içinde (sahip uzun adla; 1.15.59'da kartın dışına itiliyordu)
+      for (const w of [1280, 390]) {
+        await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(300);
+        const ic = await page.evaluate(async c => { const it = document.querySelector(`.ag-item[data-row="${c}"]`); if (!it) return 'satır yok';
+          const card = it.closest('.ag-card').getBoundingClientRect(), bad = [];
+          [['bitiş', '.ag-td-until'], ['⋯', '[data-act="menu"]'], ['sahip', '.ag-own-s']].forEach(([n, s]) => { const e = it.querySelector(s); if (!e) { bad.push(n + ' yok'); return; }
+            const r = e.getBoundingClientRect(); if (r.width < 1 || r.right > card.right + 1 || r.left < card.left - 1) bad.push(`${n} ${Math.round(r.left)}–${Math.round(r.right)} (kart ${Math.round(card.left)}–${Math.round(card.right)})`); });
+          return bad.length ? bad.join(', ') : 'ok'; }, c);
+        check(`Susturulanlar satırı kartın içinde (bitiş, ⋯, sahip) · ${w} px`, ic === 'ok', ic);
+      }
+      await page.setViewportSize({ width: 1280, height: 900 }); await page.waitForTimeout(300);
       await openIm();
       const vis = await page.evaluate(() => { const b = document.querySelector('.ag-menu [data-act="unignore"]'); if (!b) return 'yok';
         const r = b.getBoundingClientRect(); return r.width > 0 && r.right <= window.innerWidth + 1 && r.left >= -1 ? 'ok' : `menü ${Math.round(r.left)}–${Math.round(r.right)}`; });

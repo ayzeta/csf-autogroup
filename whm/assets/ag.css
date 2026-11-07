@@ -369,10 +369,13 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-t-warn { color: var(--ag-warn); font-size: 12px; font-weight: 600; white-space: nowrap; }
 .ag-th { overflow: hidden; white-space: nowrap; }
 .ag-td-own { display: flex; align-items: center; gap: 7px; overflow: hidden; white-space: nowrap; }
-.ag-own-s { display: flex; align-items: center; gap: 6px; margin-top: 4px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 12px; }   /* Susturulanlar: sahip adresin altında (dar kart) */
+.ag-own-s { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; margin-top: -2px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 12px; }   /* Susturulanlar: sahip satırın altında, kart genişliğinde */
 .ag-own-s .ag-org { overflow: hidden; text-overflow: ellipsis; }
+.ag-own-s.ag-own-f { margin-top: 0; font-size: inherit; }   /* aralık kartı Sahip satırı */
 .ag-asn { font-family: var(--ag-mono); font-size: 11px; font-weight: 600; color: var(--ag-accent); background: var(--ag-accent-soft); padding: 2px 6px; border-radius: 5px; flex: none; }
 .ag-org { overflow: hidden; text-overflow: ellipsis; color: var(--ag-text); }
+/* sağa yaslı başlıkta sıralama oku metnin solunda: sağdaki boş ok yeri metni sayıların 12 px solunda bitiriyordu (canlıda ölçüldü) */
+.ag-th.ag-th-r .ag-sort, .ag-th.ag-num-c .ag-sort { order: -1; }
 .ag-num-c { text-align: right; font-variant-numeric: tabular-nums; color: var(--ag-text-2); justify-content: flex-end; }
 .ag-when { font-size: 12.5px; color: var(--ag-text-3); white-space: nowrap; }
 .ag-td-act { display: flex; justify-content: flex-end; overflow: visible; }
@@ -1014,7 +1017,9 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
 .ag-td-stack .ag-under { margin-left: 0; align-self: flex-start; }
 .ag-dr-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 /* IP kartı: üst seviyeler tablosu (blok, ağ, duyurulan aralık, ülke, sağlayıcı, kiralık liste) */
-.ag-lv-t td:first-child { width: 1%; }   /* seviye adı kırılabilir: kart hep 460 px, "Duyurulan aralık" kırılmayınca tablo kartı 11 px aşıp yatay kaydırma çıkarıyordu */
+/* seviye adı yalnız sözcük arasından kırılır ("Duyurulan / aralık"); sözcük içinden kırılmaz (1.15.59'da "Duyur-ulan", "Sağlay-ıcı"
+   bölünüyordu: genel td kuralı overflow-wrap anywhere). Kart 460 px; adı tek satır tutmak tabloyu 11 px taşırıyordu */
+.ag-lv-t td:first-child { width: 1%; overflow-wrap: normal; word-break: normal; }
 /* kimlik (aralık, AS numarası, ülke) bölünmez; kurum / liste adı satır atlar (telefonda tabloyu genişletip düğmeyi taşırıyordu) */
 .ag-lv-t .ag-lv-c .ag-cidr, .ag-lv-t .ag-lv-c b, .ag-lv-t .ag-lv-c .ag-flag { white-space: nowrap; }
 /* (eski: yalnız ekran ≤600 px iken kırılıyordu; kartın genişliği ekrandan bağımsız) */
@@ -1043,6 +1048,7 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
 .ag-modal-b .ag-svc-x label { margin: 0; font-weight: 500; color: var(--ag-text-3); }
 .ag-svc-x .ag-input { width: 200px; height: 30px; }
 .ag-al-nh { margin-top: 6px; font-size: 12px; }
+.ag-al-ch { white-space: pre; color: var(--ag-text); }   /* yasak işaretler aralıklı, tek satırda */
 .ag-svc-x.bad .ag-input { border-color: #f87171; box-shadow: 0 0 0 3px var(--ag-bad-soft); }
 .ag-mode-hint { margin-top: 10px; padding: 9px 12px; border-radius: 8px; background: var(--ag-accent-soft); border: 1px solid var(--ag-accent-line); color: var(--ag-text-2); font-size: 12.5px; }
 .ag-mode-hint div + div { margin-top: 6px; }
