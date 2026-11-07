@@ -1,7 +1,7 @@
 #!/bin/bash
 set -f
 # csf taklidi — csf.pl dodeny/dokill/dotempdeny/dotemprm/dotempban davranışına göre
-R="$SIM_ROOT"; DENY="$R/etc/csf/csf.deny"; TB="$R/var/lib/csf/csf.tempban"; touch "$TB"
+R="$SIM_ROOT"; DENY="$R/etc/csf/csf.deny"; TB="$R/var/lib/csf/csf.tempban"; TA="$R/var/lib/csf/csf.tempallow"; touch "$TB"
 echo "csf $*" >> "$R/csf_calls.log"
 cmd="$1"; shift
 case "$cmd" in
@@ -22,7 +22,20 @@ case "$cmd" in
       while [ $# -gt 0 ]; do case "$1" in -p) port="$2"; shift 2 ;; -d) dir="$2"; shift 2 ;; *) break ;; esac; done
       note="$*"; [ -z "$note" ] && note="Manually added: $ip"
       echo "$(date +%s)|$ip|$port|$dir|$to|$note" >> "$TB"; echo "csf: $ip blocked on port ${port:-*} for $to seconds $dir" ;;
-  -tr) ip="$1"; grep -vF "|$ip|" "$TB" > "$TB.new"; mv "$TB.new" "$TB"; echo "DENY $ip removed" ;;
+  -tr) ip="$1"; grep -vF "|$ip|" "$TB" > "$TB.new"; mv "$TB.new" "$TB"; echo "DENY $ip removed"
+      [ -f "$TA" ] && { grep -vF "|$ip|" "$TA" > "$TA.new"; mv "$TA.new" "$TA"; } ;;
+  # izin (ölçüldü, CSF 16.33): -a csf.deny'deki satırı siler ("do not delete" işaretliyi silmez), zaten izinliyi reddeder;
+  # -ta kalıcı izinliyi reddeder; -tr geçici banı ve izni, -tra yalnız geçici izni siler
+  -a) ip="$1"; shift; comment="$*"; AL="$R/etc/csf/csf.allow"
+      if awk -v ip="$ip" '$1==ip{f=1} END{exit !f}' "$AL"; then echo "add failed: $ip is in already in the allow file /etc/csf/csf.allow"; exit 0; fi
+      awk -v ip="$ip" '!($1==ip && tolower($0) !~ /do not delete/)' "$DENY" > "$DENY.new"; mv "$DENY.new" "$DENY"
+      echo "$ip # $comment - Sat Sep 26 12:00:00 2026" >> "$AL"; echo "Adding $ip to csf.allow and iptables ACCEPT..." ;;
+  -ar) ip="$1"; AL="$R/etc/csf/csf.allow"; awk -v ip="$ip" '$1!=ip' "$AL" > "$AL.new"; mv "$AL.new" "$AL"; echo "Removing rule..." ;;
+  -ta) ip="$1"; to="$2"; shift 2
+      if awk -v ip="$ip" '$1==ip{f=1} END{exit !f}' "$R/etc/csf/csf.allow"; then echo "csf: $ip is already permanently allowed"; exit 0; fi
+      port=""; dir="inout"; while [ $# -gt 0 ]; do case "$1" in -p) port="$2"; shift 2 ;; -d) dir="$2"; shift 2 ;; *) break ;; esac; done
+      echo "$(date +%s)|$ip|$port|$dir|$to|$*" >> "$TA"; echo "csf: $ip allowed on port ${port:-*} for $to seconds $dir" ;;
+  -tra) ip="$1"; [ -f "$TA" ] && { grep -vF "|$ip|" "$TA" > "$TA.new"; mv "$TA.new" "$TA"; }; echo "csf: $ip temporary allow removed" ;;
   -t) [ -s "$TB" ] || { echo "csf: There are no temporary IP entries"; exit 0; }
       echo; echo "A/D   IP address                               Port   Dir   Time To Live     Comment"
       while IFS='|' read -r t ip port dir to msg; do [ -z "$port" ] && port="*"

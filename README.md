@@ -249,6 +249,19 @@ server's own IP, an IP that is already banned or inside a permanent range ban,
 and a whitelisted IP needs a confirmation. An IP with its own ban, whoever set
 it, gets **Remove ban**.
 
+An IP can also be allowed from its IP card (Whitelist → **Allow…**): with no
+end (a csf.allow line, with an optional note) or for 1 hour to 7 days (CSF's
+temporary allows, both directions). The allow comes before every ban; the
+rented-server lists and the ban guard pick it up right away. CSF deletes the
+IP's permanent single ban from csf.deny when allowing it (a `do not delete` line
+stays but no longer works). **Remove allow** deletes the IP's own csf.allow
+line or temporary allow; allows from included files are removed in those files.
+
+Range bans (`/24`, `/16`, announced range) can be timed too (*Everything*, 1
+hour to 7 days). A timed ban does not remove what is inside the range, so the
+range is back to how it was when the time is up; it is listed as a manual ban
+with the time left.
+
 Manual bans run the same whitelist checks as automatic ones (for a `/16`, the
 blocks inside with single bans are checked too), including Imunify360's own
 whitelist. Manual `/24` and `/16` bans open the same window: it first lists what is inside

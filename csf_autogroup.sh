@@ -31,6 +31,10 @@
 #     ban16|ban24 … --mode svc --svc web,ssh,ftp,cp,min,sync,dns [--ports 8080,…]       block only these (inbound)
 #     ban16|ban24 … --mode exc --svc web,ssh,ftp,cp,min,sync,dns,mout,wout [--ports …]  full ban, these stay open
 #     ban16|ban24 … --replace   change the mode of an existing CSF Auto-Group ban
+#     ban16|ban24|banpfx … --ttl SECONDS   temporary ban (everything); covered entries stay
+#   csf_autogroup.sh --action ban1 IP [--mode svc --svc …] [--ttl SECONDS]   ban one IP
+#   csf_autogroup.sh --action allow1 IP [--ttl SECONDS] [--note TEXT]        allow one IP (csf.allow / temporary)
+#   csf_autogroup.sh --action unallow1 IP                    remove that allow (its own csf.allow line or temporary allow)
 #   csf_autogroup.sh --action NAME TARGET [DAYS] [--force] [--json]
 #        ban16 A.B | ban24 A.B.C | forget A.B.C | unban CIDR
 #        ignore CIDR [DAYS] | unignore CIDR          (used by the WHM plugin)
@@ -57,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.59"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.60"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -184,7 +188,7 @@ TODAY=$(date '+%Y-%m-%d')
 NL=$'\n'
 
 # ── Command line ────────────────────────────────────────────────────────────
-MODE=run; JSON=0; FORCE=0; DRY=0; ACT=""; ARGS=(); SETS=(); SEND=0; CLEAN=1; RESTORE=0; BMODE=all; BSVC=""; BPORTS=""; REPLACE=0; BTTL=0; IMP_STATES=""
+MODE=run; JSON=0; FORCE=0; DRY=0; ACT=""; ARGS=(); SETS=(); SEND=0; CLEAN=1; RESTORE=0; BMODE=all; BSVC=""; BPORTS=""; REPLACE=0; BTTL=0; BNOTE=""; IMP_STATES=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --dry-run) MODE=run; DRY=1 ;;
@@ -201,7 +205,8 @@ while [ $# -gt 0 ]; do
         --svc)     BSVC="${2:-}"; shift ;;
         --ports)   BPORTS="${2:-}"; shift ;;
         --replace) REPLACE=1 ;;          # eklentinin kendi banının kipini değiştir
-        --ttl)     BTTL="${2:-0}"; shift ;;  # tek IP banı: geçici ban süresi (saniye; 0 = kalıcı)
+        --ttl)     BTTL="${2:-0}"; shift ;;  # elle ban (tek IP, aralık) ve izin: süre (saniye; 0 = kalıcı)
+        --note)    BNOTE="${2:-}"; shift ;;  # elle izin: csf.allow satırının notu
         --states)  IMP_STATES="${2:-}"; shift ;;  # Etkisini ölç: günlük okumadan yalnız bu IP'lerin şu anki durumu (eylemden sonra ekran)
         --action)  MODE=action; ACT="${2:-}"; shift ;;
         --config)  MODE=config ;;
@@ -372,6 +377,21 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_A1_TBANNED="%s geçici banlandı (%s)"
   M_A1_EXISTS="%s zaten banlı (önce mevcut banı kaldırın)"
   M_A1_TSVC="geçici ban yalnız \"Her şey\" ile konabilir"
+  M_AR_TCOMMENT="csf_autogroup: elle geçici /%s ban (%s)"
+  M_AR_TBANNED="%s geçici banlandı (%s); içindeki banlar yerinde kaldı"
+  M_AR_TEXISTS="%s zaten geçici banlı (önce mevcut banı kaldırın)"
+  M_AL_COMMENT="csf_autogroup: elle izin (%s)%s"
+  M_AL_TCOMMENT="csf_autogroup: elle geçici izin (%s)%s"
+  M_AL_DONE="%s izin listesine eklendi (csf.allow)"
+  M_AL_TDONE="%s geçici olarak izinli (%s)"
+  M_AL_UNDENY="%s; CSF kalıcı tekil banını csf.deny'den kaldırdı"
+  M_AL_EXISTS="%s zaten bütün portlara izinli: %s"
+  M_AL_BADNOTE="not en çok 60 karakter olabilir ve # | \\ \" ' \` \$ ; < > içeremez"
+  M_AL_FAIL="%s izne eklenemedi: %s"
+  M_UA_DONE="%s izin listesinden çıkarıldı (csf.allow)"
+  M_UA_TDONE="%s geçici izni kaldırıldı"
+  M_UA_NONE="%s için csf.allow'da kendi satırı ya da geçici izin yok (Include edilen dosyadaki izin o dosyadan kaldırılır)"
+  M_UA_FAIL="%s izinden çıkarılamadı: %s"
   M_DUR_D="%s gün"; M_DUR_H="%s saat"; M_DUR_S="%s sn"
   M_A_CLEANED="%s · %s kayıt kaldırıldı"
   M_IN_COVER="Zaten kapsanıyor: %s"
@@ -637,6 +657,21 @@ else
   M_A1_TBANNED="%s temporarily banned (%s)"
   M_A1_EXISTS="%s is already banned (remove the current ban first)"
   M_A1_TSVC="a temporary ban can only block \"Everything\""
+  M_AR_TCOMMENT="csf_autogroup: manual temporary /%s ban (%s)"
+  M_AR_TBANNED="%s temporarily banned (%s); the bans inside were left in place"
+  M_AR_TEXISTS="%s already has a temporary ban (remove it first)"
+  M_AL_COMMENT="csf_autogroup: manual allow (%s)%s"
+  M_AL_TCOMMENT="csf_autogroup: manual temporary allow (%s)%s"
+  M_AL_DONE="%s added to the allow list (csf.allow)"
+  M_AL_TDONE="%s temporarily allowed (%s)"
+  M_AL_UNDENY="%s; CSF removed its permanent single ban from csf.deny"
+  M_AL_EXISTS="%s is already allowed on every port: %s"
+  M_AL_BADNOTE="the note can have at most 60 characters and can not contain # | \\ \" ' \` \$ ; < >"
+  M_AL_FAIL="could not allow %s: %s"
+  M_UA_DONE="%s removed from the allow list (csf.allow)"
+  M_UA_TDONE="temporary allow of %s removed"
+  M_UA_NONE="%s has no line of its own in csf.allow and no temporary allow (an allow from an included file is removed in that file)"
+  M_UA_FAIL="could not remove the allow of %s: %s"
   M_DUR_D="%s days"; M_DUR_H="%s h"; M_DUR_S="%s s"
   M_A_CLEANED="%s · %s entries removed"
   M_IN_COVER="Already covered: %s"
@@ -1935,7 +1970,10 @@ wl_load() {      # FILE LABEL [DEPTH] — IP, CIDR, gelişmiş satır (tcp|in|d=
           if (index(l, "csf_autogroup: exception")) next
           svn = ""; if (match(l, /csf_autogroup: service [A-Za-z0-9_-]+/)) svn = substr(l, RSTART + 23, RLENGTH - 23)
           cm = ""; k = index(l, "#")
-          if (k) { cm = substr(l, k + 1); gsub(/^[ \t]+|[ \t]+$/, "", cm); if (cm ~ /csf_autogroup:/ || cm ~ /^do not delete/) cm = ""
+          if (k) { cm = substr(l, k + 1); gsub(/^[ \t]+|[ \t]+$/, "", cm)
+                   # panelden verilen izin ("csf_autogroup: elle izin (kim) - not - <CSF tarihi>"): yorum yalnız kullanıcının notu
+                   if (cm ~ /^csf_autogroup: (elle izin|manual allow) \(/) { sub(/ - [A-Z][a-z][a-z] [A-Z][a-z][a-z] +[0-9]+ [0-9:]+ [0-9]+$/, "", cm); if (!sub(/^[^)]*\) - /, "", cm)) cm = "" }
+                   else if (cm ~ /csf_autogroup:/ || cm ~ /^do not delete/) cm = ""
                    cm = substr(cm, 1, 80); r = substr(l, 1, k - 1) } else r = l
           sub(/^[ \t]+/, "", r); if (r == "") next
           tok = r; sub(/[ \t].*$/, "", tok)
@@ -2051,7 +2089,27 @@ load_whitelist() {
     wl_load "$CSF_VAR/csf.gignore"    "GLOBAL_IGNORE"
     wl_load "$CSF_VAR/csf.tempdyn"    "DYNDNS"
     wl_load "$CSF_VAR/csf.tempgdyn"   "GLOBAL_DYNDNS"
-    wl_load "$CSF_VAR/csf.tempallow"  "csf.tempallow"
+    # CSF'in geçici izinleri (csf -ta): satır "zaman|ip|port|yön|süre|not" (port boş = bütün portlar, "22,53;udp" = o portlar).
+    # Önce wl_load ile okunuyordu: satır gelişmiş izin satırı sanılıp atlanıyordu, geçici izin hiçbir ekranda izin sayılmıyordu
+    # (kiralık liste ve ban koruması allow-list.sh ile doğru okuyor). Süresi dolmuş satır sayılmaz; tek portluk izin tam izin değil.
+    if [ -r "$CSF_VAR/csf.tempallow" ]; then
+        eval "$(awk -F'|' -v now="$(date +%s)" '
+            function q(x) { gsub(/[\\"$`]/, "\\\\&", x); return "\"" x "\"" }
+            $1 ~ /^[0-9]+$/ && $5 ~ /^[0-9]+$/ && $2 ~ /^[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?(\/[0-9][0-9]?)?$/ {
+                if ($1 + $5 <= now + 0) next
+                ip = $2; bits = 32; k = index(ip, "/"); if (k) { bits = substr(ip, k + 1) + 0; ip = substr(ip, 1, k - 1) }
+                if (bits < 1 || bits > 32) next
+                split(ip, o, "."); if (o[1] + 0 > 255 || o[2] + 0 > 255 || o[3] + 0 > 255 || o[4] + 0 > 255) next
+                v = ((o[1] * 256 + o[2]) * 256 + o[3]) * 256 + o[4]; size = 2 ^ (32 - bits); lo = v - v % size
+                cm = $6; for (j = 7; j <= NF; j++) cm = cm "|" $j
+                if (cm ~ /^csf_autogroup: /) { if (!sub(/^[^)]*\) - /, "", cm)) cm = "" }   # eklentinin izni: yalnız kullanıcının notu
+                cm = substr(cm, 1, 80)
+                if ($3 == "" || $3 == "*") lab = "csf.tempallow: " $2
+                else { pr = "tcp"; pt = $3; k = index(pt, ";"); if (k) { pr = substr(pt, k + 1); pt = substr(pt, 1, k - 1) }
+                       if (pr !~ /^[a-z]+$/) pr = "?"; if (pt !~ /^[0-9,:_*-]*$/) pt = ""
+                       lab = "csf.tempallow (" pr " " ($4 == "out" ? "out" : "in") " d=" pt "): " $2 }
+                printf "WL_LO+=(%.0f);WL_HI+=(%.0f);WL_TXT+=(%s);WL_CM+=(%s)\n", lo, lo + size - 1, q(lab), q(cm) }' "$CSF_VAR/csf.tempallow")"
+    fi
     # Imunify360'ın yerel beyaz listesi (elle eklenenler ve Imunify'ın doğruladığı arama motoru botları).
     # Önbellekten okunur (imunify_refresh, IMUNIFY_REFRESH_MIN dakikada bir); süresi dolan kayıt sayılmaz.
     pa "wl_dosyalar"
@@ -2618,12 +2676,17 @@ tpk_load() {     # panel için: TPK_N[önek] / TPK_I[önek] = turun geçici eşi
 }
 
 # ── Temp group bans: csf.tempban içinde bizim eklediğimiz /24'ler ────────────
-declare -A TG_TTL TG_NOTE TG_T
+declare -A TG_TTL TG_NOTE TG_T TG_K
 read_temp_groups() {
-    local t ip port dir to note now p
+    local t ip port dir to note now p re_m='csf_autogroup: (elle geçici|manual temporary) /'
     now=$(date +%s)
     [ -r "$CSF_VAR/csf.tempban" ] || return
     while IFS='|' read -r t ip port dir to note; do
+        # elle süreli aralık banı (panel, her genişlik): kind "manual" + kalan süre
+        if [[ "$ip" == */* && "$note" =~ $re_m ]]; then
+            TG_TTL[$ip]=$(( $(num "$t") + $(num "$to") - now )); TG_NOTE[$ip]="$note"; TG_T[$ip]=$(num "$t"); TG_K[$ip]=manual
+            continue
+        fi
         [[ "$ip" == */24 ]] || continue
         # Yorumdan (v1.2+) ya da sayaç kaydından (daha eski sürümlerin eklediği) tanınır.
         p="${ip%.0/24}"
@@ -2836,8 +2899,8 @@ do_status() {
         [ "${TG_TTL[$c]}" -gt 0 ] || continue
         n=0; [[ "${TG_NOTE[$c]}" =~ $re_n ]] && n="${BASH_REMATCH[1]}"
         REPLY=""; cidr_range "$c" && under_of "$R_LO" "$R_HI" "$c"
-        groups+=("{\"cidr\":\"$c\",\"kind\":\"temp\",\"dnd\":false,\"n\":$n,\"added\":${TG_T[$c]:-0},\"ttl\":${TG_TTL[$c]}${REPLY:+,\"under\":\"$REPLY\"}}")
-        [ "$JSON" = 1 ] || gtext+=("$(printf '%-18s %-9s %s' "$c" "temp" "$(m "$M_S_TTL" "$(( TG_TTL[$c] / 3600 ))h")")")
+        groups+=("{\"cidr\":\"$c\",\"kind\":\"${TG_K[$c]:-temp}\",\"dnd\":false,\"n\":$n,\"added\":${TG_T[$c]:-0},\"ttl\":${TG_TTL[$c]}${REPLY:+,\"under\":\"$REPLY\"}${PCOV[$c]:+,\"pcov\":\"${PCOV[$c]}\"}}")
+        [ "$JSON" = 1 ] || gtext+=("$(printf '%-18s %-9s %s' "$c" "${TG_K[$c]:-temp}" "$(m "$M_S_TTL" "$(( TG_TTL[$c] / 3600 ))h")")")
     done
 
     prof groups_json
@@ -3881,6 +3944,12 @@ do_lookup() {
             v="${!k}"; jstr "$v"; o+=",\"$k\":$REPLY"
         done
         [ -n "$ign_t" ] && o+=",\"ign_t\":$ign_t"
+        # IP'nin kendi izni (panelden kaldırılabilen): csf.allow'daki kendi satırı ve geçici izin (kalan saniye)
+        local al_l al_t
+        al_l=$(grep -m1 -E "^${ip//./\\.}([[:space:]]|$)" "$CSF_DIR/csf.allow" 2>/dev/null)
+        al_t=$(awk -F'|' -v ip="$ip" -v now="$now" '$2 == ip && $1 + $5 > now { print $1 + $5 - now; exit }' "$CSF_VAR/csf.tempallow" 2>/dev/null)
+        if [ -n "$al_l" ]; then jstr "$al_l"; o+=",\"alw\":{\"k\":\"perm\",\"line\":$REPLY}"
+        elif [[ "$al_t" =~ ^[0-9]+$ ]]; then o+=",\"alw\":{\"k\":\"temp\",\"left\":$al_t}"; fi
         ACCT_RO=1; acct_need "$ip"; [ -n "${ACCTM[$ip]}" ] && o+=",\"acct\":${ACCTM[$ip]}"   # günlüklerde bu IP'nin denedikleri (posta, SSH, FTP, cPanel, web)
         local bp="${ip%.*}" btc=0
         tpk_load; btc=${TPK_N[$bp]:-0}     # turun geçici eşik sayımıyla aynı (son turdan bu yana aynı anda geçici banlı en çok tekil)
@@ -5414,6 +5483,61 @@ do_action() {    # NAME TARGET [DAYS]
             ev manual_ban "$t" "by=\"$AG_BY\"" "kind=\"ip\"" "wl=$jw" "force=$([ "$FORCE" = 1 ] && echo true || echo false)" "${OKV[@]}" \
                "mode=\"$BMODE\"" "ttl=$BTTL" $([ "$BMODE" = svc ] && echo "svc=\"$BSVC\" extra=\"$BPORTS\" ports=\"$pp\"")
             act_out 0 "$cm" ;;
+        allow1)
+            # tek IP'ye izin: süresiz csf -a ya da süreli csf -ta (iki yönlü, bütün portlar). Ölçüldü (CSF 16.33): csf -a IP'nin
+            # csf.deny'deki kalıcı tekil satırını da siler; zaten izinli IP'yi "add failed" ile reddeder; csf -ta kalıcı izinli IP'yi
+            # reddeder. İzin bandan önce gelir (ALLOWIN). Kiralık liste ve ban koruması izinleri kendi kümelerine alır: hemen
+            # yenilenir, yoksa sonraki tura kadar liste o IP'yi kesmeye devam ederdi.
+            [[ "$t" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] && ip2int "$t" || { act_out 2 "$(m "$M_BAD_TARGET" "$t")"; return; }
+            local n="$REPLY" i cm nt="" hd=0 re_bad='[#|\"`$;<>'"'"']'
+            [[ "$BTTL" =~ ^[0-9]{1,8}$ ]] || { act_out 2 "$(m "$M_BAD_TARGET" "$BTTL")"; return; }
+            if [ -n "$BNOTE" ]; then
+                if [ "${#BNOTE}" -gt 60 ] || [[ "$BNOTE" =~ $re_bad ]] || [[ "$BNOTE" == *\\* ]] || [[ "$BNOTE" == *$'\n'* ]]; then act_out 2 "$M_AL_BADNOTE"; return; fi
+                nt=" - $BNOTE"
+            fi
+            [ "$WL_LOADED" = 1 ] || load_whitelist
+            for i in "${!WL_LO[@]}"; do
+                (( WL_LO[i] <= n && WL_HI[i] >= n )) || continue
+                wl_full_idx "$i"; [ "$REPLY" = 1 ] && { wl_label "$i"; act_out 1 "$(m "$M_AL_EXISTS" "$t" "$REPLY")"; return; }
+            done
+            deny_has "$t" && hd=1
+            if [ "$BTTL" -gt 0 ]; then
+                csf_run -ta "$t" "$BTTL" -d inout "$(m "$M_AL_TCOMMENT" "$AG_BY" "$nt")"
+                awk -F'|' -v ip="$t" '$2 == ip { f = 1 } END { exit !f }' "$CSF_VAR/csf.tempallow" 2>/dev/null || { act_out 1 "$(m "$M_AL_FAIL" "$t" "${CSF_OUT%%$NL*}")"; return; }
+                cm="$(m "$M_AL_TDONE" "$t" "$(dur_text "$BTTL")")"
+            else
+                csf_run -a "$t" "$(m "$M_AL_COMMENT" "$AG_BY" "$nt")"
+                grep -qE "^${t//./\\.}([[:space:]]|$)" "$CSF_DIR/csf.allow" 2>/dev/null || { act_out 1 "$(m "$M_AL_FAIL" "$t" "${CSF_OUT%%$NL*}")"; return; }
+                cm="$(m "$M_AL_DONE" "$t")"
+                [ "$hd" = 1 ] && ! deny_has "$t" && cm="$(m "$M_AL_UNDENY" "$cm")"
+            fi
+            WL_LOADED=0; cloud_enforce 0 >/dev/null 2>&1; guard_update
+            jstr "$BNOTE"; local jn="$REPLY"
+            owners_load; inside_owner "${t%.*}" "$t"; owner_kv
+            log "$(m "$M_A_LOG" "$AG_BY" "$cm")"
+            ev manual_allow "$t" "by=\"$AG_BY\"" "ttl=$BTTL" "note=$jn" "undeny=$([ "$hd" = 1 ] && ! deny_has "$t" && echo true || echo false)" "${OKV[@]}"
+            act_out 0 "$cm" ;;
+        unallow1)
+            # elle izni kaldır: IP'nin csf.allow'daki kendi satırı (csf -ar) ve geçici izni (csf -tra; csf -tr geçici banı da siler,
+            # ölçüldü). Include edilen dosyalardaki izinlere (izinli servisler, Imunify360…) dokunulmaz.
+            [[ "$t" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || { act_out 2 "$(m "$M_BAD_TARGET" "$t")"; return; }
+            local hp=0 ht=0 cm
+            grep -qE "^${t//./\\.}([[:space:]]|$)" "$CSF_DIR/csf.allow" 2>/dev/null && hp=1
+            awk -F'|' -v ip="$t" '$2 == ip { f = 1 } END { exit !f }' "$CSF_VAR/csf.tempallow" 2>/dev/null && ht=1
+            [ "$hp" = 1 ] || [ "$ht" = 1 ] || { act_out 1 "$(m "$M_UA_NONE" "$t")"; return; }
+            if [ "$hp" = 1 ]; then
+                csf_run -ar "$t"
+                grep -qE "^${t//./\\.}([[:space:]]|$)" "$CSF_DIR/csf.allow" && { act_out 1 "$(m "$M_UA_FAIL" "$t" "${CSF_OUT%%$NL*}")"; return; }
+            fi
+            if [ "$ht" = 1 ]; then
+                csf_run -tra "$t"
+                awk -F'|' -v ip="$t" '$2 == ip { f = 1 } END { exit !f }' "$CSF_VAR/csf.tempallow" 2>/dev/null && { act_out 1 "$(m "$M_UA_FAIL" "$t" "${CSF_OUT%%$NL*}")"; return; }
+            fi
+            if [ "$hp" = 1 ]; then cm="$(m "$M_UA_DONE" "$t")"; else cm="$(m "$M_UA_TDONE" "$t")"; fi
+            WL_LOADED=0; cloud_enforce 0 >/dev/null 2>&1; guard_update
+            log "$(m "$M_A_LOG" "$AG_BY" "$cm")"
+            ev manual_unallow "$t" "by=\"$AG_BY\"" "kind=\"$([ "$hp" = 1 ] && echo perm || echo temp)\""
+            act_out 0 "$cm" ;;
         ban16|ban24|banpfx)
             bits="${name#ban}"
             if [ "$name" = banpfx ]; then       # duyurulan aralık: /17–/23, ağ adresiyle verilmeli (176.88.120.0/21)
@@ -5424,6 +5548,8 @@ do_action() {    # NAME TARGET [DAYS]
             else [[ "$t" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] && cidr="$t.0/24"; fi
             { [ -n "$cidr" ] && cidr_range "$cidr"; } || { act_out 2 "$(m "$M_BAD_TARGET" "$t")"; return; }
             local lo=$R_LO hi=$R_HI
+            [[ "$BTTL" =~ ^[0-9]{1,8}$ ]] || { act_out 2 "$(m "$M_BAD_TARGET" "$BTTL")"; return; }
+            [ "$BTTL" -gt 0 ] && { [ "$BMODE" = all ] && [ "$REPLACE" != 1 ] || { act_out 2 "$M_A1_TSVC"; return; }; }
             [ "$BMODE" = all ] || split_ports "$BPORTS" || { act_out 2 "$(m "$M_A_BADPORTS" "$BPORTS")"; return; }
             case "$BMODE" in
                 all) ;;
@@ -5443,6 +5569,22 @@ do_action() {    # NAME TARGET [DAYS]
             # doğrulanamadı (ülke / ters DNS bilinmiyor): izin kaydı değil, otomatik ban bunu sonraki tura bırakır; elle banı engellemez
             [ "${WL_RETRY:-0}" = 1 ] && WL_HIT=""
             if [ -n "$WL_HIT" ] && [ "$FORCE" != 1 ]; then act_out 4 "$(m "$M_A_WL" "$cidr" "$WL_HIT")"; return; fi
+            # süreli ban (yalnız "Her şey"): csf -td, iki yönlü. İçindeki banlara, izlemelere ve kısmi banlara dokunulmaz: süre bitince
+            # aralık banından önceki hâline döner (kalıcı bandaki temizlik ve geri yükleme kopyası yok)
+            if [ "$BTTL" -gt 0 ]; then
+                if [ -r "$CSF_VAR/csf.tempban" ] && awk -F'|' -v c="$cidr" '$2 == c { f = 1 } END { exit !f }' "$CSF_VAR/csf.tempban"; then
+                    act_out 1 "$(m "$M_AR_TEXISTS" "$cidr")"; return
+                fi
+                csf_run -td "$cidr" "$BTTL" -d inout "$(m "$M_AR_TCOMMENT" "$bits" "$AG_BY")"
+                awk -F'|' -v c="$cidr" '$2 == c { f = 1 } END { exit !f }' "$CSF_VAR/csf.tempban" 2>/dev/null || { act_out 1 "$(m "$M_A_BANFAIL" "$cidr" "${CSF_OUT%%$NL*}")"; return; }
+                jstr "$WL_HIT"; jw="$REPLY"
+                owners_load; inside_owner "${t%.*}" "$t"; owner_kv
+                local msg; msg="$(m "$M_AR_TBANNED" "$cidr" "$(dur_text "$BTTL")")"
+                log "$(m "$M_A_LOG" "$AG_BY" "$msg")"
+                ev manual_ban "$cidr" "by=\"$AG_BY\"" "wl=$jw" "restorable=0" "force=$([ "$FORCE" = 1 ] && echo true || echo false)" "${OKV[@]}" \
+                   "mode=\"all\"" "ttl=$BTTL" "total=$IN_EVN" "ips=[$(IFS=,; echo "${IN_EVJ[*]}")]"
+                act_out 0 "$msg"; return
+            fi
             # kısmi ban: aralığı tamamen kapsamaz; içindekilere ve izlemelere dokunulmaz
             if [ "$BMODE" = svc ]; then part_ports; ban_partial "$cidr" "$bits" "$REPLY"; return; fi
             # Sıra, yarıda kesilse (panelin süre sınırı) bile güvenli kalacak biçimde: önce kurtarma kopyası ve izin

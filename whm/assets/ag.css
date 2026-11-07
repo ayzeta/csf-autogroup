@@ -1042,6 +1042,7 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
 .ag-svc-x { margin-top: 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .ag-modal-b .ag-svc-x label { margin: 0; font-weight: 500; color: var(--ag-text-3); }
 .ag-svc-x .ag-input { width: 200px; height: 30px; }
+.ag-al-nh { margin-top: 6px; font-size: 12px; }
 .ag-svc-x.bad .ag-input { border-color: #f87171; box-shadow: 0 0 0 3px var(--ag-bad-soft); }
 .ag-mode-hint { margin-top: 10px; padding: 9px 12px; border-radius: 8px; background: var(--ag-accent-soft); border: 1px solid var(--ag-accent-line); color: var(--ag-text-2); font-size: 12.5px; }
 .ag-mode-hint div + div { margin-top: 6px; }

@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.15.60 — 2026-11-06
+
+- **Allow an IP** from its IP card (Whitelist → *Allow…*): with no end
+  (written to csf.allow, with an optional note) or for 1 hour to 7 days (CSF's
+  temporary allows). The allow comes before every ban, including the
+  rented-server lists and the ban guard, which are refreshed right away. CSF
+  removes the IP's permanent single ban from csf.deny when allowing it (a ban
+  marked "do not delete" stays, but no longer works); the window says so.
+  *Remove allow* deletes the IP's own csf.allow line or its temporary allow;
+  allows from included files (allowed services, Imunify360…) are not touched.
+- **Timed range bans**: blocks (/24), networks (/16) and announced ranges can
+  be banned for 1 hour to 7 days ("Everything" only). A timed ban leaves the
+  bans, watches and partial bans inside in place, so the range is back to how
+  it was when the time is up. It is listed as a manual ban with the time left;
+  *Remove ban* lifts it early.
+- History shows the duration of manual bans and allows, the note and whether
+  the permanent ban was lifted.
+- Fixed: CSF's temporary allows (`csf -ta`, csf.tempallow) were never counted
+  as allows: the IP card said "none", a banned IP with a temporary allow was
+  not shown as "Ban not working" and still counted towards block thresholds. A
+  port-limited temporary allow counts like a port-limited csf.allow line.
+- The note of an allow added from the panel shows next to the allow on every
+  screen.
+
 ## 1.15.59 — 2026-11-06
 
 - Port lists are written by service name on every screen ("Web", "Web, SSH",

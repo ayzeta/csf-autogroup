@@ -445,6 +445,36 @@ mcheck "sahip: IP kartı önbellekten farklı sahip görünce blok işaretlenir"
 quiet
 mcheck "sahip: tur işaretli bloğu yeniden sorar (önbellek taze sahiple, işaret temizlenir)" "grep -q '^151.80.7|16276|' '$OF' && [ ! -s '$OF.stale' ]"
 
+# Tek IP'ye izin (IP kartı, --action allow1 / unallow1): süresiz csf -a (CSF kalıcı tekil satırı siler, "do not delete" satırı
+# kalır — ölçüldü), süreli csf -ta (iki yönlü); not satıra yazılır, geçersiz not ve zaten izinli IP reddedilir; IP kartı kendi
+# iznini (satır / kalan süre) taşır; kaldırma ikisinde de
+mk alw1; EVF="$R/var/lib/csf_autogroup/events.jsonl"; TA="$R/var/lib/csf/csf.tempallow"
+single 151.80.7.60 sshd; printf '151.80.7.61 # elle - do not delete - Sat Sep 26 12:00:00 2026\n' >> "$D"
+quiet --action allow1 151.80.7.60 --note ofis; quiet --action allow1 151.80.7.61; quiet --action allow1 151.80.7.62 --ttl 3600
+mcheck "izin: süresiz izin csf.allow'da notuyla; kalıcı tekil ban CSF'ten kalktı, olay undeny ve not taşır" "grep -q '^151.80.7.60 # csf_autogroup: elle izin (root) - ofis' '$A' && ! grep -q '^151.80.7.60 ' '$D' && grep -q '\"type\":\"manual_allow\",\"cidr\":\"151.80.7.60\".*\"ttl\":0,\"note\":\"ofis\",\"undeny\":true' '$EVF'"
+mcheck "izin: do not delete işaretli ban satırı kalır (olay undeny=false)" "grep -q '^151.80.7.61 # elle - do not delete' '$D' && grep -q '^151.80.7.61 # csf_autogroup: elle izin (root)' '$A' && grep -q '\"cidr\":\"151.80.7.61\".*\"undeny\":false' '$EVF'"
+mcheck "izin: süreli izin iki yönlü ve süreli (csf -ta … -d inout)" "grep -q '|151.80.7.62||inout|3600|csf_autogroup: elle geçici izin (root)' '$TA' && ! grep -q '^151.80.7.62 ' '$A'"
+mcheck "izin: zaten izinli IP ve geçersiz not reddedilir (kod 1 / 2)" "run --action allow1 151.80.7.60 --json 2>/dev/null | grep -q '\"code\":1' && run --action allow1 151.80.7.63 --note 'a#b' --json 2>/dev/null | grep -q '\"code\":2' && ! grep -q '151.80.7.63' '$A' '$TA'"
+mcheck "izin: IP kartı kendi iznini taşır (csf.allow satırı / geçici izin kalan süresi)" "run --lookup 151.80.7.60 --json 2>/dev/null | grep -q '\"alw\":{\"k\":\"perm\",\"line\":\"151.80.7.60 # csf_autogroup: elle izin' && run --lookup 151.80.7.62 --json 2>/dev/null | grep -q '\"alw\":{\"k\":\"temp\",\"left\":3[0-9][0-9][0-9]}' && ! run --lookup 151.80.7.64 --json 2>/dev/null | grep -q '\"alw\"'"
+printf '%s|151.80.7.65|22|in|3600|lfd yerine elle\n%s|151.80.7.66||inout|60|eski\n' "$NOW" $(( NOW - 600 )) >> "$TA"
+mcheck "izin: beyaz liste geçici izni okur (önce csf.tempallow satırları atlanıyordu); kalıcı izinde yorum kullanıcının notu" "run --lookup 151.80.7.62 --json 2>/dev/null | grep -q '\"wl\":\"csf.tempallow: 151.80.7.62\"' && run --lookup 151.80.7.60 --json 2>/dev/null | grep -q '\"wl\":\"csf.allow: 151.80.7.60 (ofis)\"'"
+mcheck "izin: tek portluk geçici izin tam izin değil, süresi dolmuş geçici izin sayılmaz" "run --lookup 151.80.7.65 --json 2>/dev/null | grep -q '\"wl\":\"csf.tempallow (tcp in d=22): 151.80.7.65 (lfd yerine elle)\"' && run --lookup 151.80.7.66 --json 2>/dev/null | grep -q '\"wl\":\"\"' && run --action allow1 151.80.7.65 --json 2>/dev/null | grep -q '\"ok\":true'"
+quiet --action unallow1 151.80.7.60; quiet --action unallow1 151.80.7.62
+mcheck "izin: İzni kaldır csf.allow satırını ve geçici izni siler; izni olmayan IP'de kod 1" "! grep -q '^151.80.7.60 ' '$A' && ! grep -q '|151.80.7.62|' '$TA' && run --action unallow1 151.80.7.64 --json 2>/dev/null | grep -q '\"code\":1' && grep -q '\"type\":\"manual_unallow\",\"cidr\":\"151.80.7.62\".*\"kind\":\"temp\"' '$EVF'"
+
+# Süreli aralık banı (--ttl, yalnız "Her şey"): csf -td CIDR iki yönlü; içindeki tekiller yerinde kalır; durum çıktısında elle +
+# kalan süre; servis kipi ve değiştirme ile reddedilir; aynı aralığa ikinci süreli ban reddedilir; Banı kaldır geçici listeden siler
+mk rtt1; EVF="$R/var/lib/csf_autogroup/events.jsonl"
+single 151.80.20.5 sshd; single 151.80.20.6 sshd
+quiet --action ban24 151.80.20 --ttl 7200; quiet --action ban16 151.81 --ttl 3600; quiet --action banpfx 151.82.0.0/20 --ttl 600
+mcheck "süreli aralık: /24, /16 ve duyurulan aralık geçici listede iki yönlü, kendi yorumuyla" "grep -q '|151.80.20.0/24||inout|7200|csf_autogroup: elle geçici /24 ban (root)' '$T' && grep -q '|151.81.0.0/16||inout|3600|csf_autogroup: elle geçici /16 ban (root)' '$T' && grep -q '|151.82.0.0/20||inout|600|csf_autogroup: elle geçici /20 ban (root)' '$T'"
+mcheck "süreli aralık: içindeki tekiller csf.deny'de kalır, kalıcı satır yok, olay ttl taşır" "grep -q '^151.80.20.5 ' '$D' && grep -q '^151.80.20.6 ' '$D' && ! grep -q '^151.80.20.0/24' '$D' && grep -q '\"type\":\"manual_ban\",\"cidr\":\"151.80.20.0/24\".*\"ttl\":7200' '$EVF'"
+run --status --json > "$W/out/rtt1.sahip.json" 2>/dev/null
+mcheck "süreli aralık: durum çıktısında elle ban, kalan süreyle (her genişlik)" "grep -q '\"cidr\":\"151.80.20.0/24\",\"kind\":\"manual\",\"dnd\":false,\"n\":0,\"added\":[0-9]*,\"ttl\":7[01][0-9][0-9]' '$W/out/rtt1.sahip.json' && grep -q '\"cidr\":\"151.81.0.0/16\",\"kind\":\"manual\"' '$W/out/rtt1.sahip.json' && grep -q '\"cidr\":\"151.82.0.0/20\",\"kind\":\"manual\"' '$W/out/rtt1.sahip.json'"
+mcheck "süreli aralık: servis kipiyle ve aynı aralığa ikinci kez reddedilir" "run --action ban24 151.80.21 --mode svc --svc web --ttl 600 --json 2>/dev/null | grep -q '\"code\":2' && ! grep -q '151.80.21' '$D' '$T' && run --action ban24 151.80.20 --ttl 600 --json 2>/dev/null | grep -q '\"code\":1' && [ \"\$(grep -c '|151.80.20.0/24|' '$T')\" = 1 ]"
+quiet --action unban 151.80.20.0/24
+mcheck "süreli aralık: Banı kaldır geçici listeden siler, tekiller yerinde" "! grep -q '|151.80.20.0/24|' '$T' && grep -q '^151.80.20.5 ' '$D'"
+
 # Kiralık liste başına kip (CLOUD_MODES): her ekran listenin kendi kuralını söyler. gcp "her şeyi kapat, web hariç", oracle kipsiz
 # (eski ortak port listesi: web), vultr "her şey". IP kartı, aralık penceresi, Etkisini ölç (web istekleri yalnız web'i kapatan listede
 # "zaten kapalı") ve ayar doğrulaması

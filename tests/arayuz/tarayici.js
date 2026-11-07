@@ -447,7 +447,64 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
       await page.setViewportSize({ width: 1280, height: 900 });
       await page.keyboard.press('Escape'); await page.waitForTimeout(400);
     }
-    await page.keyboard.press('Escape'); await page.waitForTimeout(400);
+    // İzin ver (gerçek CSF'te uçtan uca): kartta "İzin ver…" → pencere (5 süre, ilki süresiz; not; geçersiz notta onay kapalı) → 1 sa +
+    // not → kart yeniden açılır, "İzni kaldır" ve kalan süre → kaldır → yeniden "İzin ver…"
+    const alw = await page.$('.ag-drawer [data-dr="allow1"]');
+    check('izin: banlı / izinli olmayan IP\'nin kartında "İzin ver…" var', !!alw);
+    if (alw) {
+      await alw.click(); await page.waitForSelector('.ag-modal #ag-al-note', { timeout: 8000 }).catch(() => {});
+      const am = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); if (!m) return null;
+        const n = m.querySelector('#ag-al-note'), ok = m.querySelector('[data-m="ok"]');
+        n.value = 'a#b'; n.dispatchEvent(new Event('input', { bubbles: true })); const bad = ok.disabled;
+        n.value = 'ofis'; n.dispatchEvent(new Event('input', { bubbles: true }));
+        return { sure: Array.from(m.querySelectorAll('[data-ttl]')).map(b => b.textContent.trim()), bad, ok: !ok.disabled, d: (m.querySelector('#ag-ttl-d') || {}).textContent || '' }; });
+      check('izin penceresi: 5 süre (ilki süresiz), açıklama, geçersiz notta onay kapalı, geçerlide açık', !!am && am.sure.length === 5 && /^(Süresiz|No end)$/.test(am.sure[0]) && am.bad && am.ok && am.d.length > 20, JSON.stringify(am));
+      for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(250); await layoutChecks(page, 'ip-izin', w); }
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.click('.ag-modal [data-ttl="3600"]'); await page.click('.ag-modal [data-m="ok"]');
+      await page.waitForSelector('.ag-drawer [data-dr="unallow1"]', { timeout: 60000 }).catch(() => {});
+      const ak = await page.evaluate(() => { const d = document.querySelector('.ag-drawer'); return d ? { un: !!d.querySelector('[data-dr="unallow1"]'), txt: d.innerText } : null; });
+      check('izin: onaydan sonra kart "İzni kaldır" ve geçici iznin kalan süresini gösterir', !!ak && ak.un && /csf\.tempallow/.test(ak.txt) && /(kaldı|left)/.test(ak.txt), ak ? ak.txt.slice(0, 400) : '');
+      if (ak && ak.un) {
+        await page.click('.ag-drawer [data-dr="unallow1"]'); await page.waitForSelector('.ag-modal [data-m="ok"]', { timeout: 8000 }).catch(() => {});
+        await page.click('.ag-modal [data-m="ok"]');
+        await page.waitForSelector('.ag-drawer [data-dr="allow1"]', { timeout: 60000 }).catch(() => {});
+        check('izin: İzni kaldır sonrası kart yeniden "İzin ver…" gösterir', !!(await page.$('.ag-drawer [data-dr="allow1"]')));
+      }
+    }
+    // Süreli aralık banı (gerçek CSF): Bloğu banla penceresinde süre yalnız "Her şey"de; süre seçilince açıklama, kapsananlar kaldırılmaz;
+    // 1 sa ile onay → kartın Blok satırı kalan süreyi gösterir → Aktif aralık banları satırı "elle · süre", ⋯ → Banı kaldır (yazarak)
+    const b24 = await page.$('.ag-drawer [data-dr="ban24"]');
+    if (b24) {
+      await b24.click(); await page.waitForSelector('.ag-modal #ag-ttl', { timeout: 30000 }).catch(() => {});
+      const rb = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); const tt = m && m.querySelector('#ag-ttl'); if (!tt) return null;
+        const vis = () => tt.style.display !== 'none', r = { all: vis(), n: m.querySelectorAll('#ag-ttl [data-ttl]').length };
+        m.querySelector('[data-mode="svc"]').click(); r.svc = vis(); m.querySelector('[data-mode="exc"]').click(); r.exc = vis();
+        m.querySelector('[data-mode="all"]').click(); m.querySelector('#ag-ttl [data-ttl="3600"]').click();
+        const cb = m.querySelector('#ag-clean'); r.cb = cb ? cb.disabled : null; r.d = (m.querySelector('#ag-ttl-d') || {}).textContent || ''; return r; });
+      check('aralık banı: süre yalnız "Her şey"de (5 seçenek); süre seçilince açıklama, kapsananlar kaldırılmaz', !!rb && rb.all && !rb.svc && !rb.exc && rb.n === 5 && rb.d.length > 20 && rb.cb !== false, JSON.stringify(rb));
+      for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(250); await layoutChecks(page, 'aralik-sureli', w); }
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.click('.ag-modal [data-m="ok"]');
+      await page.waitForFunction(() => /(kaldı|left)/.test(((document.querySelector('.ag-drawer .ag-lv-t') || {}).innerText) || ''), null, { timeout: 60000 }).catch(() => {});
+      const lvTxt = await page.evaluate(() => { const d = document.querySelector('.ag-drawer .ag-lv-t'); return d ? d.innerText : ''; });
+      check('aralık banı: süreli /24 banından sonra kartın Blok satırı kalan süreyi gösterir', /(Blok|Block)[^\n]*\n?[^\n]*(kaldı|left)/.test(lvTxt), lvTxt.slice(0, 300));
+      await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('.ag-drawer'), null, { timeout: 5000 }).catch(() => {});
+      const gr = '198.51.100.0/24', gm = await page.$(`.ag-item[data-row="${gr}"] [data-act="menu"]`);
+      const pill = await page.evaluate(c => { const r = document.querySelector(`.ag-item[data-row="${c}"] .ag-td-state`); return r ? r.textContent.trim() : ''; }, gr);
+      check('aralık banı: Aktif aralık banları satırı "elle · kalan süre", menüde Banı değiştir yok', /^(elle|manual) · \d/.test(pill), pill);
+      if (gm) {
+        await gm.click(); await page.waitForTimeout(400);
+        const acts = await page.evaluate(c => Array.from(document.querySelectorAll(`.ag-item[data-row="${c}"] .ag-menu [data-act]`)).map(b => b.getAttribute('data-act')), gr);
+        check('aralık banı: süreli elle banın menüsünde Banı değiştir yok, Banı kaldır var', !acts.includes('chg') && acts.includes('unban'), acts.join(','));
+        await page.click(`.ag-item[data-row="${gr}"] .ag-menu [data-act="unban"]`); await page.waitForSelector('.ag-modal [data-m="ok"]', { timeout: 8000 }).catch(() => {});
+        const ty = await page.$('.ag-modal #ag-typed'); if (ty) await ty.fill(gr);
+        await page.click('.ag-modal [data-m="ok"]');
+        await page.waitForFunction(c => !document.querySelector(`.ag-item[data-row="${c}"]`), gr, { timeout: 60000 }).catch(() => {});
+        check('aralık banı: süreli ban kaldırıldı', !(await page.$(`.ag-item[data-row="${gr}"]`)));
+      }
+    }
+    if (await page.$('.ag-drawer')) { await page.keyboard.press('Escape'); await page.waitForTimeout(400); }
   }
   // Yoksay akışı: ilk satır yoksayılır, Yoksayılanlar'da görünür, geri alınır
   if (rows.length) {
