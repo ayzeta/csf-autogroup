@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.15.71 — 2026-11-08
+
+- **The Imunify360 list is fetched as often as the setting says, and the run
+  tooltip says so.** Reading Imunify360's own block and allow lists takes a
+  few seconds (`imunify360-agent` is slow to start), so it is done every
+  *Imunify list refresh* minutes rather than on every run. The age check had
+  no margin: the list is read a few seconds into a run, so one interval later
+  it was a few seconds short and the refresh slipped to the following run
+  (with the default 60 minutes and runs every 15 minutes, every 75 minutes).
+  A two-minute margin fixes that. The run that fetches the list now names it
+  in the run-duration tooltip, so its longer bar is explained.
+- Test: a rule that compared a range ban's remaining time accepted 7000–7199
+  seconds and failed when the status was read in the same second as the ban
+  (7200).
+
 ## 1.15.70 — 2026-11-08
 
 - **Mail services follow the protocol and the server's own ports.** "Incoming

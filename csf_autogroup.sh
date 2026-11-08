@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.70"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.71"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1118,7 +1118,7 @@ temp_added() {   # CIDR → csf -td gerçekten tuttu mu? Sayaç kaydı buna bağ
     # dosya okunamıyorsa CSF'in kendi listesine sorulur (önce "tuttu" sayılıyordu: izleme kaydı yanlış yazılabilirdi)
     [ ! -r "$CSF_VAR/csf.tempban" ] && "$CSF_BIN" -t 2>/dev/null 9>&- | grep -qF " $1 "
 }
-LFD_RN=0; RF_JOBS=""   # turun kaydı (run olayı): lfd yeniden başlatma sayısı, yapılan yenileme işleri (svc, cloud, cdn, geo)
+LFD_RN=0; RF_JOBS=""   # turun kaydı (run olayı): lfd yeniden başlatma sayısı, yapılan yenileme işleri (svc, cloud, cdn, geo, imu)
 lfd_restart() {  # lfd'yi yeniden başlat; ASN setlerini lfd doldurur (kilit ona geçmesin). Tur süresini uzatır: sayılır
     LFD_RN=$(( LFD_RN + 1 ))
     systemctl restart lfd 2>/dev/null 9>&- || service lfd restart >/dev/null 2>&1 9>&-
@@ -6535,7 +6535,9 @@ imunify_refresh() {
     # Liste yalnız panelde gösteriliyor, ban kararına girmiyor; imunify360-agent her çağrıda yavaş
     # açıldığı için her turda değil IMUNIFY_REFRESH_MIN dakikada bir alınır.
     last=$(sed -n 's/^#t|//p' "$IMUNIFY_FILE" 2>/dev/null | awk 'NR == 1')
-    if [[ "$last" =~ ^[0-9]+$ ]] && [ $(( $(date +%s) - last )) -lt $(( IMUNIFY_REFRESH_MIN * 60 )) ]; then
+    # 2 dk pay: liste turun birkaç saniye içinde alınır; payın yokluğunda süre sonraki turda birkaç saniye eksik kalıyor,
+    # yenileme bir tur kayıyordu (60 dk ayarı, 15 dk'lık turlarla 75 dk'da bir; sunucuda ölçüldü 2026-11-08)
+    if [[ "$last" =~ ^[0-9]+$ ]] && [ $(( $(date +%s) - last )) -lt $(( IMUNIFY_REFRESH_MIN * 60 - 120 )) ]; then
         IM_R=fresh; IM_AGE=$(( ($(date +%s) - last) / 60 )); return 0
     fi
     IM_R=fail
@@ -7510,10 +7512,10 @@ prof "turn sayaç+günlük"
 st=$(date +%s); backfill_owners
 [ "$BF_N" -gt 0 ] && logr "$(m "$M_STEP_OWN" "$BF_N" "$(( $(date +%s) - st ))")"
 st=$(date +%s); imunify_refresh
-case "$IM_R" in
-    ok)    logr "$(m "$M_STEP_IM" "$IM_N" "$(( $(date +%s) - st ))")" ;;
+case "$IM_R" in   # alındığı tur uzun sürer (imunify360-agent her çağrıda ~2,5 sn): run olayı "jobs" → panel ipucu
+    ok)    RF_JOBS+="${RF_JOBS:+,}imu"; logr "$(m "$M_STEP_IM" "$IM_N" "$(( $(date +%s) - st ))")" ;;
     fresh) logr "$(m "$M_STEP_IMFRESH" "$IM_AGE" "$IMUNIFY_REFRESH_MIN")" ;;
-    fail)  log "$(m "$M_STEP_IMFAIL" "$(( $(date +%s) - st ))")" ;;
+    fail)  RF_JOBS+="${RF_JOBS:+,}imu:0/1"; log "$(m "$M_STEP_IMFAIL" "$(( $(date +%s) - st ))")" ;;
 esac
 st=$(date +%s); backfill_imunify
 [ "$BF_N" -gt 0 ] && logr "$(m "$M_STEP_IMOWN" "$BF_N" "$(( $(date +%s) - st ))")"

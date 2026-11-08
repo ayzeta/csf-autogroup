@@ -502,7 +502,7 @@ quiet --action ban24 151.80.20 --ttl 7200; quiet --action ban16 151.81 --ttl 360
 mcheck "süreli aralık: /24, /16 ve duyurulan aralık geçici listede iki yönlü, kendi yorumuyla" "grep -q '|151.80.20.0/24||inout|7200|csf_autogroup: elle geçici /24 ban (root)' '$T' && grep -q '|151.81.0.0/16||inout|3600|csf_autogroup: elle geçici /16 ban (root)' '$T' && grep -q '|151.82.0.0/20||inout|600|csf_autogroup: elle geçici /20 ban (root)' '$T'"
 mcheck "süreli aralık: içindeki tekiller csf.deny'de kalır, kalıcı satır yok, olay ttl taşır" "grep -q '^151.80.20.5 ' '$D' && grep -q '^151.80.20.6 ' '$D' && ! grep -q '^151.80.20.0/24' '$D' && grep -q '\"type\":\"manual_ban\",\"cidr\":\"151.80.20.0/24\".*\"ttl\":7200' '$EVF'"
 run --status --json > "$W/out/rtt1.sahip.json" 2>/dev/null
-mcheck "süreli aralık: durum çıktısında elle ban, kalan süreyle (her genişlik)" "grep -q '\"cidr\":\"151.80.20.0/24\",\"kind\":\"manual\",\"dnd\":false,\"n\":0,\"added\":[0-9]*,\"ttl\":7[01][0-9][0-9]' '$W/out/rtt1.sahip.json' && grep -q '\"cidr\":\"151.81.0.0/16\",\"kind\":\"manual\"' '$W/out/rtt1.sahip.json' && grep -q '\"cidr\":\"151.82.0.0/20\",\"kind\":\"manual\"' '$W/out/rtt1.sahip.json'"
+mcheck "süreli aralık: durum çıktısında elle ban, kalan süreyle (her genişlik)" "grep -qE '\"cidr\":\"151.80.20.0/24\",\"kind\":\"manual\",\"dnd\":false,\"n\":0,\"added\":[0-9]*,\"ttl\":7([01][0-9][0-9]|200)[,}]' '$W/out/rtt1.sahip.json' && grep -q '\"cidr\":\"151.81.0.0/16\",\"kind\":\"manual\"' '$W/out/rtt1.sahip.json' && grep -q '\"cidr\":\"151.82.0.0/20\",\"kind\":\"manual\"' '$W/out/rtt1.sahip.json'"
 mcheck "süreli aralık: servis kipiyle ve aynı aralığa ikinci kez reddedilir" "run --action ban24 151.80.21 --mode svc --svc web --ttl 600 --json 2>/dev/null | grep -q '\"code\":2' && ! grep -q '151.80.21' '$D' '$T' && run --action ban24 151.80.20 --ttl 600 --json 2>/dev/null | grep -q '\"code\":1' && [ \"\$(grep -c '|151.80.20.0/24|' '$T')\" = 1 ]"
 quiet --action unban 151.80.20.0/24
 mcheck "süreli aralık: Banı kaldır geçici listeden siler, tekiller yerinde" "! grep -q '|151.80.20.0/24|' '$T' && grep -q '^151.80.20.5 ' '$D'"
@@ -643,10 +643,26 @@ geo() {   # ad yaş-dakika
 }
 geo geo25 $((25 * 1440 + 30))
 mcheck "ASN verisi: ayar 25 gün, veri 25 günlük → yenilenir (lfd yeniden başlatılır)" "[ ! -e '$G' ] && [ -e '$G.old' ] && grep -q 'restart lfd' '$R/systemctl.log'"
-mcheck "tur kaydı: ASN verisi yenilenen turda run olayı yapılan işi ve lfd yeniden başlatmasını taşır" "tail -n 1 '$R/var/lib/csf_autogroup/events.jsonl' | grep -q '\"jobs\":\"geo\".*\"lfdr\":1'"
-mcheck "tur kaydı: durum çıktısının son turu [zaman, süre, işler, csf -r, ms, lfd] (Tur süresi ipucu)" "run --status --json 2>/dev/null | grep -qE '\[[0-9]+,[0-9]+,\"geo\",[0-9]+,[0-9]+,1,0\]\]'"
+mcheck "tur kaydı: ASN verisi yenilenen turda run olayı yapılan işi ve lfd yeniden başlatmasını taşır" "tail -n 1 '$R/var/lib/csf_autogroup/events.jsonl' | grep -q '\"jobs\":\"geo,imu\".*\"lfdr\":1'"
+mcheck "tur kaydı: durum çıktısının son turu [zaman, süre, işler, csf -r, ms, lfd] (Tur süresi ipucu)" "run --status --json 2>/dev/null | grep -qE '\[[0-9]+,[0-9]+,\"geo,imu\",[0-9]+,[0-9]+,1,0\]\]'"
 geo geo24 $((24 * 1440))
 mcheck "ASN verisi: ayar 25 gün, veri 24 günlük → yenilenmez" "[ -e '$G' ] && [ ! -e '$R/systemctl.log' ]"
+# Imunify360 listesi IMUNIFY_REFRESH_MIN (60) dakikada bir: liste turun birkaç saniye içinde alınır, karşılaştırmada pay olmazsa
+# 60 dk sonraki tur birkaç saniye eksik kalıp yenileme bir tur kayıyordu (sunucuda 15 dk'lık turlarla 75 dk'da bir). Alındığı tur
+# run olayına "imu" işini yazar (Tur süresi ipucu uzun turun sebebini söyler)
+imu() {   # ad önbellek-yaşı-saniye (boş: önbellek yok)
+    mk "$1"; mkdir -p "$R/bin"; printf '%s\n' '#!/bin/bash' "echo \"\$*\" >> '$R/imu.log'" \
+        "echo '{\"items\": [{\"ip\": \"203.0.113.5\", \"comment\": null}], \"max_count\": 1}'" > "$R/bin/imunify360-agent"
+    chmod +x "$R/bin/imunify360-agent"; printf '%s\n' "IMUNIFY_BIN=$R/bin/imunify360-agent" >> "$R/app/config.env"
+    [ -n "$2" ] && printf '%s\n' "#t|$((NOW - $2))" "#total|0" > "$R/var/lib/csf_autogroup/imunify"
+    quiet
+}
+imu imu0
+mcheck "Imunify listesi: önbellek yokken alınır, tur kaydında 'imu' işi" "grep -q 'purpose drop' '$R/imu.log' && tail -n 1 '$R/var/lib/csf_autogroup/events.jsonl' | grep -q '\"jobs\":\"imu\"' && grep -q '^203.0.113.5|' '$R/var/lib/csf_autogroup/imunify'"
+imu imu59 3550
+mcheck "Imunify listesi: ayar 60 dk, önbellek 59 dk 10 sn → bu turda yenilenir (pay)" "grep -q 'purpose drop' '$R/imu.log' && tail -n 1 '$R/var/lib/csf_autogroup/events.jsonl' | grep -q '\"jobs\":\"imu\"'"
+imu imu50 3000
+mcheck "Imunify listesi: önbellek 50 dk → alınmaz, tur kaydında iş yok" "[ ! -e '$R/imu.log' ] && tail -n 1 '$R/var/lib/csf_autogroup/events.jsonl' | grep -q '\"jobs\":\"\"'"
 # ASN verisi her turda denetlenir: eski sürümün gün anahtarı dursa da süre dolunca bu turda yenilenir
 mk geodd; printf 'DAILY_TASKS %s\n' "$(date +%F)" >> "$C"; printf '%s\n' 'CC_DENY_PORTS = "AS64500"' >> "$R/etc/csf/csf.conf"
 mkdir -p "$R/var/lib/csf/Geo" "$R/bin"; G="$R/var/lib/csf/Geo/ip2asn-combined.tsv"; printf '1.0.0.0\t1.0.0.255\t64500\tUS\tX\n' > "$G"; touch -d "-$((25 * 1440 + 60)) min" "$G"

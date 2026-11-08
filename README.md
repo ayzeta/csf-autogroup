@@ -114,7 +114,7 @@ settings, with no prompts. `config.env` is left untouched.
 
 - **Status** — whether protection is running, when the last run was and how long
   it took, a countdown to the next run and the durations of the last 36 runs
-  (a run's tooltip names what made it longer: lists refreshed, `csf -r`, lfd
+  (a run's tooltip names what made it longer: lists refreshed, the Imunify360 list fetched, `csf -r`, lfd
   restarted), plus three markers: **CSF** (rules loaded, not disabled, not in testing mode),
   **LFD** (running) and **Cron** (runs on time). Turns red when any of them has
   a problem. Coming back to a tab that was hidden for a while, the run times
