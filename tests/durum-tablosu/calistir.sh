@@ -214,11 +214,11 @@ DTI=$(date '+%F %T'); DTS=$(LC_ALL=C date '+%b %e %H:%M:%S'); DTA=$(LC_ALL=C dat
 amail() { printf 'SMTPAUTH_LOG = "%s"\n' "$R/exim_mainlog" >> "$R/etc/csf/csf.conf"
     printf '%s dovecot_login authenticator failed for H=(x) [%s]:1: 535 Incorrect authentication data (set_id=%s)\n' "$DTI" "$1" info@site-a.example "$DTI" "$1" info@site-a.example "$DTI" "$1" info@site-b.example "$DTI" 198.51.100.77 baska@site.example > "$R/exim_mainlog"; }
 mkav avacct; amail 151.80.7.9; quiet
-mcheck "izinli IP: durumda deneme haritası (yalnız ekrandaki IP'ler), mail satırında denenen posta hesapları" "run --status --json 2>/dev/null | grep -q '\"accts\":{\"151.80.7.9\":\[{\"s\":\"mail\",\"u\":\"info@site-a.example\",\"n\":2},{\"s\":\"mail\",\"u\":\"info@site-b.example\",\"n\":1}\]}' && mtext | grep -q 'denenen posta hesapları: info@site-a.example (2), info@site-b.example (1)'"
+mcheck "izinli IP: durumda deneme haritası (yalnız ekrandaki IP'ler), mail satırında denenen posta hesapları" "run --status --json 2>/dev/null | grep -q '\"accts\":{\"151.80.7.9\":\[{\"s\":\"mail\",\"u\":\"info@site-a.example\",\"n\":2},{\"s\":\"mail\",\"u\":\"info@site-b.example\",\"n\":1}\]}' && mtext | grep -q 'denenen posta hesapları: info@site-a.example (2 hatalı giriş), info@site-b.example (1 hatalı giriş)'"
 mk lkacct; amail 198.51.100.77
-mcheck "IP kartı: listede olmayan IP'nin de denedikleri (terminal önbelleği kurar, sonra JSON)" "run --lookup 198.51.100.77 2>/dev/null | grep -q 'Denemeler *denenen posta hesapları: info@site-a.example (2), baska@site.example (1), info@site-b.example (1)' && run --lookup 198.51.100.77 --json 2>/dev/null | grep -q '\"acct\":\[{\"s\":\"mail\",\"u\":\"info@site-a.example\",\"n\":2},{\"s\":\"mail\",\"u\":\"baska@site.example\",\"n\":1},{\"s\":\"mail\",\"u\":\"info@site-b.example\",\"n\":1}\]'"
+mcheck "IP kartı: listede olmayan IP'nin de denedikleri (terminal önbelleği kurar, sonra JSON)" "run --lookup 198.51.100.77 2>/dev/null | grep -q 'Denemeler *denenen posta hesapları: info@site-a.example (2 hatalı giriş), baska@site.example (1 hatalı giriş), info@site-b.example (1 hatalı giriş)' && run --lookup 198.51.100.77 --json 2>/dev/null | grep -q '\"acct\":\[{\"s\":\"mail\",\"u\":\"info@site-a.example\",\"n\":2},{\"s\":\"mail\",\"u\":\"baska@site.example\",\"n\":1},{\"s\":\"mail\",\"u\":\"info@site-b.example\",\"n\":1}\]'"
 mkm mailacct 1; amail 151.80.7.1; for x in 1 2 3; do single 151.80.7.$x sshd; done; quiet
-mcheck "blok banı maili: tekil satırında denenen posta hesapları" "mtext | grep -q '151.80.7.1 .*denenen posta hesapları: info@site-a.example (2)'"
+mcheck "blok banı maili: tekil satırında denenen posta hesapları" "mtext | grep -q '151.80.7.1 .*denenen posta hesapları: info@site-a.example (2 hatalı giriş)'"
 mk acold; printf 'SMTPAUTH_LOG = "%s"\n' "$R/exim_mainlog" >> "$R/etc/csf/csf.conf"
 printf '%s dovecot_login authenticator failed for H=(x) [198.51.100.77]:1: 535 Incorrect authentication data (set_id=eski@site.example)\n' "$(date -d '-9 days' '+%F %T')" > "$R/exim_mainlog"
 mcheck "Kontrol edilecekler penceresinden (7 gün) eski deneme sayılmaz" "! run --lookup 198.51.100.77 2>/dev/null | grep -q 'eski@site.example' && [ -e '$R/var/lib/csf_autogroup/denemeler' ] && ! run --lookup 198.51.100.77 --json 2>/dev/null | grep -q 'eski@site.example'"
@@ -238,16 +238,16 @@ ornek() {
 }
 mk acall; ornek
 AL=$(run --lookup 198.51.100.50 2>/dev/null | grep '^  Denemeler')
-mcheck "SSH: lfd'nin saydığı satırlardaki kullanıcılar (sshd ve sshd-session; tanıtım dizgisi gelmeyen satır hesap taşımaz)" "grep -q 'denenen SSH kullanıcıları: root (2), admin (1), guest (1)' <<< \"\$AL\""
-mcheck "FTP: pure-ftpd satırındaki hesap" "grep -q 'denenen FTP hesapları: admin (1)' <<< \"\$AL\""
-mcheck "cPanel/WHM: hesap ve giriş türü, API anahtarı ayrı; 2024 tarihli satır sayılmaz" "grep -q 'denenen cPanel/WHM girişleri: root · WHM (1), root · WHM API (1)' <<< \"\$AL\" && ! grep -q eski <<< \"\$AL\""
-mcheck "web şifresi (htpasswd): Apache 2.2 ve 2.4 biçimi (pid, client:port)" "grep -q 'denenen web şifresi kullanıcıları: webadmin (1), webadmin2 (1)' <<< \"\$AL\""
-mcheck "ModSecurity: yalnız Access denied satırlarının site ve adresi; Warning (404 izleme) sayılmaz" "grep -q 'hedef: site-a.example /wp-login.php (2), site-b.example /x (1)' <<< \"\$AL\" && ! grep -q '/2399' <<< \"\$AL\""
+mcheck "SSH: lfd'nin saydığı satırlardaki kullanıcılar (sshd ve sshd-session; tanıtım dizgisi gelmeyen satır hesap taşımaz)" "grep -q 'denenen SSH kullanıcıları: root (2 hatalı giriş), admin (1 hatalı giriş), guest (1 hatalı giriş)' <<< \"\$AL\""
+mcheck "FTP: pure-ftpd satırındaki hesap" "grep -q 'denenen FTP hesapları: admin (1 hatalı giriş)' <<< \"\$AL\""
+mcheck "cPanel/WHM: hesap ve giriş türü, API anahtarı ayrı; 2024 tarihli satır sayılmaz" "grep -q 'denenen cPanel/WHM girişleri: root · WHM (1 hatalı giriş), root · WHM API (1 hatalı giriş)' <<< \"\$AL\" && ! grep -q eski <<< \"\$AL\""
+mcheck "web şifresi (htpasswd): Apache 2.2 ve 2.4 biçimi (pid, client:port)" "grep -q 'denenen web şifresi kullanıcıları: webadmin (1 hatalı giriş), webadmin2 (1 hatalı giriş)' <<< \"\$AL\""
+mcheck "ModSecurity: yalnız Access denied satırlarının site ve adresi; Warning (404 izleme) sayılmaz" "grep -q 'hedef: site-a.example /wp-login.php (2 engellendi), site-b.example /x (1 engellendi)' <<< \"\$AL\" && ! grep -q '/2399' <<< \"\$AL\""
 mcheck "IP kartı JSON'unda servis ve web kuralı" "run --lookup 198.51.100.50 --json 2>/dev/null | grep -q '{\"s\":\"web\",\"u\":\"site-a.example /wp-login.php\",\"n\":2,\"i\":\"1302\"}'"
 mkm acweb 1; ornek
 printf '%s\n' "198.51.100.50 # lfd: (mod_security) mod_security (id:9999) triggered by 198.51.100.50 (FR/France/-): 5 in the last 3600 secs - $DT" >> "$D"
 for x in 51 52; do single 198.51.100.$x sshd; done; quiet
-mcheck "blok banı maili: ModSecurity tekilinde yalnız banı doğuran kuralın hedefi (id:9999 → site-b), öteki servisler de" "mtext | grep -q '198.51.100.50 .*denenen SSH kullanıcıları: root (2).*hedef: site-b.example /x (1)' && ! mtext | grep -q 'wp-login'"
+mcheck "blok banı maili: ModSecurity tekilinde yalnız banı doğuran kuralın hedefi (id:9999 → site-b), öteki servisler de" "mtext | grep -q '198.51.100.50 .*denenen SSH kullanıcıları: root (2 hatalı giriş).*hedef: site-b.example /x (1 engellendi)' && ! mtext | grep -q 'wp-login'"
 # lfd'nin kendi ayrıştırıcısı (CSF kuruluysa): örnek satırları lfd de aynı IP ve hesapla sayıyor mu
 if [ -r /usr/local/csf/lib/ConfigServer/RegexMain.pm ]; then
     LK=$(DTI="$DTI" DTS="$DTS" DTA="$DTA" "$(command -v /usr/local/cpanel/3rdparty/bin/perl || command -v perl)" "$(dirname "$0")/lfd-karsilastir.pl" "$ORNEK" 2>&1)

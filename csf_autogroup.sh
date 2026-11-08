@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.65"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.66"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -290,7 +290,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_AV_N="%s kez"; M_AV_SRC="kayıt: %s"; M_AV_LAST="son: %s (%s)"
   # günlüklerde denenenler (acct_text; panelde ac_*)
   M_ACCT_mail="denenen posta hesapları: %s"; M_ACCT_ssh="denenen SSH kullanıcıları: %s"; M_ACCT_ftp="denenen FTP hesapları: %s"
-  M_ACCT_cp="denenen cPanel/WHM girişleri: %s"; M_ACCT_htp="denenen web şifresi kullanıcıları: %s"; M_ACCT_web="hedef: %s"
+  M_ACCT_cp="denenen cPanel/WHM girişleri: %s"; M_ACCT_htp="denenen web şifresi kullanıcıları: %s"; M_ACCT_web="hedef: %s"; M_ACCT_N="hatalı giriş"; M_ACCT_NW="engellendi"
   M_PERMB="Tekrar ban (PERMBLOCK): son %s içinde en az %s geçici ban aldı, kalıcıya alındı"; M_PB_SVC="önceki ban: %s"
   M_T_H="%s saat"; M_T_M="%s dakika"; M_T_S="%s saniye"
   # servis adları panelle aynı (ag.js svc_*)
@@ -571,7 +571,7 @@ else
   M_AVIOL_SUBJ="%s violations from allowed IPs"; M_AVIOL_BODY="IPs that tripped an lfd rule but were not banned (allowed, ignored or the server's own address); once per IP per day:"
   M_AV_N="%s times"; M_AV_SRC="entry: %s"; M_AV_LAST="last: %s (%s)"
   M_ACCT_mail="mail accounts tried: %s"; M_ACCT_ssh="SSH users tried: %s"; M_ACCT_ftp="FTP accounts tried: %s"
-  M_ACCT_cp="cPanel/WHM logins tried: %s"; M_ACCT_htp="web password users tried: %s"; M_ACCT_web="targets: %s"
+  M_ACCT_cp="cPanel/WHM logins tried: %s"; M_ACCT_htp="web password users tried: %s"; M_ACCT_web="targets: %s"; M_ACCT_N="failed"; M_ACCT_NW="blocked"
   M_PERMB="Repeat ban (PERMBLOCK): in the last %s, at least %s temp bans, made permanent"; M_PB_SVC="earlier ban: %s"
   M_T_H="%s hour(s)"; M_T_M="%s minute(s)"; M_T_S="%s second(s)"
   M_SVCN_web="Web"; M_SVCN_ssh="SSH"; M_SVCN_ftp="FTP"; M_SVCN_cp="cPanel · WHM · Webmail"; M_SVCN_min="Incoming mail"; M_SVCN_mout="Outgoing mail"
@@ -6194,8 +6194,10 @@ acct_text() {    # IP [SEBEP] → REPLY = "denenen posta hesapları: a (2) · de
     [ -n "${ACCTM[$1]}" ] || return 0
     IFS=$'\036' read -r -a PA <<< "${ACCTT[$1]}"
     for p in "${PA[@]}"; do [ -n "$p" ] && SV[${p%%:*}]="${p#*:}"; done
+    # sayı ne demek yazılsın (önce yalnız "(282)"): hesaplarda hatalı giriş satırı, web'de ModSecurity'nin reddettiği istek (ag.js ac_n / ac_nw)
     for s in mail cp ssh ftp htp; do       # panelle aynı sıra (ag.js AC_ORD)
-        [ -n "${SV[$s]}" ] || continue; k="M_ACCT_$s"; out+="${out:+ · }$(m "${!k}" "${SV[$s]}")"
+        [ -n "${SV[$s]}" ] || continue; k="M_ACCT_$s"
+        out+="${out:+ · }$(m "${!k}" "$(sed -E "s/ \(([0-9]+)\)(, |\$)/ (\1 $M_ACCT_N)\2/g" <<< "${SV[$s]}")")"
     done
     [[ "$2" =~ (id:|ModSecurity\ )([0-9]+) ]] && rid="${BASH_REMATCH[2]}"
     IFS=$'\036' read -r -a PA <<< "${ACCTW[$1]}"
@@ -6203,7 +6205,7 @@ acct_text() {    # IP [SEBEP] → REPLY = "denenen posta hesapları: a (2) · de
         [ -n "$p" ] || continue; [ -n "$rid" ] && [ "${p%%:*}" != "$rid" ] && continue
         wn=$((wn + 1)); [ "$wn" -le 5 ] || break; wt+="${wt:+, }${p#*:}"
     done
-    [ -n "$wt" ] && out+="${out:+ · }$(m "$M_ACCT_web" "$wt")"
+    [ -n "$wt" ] && out+="${out:+ · }$(m "$M_ACCT_web" "$(sed -E "s/ \(([0-9]+)\)(, |\$)/ (\1 $M_ACCT_NW)\2/g" <<< "$wt")")"
     REPLY="$out"
 }
 aa_ipj() {       # İNDİS … → REPLY = IP listesi JSON'u (izinli saldırganlar: sebep, servis, izin kaydı, kaç kez)

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.15.66 — 2026-11-08
+
+- **Attempt counts say what they count.** Accounts tried now read
+  "name (282 failed)" and web targets "site /path (3 blocked)" instead of a
+  bare number, in the panel, the emails and the terminal; a range's ban window
+  also says how many IPs tried the same account.
+
 ## 1.15.65 — 2026-11-08
 
 - **A single-IP partial ban can be changed.** Active range bans → *Change
