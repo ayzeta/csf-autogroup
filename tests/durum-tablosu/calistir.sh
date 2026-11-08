@@ -448,6 +448,7 @@ printf '%s\n' 'tcp|in|d=25|s=151.80.7.44 # lfd: 151.80.7.44 (TR/Turkey/-) AUTHRE
 IPJ=$(run --inside 151.80.0.0/16 --json 2>/dev/null)
 printf '%s' "$IPJ" > "$W/out/inport.json"
 mcheck "aralık kartı: port satırları yorumlarıyla (portc ports ile aynı sıra), tırnaklı yorum kaçışlı" "node '$(wp "$H/portc.js")' < '$W/out/inport.json'"
+mcheck "aralık kartı: port satırı metni portları bir kez yazar (adı çıkmayan port varsa ham liste parantezde yinelenmez)" "node '$(wp "$H/portline.js")' '$(wp "$REPO/whm/assets/ag.js")' < '$W/out/inport.json'"
 # sahip önbelleği: süresi geçmiş kayıt gösterilir (önce okunmuyor, listelerde "—" kalıyordu); kısmi ban, susturulan ve tekilin bloğu
 # haritada; IP kartının taze sorgusu önbellekten farklı sahip görünce blok işaretlenir ve tur onu yeniden sorar
 mk own1; OF="$R/var/lib/csf_autogroup/owners"

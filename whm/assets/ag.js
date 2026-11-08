@@ -4157,7 +4157,9 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     if (why.length > 80) why = why.slice(0, 79) + '…';
     var tcp = g.tcp.filter(function (p) { return p !== '*'; }), raw = g.tcp.concat(g.udp.map(function (p) { return p + '/udp'; })).join(', ');
     var pn = tcp.length || g.udp.length ? portsName(tcp.join(','), g.udp.join(',')) : '';
-    return '<span class="ag-cidr" data-ip="' + esc(g.c.replace(/\/\d+$/, '')) + '">' + esc(g.c) + '</span> · ' + esc(pn && pn !== raw ? pn + ' (' + raw + ')' : raw) +
+    // adı çıkmayan port kaldıysa portsName onu "port N" diye zaten yazıyor: ham liste yalnız her port bir servis adına girdiğinde
+    var allNamed = pn && !portsSel(tcp.join(','), g.udp.join(',')).extra;
+    return '<span class="ag-cidr" data-ip="' + esc(g.c.replace(/\/\d+$/, '')) + '">' + esc(g.c) + '</span> · ' + esc(pn ? (allNamed && pn !== raw ? pn + ' (' + raw + ')' : pn) : raw) +
       (why ? ' · ' + esc(why) : '') + (dt ? ' · ' + esc(dt) : '');
   }
   function portsName(tcp, udp) {

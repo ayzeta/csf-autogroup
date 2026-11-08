@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.15.68 — 2026-11-08
+
+- **Port-limited ban lines show each port once.** When some ports of a line
+  belong to no named service (for example a mail client's 465 and 587 without
+  its IMAP and POP3 ports), they were already written as "port 465, 587" and
+  the full port list was then repeated in brackets. The bracketed list now
+  only follows when every port has a service name.
+
 ## 1.15.67 — 2026-11-08
 
 - **Port-limited bans in a range are listed, not just counted.** The range
