@@ -70,6 +70,51 @@ if command -v node >/dev/null 2>&1; then
     N=$((N + 1)); r=$(node "$H/ayar-deseni.js" "$REPO/whm/assets/ag.js" 2>&1 | tail -n 1)
     case "$r" in *" 0 beklenmeyen") echo "  ✓ panelin ayar doğrulaması (süzgeçli satırlar): $r";; *) F=$((F + 1)); echo "  ✗ panelin ayar doğrulaması: $r";; esac
 fi
+# liste yenileme zamanı (due_at): REFRESH_HOUR saatse son yenilemenin gününden GÜN takvim günü geçince o saatten sonraki ilk turda;
+# saat kaçtıysa (bir gün daha geçti) beklemez; "off" tam GÜN×24 saat. Saat taklidi: date'e -d verilmezse ŞİMDİ'nin anı kullanılır
+eval "$(awk '/^due_at\(\) \{/{f=1} f{print} f && /^}$/{exit}' "$REPO/csf_autogroup.sh")"
+date() { case " $* " in *" -d "*) command date "$@" ;; *) command date -d "@$SIMDI" "$@" ;; esac; }
+dz() { # TZ ŞİMDİ SON GÜN SAAT BEKLENEN AÇIKLAMA
+    N=$((N + 1)); local r; r=$(export TZ="$1"; SIMDI=$(command date -d "$2" +%s); REFRESH_HOUR="$5"
+        due_at "$(command date -d "$3" +%s)" "$4" && echo 1 || echo 0)
+    if [ "$r" = "$6" ]; then echo "  ✓ yenileme zamanı: $7 → $r"; else F=$((F + 1)); echo "  ✗ yenileme zamanı: $7 → $r (beklenen $6)"; fi; }
+dz UTC "2026-11-08 03:59" "2026-11-07 02:00" 1 4 0 "dün 02:00, saat 4, şimdi 03:59: beklenir"
+dz UTC "2026-11-08 04:00" "2026-11-07 02:00" 1 4 1 "dün 02:00, saat 4, şimdi 04:00: yenilenir"
+dz UTC "2026-11-08 23:50" "2026-11-08 01:00" 1 4 0 "bugün 01:00 yenilendi: ertesi güne kadar yok"
+dz UTC "2026-11-08 02:00" "2026-11-06 05:00" 1 4 1 "iki gün önce: saat kaçmış, beklemeden yenilenir"
+dz UTC "2026-11-08 04:10" "2026-11-05 04:30" 3 4 1 "3 günde bir: 3. gün saat 4'ten sonra"
+dz UTC "2026-11-07 10:00" "2026-11-05 04:30" 3 4 0 "3 günde bir: 2. gün yenilenmez"
+dz UTC "2026-11-08 00:30" "2026-11-07 23:30" 1 0 1 "saat 0: gece yarısından sonraki ilk tur"
+dz UTC "2026-11-08 02:00:36" "2026-11-07 02:00:37" 1 off 0 "saat yok: 24 saat dolmadan yenilenmez"
+dz UTC "2026-11-08 02:00:37" "2026-11-07 02:00:37" 1 off 1 "saat yok: tam 24 saatte yenilenir"
+dz Europe/Berlin "2026-10-26 04:00" "2026-10-25 05:00" 1 4 1 "yaz saati bitiminden sonraki gün (25 saatlik gece yarısı farkı)"
+dz Europe/Berlin "2026-03-30 04:00" "2026-03-29 05:00" 1 4 1 "yaz saati başlangıcından sonraki gün (23 saatlik fark)"
+unset -f date
+# Tur süresi ipucunun "yenilendi" işareti (rf_mark): aracın GERÇEK durum dosyasından. cloud-ban.sh yalnız indirir (NOAPPLY): bir liste
+# yerel dosyadan iner, öbürü bağlantı reddiyle düşer → "1/2". Durum dosyası bu turda yazılmadıysa (araç zaman aşımında öldürüldü)
+# eski başarılı satırlar sayılmaz → "0/2"; dosya yoksa "0/0". Önce çağrılmış olması yetiyordu: başarısız indirme de "yenilendi" yazacaktı
+eval "$(awk '/^rf_mark\(\) \{/{f=1} f{print} f && /^}$/{exit}' "$REPO/csf_autogroup.sh")"
+TD=$(mktemp -d); printf '203.0.113.0/24\n198.51.100.0/24\n' > "$TD/liste.txt"
+rfm() { N=$((N + 1)); RF_JOBS=""; rf_mark cloud "$2"; if [ "$RF_JOBS" = "$3" ]; then echo "  ✓ yenileme işareti: $1 → $RF_JOBS"; else F=$((F + 1)); echo "  ✗ yenileme işareti: $1 → $RF_JOBS (beklenen $3)"; fi; }
+RUN_T0=$(date +%s)
+SRC="iyi|file://$TD/liste.txt"$'\n'"kotu|https://127.0.0.1:9/yok" CACHE="$TD/c" LOG_FILE=/dev/null NOAPPLY=1 bash "$REPO/tools/cloud-ban.sh" >/dev/null 2>&1
+rfm "biri indi, biri bağlantı reddi" "$TD/c/status" "cloud:1/2"
+RUN_T0=$(( $(date +%s) + 60 )); rfm "durum dosyası bu turda yazılmadı (zaman aşımı)" "$TD/c/status" "cloud:0/2"
+rfm "durum dosyası yok" "$TD/c/yok" "cloud:0/0"
+# zaman aşımı (st_fail_mark): araç GERÇEKTEN öldürülür (yanıt vermeyen adres, timeout 2) → durum dosyası yazılmaz; önceki başarılı
+# satırlar "timeout" hatası ve ilk hata zamanı alır (bildirim ve panel aynı dosyayı okur), daha önce düşen listenin ilk hata zamanı korunur
+eval "$(awk '/^st_fail_mark\(\) \{/{f=1} f{print} f && /^}$/{exit}' "$REPO/csf_autogroup.sh")"
+k0=$(cut -d'|' -f5 < <(grep '^kotu|' "$TD/c/status")); sleep 1; T1=$(date +%s)
+SRC="iyi|https://10.255.255.1/x"$'\n'"kotu|https://10.255.255.1/y" CACHE="$TD/c" LOG_FILE=/dev/null NOAPPLY=1 timeout 2 bash "$REPO/tools/cloud-ban.sh" >/dev/null 2>&1
+N=$((N + 1)); m=$(stat -c %Y "$TD/c/status")
+if [ "$m" -lt "$T1" ]; then echo "  ✓ zaman aşımı: araç öldürüldü, durum dosyası yazılmadı"; else F=$((F + 1)); echo "  ✗ zaman aşımı sınanamadı: araç durum dosyasını yazdı (adres yanıt verdi?)"; fi
+st_fail_mark "$TD/c/status" "$T1"; RUN_T0=$T1
+N=$((N + 1)); i=$(grep '^iyi|' "$TD/c/status"); k=$(grep '^kotu|' "$TD/c/status")
+if [ "$(cut -d'|' -f4 <<< "$i")" = timeout ] && [ "$(cut -d'|' -f5 <<< "$i")" -ge "$T1" ] && [ -s "$TD/c/iyi.fail" ] && [ "$(cut -d'|' -f5 <<< "$k")" = "$k0" ] && [ "$k0" -gt 0 ]; then
+    echo "  ✓ zaman aşımı: listelere hata ve ilk hata zamanı yazıldı, önceki ilk hata korundu"
+else F=$((F + 1)); echo "  ✗ zaman aşımı işareti: iyi=«$i» kotu=«$k» (önceki ilk hata $k0)"; fi
+rfm "zaman aşımından sonra" "$TD/c/status" "cloud:0/2"
+rm -rf "$TD"
 # tek tırnaklı programın (awk …) içindeki yorumda kesme işareti tırnağı kapatır; bash -n yakalamaz (dört kez oldu)
 for f in "$REPO/csf_autogroup.sh" "$REPO"/tools/*.sh; do
     N=$((N + 1)); k=$(awk -f "$(dirname "$0")/tirnak.awk" "$f" | head -n 1)

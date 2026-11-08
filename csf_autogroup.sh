@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.63"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.64"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -109,6 +109,8 @@ CLOUD_FAIL_DAYS="${CLOUD_FAIL_DAYS:-3}"       # bir kiralık sunucu listesi bu k
 SVC_REFRESH_DAYS="${SVC_REFRESH_DAYS:-1}"     # izinli servis listeleri bu kadar günde bir yeniden indirilir
 SVC_FAIL_DAYS="${SVC_FAIL_DAYS:-3}"           # bir izinli servis listesi bu kadar gün indirilemezse bildirilir
 GEO_REFRESH_DAYS="${GEO_REFRESH_DAYS:-25}"    # CSF'in ASN verisi (ip2asn) bundan eskiyse lfd'ye yeniden indirtilir
+REFRESH_HOUR="${REFRESH_HOUR:-4}"             # izinli servis / kiralık liste / CDN site yenilemesi bu saatten sonraki ilk turda (0–23; off = saat yok,
+                                              # son yenilemeden tam süre sonra). Yenileme turu ~30 sn sürebilir: belli saatte olsun, sebebi bilinsin
 EVENTS_FILE="${EVENTS_FILE:-$(dirname "$SAYAC_FILE")/events.jsonl}"   # WHM eklentisi / --status okur
 # Olay kaydının saklama süresi (gün): banlar, uyarılar, elle işlemler ve ayar değişiklikleri EVENTS_DAYS, tur kayıtları RUN_DAYS.
 # Önce satır sayısıyla tutuluyordu (5000 olay, 1000 tur): tur sıklığı değişince kapsadığı süre de değişiyordu (30 dakikada
@@ -859,7 +861,7 @@ mail() {
 
 # ── Settings: validation (panel + --config set + --dry-run --set) ──────────
 # Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
-CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST IC_REVIEW IE_REVIEW THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_KEEP_DAYS EVENTS_DAYS RUN_DAYS PERM_WINDOW_DAYS BANLOG_DAYS LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_MODES CLOUD_URLS CLOUD_EXTRA SRC_LABELS ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS OWNER_TTL_DAYS IMUNIFY_REFRESH_MIN BLOCK_ACTIVE_DAYS"
+CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST IC_REVIEW IE_REVIEW THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_KEEP_DAYS EVENTS_DAYS RUN_DAYS PERM_WINDOW_DAYS BANLOG_DAYS LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_MODES CLOUD_URLS CLOUD_EXTRA SRC_LABELS ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS REFRESH_HOUR OWNER_TTL_DAYS IMUNIFY_REFRESH_MIN BLOCK_ACTIVE_DAYS"
 PROV_KEYS="SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_MODES CLOUD_URLS CLOUD_EXTRA ENABLED"
 SVC_CATALOG="google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake microsoft365 quiccloud"
 CLOUD_CATALOG="gcp aws azure oracle digitalocean linode vultr"
@@ -906,6 +908,7 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
         BLOCK_EXPIRE_AUTO) opts="0 1" ;;
         CLOUD_REFRESH_DAYS|SVC_REFRESH_DAYS|CLOUD_FAIL_DAYS|SVC_FAIL_DAYS) lo=1; hi=30 ;;
         GEO_REFRESH_DAYS) lo=7; hi=90 ;;
+        REFRESH_HOUR) opts="off 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23" ;;
         OWNER_TTL_DAYS) lo=1; hi=180 ;;
         IMUNIFY_REFRESH_MIN) lo=10; hi=1440 ;;
         BLOCK_ACTIVE_DAYS) lo=1; hi=365 ;;
@@ -1114,6 +1117,11 @@ temp_added() {   # CIDR → csf -td gerçekten tuttu mu? Sayaç kaydı buna bağ
     [[ "$CSF_OUT" == *blocked* ]] && return 0      # "... blocked on port" / "already temporarily blocked"
     # dosya okunamıyorsa CSF'in kendi listesine sorulur (önce "tuttu" sayılıyordu: izleme kaydı yanlış yazılabilirdi)
     [ ! -r "$CSF_VAR/csf.tempban" ] && "$CSF_BIN" -t 2>/dev/null 9>&- | grep -qF " $1 "
+}
+LFD_RN=0; RF_JOBS=""   # turun kaydı (run olayı): lfd yeniden başlatma sayısı, yapılan yenileme işleri (svc, cloud, cdn, geo)
+lfd_restart() {  # lfd'yi yeniden başlat; ASN setlerini lfd doldurur (kilit ona geçmesin). Tur süresini uzatır: sayılır
+    LFD_RN=$(( LFD_RN + 1 ))
+    systemctl restart lfd 2>/dev/null 9>&- || service lfd restart >/dev/null 2>&1 9>&-
 }
 csf_run() {      # csf'i çalıştır, çıktıyı log'a yaz, CSF_OUT'ta sakla (csf hata durumunda da 0 döner)
     if [ "$DRY" = 1 ]; then
@@ -3308,6 +3316,12 @@ do_status() {
               if (match($0, /"t":[0-9]+/))   t = substr($0, RSTART + 4, RLENGTH - 4) + 0
               if (match($0, /"dur":[0-9]+/)) d = substr($0, RSTART + 6, RLENGTH - 6) + 0
               if (NR == 1) f = t; if (t >= c) n++; T[NR] = t; D[NR] = d
+              # turu uzatan işler: yenilemeler (jobs), csf -r (sayı, ms), lfd yeniden başlatma
+              J[NR] = match($0, /"jobs":"[a-z0-9,:\/]*"/) ? substr($0, RSTART + 8, RLENGTH - 9) : ""
+              R[NR] = match($0, /"csfr":[0-9]+/) ? substr($0, RSTART + 7, RLENGTH - 7) + 0 : 0
+              RM[NR] = match($0, /"csfr_ms":[0-9]+/) ? substr($0, RSTART + 10, RLENGTH - 10) + 0 : 0
+              LR[NR] = match($0, /"lfdr":[0-9]+/) ? substr($0, RSTART + 7, RLENGTH - 7) + 0 : 0
+              RX[NR] = match($0, /"csfr_t":[0-9]+/) ? substr($0, RSTART + 9, RLENGTH - 9) + 0 : 0
               if (!got && t >= w && match($0, /"perm_used":[0-9]+/)) {
                   p7 = substr($0, RSTART + 12, RLENGTH - 12) + 0
                   if (match($0, /"temp_used":[0-9]+/)) t7 = substr($0, RSTART + 12, RLENGTH - 12) + 0; else t7 = -1
@@ -3320,7 +3334,7 @@ do_status() {
                   # diye gösteriliyordu, oysa o kayıt kurulum günü değil saklanan en eski tur
                   if (f > w + 3600) got = 0; if (f > w30 + 3600) got30 = 0
                   s = NR > 36 ? NR - 35 : 1; o = ""
-                  for (i = s; i <= NR; i++) o = o (o != "" ? "," : "") "[" T[i] "," D[i] "]"
+                  for (i = s; i <= NR; i++) o = o (o != "" ? "," : "") "[" T[i] "," D[i] ",\"" J[i] "\"," R[i] "," RM[i] "," LR[i] "," RX[i] "]"
                   printf "{\"n24\":%d,\"first\":%d,\"p7\":%d,\"t7\":%d,\"p30\":%d,\"t30\":%d,\"list\":[%s]}", n, f, (got ? p7 : -1), (got ? t7 : -1), (got30 ? p30 : -1), (got30 ? t30 : -1), o }')
     fi
 
@@ -4581,9 +4595,10 @@ cloud_enforce() { # FORCE(1 = listeleri şimdi indir) → bulut listesi banını
             # (önce imza değişince her tur deneniyordu; sunucu dışarı çıkamıyorsa her tur 300 sn kilit tutuluyordu)
             local lfs=""; lf=""; [ -r "$CLOUD_DIR/.fail" ] && read -r lf lfs < "$CLOUD_DIR/.fail"
             if [ "${1:-0}" = 1 ] || ! [[ "$lf" =~ ^[0-9]+$ ]] || [ $(( $(date +%s) - lf )) -ge 3600 ] || { [ "$need" = 2 ] && [ "$lfs" != "$sig" ]; }; then
+                local ct0; ct0=$(date +%s)
                 if SRC="$REPLY" CACHE="$CLOUD_DIR" CSF_DIR="$CSF_DIR" CSF_VAR="$CSF_VAR" LOG_FILE="$LOG_FILE" timeout 300 bash "$tool" >/dev/null 2>&1 9>&-; then
                     printf '%s' "$sig" > "$sigf"; printf '%s' "$st" > "$CLOUD_DIR/.applied"; rm -f "$CLOUD_DIR/.fail"
-                else echo "$(date +%s) $sig" > "$CLOUD_DIR/.fail"; fi
+                else echo "$(date +%s) $sig" > "$CLOUD_DIR/.fail"; st_fail_mark "$CLOUD_DIR/status" "$ct0"; fi
                 return 0
             fi
         fi
@@ -4928,7 +4943,7 @@ asn_enforce() {  # istenen sağlayıcı banını CSF'te kur / onar / kaldır →
         cp -p "$CSF_CONF" "$CSF_CONF.autogroup.bak" 2>/dev/null
         conf_set CC_DENY "$nd"; conf_set CC_DENY_PORTS "$np"; conf_set CC_DENY_PORTS_TCP "$nt"; conf_set CC_DENY_PORTS_UDP "$nu"
         csf_run -r
-        { systemctl restart lfd 2>/dev/null 9>&- || service lfd restart >/dev/null 2>&1 9>&-; }   # setleri lfd doldurur; kilit ona geçmesin
+        lfd_restart   # setleri lfd doldurur; kilit ona geçmesin
         if [ -n "$wp$wa" ]; then
             log "$(m "$M_ASN_APPLIED" "${wp:+$wp ($ASN_MODE)}${wp:+${wa:+ · }}${wa:+$wa (all)}")"
             ev provider "" "asn=\"$wp\"" "all=\"$wa\"" "mode=\"$ASN_MODE\"" "by=\"${AG_BY:-cron}\""
@@ -4956,10 +4971,10 @@ svc_enforce() {  # FORCE(1 = listeleri şimdi yenile) → izinli servisleri kur 
             # son deneme başarısızsa (sunucu dışarı bağlanamıyor, kaynaklar boş) zorlanmadıkça saatte birden sık denenmez
             local lf; lf=$(cat "$cache/.fail" 2>/dev/null)
             if [ "${1:-0}" = 1 ] || ! [[ "$lf" =~ ^[0-9]+$ ]] || [ $(( $(date +%s) - lf )) -ge 3600 ]; then
-                mkdir -p "$cache"
+                mkdir -p "$cache"; local st0; st0=$(date +%s)
                 if SRC="$REPLY" EXCEPT="$SVC_EXCEPT" OUT="$SVC_OUT" ALLOW="$CSF_DIR/csf.allow" CSF_BIN="$CSF_BIN" LOG_FILE="$LOG_FILE" CACHE="$cache" \
                     timeout 300 bash "$tool" >/dev/null 2>&1 9>&-; then printf '%s' "$sig" > "$sigf"; rm -f "$cache/.fail"
-                else date +%s > "$cache/.fail"; fi
+                else date +%s > "$cache/.fail"; st_fail_mark "$cache/status" "$st0"; fi
             fi
         fi
     elif [ "$inc" = 1 ] || [ -e "$SVC_OUT" ]; then
@@ -5396,21 +5411,61 @@ svc_health() {   # izinli servis kaynaklarından uyarı süresinden uzun süredi
     ic_track IC_RUN SvcFail "$([ -n "$bad" ] && echo 1 || echo 0)" "$(m "$M_SVC_FAIL_SUBJ" "$bad")" "$(m "$M_SVC_FAIL_BODY" "$bad")" "$M_SVC_FAIL_OK"
     return 0
 }
-refresh_due() {  # DOSYA GÜN → 0: dosyadaki son yenileme zamanından bu yana GÜN geçti (ya da hiç yenilenmedi); her turda denetlenir
+refresh_due() {  # DOSYA GÜN → 0: yenileme zamanı (dosyada son yenilemenin epoch'u; yoksa hemen); her turda denetlenir
     local t; t=$(cat "$1" 2>/dev/null)
     [[ "$t" =~ ^[0-9]+$ ]] || return 0
-    (( $(date +%s) - t >= $2 * 86400 ))
+    due_at "$t" "$2"
+}
+st_fail_mark() { # DURUM_DOSYASI BAŞLANGIÇ → araç bu çağrıda durum dosyasını yazamadıysa (zaman aşımında öldürüldü) her listeye hata
+    # "timeout" ve ilk hata zamanı (varsa korunur; listenin .fail dosyası da). Yazılmazsa dosyada önceki başarılı satırlar kalıyordu:
+    # liste günlerce inmese de bildirim (cloud_health / svc_health), panel kartı ve Tur süresi ipucu "sorun yok" diyordu
+    local f="$1" t0="$2" d now n; [ -s "$f" ] || return 0
+    [ "$(stat -c %Y "$f" 2>/dev/null || echo 0)" -ge "$t0" ] && return 0
+    d=$(dirname "$f"); now=$(date +%s)
+    while IFS='|' read -r n _; do
+        [[ "$n" =~ ^[A-Za-z0-9._-]+$ ]] && [ ! -s "$d/$n.fail" ] && echo "$now" > "$d/$n.fail"
+    done < "$f"
+    awk -F'|' -v OFS='|' -v now="$now" 'NF >= 4 { $4 = "timeout"; if (NF < 5 || $5 + 0 == 0) $5 = now } { print }' "$f" > "$f.tmp.$$" &&
+        mv -f "$f.tmp.$$" "$f" || rm -f "$f.tmp.$$"
+}
+rf_mark() {      # TÜR DURUM_DOSYASI → RF_JOBS'a "tür:indirilen/toplam". Ölçüt aracın kendi sonucu, çağrılmış olması değil: durum
+    # satırı "ad|sayı|liste zamanı|hata|ilk hata" ve liste dosyası (zamanı) yalnız başarılı indirmede yenilenir; hata alanı boş ve
+    # zaman bu turun başından yeni olanlar sayılır. Durum dosyası bu turda yazılmadıysa (zaman aşımı) hepsi 0 (ipucu "indirilemedi")
+    local k; k=$(awk -F'|' -v t0="$RUN_T0" 'NF >= 4 { n++; if ($4 == "" && $3 + 0 >= t0) k++ } END { print k + 0 "/" n + 0 }' "$2" 2>/dev/null)
+    RF_JOBS+="${RF_JOBS:+,}$1:${k:-0/0}"
+}
+due_at() {       # EPOCH GÜN → 0: yenileme zamanı geldi. REFRESH_HOUR saatse (0–23): son yenilemenin gününden bu yana GÜN takvim
+    # günü geçti ve saat REFRESH_HOUR'u geçti; o saat kaçtıysa (sunucu kapalıydı, bir gün daha geçti) saat beklenmez. "off":
+    # son yenilemeden tam GÜN×24 saat sonra (eski davranış; yenileme turu her gün bir tur kayıyordu)
+    local t="$1" n="$2" now d h; now=$(date +%s)
+    if [[ "$REFRESH_HOUR" =~ ^[0-9]+$ ]]; then
+        # takvim günü farkı yerel gece yarılarından (yaz saati değişiminde fark 23/25 saat: yuvarlanır)
+        d=$(( ( $(date -d "$(date +%F)" +%s) - $(date -d "$(date -d "@$t" +%F)" +%s) + 43200 ) / 86400 ))
+        h=$(date +%-H)
+        (( d > n || ( d == n && h >= 10#$REFRESH_HOUR ) ))
+        return
+    fi
+    (( now - t >= n * 86400 ))
 }
 refresh_tasks() { # her tur, her iş kendi zaman damgasıyla (ayrı cron satırı gerekmez); süresi dolan sonraki turda yenilenir:
     # izinli servis listeleri (SVC_REFRESH_DAYS), kiralık sunucu listeleri (CLOUD_REFRESH_DAYS), CDN arkasındaki siteler. Önce günde
     # bir kez (günün ilk turunda) çalışıyordu: süre gün içinde dolunca ya da liste gün içinde elle yenilenince sonraki yenileme
     # ertesi günü bekliyordu (kayma bir güne kadar). Son deneme zamanı .refreshed'de; yenileme çalışamazsa yazılmaz, sonraki
-    # tur yeniden dener. CSF'in ASN verisi geo_refresh'te.
-    local cref="$CLOUD_DIR/.refreshed" sref="$(dirname "$SAYAC_FILE")/services/.refreshed"
-    if [ "$SVC_ALLOW" = 1 ] && refresh_due "$sref" "$SVC_REFRESH_DAYS"; then svc_enforce 1; mkdir -p "$(dirname "$sref")"; date +%s > "$sref"; fi
-    if [ "$CLOUD_BAN" = 1 ] && refresh_due "$cref" "$CLOUD_REFRESH_DAYS"; then cloud_enforce 1 && { cloud_probe; date +%s > "$cref"; }; fi
-    # CDN arkasındaki siteler: istekleri güvenlik duvarına CDN'den gelir, ziyaretçinin IP'si görünmez (Etkisini ölç ve ban-leak ayırır)
-    [ -r "$SELF_DIR/tools/cdn-sites.sh" ] && OUT="$CDN_FILE" LOG_FILE="$LOG_FILE" timeout 600 bash "$SELF_DIR/tools/cdn-sites.sh" --if-older 1 >/dev/null 2>&1
+    # tur yeniden dener. CSF'in ASN verisi geo_refresh'te. REFRESH_HOUR (varsayılan 4): üçü de o saatten sonraki ilk turda (due_at);
+    # yapılan işler RF_JOBS'a (run olayı "jobs": panelin Tur süresi grafiği uzun turun sebebini yazar)
+    local cref="$CLOUD_DIR/.refreshed" sref="$(dirname "$SAYAC_FILE")/services/.refreshed" c0 c1
+    if [ "$SVC_ALLOW" = 1 ] && refresh_due "$sref" "$SVC_REFRESH_DAYS"; then svc_enforce 1; mkdir -p "$(dirname "$sref")"; date +%s > "$sref"; rf_mark svc "$(dirname "$sref")/status"; fi
+    if [ "$CLOUD_BAN" = 1 ] && refresh_due "$cref" "$CLOUD_REFRESH_DAYS"; then cloud_enforce 1 && { cloud_probe; rf_mark cloud "$CLOUD_DIR/status"; date +%s > "$cref"; }; fi
+    # CDN arkasındaki siteler: istekleri güvenlik duvarına CDN'den gelir, ziyaretçinin IP'si görünmez (Etkisini ölç ve ban-leak ayırır).
+    # Dosyanın ilk satırı "#t|EPOCH" (son tarama); saat ayarlıysa zamanı due_at verir, araç her çağrıda tarar
+    if [ -r "$SELF_DIR/tools/cdn-sites.sh" ]; then
+        c0=$(head -n 1 "$CDN_FILE" 2>/dev/null)
+        if [[ "$REFRESH_HOUR" =~ ^[0-9]+$ ]]; then
+            [[ "$c0" =~ ^#t\|([0-9]+)$ ]] && ! due_at "${BASH_REMATCH[1]}" 1 ||
+                OUT="$CDN_FILE" LOG_FILE="$LOG_FILE" timeout 600 bash "$SELF_DIR/tools/cdn-sites.sh" >/dev/null 2>&1
+        else OUT="$CDN_FILE" LOG_FILE="$LOG_FILE" timeout 600 bash "$SELF_DIR/tools/cdn-sites.sh" --if-older 1 >/dev/null 2>&1; fi
+        c1=$(head -n 1 "$CDN_FILE" 2>/dev/null); [ "$c1" != "$c0" ] && RF_JOBS+="${RF_JOBS:+,}cdn"
+    fi
     return 0
 }
 geo_refresh() {  # her tur: ASN banı varsa ve CSF'in ASN verisi (ip2asn) ayardaki günden (GEO_REFRESH_DAYS) eskiyse kenara alınır ve lfd
@@ -5424,7 +5479,7 @@ geo_refresh() {  # her tur: ASN banı varsa ve CSF'in ASN verisi (ip2asn) ayarda
     now=$(date +%s)
     mv0=$(cat "$geo.moved" 2>/dev/null); [[ "$mv0" =~ ^[0-9]+$ ]] || mv0=0
     if [ ! -e "$geo" ] && [ -e "$geo.old" ] && [ $(( now - mv0 )) -ge 43200 ]; then
-        mv -f "$geo.old" "$geo" && { systemctl restart lfd 2>/dev/null 9>&- || service lfd restart >/dev/null 2>&1 9>&-; }
+        mv -f "$geo.old" "$geo" && lfd_restart
         echo "$now" > "$geo.tried"; log "$(m "$M_ASN_REFRESH_FAIL" "?")"
     fi
     [ -e "$geo" ] && rm -f "$geo.moved"
@@ -5432,8 +5487,8 @@ geo_refresh() {  # her tur: ASN banı varsa ve CSF'in ASN verisi (ip2asn) ayarda
     gmt=$(stat -c %Y "$geo" 2>/dev/null); [[ "$gmt" =~ ^[0-9]+$ ]] || return 0
     [ $(( now - gmt )) -ge $(( GEO_REFRESH_DAYS * 86400 )) ] || return 0
     age=$(( ( now - gmt ) / 86400 ))
-    if mv -f "$geo" "$geo.old" && echo "$now" > "$geo.moved" && { systemctl restart lfd 2>/dev/null 9>&- || service lfd restart >/dev/null 2>&1 9>&-; }; then
-        rm -f "$geo.tried"; log "$(m "$M_ASN_REFRESH" "$age" "$asn")"
+    if mv -f "$geo" "$geo.old" && echo "$now" > "$geo.moved" && lfd_restart; then
+        rm -f "$geo.tried"; log "$(m "$M_ASN_REFRESH" "$age" "$asn")"; RF_JOBS+="${RF_JOBS:+,}geo"
     else
         [ -e "$geo" ] || mv -f "$geo.old" "$geo"           # lfd başlatılamadıysa eski veri yerine dönsün
         rm -f "$geo.moved"; echo "$now" > "$geo.tried"
@@ -6797,7 +6852,7 @@ do_config() {
                 o="{\"ok\":true,\"values\":{"
                 i=0
                 for k in $CFG_KEYS; do jstr "$(cfg_value "$k")"; o+="$([ $i -gt 0 ] && echo ,)\"$k\":$REPLY"; i=1; done
-                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"whm\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"NOTIFY\":\"all\",\"IC_FIREWALL\":\"1\",\"IC_LISTFULL\":\"1\",\"IC_RUN\":\"1\",\"IC_DIGEST\":\"1\",\"IE_FIREWALL\":\"1\",\"IE_LISTFULL\":\"1\",\"IE_RUN\":\"1\",\"IE_DIGEST\":\"1\",\"IC_REVIEW\":\"1\",\"IE_REVIEW\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_KEEP_DAYS\":\"30\",\"EVENTS_DAYS\":\"180\",\"RUN_DAYS\":\"31\",\"PERM_WINDOW_DAYS\":\"90\",\"BANLOG_DAYS\":\"90\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"BLOCK_EXPIRE_DAYS\":\"365\",\"BLOCK_ACTIVE_DAYS\":\"30\",\"OWNER_TTL_DAYS\":\"30\",\"IMUNIFY_REFRESH_MIN\":\"60\",\"CLOUD_REFRESH_DAYS\":\"1\",\"CLOUD_FAIL_DAYS\":\"3\",\"SVC_REFRESH_DAYS\":\"1\",\"SVC_FAIL_DAYS\":\"3\",\"GEO_REFRESH_DAYS\":\"25\",\"BLOCK_EXPIRE_AUTO\":\"0\",\"CRON_MIN\":\"*/10\"}"
+                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"whm\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"NOTIFY\":\"all\",\"IC_FIREWALL\":\"1\",\"IC_LISTFULL\":\"1\",\"IC_RUN\":\"1\",\"IC_DIGEST\":\"1\",\"IE_FIREWALL\":\"1\",\"IE_LISTFULL\":\"1\",\"IE_RUN\":\"1\",\"IE_DIGEST\":\"1\",\"IC_REVIEW\":\"1\",\"IE_REVIEW\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_KEEP_DAYS\":\"30\",\"EVENTS_DAYS\":\"180\",\"RUN_DAYS\":\"31\",\"PERM_WINDOW_DAYS\":\"90\",\"BANLOG_DAYS\":\"90\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"BLOCK_EXPIRE_DAYS\":\"365\",\"BLOCK_ACTIVE_DAYS\":\"30\",\"OWNER_TTL_DAYS\":\"30\",\"IMUNIFY_REFRESH_MIN\":\"60\",\"CLOUD_REFRESH_DAYS\":\"1\",\"CLOUD_FAIL_DAYS\":\"3\",\"SVC_REFRESH_DAYS\":\"1\",\"SVC_FAIL_DAYS\":\"3\",\"GEO_REFRESH_DAYS\":\"25\",\"REFRESH_HOUR\":\"4\",\"BLOCK_EXPIRE_AUTO\":\"0\",\"CRON_MIN\":\"*/10\"}"
                 ALERT_MAIL=whm mail_to; jstr "$REPLY"; o+=",\"whm_contact\":$REPLY"
                 slack_url; o+=",\"slack\":$([ -n "$REPLY" ] && echo true || echo false)"
                 # lfd'nin geçici ban süreleri (saniye; en kısa ve en uzun): LF_TRIGGER açıksa LF_TRIGGER_PERM, değilse açık
@@ -6952,7 +7007,7 @@ esac
 take_lock || { log "$M_LOCKED"; exit 0; }
 [ "$DRY" = 1 ] && log "$M_DRY_ON"
 [ ${#SETS[@]} -gt 0 ] && log "$(m "$M_DRY_OVR" "${SETS[*]}")"
-RUN_T0=$(date +%s)
+RUN_T0=$(date +%s); RUN_LB=$(stat -c %s "$LOG_FILE" 2>/dev/null || echo 0)   # günlüğün tur başındaki boyu: araçların bu turdaki satırları
 prof start
 panel_init
 owners_load
@@ -7426,7 +7481,9 @@ own_blocks_save                       # eklentinin işaretsiz otomatik blok banl
 fi
 ev run "" "v=\"$VERSION\"" "dur=$(( $(date +%s) - RUN_T0 ))" "added=$added24" "warn16=$warn16" \
     "temp_added=$temp_added24" "promoted=$temp_perm_added24" "temp_warn16=$temp_warn16" "wl_skipped=$wl_skipped" \
-    "perm_used=$(num "$current_count")" "perm_limit=$(num "$limit")" "temp_used=$(num "$temp_current")" "temp_limit=$(num "$temp_limit")"
+    "perm_used=$(num "$current_count")" "perm_limit=$(num "$limit")" "temp_used=$(num "$temp_current")" "temp_limit=$(num "$temp_limit")" \
+    "jobs=\"$RF_JOBS\"" "csfr=$(num "${CSF_TN[-r]:-0}")" "csfr_ms=$(num "${CSF_TMS[-r]:-0}")" "lfdr=$(num "$LFD_RN")" \
+    "csfr_t=$(num "$(tail -c +$(( RUN_LB + 1 )) "$LOG_FILE" 2>/dev/null | grep -c 'services-allow: csf -r çalıştı')")"   # turu uzatan işler (Tur süresi ipucu); csfr_t: izinli servis aracının kendi csf -r'si (günlüğünden)
 RUN_DUR=$(( $(date +%s) - RUN_T0 ))
 if [ "$EVENTFUL" = 0 ] && [ "$DRY" != 1 ] && [ "$LOG_MODE" = tee ]; then
     printf '[%(%Y-%m-%d %H:%M:%S)T] %s\n' -1 "$(m "$M_END_T" "$RUN_DUR")"          # ekrana her zamanki gibi

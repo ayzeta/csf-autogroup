@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.15.64 — 2026-11-08
+
+- **Lists are refreshed at a set hour.** The allowed-service lists, the
+  rented-server lists and the check for sites behind a CDN are downloaded in
+  the first run after the refresh hour (Settings → Sources and refresh,
+  default 04:00 server time). Before, each refresh came exactly a day after the
+  previous one, so the longer run moved a little later every day. Choosing
+  *No set hour* keeps the old behavior.
+- **The Run time chart says why a run took longer:** its tooltip names the
+  lists refreshed in that run, how many times `csf -r` ran and for how long,
+  and whether lfd was restarted. A list counts as refreshed only if its
+  download succeeded in that run.
+- **A list download that times out is reported.** When the download of the
+  rented-server or allowed-service lists was stopped by its time limit, the
+  previous successful status stayed in place, so a list that kept failing was
+  never reported. Now each list is marked as failed, and the usual alert after
+  the set number of days applies.
+
 ## 1.15.63 — 2026-11-08
 
 - **QUIC.cloud is a built-in allowed service.** LiteSpeed's CDN and

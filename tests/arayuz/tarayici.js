@@ -254,6 +254,10 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
   console.log('Arayüz');
   await page.goto(URL, { waitUntil: 'networkidle', timeout: 90000 }); await ready(page);
   check('sayfa açıldı, durum yüklendi', await page.$('.ag-head') !== null);
+  // Tur süresi ipucu: calistir.sh'nin olay kaydına eklediği tur (motorun durum çıktısından): kısmen inen liste "indirilemedi" der
+  const tips = await page.$$eval('.ag-spark i', L => L.map(i => i.title));
+  check('Tur süresi ipucu turu uzatan işleri yazar (yenilenen, inemeyen, csf -r)', tips.some(x => /izinli servis listeleri yenilendi/.test(x) &&
+    /kiralık sunucu listeleri: 7\/8 yenilendi, 1 indirilemedi/.test(x) && /csf -r 1× \(4 sn\)/.test(x)), tips.slice(-2).join(' | '));
   // sekmeler, iki genişlikte
   for (const tab of ['overview', 'history', 'prov', 'settings']) {
     for (const width of [1280, 390]) {

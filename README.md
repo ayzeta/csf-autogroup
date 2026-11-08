@@ -113,8 +113,9 @@ settings, with no prompts. `config.env` is left untouched.
 ### Overview
 
 - **Status** — whether protection is running, when the last run was and how long
-  it took, a countdown to the next run and the durations of the last 36 runs,
-  plus three markers: **CSF** (rules loaded, not disabled, not in testing mode),
+  it took, a countdown to the next run and the durations of the last 36 runs
+  (a run's tooltip names what made it longer: lists refreshed, `csf -r`, lfd
+  restarted), plus three markers: **CSF** (rules loaded, not disabled, not in testing mode),
   **LFD** (running) and **Cron** (runs on time). Turns red when any of them has
   a problem. Coming back to a tab that was hidden for a while, the run times
   show *updating…* until the new status arrives, never the old numbers.
@@ -402,8 +403,10 @@ its own:
 
 - **Sources and refresh** — owner/hostname lookups on or off, DNS timeout and
   how long a block's owner is kept before it is looked up again (default 30
-  days); how often the rented-server and allowed-service lists are downloaded
-  again and after how many failed days it is reported; how old CSF's ASN data
+  days); the hour the lists are refreshed (default 04:00, server time: the
+  first run after it downloads them, so that run takes longer); how often the
+  rented-server and allowed-service lists are downloaded again and after how
+  many failed days it is reported; how old CSF's ASN data
   may get; how often Imunify360's list is read (default 60 minutes). The
   Providers cards link here.
 - **Server** — version and update, CSF's list limits (read-only, with how full
@@ -719,7 +722,7 @@ Online), the site monitors UptimeRobot, Pingdom and StatusCake, and QUIC.cloud
 `csf.allow` (plain addresses, kept in an ipset); CSF checks the allow list
 first, so they pass country and provider bans, on every port. Lists are
 downloaded again as often as set under **Refresh** in the card (default every
-day; checked on every run); a list that fails to download, or returns far fewer
+day, in the first run after the refresh hour, 04:00 by default); a list that fails to download, or returns far fewer
 addresses than before, keeps its previous version; ranges wider than /16 are
 refused. Yandex and Facebook don't publish address lists.
 

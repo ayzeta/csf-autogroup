@@ -20,7 +20,12 @@ for p in "${NODE_PATH:-}" "$(npm root -g 2>/dev/null)" /opt/node-tools/node_modu
 done
 node -e "require('playwright')" 2>/dev/null || { echo "arayüz testi: playwright modülü yok (npm i playwright && npx playwright install chromium)"; exit 2; }
 W="$(mktemp -d)"; PORT="${PORT:-8098}"
-cleanup() { [ -n "${PHPPID:-}" ] && kill "$PHPPID" 2>/dev/null; rm -rf "$W"; }
+# Tur süresi grafiği: motorun olay kaydına iki tur satırı (biri yenileme + csf -r ile); motor durum çıktısında listeyi kurar, panel
+# ipucunu çizer. Test makinesinde tur kaydı yoktu: 1.15.64'teki awk hatası (gawk'ın RT değişkeni) bu testte görünmedi. Sonda silinir
+EVF=/var/lib/csf_autogroup/events.jsonl; mkdir -p /var/lib/csf_autogroup; NOWT=$(date +%s)
+printf '{"t":%s,"type":"run","dur":3,"arayuz_testi":1}\n{"t":%s,"type":"run","dur":35,"jobs":"svc:14/14,cloud:7/8","csfr":1,"csfr_ms":4200,"lfdr":0,"csfr_t":0,"arayuz_testi":1}\n' \
+    $((NOWT - 120)) $((NOWT - 60)) >> "$EVF"
+cleanup() { [ -n "${PHPPID:-}" ] && kill "$PHPPID" 2>/dev/null; rm -rf "$W"; sed -i '/"arayuz_testi":1/d' "$EVF"; }
 trap cleanup EXIT
 # panelin kopyası: shebang satırları kalkar (cPanel'in PHP yolu), version.json install.sh'nin yazdığı biçimde
 mkdir -p "$W/panel" && cp -a "$REPO/whm/." "$W/panel/" && sed -i '1{/^#!/d}' "$W/panel/index.php" "$W/panel/api.php"

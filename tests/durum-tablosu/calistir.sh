@@ -613,6 +613,8 @@ geo() {   # ad yaş-dakika
 }
 geo geo25 $((25 * 1440 + 30))
 mcheck "ASN verisi: ayar 25 gün, veri 25 günlük → yenilenir (lfd yeniden başlatılır)" "[ ! -e '$G' ] && [ -e '$G.old' ] && grep -q 'restart lfd' '$R/systemctl.log'"
+mcheck "tur kaydı: ASN verisi yenilenen turda run olayı yapılan işi ve lfd yeniden başlatmasını taşır" "tail -n 1 '$R/var/lib/csf_autogroup/events.jsonl' | grep -q '\"jobs\":\"geo\".*\"lfdr\":1'"
+mcheck "tur kaydı: durum çıktısının son turu [zaman, süre, işler, csf -r, ms, lfd] (Tur süresi ipucu)" "run --status --json 2>/dev/null | grep -qE '\[[0-9]+,[0-9]+,\"geo\",[0-9]+,[0-9]+,1,0\]\]'"
 geo geo24 $((24 * 1440))
 mcheck "ASN verisi: ayar 25 gün, veri 24 günlük → yenilenmez" "[ -e '$G' ] && [ ! -e '$R/systemctl.log' ]"
 # ASN verisi her turda denetlenir: eski sürümün gün anahtarı dursa da süre dolunca bu turda yenilenir
