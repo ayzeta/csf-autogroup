@@ -555,6 +555,15 @@ if [ "${GERCEK:-0}" = 1 ] && command -v ip >/dev/null 2>&1 && command -v python3
     check "tek IP · seçilen port: yalnız o port kesilir, öteki port ve sunucu yönü açık" -GG "$(tp $P1)$(tp $P2)$(tsrv)"
     run --action unban $NC >/dev/null 2>&1
     check "tek IP · kısmi banı kaldır: açılır" G "$(tp $P1)"
+    # Banı değiştir (--replace, 1.15.65): kısmi ban başka porta geçer (eski port açılır), sonra her şeye (iki yön kesilir); eski kısmi
+    # kural csf -r ile kalkar. csf.deny'de IP için tek tam satır kalır
+    run --action ban1 $NC --mode svc --ports "$P1" >/dev/null 2>&1
+    run --action ban1 $NC --mode svc --ports "$P2" --replace >/dev/null 2>&1
+    check "tek IP · değiştir: kısmi ban başka porta geçer (eski port açılır, yeni kesilir)" G-G "$(tp $P1)$(tp $P2)$(tsrv)"
+    run --action ban1 $NC --replace >/dev/null 2>&1
+    check "tek IP · değiştir: kısmi → her şey (iki yön kesilir, kısmi satır kalmaz)" ---G "$(tp $P1)$(tp $P2)$(tsrv)$(grep -q "|s=$NC " "$D" && echo - || echo G)"
+    run --action unban $NC >/dev/null 2>&1
+    check "tek IP · değiştirilen banı kaldır: açılır" GG "$(tp $P2)$(tsrv)"
     ip netns exec agcli pkill -f "^python3 -m http.server --bind 0.0.0.0 $PC" 2>/dev/null
     for _p in $(pgrep -f "^python3 -m http.server --bind 0.0.0.0 1839"); do kill "$_p" 2>/dev/null; done
     ip netns del agcli 2>/dev/null; ip link del agv0 2>/dev/null

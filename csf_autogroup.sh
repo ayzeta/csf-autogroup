@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.64"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.65"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -5526,29 +5526,48 @@ do_action() {    # NAME TARGET [DAYS]
                 *)   act_out 2 "$(m "$M_BAD_TARGET" "$BMODE")"; return ;;
             esac
             self_overlap "$lo" "$hi" && { act_out 1 "$(m "$M_A_SELF" "$t" "$SELF_HIT")"; return; }
-            if deny_has "$t" || grep -qF "|s=$t # " "$DENY_FILE" 2>/dev/null || { [ -r "$CSF_VAR/csf.tempban" ] && grep -qF "|$t|" "$CSF_VAR/csf.tempban"; }; then
+            # Banı değiştir (--replace): IP'nin eklentiye ait kısmi banı (csf.deny "…|s=IP # csf_autogroup:") yeni seçimle değişir.
+            # Yalnız o varken: IP'nin kalıcı / geçici tam banı ya da eklentinin olmayan kısmi satırı varsa yine "zaten banlı"
+            local rp1=0
+            if [ "$REPLACE" = 1 ] && grep -qF "|s=$t # csf_autogroup:" "$DENY_FILE" 2>/dev/null && ! deny_has "$t" &&
+               ! grep -F "|s=$t # " "$DENY_FILE" 2>/dev/null | grep -qvF "# csf_autogroup:" &&
+               ! { [ -r "$CSF_VAR/csf.tempban" ] && grep -qF "|$t|" "$CSF_VAR/csf.tempban"; }; then rp1=1
+            elif deny_has "$t" || grep -qF "|s=$t # " "$DENY_FILE" 2>/dev/null || { [ -r "$CSF_VAR/csf.tempban" ] && grep -qF "|$t|" "$CSF_VAR/csf.tempban"; }; then
                 act_out 1 "$(m "$M_A1_EXISTS" "$t")"; return
             fi
             perm_covers "$lo" "$hi" && { act_out 1 "$(m "$M_A_EXISTS" "$t")"; return; }
             WL_HIT=""; wl_overlap "$lo" "$hi"
             if [ -n "$WL_HIT" ] && [ "$FORCE" != 1 ]; then act_out 4 "$(m "$M_A_WL" "$t" "$WL_HIT")"; return; fi
+            local old1=""
+            if [ "$rp1" = 1 ] && [ "$BMODE" = all ]; then
+                # kısmi → her şey: kısmi satırlar dosyadan kalkar, tam ban yazılır, csf -r eski kısmi kuralları da siler. Tam ban
+                # yazılamazsa eski satırlar geri konur (IP açıkta kalmasın)
+                local sf1; sf1=$(mktemp) || { act_out 1 "$(m "$M_A_BANFAIL" "$t" "csf.deny")"; return; }
+                old1=$(grep -F "|s=$t # csf_autogroup:" "$DENY_FILE")
+                printf '%s\n' "|s=$t # csf_autogroup:" > "$sf1"
+                file_rewrite "$DENY_FILE" /dev/null "$sf1" "" || { rm -f "$sf1"; act_out 1 "$(m "$M_A_BANFAIL" "$t" "csf.deny")"; return; }
+                rm -f "$sf1"
+            fi
             if [ "$BMODE" = svc ]; then
                 partial_write "$t" 32 "$pp" || { act_out 1 "$(m "$M_A_BANFAIL" "$t" "csf.deny")"; return; }
                 csf_run -r
                 cm="$(m "$M_A_PBANNED" "$t" "$(part_shown "$pp")")"
             elif [ "$BTTL" -gt 0 ]; then
                 csf_run -td "$t" "$BTTL" -d inout "$(m "$M_A1_TCOMMENT" "$AG_BY")"
-                grep -qF "|$t|" "$CSF_VAR/csf.tempban" 2>/dev/null || { act_out 1 "$(m "$M_A_BANFAIL" "$t" "${CSF_OUT%%$NL*}")"; return; }
+                grep -qF "|$t|" "$CSF_VAR/csf.tempban" 2>/dev/null || { [ -n "$old1" ] && file_append_locked "$DENY_FILE" "$old1"$'\n'
+                    act_out 1 "$(m "$M_A_BANFAIL" "$t" "${CSF_OUT%%$NL*}")"; return; }
                 cm="$(m "$M_A1_TBANNED" "$t" "$(dur_text "$BTTL")")"
             else
                 csf_run -d "$t" "$(m "$M_A1_COMMENT" "$AG_BY")"
-                deny_has "$t" || { act_out 1 "$(m "$M_A_BANFAIL" "$t" "${CSF_OUT%%$NL*}")"; return; }
+                deny_has "$t" || { [ -n "$old1" ] && file_append_locked "$DENY_FILE" "$old1"$'\n'
+                    act_out 1 "$(m "$M_A_BANFAIL" "$t" "${CSF_OUT%%$NL*}")"; return; }
                 cm="$(m "$M_A1_BANNED" "$t")"
             fi
+            [ -n "$old1" ] && csf_run -r
             jstr "$WL_HIT"; jw="$REPLY"
             owners_load; inside_owner "${t%.*}" "$t"; owner_kv
             log "$(m "$M_A_LOG" "$AG_BY" "$cm")"
-            ev manual_ban "$t" "by=\"$AG_BY\"" "kind=\"ip\"" "wl=$jw" "force=$([ "$FORCE" = 1 ] && echo true || echo false)" "${OKV[@]}" \
+            ev "$([ "$rp1" = 1 ] && echo manual_change || echo manual_ban)" "$t" "by=\"$AG_BY\"" "kind=\"ip\"" "wl=$jw" "force=$([ "$FORCE" = 1 ] && echo true || echo false)" "${OKV[@]}" \
                "mode=\"$BMODE\"" "ttl=$BTTL" $([ "$BMODE" = svc ] && echo "svc=\"$BSVC\" extra=\"$BPORTS\" ports=\"$pp\"")
             act_out 0 "$cm" ;;
         allow1)

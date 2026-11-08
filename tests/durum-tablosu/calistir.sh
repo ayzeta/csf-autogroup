@@ -429,6 +429,16 @@ mcheck "tek IP: Banı kaldır kalıcı, geçici ve kısmi tek IP banlarını kal
 # geçicide asıl bitiş lfd süresiyle (süresi dolmadan kaldırıldı); kısmi /32 servis banı tekil ban değil
 quiet; BLF="$R/var/lib/csf_autogroup/banlog"
 mcheck "tek IP: tur görmeden konup kaldırılan elle banlar ban geçmişinde (kalıcı ve geçici, bitişleri kaldırma anı)" "awk -F'|' '\$1 == \"151.80.7.50\" && \$2 == \"p\" && \$4 >= \$3 && \$4 > 0 && \$5 ~ /elle tekil ban \\(root\\)\$/' '$BLF' | grep -q . && awk -F'|' '\$1 == \"151.80.7.51\" && \$2 == \"t\" && \$4 - \$3 < 600 && \$6 - \$3 >= 3590 && \$5 ~ /elle geçici tekil ban/' '$BLF' | grep -q . && ! grep -q '^151.80.7.52|' '$BLF'"
+# Banı değiştir (--replace): tek IP'nin eklenti kısmi banı yeni seçimle değişir (satırlar yeniden yazılır, olay manual_change); --replace
+# olmadan yine "zaten banlı"; kısmi → her şey: kısmi satırlar kalkar, kalıcı tam ban yazılır. Kalıcı tam banı olan IP'de --replace işlemez
+mk ip1r; EVF="$R/var/lib/csf_autogroup/events.jsonl"
+quiet --action ban1 151.80.7.60 --mode svc --svc ssh; quiet --action ban1 151.80.7.60 --mode svc --svc web
+mcheck "tek IP değiştir: --replace olmadan ikinci kısmi ban reddedilir (SSH satırı kalır, web yok)" "grep -q '^tcp|in|d=22|s=151.80.7.60 ' '$D' && ! grep -q '|d=80,443|s=151.80.7.60 ' '$D'"
+quiet --action ban1 151.80.7.60 --mode svc --svc web --replace
+mcheck "tek IP değiştir: --replace ile servis değişir (SSH satırı gider, web gelir), olay manual_change kind=ip" "! grep -q '^tcp|in|d=22|s=151.80.7.60 ' '$D' && grep -q '^tcp|in|d=80,443|s=151.80.7.60 # csf_autogroup:' '$D' && grep -q '\"type\":\"manual_change\",\"cidr\":\"151.80.7.60\".*\"kind\":\"ip\".*\"mode\":\"svc\"' '$EVF'"
+quiet --action ban1 151.80.7.60 --replace
+mcheck "tek IP değiştir: kısmi → her şey (kısmi satırlar kalkar, kalıcı tam ban yazılır)" "! grep -q '|s=151.80.7.60 ' '$D' && grep -q '^151.80.7.60 # csf_autogroup: elle tekil ban' '$D' && grep -q '\"type\":\"manual_change\",\"cidr\":\"151.80.7.60\".*\"mode\":\"all\"' '$EVF'"
+mcheck "tek IP değiştir: tam banlı IP'de --replace yine 'zaten banlı' (satır tek)" "run --action ban1 151.80.7.60 --mode svc --svc ssh --replace --json 2>/dev/null | grep -q '\"code\":1' && [ \"\$(grep -c '151.80.7.60' '$D')\" = 1 ]"
 # sahip önbelleği: süresi geçmiş kayıt gösterilir (önce okunmuyor, listelerde "—" kalıyordu); kısmi ban, susturulan ve tekilin bloğu
 # haritada; IP kartının taze sorgusu önbellekten farklı sahip görünce blok işaretlenir ve tur onu yeniden sorar
 mk own1; OF="$R/var/lib/csf_autogroup/owners"

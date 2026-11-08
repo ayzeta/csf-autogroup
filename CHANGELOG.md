@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.15.65 — 2026-11-08
+
+- **A single-IP partial ban can be changed.** Active range bans → *Change
+  ban* now also works for an IP banned on selected services: the IP ban
+  window opens with the current choice, and the ban moves to other services
+  or to a full ban. The menu also offers *Ban block (/24)* for single IPs.
+- **History matches Overview for allowed IPs.** A violation row of an
+  allowed, ignored or server IP no longer offers *Ban anyway* (for the
+  server's own IP the window could only say it cannot be banned).
+- **Clearer windows.** *Make permanent* no longer shows time limits; the
+  attempts note in a ban window merges the same account tried from several
+  IPs and only warns about customer accounts when accounts were tried (not
+  for web addresses); *Unmute* says what changes; removing a single-IP
+  partial ban says "this IP" instead of "this range".
+
 ## 1.15.64 — 2026-11-08
 
 - **Lists are refreshed at a set hour.** The allowed-service lists, the
