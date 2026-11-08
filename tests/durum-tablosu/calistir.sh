@@ -444,6 +444,8 @@ mcheck "tek IP değiştir: tam banlı IP'de --replace yine 'zaten banlı' (satı
 mk inport
 printf '%s\n' 'tcp|in|d=25|s=151.80.7.44 # lfd: 151.80.7.44 (TR/Turkey/-) AUTHRELAY limit exceeded - Fri Jun 26 13:32:31 2026' \
     'tcp|in|d=465|s=151.80.7.44 # lfd: 151.80.7.44 (TR/Turkey/-) AUTHRELAY limit exceeded - Fri Jun 26 13:32:31 2026' \
+    'tcp|in|d=26|s=151.80.7.44 # lfd: 151.80.7.44 (TR/Turkey/-) AUTHRELAY limit exceeded - Fri Jun 26 13:32:31 2026' \
+    'tcp|in|d=587|s=151.80.7.44 # lfd: 151.80.7.44 (TR/Turkey/-) AUTHRELAY limit exceeded - Fri Jun 26 13:32:31 2026' \
     'tcp|in|d=22|s=151.80.7.45 # elle "ofis" \ deneme' >> "$D"
 IPJ=$(run --inside 151.80.0.0/16 --json 2>/dev/null)
 printf '%s' "$IPJ" > "$W/out/inport.json"
@@ -452,6 +454,11 @@ mcheck "aralık kartı: port satırı metni portları bir kez yazar (adı çıkm
 # IP kartı: aynı adresin port satırları her ekranda bir kez (Üst seviyeler grubu, sonuç kutusu); motorun gerçek --lookup çıktısıyla
 run --lookup 151.80.7.44 --json 2>/dev/null > "$W/out/inport-ip.json"
 mcheck "IP kartı: adresin port satırları tek grup (sonuç kutusunda adres bir kez, sebep ve tarih)" "node '$(wp "$H/portline.js")' '$(wp "$REPO/whm/assets/ag.js")' ip < '$W/out/inport-ip.json'"
+# posta portları sunucudan (her sunucuda farklı olabilir): exim.conf daemon_smtp_ports (WHM "exim on another port" 26 ekler), yoksa
+# varsayılan; durum JSON svcp çiplerin portlarını verir. Taklit kökte ss'e bakılmaz (makinenin süreçleri test verisi değil)
+printf '%s\n' '# exim' 'daemon_smtp_ports = 25 : 26 : 465 : 587' 'tls_on_connect_ports = 465' > "$R/exim.conf"
+mcheck "posta portları: exim.conf'tan (25, 26, 465, 587), dosya yoksa varsayılan 25, 465, 587; IMAP/POP varsayılanı" "EXIM_CONF='$R/exim.conf' run --status --json 2>/dev/null | grep -q '\"svcp\":{\"ssh\":\"[0-9,]*\",\"smtp\":\"25,26,465,587\",\"mread\":\"110,143,993,995\"}' && EXIM_CONF='$R/yok.conf' run --status --json 2>/dev/null | grep -q '\"smtp\":\"25,465,587\"'"
+mcheck "posta portları: SMTP servisli kısmi ban sunucunun portlarını kapatır (26 dahil)" "EXIM_CONF='$R/exim.conf' run --action ban24 151.80.9 --mode svc --svc smtp >/dev/null 2>&1; grep -q '^tcp|in|d=25,26,465,587|s=151.80.9.0/24 ' '$D'"
 # sahip önbelleği: süresi geçmiş kayıt gösterilir (önce okunmuyor, listelerde "—" kalıyordu); kısmi ban, susturulan ve tekilin bloğu
 # haritada; IP kartının taze sorgusu önbellekten farklı sahip görünce blok işaretlenir ve tur onu yeniden sorar
 mk own1; OF="$R/var/lib/csf_autogroup/owners"
@@ -533,7 +540,7 @@ printf '%s\n' "151.80.9.0/24 # csf_autogroup: elle blok banı - do not delete" >
 printf '{"t":%s,"type":"warn16","cidr":"151.80.0.0/16","n":1,"ips":[{"ip":"151.80.9.20","host":"","why":"lfd - (sshd) Failed SSH login"}]}\n' "$NOW" >> "$R/var/lib/csf_autogroup/events.jsonl"
 SI=$(run --src-ips cl:gcp --json 2>/dev/null); PO=$(run --status --json 2>/dev/null | grep -o '"pot":{[^}]*}' | grep -o '"gcp":[0-9]*' | cut -d: -f2)
 mcheck "kaynak ayrıntısı: kutudaki sayı (pot) = ayrıntının IP sayısı, listenin dışındaki IP sayılmaz" "[ \"\$(printf '%s' '$SI' | grep -o '\"n\":[0-9]*')\" = '\"n\":4' ] && [ '$PO' = 4 ] && ! printf '%s' '$SI' | grep -q 198.51.100.5"
-mcheck "kaynak ayrıntısı: şu anki durum — tekil kalıcı, geçici, aralık banı içinde, banlı değil" "printf '%s' '$SI' | grep -q '\"151.80.7.10\",\"ssh\",[^]]*,\"deny\",\"deny\"\]' && printf '%s' '$SI' | grep -q '\"151.80.7.11\",\"sync\",[^]]*,\"temp\",\"temp\"\]' && printf '%s' '$SI' | grep -q '\"151.80.9.20\",[^]]*\"deny24:151.80.9.0/24\"\]' && printf '%s' '$SI' | grep -q '\"151.80.7.9\",\"ssh\",[^]]*,\"temp24\",\"\"\]'"
+mcheck "kaynak ayrıntısı: şu anki durum — tekil kalıcı, geçici, aralık banı içinde, banlı değil" "printf '%s' '$SI' | grep -q '\"151.80.7.10\",\"ssh\",[^]]*,\"deny\",\"deny\"\]' && printf '%s' '$SI' | grep -q '\"151.80.7.11\",\"smtp\",[^]]*,\"temp\",\"temp\"\]' && printf '%s' '$SI' | grep -q '\"151.80.9.20\",[^]]*\"deny24:151.80.9.0/24\"\]' && printf '%s' '$SI' | grep -q '\"151.80.7.9\",\"ssh\",[^]]*,\"temp24\",\"\"\]'"
 printf '%s\n' "151.80.7.10 # ofis" "tcp|in|d=22|s=151.80.7.11" >> "$A"
 SI=$(run --src-ips cl:gcp --json 2>/dev/null)
 mcheck "kaynak ayrıntısı: bütün portlara izinli IP'nin banı 'izinli' (IP kartı: ban işlemiyor); tek portluk izin banı bozmaz" "printf '%s' '$SI' | grep -q '\"151.80.7.10\",[^]]*,\"alw\"\]' && printf '%s' '$SI' | grep -q '\"151.80.7.11\",[^]]*,\"temp\"\]' && run --lookup 151.80.7.10 --json 2>/dev/null | grep -q '\"wl\":\"csf.allow: 151.80.7.10'"
@@ -565,7 +572,7 @@ mcheck "aralığa tıklamak aralık kartını açar" "grep -qF 'if (RANGE_RE.tes
 mk insany; single 151.80.7.9 sshd; single 151.80.7.100 sshd; printf '%s\n' "151.80.7.0/26 # Manually denied - $DT" >> "$D"
 mcheck "aralık kartı · /26: kendi banı kapsar, içindeki 1 tekil sayılır" "run --inside 151.80.7.0/26 --json 2>/dev/null | grep -q '\"cover\":\"151.80.7.0/26\".*\"singles\":1,'"
 mk insatmp; single 151.80.7.9 sshd; printf '%s|151.80.7.20||inout|3600|lfd: (pop3d) Failed POP3 login from 151.80.7.20 (FR/France/-): 5 in the last 3600 secs\n' "$NOW" >> "$T"
-mcheck "aralık kartı · geçici tek IP banı da listede, kalan süreyle (kart '1 geçici ban' diyor)" "run --inside 151.80.7.0/24 --json 2>/dev/null | grep -q '\"sgl\":\[{\"ip\":\"151.80.7.9\"[^]]*{\"ip\":\"151.80.7.20\",\"why\":\"[^\"]*\",\"svc\":\"sync\",\"dnd\":false,\"temp\":[0-9]*}\]'"
+mcheck "aralık kartı · geçici tek IP banı da listede, kalan süreyle (kart '1 geçici ban' diyor)" "run --inside 151.80.7.0/24 --json 2>/dev/null | grep -q '\"sgl\":\[{\"ip\":\"151.80.7.9\"[^]]*{\"ip\":\"151.80.7.20\",\"why\":\"[^\"]*\",\"svc\":\"mread\",\"dnd\":false,\"temp\":[0-9]*}\]'"
 mcheck "aralık kartı · /12 geçerli cevap (içinde tekil yok)" "run --inside 151.0.0.0/12 --json 2>/dev/null | grep -q '\"singles\":0,'"
 mcheck "aralık kartı · hizasız aralık reddedilir" "run --inside 151.80.7.5/26 --json 2>/dev/null | grep -q 'bad_input'"
 

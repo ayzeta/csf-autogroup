@@ -26,8 +26,8 @@ if locale -a 2>/dev/null | grep -qix 'tr_TR.utf8'; then
               c=IT; printf '%s|%s|%s|%s' "$(echo 'IMAP IT' | awk '{ print tolower($0) }')" "${c,,}" "$(echo 'IMAP' | grep -ci imap)" \
                   "$(awk -v r='Failed IMAP login from 1.2.3.4 - ignored' "$AWK_CLS"' BEGIN { print cls(r) }')" ); }
     N=$((N + 1)); r=$(trk motor); d=$(trk duz)
-    if [ "$r" = "imap it|it|1|sync" ]; then echo "  ✓ Türkçe modda harf çevirisi İngilizce kuralla: $r (düz tr_TR: $d)"
-    else F=$((F + 1)); echo "  ✗ Türkçe modda harf çevirisi: $r (beklenen imap it|it|1|sync; düz tr_TR: $d)"; fi
+    if [ "$r" = "imap it|it|1|mread" ]; then echo "  ✓ Türkçe modda harf çevirisi İngilizce kuralla: $r (düz tr_TR: $d)"
+    else F=$((F + 1)); echo "  ✗ Türkçe modda harf çevirisi: $r (beklenen imap it|it|1|mread; düz tr_TR: $d)"; fi
     N=$((N + 1)); [ "$d" != "$r" ] && echo "  ✓ sınama duyarlı: düz tr_TR farklı sonuç verir" || { F=$((F + 1)); echo "  ✗ düz tr_TR de aynı sonucu verdi: sınama hatayı yakalamaz"; }
 else
     echo "  ⚠ tr_TR.utf8 yerel ayarı kurulu değil: Türkçe mod harf çevirisi sınanmadı (dnf install glibc-langpack-tr)"

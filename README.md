@@ -301,7 +301,9 @@ removal is there to free space in the list.
 - **Everything** — the range is cut in both directions (a normal CSF ban).
 - **Selected services** — only connections *from* the range to the services you
   pick are blocked (Web, SSH on this server's real SSH port, FTP, cPanel · WHM ·
-  Webmail, incoming mail, mail client (sending, IMAP, POP3), DNS, plus any
+  Webmail, mail sending (SMTP: the ports Exim listens on, e.g. 25, 465, 587
+  and any extra port added in WHM), mail reading (IMAP, POP3: the ports
+  Dovecot listens on), DNS, plus any
   other ports or ranges such as `8080, 30000-35000`; add `/udp` for UDP, e.g.
   `443/udp`, a port without a suffix is TCP). Everything else stays open, and connections from this
   server to the range are not affected. Web includes UDP 443 (HTTP/3) and DNS

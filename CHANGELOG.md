@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.15.70 — 2026-11-08
+
+- **Mail services follow the protocol and the server's own ports.** "Incoming
+  mail" (25) and "Mail client" (465, 587, IMAP, POP3) are replaced by **Mail
+  sending (SMTP)** and **Mail reading (IMAP/POP)**. Their ports are read from
+  the server: the ports Exim and Dovecot are listening on, then
+  `daemon_smtp_ports` in `exim.conf`, otherwise 25, 465, 587 and 110, 143,
+  993, 995. An extra SMTP port added in WHM (such as 26) is now part of the
+  SMTP service in bans, rented-server list rules, the IP card and the range
+  card, instead of showing up as a bare port number. SMTP AUTH failures count
+  as mail sending, IMAP and POP3 failures as mail reading. Bans and rules
+  saved with the old services keep their ports and open in the new choices
+  when edited.
+- Port lists in port-limited lines are shown in numeric order.
+
 ## 1.15.69 — 2026-11-08
 
 - **Rented-server lists and the ban guard no longer switch off briefly on

@@ -52,7 +52,7 @@ layer() {    # koruma katmanı
         yok) ;;
         liste-web) printf '%s\n' CLOUD_BAN=1 CLOUD_SOURCES=gcp CLOUD_TCP=80,443 CLOUD_UDP=443 >> "$R/app/config.env"; echo "151.80.0.0/16" > "$R/var/lib/csf_autogroup/cloud/gcp.txt" ;;
         asn-web)   sed -i 's/^CC_DENY_PORTS = ""/CC_DENY_PORTS = "AS16276"/; s/^CC_DENY_PORTS_TCP = ""/CC_DENY_PORTS_TCP = "80,443"/; s/^CC_DENY_PORTS_UDP = ""/CC_DENY_PORTS_UDP = "443"/' "$CF" ;;
-        asn-posta) sed -i 's/^CC_DENY_PORTS = ""/CC_DENY_PORTS = "AS16276"/; s/^CC_DENY_PORTS_TCP = ""/CC_DENY_PORTS_TCP = "465,587,110,995,143,993"/' "$CF" ;;
+        asn-posta) sed -i 's/^CC_DENY_PORTS = ""/CC_DENY_PORTS = "AS16276"/; s/^CC_DENY_PORTS_TCP = ""/CC_DENY_PORTS_TCP = "25,465,587,110,995,143,993"/' "$CF" ;;
         asn-hepsi) sed -i 's/^CC_DENY = ""/CC_DENY = "AS16276"/' "$CF" ;;
         ulke-hepsi) sed -i 's/^CC_DENY = ""/CC_DENY = "FR"/' "$CF" ;;
         ulke-web)  sed -i 's/^CC_DENY_PORTS = ""/CC_DENY_PORTS = "FR"/; s/^CC_DENY_PORTS_TCP = ""/CC_DENY_PORTS_TCP = "80,443"/; s/^CC_DENY_PORTS_UDP = ""/CC_DENY_PORTS_UDP = "443"/' "$CF" ;;
@@ -118,7 +118,7 @@ if [ "${GERCEK:-0}" = 1 ]; then
                 local CA="$R/var/lib/csf_autogroup/cloud"; echo "x-test" > "$CA/active"; printf 'tcp=80,443\nudp=443\n' > "$CA/ports"; echo "" > "$CA/self"
                 SRC="x-test|file://$LST" CACHE="$CA" CSF_DIR=/etc/csf LOG_FILE="$R/autogroup.log" bash "$R/app/tools/cloud-ban.sh" >/dev/null 2>&1 ;;
             asn-web)   addconf CC_DENY_PORTS AS16276; setconf CC_DENY_PORTS_TCP 80,443; setconf CC_DENY_PORTS_UDP 443 ;;
-            asn-posta) addconf CC_DENY_PORTS AS16276; setconf CC_DENY_PORTS_TCP 465,587,110,995,143,993 ;;
+            asn-posta) addconf CC_DENY_PORTS AS16276; setconf CC_DENY_PORTS_TCP 25,465,587,110,995,143,993 ;;
             asn-hepsi) addconf CC_DENY AS16276 ;;
             ulke-hepsi) addconf CC_DENY FR ;;
             ulke-web)  addconf CC_DENY_PORTS FR; setconf CC_DENY_PORTS_TCP 80,443; setconf CC_DENY_PORTS_UDP 443 ;;

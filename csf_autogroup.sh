@@ -28,8 +28,8 @@
 #   csf_autogroup.sh --action ban16|ban24 TARGET [--keep]    manual ban; covered entries are removed unless --keep
 #   csf_autogroup.sh --action banpfx A.B.C.D/N …             same for an announced prefix, /17–/23 (all ban16 options)
 #   csf_autogroup.sh --action unban CIDR [--restore]         lift a ban; --restore brings back what a manual ban removed
-#     ban16|ban24 … --mode svc --svc web,ssh,ftp,cp,min,sync,dns [--ports 8080,…]       block only these (inbound)
-#     ban16|ban24 … --mode exc --svc web,ssh,ftp,cp,min,sync,dns,mout,wout [--ports …]  full ban, these stay open
+#     ban16|ban24 … --mode svc --svc web,ssh,ftp,cp,smtp,mread,dns [--ports 8080,…]       block only these (inbound)
+#     ban16|ban24 … --mode exc --svc web,ssh,ftp,cp,smtp,mread,dns,mout,wout [--ports …]  full ban, these stay open
 #     ban16|ban24 … --replace   change the mode of an existing CSF Auto-Group ban
 #     ban16|ban24|banpfx … --ttl SECONDS   temporary ban (everything); covered entries stay
 #   csf_autogroup.sh --action ban1 IP [--mode svc --svc …] [--ttl SECONDS]   ban one IP
@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.69"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.70"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -295,7 +295,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_T_H="%s saat"; M_T_M="%s dakika"; M_T_S="%s saniye"
   # servis adları panelle aynı (ag.js svc_*)
   M_SVCN_web="Web"; M_SVCN_ssh="SSH"; M_SVCN_ftp="FTP"; M_SVCN_cp="cPanel · WHM · Webmail"; M_SVCN_min="Gelen posta"; M_SVCN_mout="Giden posta"
-  M_SVCN_sync="E-posta istemcisi"; M_SVCN_dns="DNS"; M_SVCN_scan="port taraması"; M_SVCN_repeat="tekrar banlanan"; M_SVCN_other="diğer"; M_SVCN_norec="sebebi kayıtlı değil"
+  M_SVCN_smtp="Posta gönderme (SMTP)"; M_SVCN_mread="Posta okuma (IMAP/POP)"; M_SVCN_sync="E-posta istemcisi"; M_SVCN_dns="DNS"; M_SVCN_scan="port taraması"; M_SVCN_repeat="tekrar banlanan"; M_SVCN_other="diğer"; M_SVCN_norec="sebebi kayıtlı değil"
   M_AVK_b="ban işlemiyor"; M_AVK_i="lfd yoksaydı"; M_AVK_y="yoksayılıyor"; M_AVK_s="sunucu IP'si"
   M_POPEN_SUBJ="%s açık servis"; M_POPEN_BODY="Kısmi banın açık bıraktığı servislere eşik kadar ihlal geldi; banı değiştirip onları da kapatabilirsiniz:"; M_POPEN_L="kapalı: %s · açık servislere %s ihlal"
   M_DG_RV="Kontrol edilecekler (7 gün): %s izinli IP'den ihlal kaydı · %s açık servis kaydı"
@@ -575,7 +575,7 @@ else
   M_PERMB="Repeat ban (PERMBLOCK): in the last %s, at least %s temp bans, made permanent"; M_PB_SVC="earlier ban: %s"
   M_T_H="%s hour(s)"; M_T_M="%s minute(s)"; M_T_S="%s second(s)"
   M_SVCN_web="Web"; M_SVCN_ssh="SSH"; M_SVCN_ftp="FTP"; M_SVCN_cp="cPanel · WHM · Webmail"; M_SVCN_min="Incoming mail"; M_SVCN_mout="Outgoing mail"
-  M_SVCN_sync="Mail client"; M_SVCN_dns="DNS"; M_SVCN_scan="port scan"; M_SVCN_repeat="banned repeatedly"; M_SVCN_other="other"; M_SVCN_norec="reason not recorded"
+  M_SVCN_smtp="Mail sending (SMTP)"; M_SVCN_mread="Mail reading (IMAP/POP)"; M_SVCN_sync="Mail client"; M_SVCN_dns="DNS"; M_SVCN_scan="port scan"; M_SVCN_repeat="banned repeatedly"; M_SVCN_other="other"; M_SVCN_norec="reason not recorded"
   M_AVK_b="ban not working"; M_AVK_i="ignored by lfd"; M_AVK_y="ignored"; M_AVK_s="server IP"
   M_POPEN_SUBJ="%s open services"; M_POPEN_BODY="The services a partial ban leaves open took violations up to the threshold; change the ban to close them too:"; M_POPEN_L="closed: %s · %s violations on the open services"
   M_DG_RV="Needs review (7 days): %s allowed-IP violation records · %s open-service records"
@@ -959,8 +959,8 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
             done
             return 0 ;;
         CLOUD_MODES)              # "ad=svc|all|exc:servisler:portlar"; svc kipinde servis ya da port gerekir
-            local x n=0 sv='(web|ssh|ftp|cp|min|sync|dns)' re pp; CFG_VAL=""
-            re="^[a-z0-9-]{1,66}=(svc|all|exc):($sv(,$sv){0,6})?:([0-9]{1,5}(-[0-9]{1,5})?(/(tcp|udp))?(,[0-9]{1,5}(-[0-9]{1,5})?(/(tcp|udp))?){0,14})?\$"
+            local x n=0 sv='(web|ssh|ftp|cp|smtp|mread|min|sync|dns)' re pp; CFG_VAL=""
+            re="^[a-z0-9-]{1,66}=(svc|all|exc):($sv(,$sv){0,8})?:([0-9]{1,5}(-[0-9]{1,5})?(/(tcp|udp))?(,[0-9]{1,5}(-[0-9]{1,5})?(/(tcp|udp))?){0,14})?\$"
             for x in $v; do
                 n=$((n + 1)); pp="${x##*:}"
                 if [ "$n" -gt 100 ] || ! [[ "$x" =~ $re ]] || [[ "$x" =~ =svc::$ ]] || ! split_ports "$pp"; then
@@ -3354,6 +3354,8 @@ do_status() {
         printf '"usage":{"perm":[%s,%s],"temp":[%s,%s]},' "$(num "$pc")" "$limit" "$(num "$tc")" "$tlimit"
         printf '"last_run":%s,' "${last:-null}"
         jstr "$cronm"; printf '"cron_min":%s,"runs":%s,' "$REPLY" "$runsj"
+        local mps mpr; mail_ports smtp; mps="$REPLY"; mail_ports mread; mpr="$REPLY"; ssh_ports   # servis çiplerinin portları (sunucudan okunur)
+        printf '"svcp":{"ssh":"%s","smtp":"%s","mread":"%s"},' "$REPLY" "$mps" "$mpr"
         # ev_start: olay kaydının ilk satırının zamanı — panel, kaydı olmayan eski ban / izleme için "kayıt şu tarihte başladı" der
         local evs; evs=$(head -c 200 "$EVENTS_FILE" 2>/dev/null | sed -n '1s/^{"t":\([0-9]*\).*/\1/p')
         printf '"cron_interval":%s,"ev_start":%s,"daily":{"start":%s,%s},"owners":{%s},"asn_top":[%s],"blocks_top":[%s],"imunify":%s,' \
@@ -3578,20 +3580,22 @@ AWK_CLS='function cls(r,  lf) {
     if (r ~ /port ?scan|ps_limit|lf_distattack/) return "scan"
     # lfd "yoksayıldı" satırı uygulama ön eki yazmaz ("Failed SSH login from IP - ignored"): metinden tanınır
     if (r ~ /failed ssh login/) return "ssh"
-    if (r ~ /failed (pop3|imap) login|failed smtp auth/) return "sync"
+    if (r ~ /failed smtp auth/) return "smtp"
+    if (r ~ /failed (pop3|imap) login/) return "mread"
     if (r ~ /failed ftp login/) return "ftp"
     if (r ~ /sshd|lf_sshd/) return "ssh"
     if (r ~ /ftpd|lf_ftpd|lf_distftp/) return "ftp"
     if (r ~ /cpanel|cpaneld|whm|webmail|lf_cpanel|webmin|lf_webmin|directadmin/) return "cp"
-    if (r ~ /smtpauth|lf_smtpauth|lf_distsmtp|sasl|imapd|pop3d|lf_pop3d|lf_imapd|dovecot|courier/) return "sync"
-    if (r ~ /exim|lf_eximsyntax/) return "min"
+    if (r ~ /smtpauth|lf_smtpauth|lf_distsmtp|sasl/) return "smtp"          # SMTP AUTH: istemci Exim portuna bağlanır
+    if (r ~ /imapd|pop3d|lf_pop3d|lf_imapd|dovecot|courier/) return "mread"
+    if (r ~ /exim|lf_eximsyntax/) return "smtp"
     if (r ~ /named|lf_dns/) return "dns"
     # yazılım adları web olduğunu kendisi söyler (elle yazılmış "WordPress user enumeration attack" da web)
     if (r ~ /htpasswd|lf_htaccess|lf_apache|apache|nginx|litespeed|wordpress|wp-|xmlrpc|joomla|login\.php/) return "web"
     # iki anlamlı sözcükler (spam, smtp, relay, dns, http, 404) yalnız lfd satırında servis söyler ("lfd:" ön eki, "(sshd)" gibi
     # uygulama etiketi, [LF_…]); elle yazılmış "spam" açıklaması posta da web formu da olabilir: "diğer" (önce "Gelen posta")
     lf = (r ~ /lfd|lf_[a-z]|\([a-z0-9_]+\)/)
-    if (lf && r ~ /smtp|relay|spam/) return "min"
+    if (lf && r ~ /smtp|relay|spam/) return "smtp"
     if (lf && r ~ /dns/) return "dns"
     if (lf && r ~ /http|404/) return "web"
     return "other"
@@ -4092,12 +4096,28 @@ ssh_ports() {    # sunucunun SSH port(lar)ı → REPLY ("22" ya da "33330"); sü
     [ -z "$p" ] && p=$(awk 'tolower($1) == "port" && $2 ~ /^[0-9]+$/ { print $2 }' "$SSHD_CONFIG" 2>/dev/null | sort -un | paste -sd, -)
     REPLY="${p:-22}"; SSH_PORTS_MEMO="$REPLY"
 }
+# Posta portları her sunucuda farklı olabilir (WHM "exim on another port" 26 / 2525 ekler; Dovecot ManageSieve 4190): sunucudan okunur.
+# Önce dinleyen süreç (ss -ltnp: "LISTEN … 0.0.0.0:465 … users:(("exim",…"), sonra yapılandırma (exim.conf daemon_smtp_ports,
+# tls_on_connect_ports), yoksa varsayılan. Taklit köklerde (SIM_ROOT) makinenin süreçlerine bakılmaz: yalnız yapılandırma dosyası.
+EXIM_CONF="${EXIM_CONF:-/etc/exim.conf}"
+declare -A MAILP_MEMO=()
+mail_ports() {   # smtp | mread → REPLY = TCP portları ("25,26,465,587" / "110,143,993,995,4190"); süreç başına bir kez
+    local k="$1" pr p=""
+    [ -n "${MAILP_MEMO[$k]+x}" ] && { REPLY="${MAILP_MEMO[$k]}"; return; }
+    [ "$k" = smtp ] && pr=exim || pr=dovecot
+    [ -z "${SIM_ROOT:-}" ] && p=$(ss -ltnp 2>/dev/null | awk -v pr="$pr" '$1 == "LISTEN" && index($0, "users:((\"" pr "\"") { a = $4; sub(/.*:/, "", a); if (a ~ /^[0-9]+$/) print a }' | sort -un | paste -sd, -)
+    [ -z "$p" ] && [ "$k" = smtp ] && p=$(awk -F= '$1 ~ /^[ \t]*(daemon_smtp_ports|tls_on_connect_ports)[ \t]*$/ { n = split($2, a, /[ \t:,]+/); for (i = 1; i <= n; i++) if (a[i] ~ /^[0-9]+$/) print a[i] }' "$EXIM_CONF" 2>/dev/null | sort -un | paste -sd, -)
+    [ "$k" = smtp ] && REPLY="${p:-25,465,587}" || REPLY="${p:-110,143,993,995}"
+    MAILP_MEMO[$k]="$REPLY"
+}
 svc_ports() {    # SERVİS → REPLY = TCP portları (elle bandaki servis seçimi)
     case "$1" in
         web)  REPLY="80,443" ;;
         ssh)  ssh_ports ;;
         ftp)  REPLY="21" ;;
         cp)   REPLY="2077,2078,2079,2080,2082,2083,2086,2087,2095,2096" ;;   # cPanel, WHM, Webmail, WebDAV, CalDAV/CardDAV
+        smtp|mread) mail_ports "$1" ;;                      # SMTP (Exim: teslim + şifreli gönderim) · posta okuma (Dovecot: IMAP, POP3)
+        # eski anahtarlar (1.15.70 öncesi kayıtlar: csf.deny yorumu [svc=…], CLOUD_MODES): eski portlarıyla okunur, yeni seçimde yok
         min)  REPLY="25" ;;                                 # gelen posta (teslim)
         sync) REPLY="465,587,110,995,143,993" ;;            # posta eşitleme: gönderim, IMAP, POP3
         mout) REPLY="25" ;;                                 # giden posta
@@ -4146,7 +4166,7 @@ part_ports() {   # BSVC + BPORTS → REPLY = kapatılacak TCP portları; PART_UD
     for x in ${BSVC//,/ }; do
         case "$x" in
             web) svc_ports web; all+="${all:+,}$REPLY"; PART_UDPP+="${PART_UDPP:+,}443" ;;
-            ssh|ftp|cp|min|sync) svc_ports "$x"; all+="${all:+,}$REPLY" ;;
+            ssh|ftp|cp|smtp|mread|min|sync) svc_ports "$x"; all+="${all:+,}$REPLY" ;;
             dns) all+="${all:+,}53"; PART_UDPP+="${PART_UDPP:+,}53" ;;
             *) return 1 ;;
         esac
@@ -4163,7 +4183,7 @@ exc_lines() {    # CIDR → EXC_LINES: tam banın yanına csf.allow'a girecek iz
     [ -n "$BSVC$BPORTS" ] || return 1
     for x in ${BSVC//,/ }; do
         case "$x" in
-            web|ssh|ftp|cp|min|sync) svc_ports "$x"; tin+="${tin:+,}$REPLY" ;;   # aralıktan sunucuya gelen
+            web|ssh|ftp|cp|smtp|mread|min|sync) svc_ports "$x"; tin+="${tin:+,}$REPLY" ;;   # aralıktan sunucuya gelen
             mout|wout) svc_ports "$x"; tout+="${tout:+,}$REPLY" ;;               # sunucudan aralığa giden
             dns) tin+="${tin:+,}53"; tout+="${tout:+,}53"; uin+="${uin:+,}53"; uout+="${uout:+,}53" ;;   # iki yönde, TCP ve UDP
             *) return 1 ;;
@@ -4756,7 +4776,7 @@ cl_pol() {       # AD → CP_K (svc | all | exc | none) · CP_T, CP_U = svc'de K
         exc) CP_K=exc
              for x in ${sv//,/ }; do
                  case "$x" in
-                     web|ssh|ftp|cp|min|sync) svc_ports "$x"; t+="${t:+,}$REPLY" ;;
+                     web|ssh|ftp|cp|smtp|mread|min|sync) svc_ports "$x"; t+="${t:+,}$REPLY" ;;
                      dns) t+="${t:+,}53"; u+="${u:+,}53" ;;
                  esac
                  [ "$x" = web ] && u+="${u:+,}443"                                   # HTTP/3 (QUIC)
@@ -5233,7 +5253,7 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad) → son 24 saatin web günlüklerind
         [ "$bsince" -gt 0 ] && bkey=$(date -d "@$bsince" +%Y%m%d%H%M%S 2>/dev/null)
     fi
     # liste başına kapalı servisler (",ad:servis,"): tekil ban ancak servisini o listenin kuralı kapatıyorsa "listede, zaten kapalı"
-    local cok="," cs; for x in $CLOUD_ACTIVE; do for cs in web ssh ftp cp min sync dns; do cl_svc_closed "$x" "$cs" && cok+="$x:$cs,"; done; done
+    local cok="," cs; for x in $CLOUD_ACTIVE; do for cs in web ssh ftp cp smtp mread dns; do cl_svc_closed "$x" "$cs" && cok+="$x:$cs,"; done; done
     local bjf svm; svm=$(mktemp) && bl_svc_map "$svm"
     local bsm; bsm=$(mktemp) && blk_svc_map "$bsm"
     if [ -n "$IMP_STATES" ]; then bjf=$(mktemp)                       # yalnız durumlar: banlar dökümü gerekmez
