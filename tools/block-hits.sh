@@ -30,10 +30,14 @@ RULE=(PREROUTING ! -i lo -m set --match-set "$SET" src)
 M() { iptables -t mangle "$@"; }
 rule_first() {   # sayan kural mangle PREROUTING'te tek ve ilk sırada; eski sürümün LOCALINPUT kuralı kalkar
     while iptables -D LOCALINPUT ! -i lo -m set --match-set "$SET" src 2>/dev/null; do :; done
-    [ "$(M -S PREROUTING 2>/dev/null | grep -- '^-A PREROUTING ' | head -n 1)" = "-A PREROUTING ! -i lo -m set --match-set $SET src" ] &&
-        [ "$(M -S PREROUTING 2>/dev/null | grep -c -- "--match-set $SET src")" = 1 ] && return 0
-    while M -D "${RULE[@]}" 2>/dev/null; do :; done
-    M -I PREROUTING 1 "${RULE[@]:1}"
+    [ "$(M -S PREROUTING 2>/dev/null | grep -- '^-A PREROUTING ' | sed 's/[[:space:]]*$//' | head -n 1)" = "-A PREROUTING ! -i lo -m set --match-set $SET src" ] &&
+        [ "$(M -S PREROUTING 2>/dev/null | grep -- "^-A PREROUTING " | sed "s/[[:space:]]*$//" | grep -c -- "--match-set $SET src$")" = 1 ] && return 0
+    # önce başa ekle, sonra öteki kopyaları sil (silip eklemek arada sayılmayan paket bırakıyordu)
+    M -I PREROUTING 1 "${RULE[@]:1}" || return 1
+    local n
+    for n in $(M -S PREROUTING 2>/dev/null | grep -- '^-A PREROUTING ' | sed 's/[[:space:]]*$//' | grep -n -- "--match-set $SET src\$" | cut -d: -f1 | sort -rn); do
+        [ "$n" = 1 ] || M -D PREROUTING "$n"
+    done
 }
 
 log() { printf '[%s] block-hits: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG_FILE" 2>/dev/null; }

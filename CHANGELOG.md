@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.15.69 — 2026-11-08
+
+- **Rented-server lists and the ban guard no longer switch off briefly on
+  every run.** Some iptables builds print the plugin's counting rule with a
+  trailing space (`… --match-set ag_hits src `). The tools did not recognise
+  it, decided the order in `mangle PREROUTING` was wrong, and on every run
+  deleted their rule and inserted it again. Between the two steps the
+  rented-server lists and the ban guard were not applied, so traffic they
+  should have dropped could get through around each run. Trailing spaces
+  are now ignored, the counter stays first, and when a rule really has to
+  move it is inserted at its new place before the old copy is removed.
+- **Port-limited lines appear once per address everywhere.** The IP card
+  listed lfd's per-port lines one by one, in the result box and in the
+  levels table, without reason or date, and the range card's IP table did
+  the same in its "Now" column. They are now one entry per address and
+  direction, with the services, the reason and the date, the same as the
+  range card.
+
 ## 1.15.68 — 2026-11-08
 
 - **Port-limited ban lines show each port once.** When some ports of a line

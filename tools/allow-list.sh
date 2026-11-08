@@ -63,7 +63,16 @@ ag_port_hit() {        # PORT ("a" ya da "a:b") LİSTE ("x,y:z,…") → 0: kesi
     return 1
 }
 hits_pos() {            # mangle PREROUTING'te zincirin ekleneceği sıra: banlı blok sayacı (block-hits.sh) en başta kalır
-    iptables -t mangle -S PREROUTING 2>/dev/null | grep -- '^-A PREROUTING ' | head -n 1 | grep -q -- '--match-set ag_hits src$' && echo 2 || echo 1
+    iptables -t mangle -S PREROUTING 2>/dev/null | grep -- '^-A PREROUTING ' | sed 's/[[:space:]]*$//' | head -n 1 | grep -q -- '--match-set ag_hits src$' && echo 2 || echo 1
+}
+ag_jump_place() {       # ZİNCİR SIRA → mangle PREROUTING'te atlama önce SIRA'ya eklenir, sonra öteki kopyaları silinir: arada
+    # zincirin devre dışı kaldığı an yok (önce silip sonra eklemek, her yeniden yerleştirmede kiralık liste / banlı paketi geçiriyordu)
+    local ch=$1 pos=$2 n
+    iptables -t mangle -I PREROUTING "$pos" ! -i lo -j "$ch" || return 1
+    for n in $(iptables -t mangle -S PREROUTING 2>/dev/null | grep -- '^-A PREROUTING ' | sed 's/[[:space:]]*$//' | grep -n -- "-j $ch\$" | cut -d: -f1 | sort -rn); do
+        [ "$n" = "$pos" ] || iptables -t mangle -D PREROUTING "$n"
+    done
+    return 0
 }
 ag_allow_sum() {        # izin kaynaklarının imzası (değişince kurallar yeniden kurulur)
     local f

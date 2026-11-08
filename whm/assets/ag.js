@@ -4097,10 +4097,16 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
         else if (d.asn && !d.self) ar.btn = '<button class="ag-btn ag-btn-sm ag-btn-danger" data-act="asnhint" data-asn="' + esc(d.asn) + '" data-name="' + esc(shortName(d.asname || '') || 'AS' + d.asn) + '" data-g="">' + esc(t('lv_asn_ban')) + '</button>';
         lv.push([t('lv_asn'), d.asn ? '<b>AS' + esc(d.asn) + '</b> ' + esc(shortName(d.asname || '')) : esc(aC.what), ar]);
       }
+      // eklentinin olmayan port satırları adres + yön başına tek satır (lfd AUTHRELAY bir IP'yi her posta portuna ayrı satırla yazar;
+      // önce her port ayrı satırdı, sebep ve tarih yoktu): servisler, satır yorumundan sebep ve tarih, ham satırlar birlikte
       (d.covers || []).forEach(function (c) {
         if (c.kind === 'cloud') lv.push([t('lv_cl'), esc(clName(c.what)), { s: t('lv_cl_st', cpText(c.mode, c.tcp, c.udp)), k: 'part', x: [],
           btn: '<button class="ag-btn ag-btn-sm" data-act="tab" data-tab="prov">' + esc(t('pv_open_tab')) + '</button>' }]);   // kuralı değiştirmek için (önce satırda işlem yoktu)
-        else if (c.kind === 'port' && !c.own) lv.push([t('lv_port'), cl(c.cidr), { s: t('l_port', '', (c.ports ? portsName(c.proto === 'udp' ? '' : c.ports, c.proto === 'udp' ? c.ports : '') : '') || (c.proto || 'tcp') + ' *', c.dir === 'in' || c.dir === 'out' ? t('dir_' + c.dir) : c.dir), k: 'part', x: [], line: c.line }]);
+      });
+      portCovGroups(d.covers).forEach(function (g) {
+        var c = g.c, pw = portWhy(g.cm);
+        lv.push([t('lv_port'), cl(c.cidr), { s: t('l_port', '', g.name, c.dir === 'in' || c.dir === 'out' ? t('dir_' + c.dir) : c.dir), k: 'part',
+          x: [[pw.why, pw.dt].filter(Boolean).join(' · ')].filter(Boolean), line: g.lines.join('\n') }]);
       });
       var lvT = '<table class="ag-im-t ag-lv-t"><thead><tr><th>' + esc(t('lv_c1')) + '</th><th>' + esc(t('lv_c2')) + '</th><th>' + esc(t('lv_c3')) + '</th></tr></thead><tbody>' +
         lv.map(function (r) {
@@ -4150,11 +4156,30 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     });
     return L;
   }
-  function portGroupLine(g) {     // "176.88.140.244 · Gelen posta, E-posta istemcisi (25, 26, 465, 587) · lfd: AUTHRELAY limit exceeded · 26 Haz 2026"
-    var why = g.cm, dt = '', md = / - ([A-Z][a-z]{2} [A-Z][a-z]{2} +\d{1,2} \d\d:\d\d:\d\d \d{4})\s*$/.exec(why);
+  function portWhy(cm) {          // csf.deny satır yorumu → { why: "lfd: AUTHRELAY limit exceeded", dt: "26 Haz 2026" } (aralık ve IP kartı ortak)
+    var why = String(cm || ''), dt = '', md = / - ([A-Z][a-z]{2} [A-Z][a-z]{2} +\d{1,2} \d\d:\d\d:\d\d \d{4})\s*$/.exec(why);
     if (md) { why = why.slice(0, md.index); var ep = Date.parse(md[1]); if (ep) dt = dayStr(Math.floor(ep / 1000)); }
     var ml = /^lfd: \S+ \([^)]*\) (.+)$/.exec(why); if (ml) why = 'lfd: ' + ml[1];    // "lfd: IP (TR/Turkey/-) sebep": IP ve ülke satırda zaten var
     if (why.length > 80) why = why.slice(0, 79) + '…';
+    return { why: why, dt: dt };
+  }
+  // IP sorgusunun eklentiye ait olmayan port satırları (covers kind=port, own yok) adres + yön başına bir grup: lfd AUTHRELAY bir IP'yi
+  // her posta portuna ayrı satırla yazar; her ekran (IP kartı sonucu, Üst seviyeler tablosu) bunu tek satır gösterir. name: servis adları
+  function portCovGroups(covers) {
+    var G = {}, L = [];
+    (covers || []).forEach(function (c) {
+      if (c.kind !== 'port' || c.own) return;
+      var k = c.cidr + '|' + (c.dir || ''), g = G[k];
+      if (!g) { g = G[k] = { c: c, tcp: [], udp: [], any: [], lines: [], cm: /#/.test(c.line || '') ? String(c.line).replace(/^[^#]*#\s*/, '') : '' }; L.push(g); }
+      if (c.ports) String(c.ports).split(',').forEach(function (p) { var a = c.proto === 'udp' ? g.udp : g.tcp; if (p && a.indexOf(p) < 0) a.push(p); });
+      else if (g.any.indexOf((c.proto || 'tcp') + ' *') < 0) g.any.push((c.proto || 'tcp') + ' *');
+      if (c.line) g.lines.push(c.line);
+    });
+    L.forEach(function (g) { g.name = [g.tcp.length || g.udp.length ? portsName(g.tcp.join(','), g.udp.join(',')) : ''].concat(g.any).filter(Boolean).join(', '); });
+    return L;
+  }
+  function portGroupLine(g) {     // "176.88.140.244 · Gelen posta, E-posta istemcisi (25, 26, 465, 587) · lfd: AUTHRELAY limit exceeded · 26 Haz 2026"
+    var pw = portWhy(g.cm), why = pw.why, dt = pw.dt;
     var tcp = g.tcp.filter(function (p) { return p !== '*'; }), raw = g.tcp.concat(g.udp.map(function (p) { return p + '/udp'; })).join(', ');
     var pn = tcp.length || g.udp.length ? portsName(tcp.join(','), g.udp.join(',')) : '';
     // adı çıkmayan port kaldıysa portsName onu "port N" diye zaten yazıyor: ham liste yalnız her port bir servis adına girdiğinde
@@ -4385,10 +4410,12 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       // tekil banı olmayan IP: tam kapsayan ban; izin / yoksayma (banlanmaz); kısmi kapsama (aralığın kendi kısmi banı, kiralık liste,
       // sağlayıcı ya da ülke port listesi, IP'yi kapsayan port satırı: IP kartıyla aynı); hiçbiri yoksa banlı değil
       function partOf(ip) {
-        var v = ipNum(ip), L = [];
+        // IP'yi kapsayan port satırları tek öğe (aralık kartının "port sınırlı ban" satırı ve IP kartıyla aynı servis adları)
+        var v = ipNum(ip), T = [], U = [];
         (d.ports || []).forEach(function (x) { var m = /^(\S+) (\S+) (\S+)$/.exec(x); if (!m) return; var lo2 = ipNum(m[1]), b2 = /\//.test(m[1]) ? bitsOf(m[1]) : 32;
-          if (v >= lo2 && v < lo2 + Math.pow(2, 32 - b2)) L.push(t('im_st_port', m[2].toUpperCase() + ' ' + m[3])); });
-        return L;
+          if (v >= lo2 && v < lo2 + Math.pow(2, 32 - b2)) { var a = m[2] === 'udp' ? U : T, p = m[3].replace(/_/g, '-'); if (a.indexOf(p) < 0) a.push(p); } });
+        var tn = T.filter(function (p) { return p !== '*'; });
+        return T.length || U.length ? [t('im_st_port', [tn.length || U.length ? portsName(tn.join(','), U.join(',')) : '', T.indexOf('*') >= 0 ? 'tcp *' : ''].filter(Boolean).join(', '))] : [];
       }
       var rWide = own || !!d.ccport || !!d.cloud;     // aralığın tamamına uygulanan kısmi ban (kendi kısmi banı, sağlayıcı / ülke port listesi, kiralık liste)
       var SO = { none: 0, part: 1, rpart: 2, alw: 3, temp: 4, perm: 5, blk: 6, cover: 7 }, cnt = {};
@@ -4558,7 +4585,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   });
 
   /* ── Öğenin bugünkü durumu (Geçmiş satırındaki not ve eylemler buna göre; kayıt eski olsa da eylem güncel) ── */
-  function rawLine(x) { return x ? '<details class="ag-raw"><summary>' + esc(t('raw_line')) + '</summary><div class="ag-mono">' + esc(x) + '</div></details>' : ''; }
+  function rawLine(x) { return x ? '<details class="ag-raw"><summary>' + esc(t('raw_line')) + '</summary><div class="ag-mono">' + esc(x).replace(/\n/g, '<br>') + '</div></details>' : ''; }
   function asnNoData(w) {       // CSF sağlayıcının adres setini henüz doldurmadıysa kural etkisiz olabilir
     var x = (((S.prov || {}).asn || {}).sets || []).filter(function (z) { return z.a === w; })[0];
     return x && x.n === 0 ? '<div class="ag-warn-t">' + esc(t('pv_card_nodata')) + '</div>' : '';
@@ -4599,10 +4626,11 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     if (!full && d.temp) full = t('v_temp');
     if (full) return '<div class="ag-verdict bad">' + esc(t('v_block', full)) + '</div>' + wn;
     cv0.forEach(function (c) {
-      if (c.kind === 'port') part.push((c.own ? svcNames(c.svc, '') || c.ports : (c.ports ? portsName(c.proto === 'udp' ? '' : c.ports, c.proto === 'udp' ? c.ports : '') : '') || (c.proto || 'tcp') + ' *') + ' (' + c.cidr + ')');
+      if (c.kind === 'port' && c.own) part.push((svcNames(c.svc, '') || c.ports) + ' (' + c.cidr + ')');
       if (c.kind === 'ccport') part.push(portsName(c.tcp, c.udp) + ' (CC_DENY_PORTS ' + c.what + ')');
       if (c.kind === 'cloud') part.push(cpText(c.mode, c.tcp, c.udp) + ' (' + t('v_cloud', clName(c.what)) + ')');
     });
+    portCovGroups(cv0).forEach(function (g) { part.push(g.name + ' (' + g.c.cidr + ')'); });   // eklentinin olmayan port satırları adres başına bir kez
     return (part.length ? '<div class="ag-verdict part">' + esc(t('v_part', part.join(' · '))) + '</div>' : '<div class="ag-verdict">' + esc(t('v_none')) + '</div>') + wn;
   }
   // IP'yi kapsayan en geniş tam ban: /bit; ülke/ASN banı 0 (her şeyi kapsar), yoksa 99. Kısmi banlar (kind port) sayılmaz.

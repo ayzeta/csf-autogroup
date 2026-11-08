@@ -61,7 +61,7 @@ rules_del() {
 }
 order_ok() {     # 0: atlama mangle PREROUTING'te tek; önünde yalnız eklentinin kendi zincirleri var
     local s n
-    s=$(M -S PREROUTING 2>/dev/null | grep -- '^-A PREROUTING ')
+    s=$(M -S PREROUTING 2>/dev/null | grep -- '^-A PREROUTING ' | sed 's/[[:space:]]*$//')
     n=$(printf '%s\n' "$s" | grep -n -- "-j $CHAIN\$" | cut -d: -f1)
     [ -n "$n" ] && [ "$(printf '%s\n' "$n" | grep -c .)" -eq 1 ] || return 1
     [ "$n" -eq 1 ] && return 0
@@ -70,7 +70,8 @@ order_ok() {     # 0: atlama mangle PREROUTING'te tek; önünde yalnız eklentin
 order_fix() {
     have "$CHAIN" || return 1
     order_ok && return 0
-    jump_del; M -I PREROUTING "$(hits_pos)" ! -i lo -j "$CHAIN" || { log "mangle PREROUTING zincirine kural eklenemedi"; return 1; }
+    while iptables -D INPUT ! -i lo -j "$CHAIN" 2>/dev/null; do :; done                 # eski sürümün yeri (filter)
+    ag_jump_place "$CHAIN" "$(hits_pos)" || { log "mangle PREROUTING zincirine kural eklenemedi"; return 1; }
     log "kural mangle PREROUTING zincirinin başına alındı"
 }
 apply() {
