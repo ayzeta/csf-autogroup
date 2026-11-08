@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.15.67 — 2026-11-08
+
+- **Port-limited bans in a range are listed, not just counted.** The range
+  card said "4 port rules" for what was one IP banned by lfd on four mail
+  ports. Port-limited `csf.deny` lines that the plugin did not write are now
+  grouped by address, with the services they close, the ports, the reason
+  and the date from the line's comment.
+
 ## 1.15.66 — 2026-11-08
 
 - **Attempt counts say what they count.** Accounts tried now read

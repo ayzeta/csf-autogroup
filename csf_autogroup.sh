@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.66"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.67"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -3506,11 +3506,11 @@ do_events() {
 #   IN_TMP    geçici listedeki IP'ler ve aralıklar · IN_WATCH izlenen /24'ler (izleme her durumda biter)
 #   IN_EVJ    olay kaydına giden kanıt: tekil ve geçici IP'ler, ban sebepleriyle (en çok 40) · IN_EVN toplam
 inside_scan() {  # CIDR
-    local lo hi i x ip t tip port dir to note line
+    local lo hi i x ip t tip port dir to note line pcm
     local -A seen=() pf=()
     cidr_range "$1" || return 1
     lo=$R_LO; hi=$R_HI
-    IN_COVER=""; IN_BLK=(); IN_OTH=(); IN_SGL=(); IN_SGLD=(); IN_TMP=(); IN_WATCH=(); IN_EVJ=(); IN_EVN=0; IN_PFX=(); IN_PORT=(); IN_OWNP=(); IN_PSVC=""; IN_PEXTRA=""; IN_TNOTE=(); IN_TEND=()
+    IN_COVER=""; IN_BLK=(); IN_OTH=(); IN_SGL=(); IN_SGLD=(); IN_TMP=(); IN_WATCH=(); IN_EVJ=(); IN_EVN=0; IN_PFX=(); IN_PORT=(); IN_PORTC=(); IN_OWNP=(); IN_PSVC=""; IN_PEXTRA=""; IN_TNOTE=(); IN_TEND=()
     local cw=-1    # kapsayanlardan en genişi kazanır (kendi /24 banı + onu kapsayan /16 varken sonuç dosya sırasına bağlıydı)
     for i in "${!DC_LO[@]}"; do
         if (( DC_LO[i] <= lo && DC_HI[i] >= hi )); then
@@ -3561,7 +3561,7 @@ inside_scan() {  # CIDR
                 [[ "$line" =~ $RE_SV ]] && IN_PSVC="${BASH_REMATCH[1]}"
                 [[ "$line" =~ $RE_PO ]] && IN_PEXTRA="${BASH_REMATCH[1]}"
             fi
-        else IN_PORT+=("$ADV_CIDR $ADV_PROTO ${ADV_PORTS:-*}"); fi
+        else IN_PORT+=("$ADV_CIDR $ADV_PROTO ${ADV_PORTS:-*}"); pcm=""; [[ "$line" == *"#"* ]] && pcm="${line#*# }"; IN_PORTC+=("$pcm"); fi   # portc: satırın yorumu (kim koydu, sebep, tarih)
     done < <(grep -F '|' "$DENY_FILE" 2>/dev/null | grep -v '^[[:space:]]*#')
     IN_PFX=("${!pf[@]}")
     return 0
@@ -3748,6 +3748,7 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
         jarr "${IN_BLK[@]}"; o+=",\"blocks\":$REPLY"
         jarr "${IN_OTH[@]}"; o+=",\"others\":$REPLY"
         jarr "${IN_PORT[@]}"; o+=",\"ports\":$REPLY"
+        local pcj="" pcx; for pcx in "${IN_PORTC[@]}"; do jstr "$pcx"; pcj+="${pcj:+,}$REPLY"; done; o+=",\"portc\":[$pcj]"   # yorumlar serbest metin: kaçışlı
         jarr "${IN_OWNP[@]}"; o+=",\"own_partial\":$REPLY,\"partial_svc\":\"$IN_PSVC\",\"partial_extra\":\"$IN_PEXTRA\""
         ssh_ports; o+=",\"ssh\":\"$REPLY\""
         ftp_passive; o+=",\"ftp_pasv\":\"$REPLY\""

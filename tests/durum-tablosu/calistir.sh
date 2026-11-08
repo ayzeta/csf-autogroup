@@ -439,6 +439,15 @@ mcheck "tek IP değiştir: --replace ile servis değişir (SSH satırı gider, w
 quiet --action ban1 151.80.7.60 --replace
 mcheck "tek IP değiştir: kısmi → her şey (kısmi satırlar kalkar, kalıcı tam ban yazılır)" "! grep -q '|s=151.80.7.60 ' '$D' && grep -q '^151.80.7.60 # csf_autogroup: elle tekil ban' '$D' && grep -q '\"type\":\"manual_change\",\"cidr\":\"151.80.7.60\".*\"mode\":\"all\"' '$EVF'"
 mcheck "tek IP değiştir: tam banlı IP'de --replace yine 'zaten banlı' (satır tek)" "run --action ban1 151.80.7.60 --mode svc --svc ssh --replace --json 2>/dev/null | grep -q '\"code\":1' && [ \"\$(grep -c '151.80.7.60' '$D')\" = 1 ]"
+# aralık kartı: eklentinin olmayan port sınırlı satırları yorumlarıyla ("portc", "ports" ile aynı sıra). Biçim sunucudaki gerçek lfd satırından
+# (2026-11-08: lfd AUTHRELAY banını posta portlarına ayrı satırlarla yazar); yorumdaki tırnak ve ters bölü JSON'u bozmamalı
+mk inport
+printf '%s\n' 'tcp|in|d=25|s=151.80.7.44 # lfd: 151.80.7.44 (TR/Turkey/-) AUTHRELAY limit exceeded - Fri Jun 26 13:32:31 2026' \
+    'tcp|in|d=465|s=151.80.7.44 # lfd: 151.80.7.44 (TR/Turkey/-) AUTHRELAY limit exceeded - Fri Jun 26 13:32:31 2026' \
+    'tcp|in|d=22|s=151.80.7.45 # elle "ofis" \ deneme' >> "$D"
+IPJ=$(run --inside 151.80.0.0/16 --json 2>/dev/null)
+printf '%s' "$IPJ" > "$W/out/inport.json"
+mcheck "aralık kartı: port satırları yorumlarıyla (portc ports ile aynı sıra), tırnaklı yorum kaçışlı" "node '$(wp "$H/portc.js")' < '$W/out/inport.json'"
 # sahip önbelleği: süresi geçmiş kayıt gösterilir (önce okunmuyor, listelerde "—" kalıyordu); kısmi ban, susturulan ve tekilin bloğu
 # haritada; IP kartının taze sorgusu önbellekten farklı sahip görünce blok işaretlenir ve tur onu yeniden sorar
 mk own1; OF="$R/var/lib/csf_autogroup/owners"
