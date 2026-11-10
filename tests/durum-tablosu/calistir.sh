@@ -19,7 +19,7 @@ mk() {   # ad → temiz kök: boş listeler, sınırlar, taklit araçlar
     D="$R/etc/csf/csf.deny"; T="$R/var/lib/csf/csf.tempban"; A="$R/etc/csf/csf.allow"; C="$R/var/lib/csf_autogroup/counter"
     : > "$D"; : > "$T"; : > "$C"; printf '127.0.0.1\n' > "$A"; : > "$R/etc/csf/csf.ignore"; : > "$R/etc/csf/csf.rignore"
     printf '%s\n' 'DENY_IP_LIMIT = "200"' 'DENY_TEMP_IP_LIMIT = "100"' > "$R/etc/csf/csf.conf"
-    cp "$REPO/csf_autogroup.sh" "$R/app/csf_autogroup.sh"
+    cp "${AG_ENGINE:-$REPO/csf_autogroup.sh}" "$R/app/csf_autogroup.sh"   # AG_ENGINE: yeni kuralı eski motorla sınamak için
     printf '%s\n' "MSG_LANG=tr" "ALERT_MAIL=" "DENY_FILE=$D" "CSF_CONF=$R/etc/csf/csf.conf" "CSF_BIN=$W/bin/csf" \
         "CSF_VAR=$R/var/lib/csf" "LOG_FILE=$R/autogroup.log" "SAYAC_FILE=$C" "IMUNIFY_BIN=$W/bin/imunify360-agent" > "$R/app/config.env"
 }
@@ -48,6 +48,8 @@ mk b16f_other; printf '%s\n' "151.80.0.0/16 # Manually denied: hosting range - $
 mk cc;         printf '%s\n' 'CC_DENY = "FR"' >> "$R/etc/csf/csf.conf"; single 151.80.7.5 sshd; quiet; dump cc
 mk wl;         printf '%s\n' "151.80.7.0/24 # müşteri" >> "$A"; for x in 1 2 3 4 5 6; do single 151.80.7.$x sshd; done; quiet; dump wl
 mk review16;   for x in 7.1 7.2 8.1 8.2 9.1 10.1; do single 151.80.$x sshd; done; quiet; dump review16
+mk partopen;   quiet --action ban24 151.80.7 --mode svc --svc web
+               for x in 1 2 3; do single 151.80.7.$x sshd "$(LC_ALL=C date -d '+1 min' '+%a %b %d %H:%M:%S %Y')"; done; dump partopen
 
 # ── motor kuralları (ekran dışı): yazılan satırlar ve uyarılar ──
 MF=0; ML=""
@@ -361,6 +363,59 @@ mcheck "açık servis: bandan sonraki ama 7 günden eski ihlaller satır açmaz"
 mk ponew; printf '%s\n' "tcp|in|d=80,443|s=151.80.7.0/24 # csf_autogroup: elle /24 kısmi ban (root) [svc=web] - do not delete - $(pdt '-20 days')" >> "$D"
 for x in 1 2; do single 151.80.7.$x sshd "$(pdt '-10 days')"; done; for x in 3 4 5; do single 151.80.7.$x sshd "$(pdt '-1 day')"; done
 mcheck "açık servis: son 7 gündeki ihlaller sayılır (eskiler değil), satır son ihlal zamanını taşır" "rvrow 151.80.7.0/24 | grep -q '\"type\":\"part_open\".*\"ssh\":3,*.*\"n\":3,\"last\":[0-9]'"
+# tek IP'nin kısmi banı (aralık değil): eşik hesabı IP'yi /32 sayar (1.15.71'e kadar "[: IP: integer expression expected" yazıp
+# ağ eşiğine düşüyordu; gerçek sunucu kopyasında durum çıktısı ve tur bunu stderr'e basıyordu)
+mk po1; quiet --action ban1 151.80.7.9 --mode svc --svc web; single 151.80.7.9 sshd "$(pdt '+1 min')"
+mcheck "açık servis: tek IP kısmi banında eşik hesabı hatasız (durum ve tur stderr'i temiz)" "! { run --status --json; run; } 2>&1 >/dev/null | grep -q 'integer expression'"
+# eski blok: kararı motor verir (expire_blocks ile aynı ölçüt, BLOCK_ACTIVE_DAYS ayardan); panel "old" alanını okur
+mk oldblk; echo "BLOCK_ACTIVE_DAYS=60" >> "$R/app/config.env"
+for b in 7 8; do printf '151.80.%s.0/24 # Auto-grouped /24: 3 kalıcı tekil nedeniyle kalıcı banlandı - %s\n' "$b" "$(pdt '-400 days')" >> "$D"; done
+printf '151.80.7.0/24 %s\n' "$(( NOW - 45 * 86400 ))" > "$R/var/lib/csf_autogroup/block_hits"
+mcheck "eski blok: 45 gün önce denenen blok BLOCK_ACTIVE_DAYS=60 iken eski değil, denenmeyen eski (durum 'old')" "run --status --json 2>/dev/null | grep -o '\"groups\":\[.*' | grep -q '\"cidr\":\"151.80.8.0/24\"[^}]*\"old\":true' && ! run --status --json 2>/dev/null | grep -o '\"groups\":\[.*' | grep -q '\"cidr\":\"151.80.7.0/24\"[^}]*\"old\":true'"
+mcheck "eski blok: tur yalnız durumun 'eski' dediğini kaldırır (BLOCK_EXPIRE_AUTO=1)" "echo BLOCK_EXPIRE_AUTO=1 >> '$R/app/config.env'; run >/dev/null 2>&1; grep -q '^151.80.7.0/24' '$D' && ! grep -q '^151.80.8.0/24' '$D'"
+# geçici liste tek okuyucu (tb_load): doluluk lfd'nin ölçüsüyle (DENY_TEMP_IP_LIMIT satır sayısıyla karşılaştırılır; ölçüldü
+# lfd.pl ipunblock), port başına değil; tur, durum ve özet aynı sayıyı verir
+mk tbcnt; printf '%s\n' "$NOW|151.80.7.9|22,80,443|in|3600|lfd: (sshd) Failed SSH login from 151.80.7.9" "$NOW|151.80.8.9||in|3600|lfd: (sshd) Failed SSH login from 151.80.8.9" >> "$T"; quiet
+mcheck "geçici liste: doluluk satır sayısı (çok portlu satır bir) — durum ve tur aynı" "run --status --json 2>/dev/null | grep -q '\"temp\":\[2,100\]' && grep '\"type\":\"run\"' '$R/var/lib/csf_autogroup/events.jsonl' | tail -n 1 | grep -q '\"temp_used\":2'"
+# satır dosyada = ban duruyor (lfd süresi dolanı bir sonraki taramasında kuralla birlikte siler): süresi dolmuş ama duran satır
+# IP kartında "lfd kaldırıyor" der (eksi dakika değil); blok sayımında tur ve IP kartı aynı sayar
+mk tbexp; printf '%s\n' "$(( NOW - 7200 ))|151.80.7.9||in|3600|lfd: (sshd) Failed SSH login from 151.80.7.9" "$NOW|151.80.7.10||in|3600|lfd: (sshd) Failed SSH login from 151.80.7.10" >> "$T"
+mcheck "geçici liste: süresi dolmuş ama duran satır IP kartında 'lfd kaldırıyor' (eksi süre değil)" "run --lookup 151.80.7.9 --json 2>/dev/null | grep -q 'süresi doldu, lfd kaldırıyor'"
+# susturma tek ölçüt (ign_covers): IP'yi içine alan aralık susturulmuşsa Kontrol edilecekler'de de yok (önce yalnız birebir kayda
+# bakılıyordu: /24 susturulunca mail gelmiyor, IP satırı listede kalıyordu)
+mkl ignc; printf '151.80.7.9 # ofis\n' >> "$A"; lfdb 3600 151.80.7.9
+mcheck "susturma: önce izinli IP satırı listede (karşılaştırma)" "rvrow 151.80.7.9 | grep -q '\"type\":\"allow_ban\"'"
+# düşme anı motordan: izinli satırın "drop"u = en son kayıt + REVIEW_DAYS (panel bunu yazar; karışık satırlarda ilk kayıttan hesaplıyordu)
+rvdrop() { local r a b; r=$(rvrow "$1"); a="${r#*\"drop\":}"; a="${a%%,*}"; b="${r#*\"ips\":[}"; b="${b#*\"t\":}"; b="${b%%,*}"; [ "$a" = "$(( b + 7 * 86400 ))" ]; }
+mcheck "Kontrol edilecekler: izinli satırın düşme anı (drop) = son kayıt + 7 gün" "rvdrop 151.80.7.9"
+quiet --action ignore 151.80.7.0/24 7
+mcheck "susturma: IP'yi içine alan /24 susturulunca izinli IP satırı Kontrol edilecekler'de yok" "[ -z \"\$(rvrow 151.80.7.9)\" ]"
+# tam izin tek ölçüt: IP kartı motorun kararını taşır ("wfull", wl_full_idx); panel etiketten tahmin etmez (önce Imunify etiketini
+# tam izin, 1:65535 giriş+çıkış çiftini port izni sayıyordu)
+mk wfull; printf '%s\n' '151.80.7.9 # ofis' 'tcp|in|d=22|s=151.80.7.10' 'tcp|in|d=1:65535|s=151.80.7.11' 'tcp|out|d=1:65535|d=151.80.7.11' >> "$A"
+wfc() { run --lookup "$1" --json 2>/dev/null | grep -q "\"wfull\":$2"; }
+mcheck "tam izin: düz IP 1, tek port 0, 1:65535 giriş+çıkış çifti 1 (motorun ölçütü)" "wfc 151.80.7.9 1 && wfc 151.80.7.10 0 && wfc 151.80.7.11 1"
+# "web kapalı mı" tek tanım (svc_uports): web TCP 80/443 + UDP 443 (HTTP/3). Ülke port banı UDP 443'ü kapatmıyorsa web ihlalleri
+# kapsanmış sayılmaz → şüpheli ağ uyarısı verilir (önce yalnız TCP'ye bakılıyordu, uyarı düşüyordu); UDP 443 de kapalıysa uyarı yok
+udpw() { mk "$1"; printf '%s\n' 'CC_DENY_PORTS = "FR"' 'CC_DENY_PORTS_TCP = "80,443"' "CC_DENY_PORTS_UDP = \"$2\"" >> "$R/etc/csf/csf.conf"
+    # ülke kararı sahip önbelleğinden (bölge dosyası yok): tur ilk kez sorgulamadan önce ağın ülkesi bilinsin
+    for b in 7 8 9 10; do printf '151.80.%s|16276|FR|OVH, FR|%s|151.80.0.0/16\n' "$b" "$NOW"; done > "$R/var/lib/csf_autogroup/owners"
+    for x in 7.1 7.2 8.1 8.2 9.1 10.1; do single 151.80.$x mod_security; done; quiet; }
+udpw udpw0 ""
+mcheck "web kapalı mı: ülke port banı UDP 443'ü kapatmıyorsa web ihlalli ağ uyarılır" "grep -q '\"type\":\"warn16\",\"cidr\":\"151.80.0.0/16\"' '$R/var/lib/csf_autogroup/events.jsonl'"
+udpw udpw1 "443"
+mcheck "web kapalı mı: TCP 80/443 + UDP 443 kapalıysa web ihlalli ağ uyarılmaz (kapsanıyor)" "! grep -q '\"type\":\"warn16\",\"cidr\":\"151.80.0.0/16\"' '$R/var/lib/csf_autogroup/events.jsonl'"
+# ağ (/16) sayımı tek hesap (net_count): Kontrol edilecekler'in sayaçtan gelen eski satırı da turun ölçütüyle sayar — kalıcı tekil
+# penceresinden eski tekiller sayılmaz (önce sayılıyordu: tur uyarmazken satır duruyordu); IP kartının ağ sayısı turun uyarısıyla aynı
+mk nc16; printf 'WARN16_151.80 %s\n' "$(date +%F)" >> "$C"
+for x in 7.1 7.2 8.1; do single 151.80.$x sshd; done; for x in 9.1 9.2 10.1; do single 151.80.$x sshd "$(pdt '-120 days')"; done
+mcheck "ağ sayımı: sayaçtaki eski uyarı satırı pencereden eski tekilleri saymaz (3 yeni + 3 eski, eşik 5 → satır yok)" "[ -z \"\$(rvrow 151.80.0.0/16)\" ]"
+R="$W/roots/review16"
+ncsame() { local n; n=$(grep -o '"type":"warn16","cidr":"151.80.0.0/16","n":[0-9]*' "$R/var/lib/csf_autogroup/events.jsonl" | tail -n 1 | grep -o '[0-9]*$')
+    [ -n "$n" ] && run --lookup 151.80.7.1 --json 2>/dev/null | grep -q "\"net\":{\"n\":$n,"; }
+mcheck "ağ sayımı: IP kartının ağ sayısı turun uyarısındaki sayıyla aynı" "ncsame"
+mk tbexp2; printf '%s\n' "$(( NOW - 7200 ))|151.80.7.9||in|3600|lfd: (sshd) Failed SSH login from 151.80.7.9" "$NOW|151.80.7.10||in|3600|lfd: (sshd) Failed SSH login from 151.80.7.10" >> "$T"
+mcheck "geçici liste: IP kartının blok geçici sayısı duran satırları sayar (tur gibi: 2)" "run --lookup 151.80.7.10 --json 2>/dev/null | grep -q '\"blk\":{[^}]*\"t\":2,'"
 # İzlemeyi yeniden başlat: sayaç satırının tarihi bugün olur, olay yazılır; izlenmeyen blok reddedilir
 mk rewatch; printf '151.80.7 %s\n151.80.9 %s\n' "$(date -d '-10 days' +%F)" "$(date -d '-3 days' +%F)" >> "$C"
 mcheck "izlemeyi yeniden başlat: tarih bugün, öteki satır dokunulmaz, olay kaydı" "run --action rewatch 151.80.7 2>&1 | grep -q 'izleme süresi yeniden başladı' && grep -q \"^151.80.7 $(date +%F)\$\" '$C' && grep -q \"^151.80.9 $(date -d '-3 days' +%F)\$\" '$C' && grep -q '\"type\":\"manual_rewatch\"' '$R/var/lib/csf_autogroup/events.jsonl'"
@@ -654,7 +709,9 @@ imu() {   # ad önbellek-yaşı-saniye (boş: önbellek yok)
     mk "$1"; mkdir -p "$R/bin"; printf '%s\n' '#!/bin/bash' "echo \"\$*\" >> '$R/imu.log'" \
         "echo '{\"items\": [{\"ip\": \"203.0.113.5\", \"comment\": null}], \"max_count\": 1}'" > "$R/bin/imunify360-agent"
     chmod +x "$R/bin/imunify360-agent"; printf '%s\n' "IMUNIFY_BIN=$R/bin/imunify360-agent" >> "$R/app/config.env"
-    [ -n "$2" ] && printf '%s\n' "#t|$((NOW - $2))" "#total|0" > "$R/var/lib/csf_autogroup/imunify"
+    # yaş şimdiki saatten (testin başındaki NOW değil: yavaş makinede koşu buraya 8+ dk sonra gelince 50 dk'lık önbellek 58 dk'ya
+    # kayıp yenileniyordu — ölçüldü, paralel koşuda düştü)
+    [ -n "$2" ] && printf '%s\n' "#t|$(( $(date +%s) - $2 ))" "#total|0" > "$R/var/lib/csf_autogroup/imunify"
     quiet
 }
 imu imu0

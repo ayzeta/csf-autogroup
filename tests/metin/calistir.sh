@@ -6,7 +6,7 @@
 #   bash tests/metin/calistir.sh
 set -u
 H="$(cd "$(dirname "$0")" && pwd)"; REPO="$(cd "$H/../.." && pwd)"
-JS="$REPO/whm/assets/ag.js"; SH="$REPO/csf_autogroup.sh"
+JS="$REPO/whm/assets/ag.js"; SH="${AG_SH:-$REPO/csf_autogroup.sh}"   # AG_SH: eski motorla sınama
 YASAK=(
   "Dikkat edilecekler|Kontrol edilecekler"
   "Bulut listeleri|Kiralık sunucular"
@@ -17,6 +17,10 @@ YASAK=(
   "cloud list|rented-server list"
   "Other blocks|Added by hand"
   "To review|Needs review"
+  "Review list|Needs review"
+  "review list|Needs review"
+  "use Ignore (|use Mute ("
+  "için Yoksay (|için Sustur ("
   "Aktif blok ban|Aktif aralık ban"
   "Active block ban|Active range ban"
   "saldırgan|ihlal eden IP"
@@ -49,6 +53,18 @@ SUS='s_review_h|s_ignored|s_ignored_h|ev_manual_ignore|ev_manual_unignore|st_ign
 hits=$( { grep -oE "(^|[^a-z_0-9])($SUS): '([^'\\\\]|\\\\.)*'" "$JS"; grep -oE '^ *(M_IGN16|M_A_IGNORED|M_A_IGNORED_F|M_A_UNIGNORED|M_A_NOTIGN|M_S_IGNORED|M_L_IGN)="[^"]*"' "$SH"; } |
   sed "s/^[^:=]*[:=] *//" | grep -iE "oksay|ignor")
 if [ -n "$hits" ]; then bad=$((bad + 1)); echo "  ✗ eklentinin susturma metninde «yoksay / ignore» (CSF'in anlamıyla karışır):"; printf '%s\n' "$hits" | cut -c1-140 | sed 's/^/      /'; fi
+# motor metinleri: tanımlı her M_* bir yerde kullanılır (ölü metin kalmaz) ve TR / EN kümeleri aynıdır. Dolaylı kullanım
+# ("M_SVCN_$k", "M_STEP_${x}" …) önekleriyle sayılır. 1.15.71'de 6 ölü metin vardı (eski geçici /16 akışı, M_SVC_APPLIED).
+dyn=$(grep -oE 'M_[A-Z0-9_]*_\$\{?[a-zA-Z_]' "$SH" | sed -E 's/\$.*$//' | sort -u | paste -sd'|' -)
+defs=$(grep -oE '(^|; *| )M_[A-Z0-9_]+=' "$SH" | grep -oE 'M_[A-Z0-9_]+' | sort | uniq -c)
+dead=$(printf '%s\n' "$defs" | while read -r n k; do
+    [ -n "$k" ] || continue
+    if [ -n "$dyn" ] && [[ "$k" =~ ^($dyn) ]]; then continue; fi
+    t=$(grep -oE "\b$k\b" "$SH" | wc -l); [ "$t" -gt "$n" ] || echo "$k"
+done)
+if [ -n "$dead" ]; then bad=$((bad + 1)); echo "  ✗ kullanılmayan motor metni:"; printf '%s\n' "$dead" | sed 's/^/      /'; fi
+odd=$(printf '%s\n' "$defs" | awk '$1 % 2 { print $2 }')
+if [ -n "$odd" ]; then bad=$((bad + 1)); echo "  ✗ TR ve EN'de sayısı eşit olmayan motor metni:"; printf '%s\n' "$odd" | sed 's/^/      /'; fi
 wp() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi; }
 node "$(wp "$H/sozluk.js")" "$(wp "$JS")" || bad=$((bad + 1))     # her durum rozeti Terimler'de açıklanmış mı
 if [ "$bad" -eq 0 ]; then echo "Terim tutarlılığı: eski ad kalmadı"; exit 0; fi

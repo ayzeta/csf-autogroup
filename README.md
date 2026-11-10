@@ -128,7 +128,7 @@ settings, with no prompts. `config.env` is left untouched.
 - **Colors** — one meaning, one color everywhere (badges, icons, chart): red full
   ban, violet made permanent, teal temp ban, blue partial ban, amber suspicious
   network, gray whitelist skip.
-- **To review** — suspicious networks and whitelist-skipped blocks from the last 7
+- **Needs review** — suspicious networks and whitelist-skipped blocks from the last 7
   days, as a table: why it was flagged (how many IPs hit which services),
   owner, when, and the narrowest ban that would do; clicking the IP count lists
   every IP's hostname, owner and ban reason, with what it tried in the last
@@ -180,7 +180,7 @@ settings, with no prompts. `config.env` is left untouched.
   permanent + `do not delete`. Sorted by days left; **⋯ → IPs** shows the IPs
   and reasons behind the temp block ban.
 - **History** (its own tab) — every ban, promotion, skip, warning and manual
-  action, and once a day the review list's findings that are otherwise
+  action, and once a day the findings in Needs review that are otherwise
   recomputed from the logs (violations from allowed IPs, open services), so
   they stay after the review row is gone; back to the start of the event log:
   20 per page, like the other lists; the last page's **›** loads older entries
@@ -336,7 +336,7 @@ full one.
 
 | Button | Does |
 |--------|------|
-| Ban network (/16) | permanent `/16` ban, added as `do not delete`: from To review, **⋯** in Active range bans and Watched, and the IP card |
+| Ban network (/16) | permanent `/16` ban, added as `do not delete`: from Needs review, **⋯** in Active range bans and Watched, and the IP card |
 | Ban block (/24) | permanent `/24` ban from the IP card |
 | Change ban | change what a CSF Auto-Group ban blocks (everything / selected services / everything except) |
 | Ban anyway | ban a whitelist-skipped `/24` (overrides the whitelist) |
@@ -737,7 +737,7 @@ for). **Exclusions** (`SVC_EXCEPT`) keep single addresses or ranges out of the
 allowed lists even when a list contains them; the rest of the list stays
 allowed. Use it when one address of a service keeps violating: a ban on an
 allowed address has no effect, because CSF applies allows first. The IP card,
-the review list and History offer this in one step for such an address.
+Needs review and History offer this in one step for such an address.
 
 The card shows when the lists were last downloaded and where each one comes
 from; a built-in source's address can be changed there if the provider moves

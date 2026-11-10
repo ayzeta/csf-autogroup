@@ -188,12 +188,16 @@ awk -v since="$SINCE" -v skey="$SKEY" -v bf="$W/bans" -v sf="$W/sets" -v df="$W/
 
 # 5) etkisiz banlar: csf.deny'deki tek IP'lerden izin listesinde olanlar (CSF izni bandan önce uygular, ban işlemez)
 echo; echo "Banlı ama izin listesinde (bu banlar etkisiz):"
-{ while IFS= read -r f; do [ -r "$f" ] && sed "s|^|$f\t|" "$f"; done < <(printf '%s\n' "$CSF_DIR/csf_autogroup.services.allow" "$CSF_DIR/csf.allow"; awk '/^[[:space:]]*Include[[:space:]]/ { print $2 }' "$CSF_DIR/csf.allow" 2>/dev/null)
-  echo "#--"; grep -oE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+ ' "$CSF_DIR/csf.deny" 2>/dev/null; } | awk -F'\t' '
+# izin listesi 1. adımdaki tanımın kendisi (allow-list.sh "F" kayıtları: bütün portlara izin; kiralık liste ve ban korumasıyla ortak).
+# Önce burada ayrı bir okuyucu vardı (yalnız csf.allow, izinli servisler ve bir düzey Include; GLOBAL_ALLOW, geçici izin, DYNDNS yok).
+# İzinli servis kaydının adı raporda kalsın: servis dosyasındaki "csf_autogroup: service AD" yorumundan.
+{ awk '{ a = $1; if (match($0, /csf_autogroup: service [A-Za-z0-9_-]+/)) print "N", a, substr($0, RSTART + 23, RLENGTH - 23) }' "$CSF_DIR/csf_autogroup.services.allow" 2>/dev/null
+  ag_allow_entries | awk '$1 == "F" { print "F", $2 }'
+  echo "#--"; grep -oE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+ ' "$CSF_DIR/csf.deny" 2>/dev/null; } | awk '
     function v4(x,  p) { split(x, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
-    !S { if ($0 == "#--") { S = 1; next }; l = $2; sub(/#.*/, "", l); split(l, w, /[ \t]+/); a = w[1]; if (a !~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\/[0-9]+)?$/) next
-         split(a, q, "/"); b = (q[2] == "" ? 32 : q[2] + 0); if (b < 8) next; n++; L[n] = v4(q[1]); H[n] = L[n] + 2 ^ (32 - b) - 1
-         nm = $2; if (match(nm, /service [a-z0-9-]+/)) nm = substr(nm, RSTART + 8, RLENGTH - 8); else { nm = $1; sub(/.*\//, "", nm) }; N[n] = nm " (" a ")"; next }
+    !S && $1 == "N" { SV[$2] = $3; next }
+    !S { if ($0 == "#--") { S = 1; next }; a = $2; split(a, q, "/"); b = (q[2] == "" ? 32 : q[2] + 0); n++; L[n] = v4(q[1]); H[n] = L[n] + 2 ^ (32 - b) - 1
+         N[n] = (a in SV) ? SV[a] " (" a ")" : a; next }
     { ip = $1; v = v4(ip); for (i = 1; i <= n; i++) if (v >= L[i] && v <= H[i]) { c++; if (c <= 20) printf "  %-15s %s\n", ip, N[i]; break } }
     END { printf "  toplam: %d\n", c + 0 }'
 

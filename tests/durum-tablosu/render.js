@@ -26,7 +26,7 @@ if (!AG) { console.error('ag.js dışa veremedi'); process.exit(1); }
 const IP = '151.80.7.9', BLK = '151.80.7.0/24', NET = '151.80.0.0/16', IN = c => String(c).startsWith('151.80');
 const BAN = /^(ban16|ban24|banforce|promote)$/;
 const scen = fs.readdirSync(OUT).filter(f => f.endsWith('.status.json')).map(f => f.replace('.status.json', ''));
-const order = ['none', 'single', 'temp', 'watched', 'b24auto', 'b24full', 'b24part', 'b16full', 'b16part', 'b16p_b24f', 'b16f_other', 'cc', 'wl', 'review16'];
+const order = ['none', 'single', 'temp', 'watched', 'b24auto', 'b24full', 'b24part', 'b16full', 'b16part', 'b16p_b24f', 'b16f_other', 'cc', 'wl', 'review16', 'partopen'];
 scen.sort((a, b) => order.indexOf(a) - order.indexOf(b));
 
 const strip = h => h.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').trim();
@@ -85,6 +85,12 @@ for (const s of scen) {
     const want = c.cidr.endsWith('/16') ? 'ban16' : 'ban24';
     bans.filter(([k, x]) => x[0] === want).forEach(([k, x]) => { if (!/değiştir/i.test(x[2])) fail(s, `${k}: "${x[2]}" — ${c.cidr} kısmi banlı, etiket değiştirmeyi söylemeli`); });
   });
+  // K5: kısmi banı yetmeyen aralık (part_open) satırının eylemi her ekranda "Banı değiştir": Geçmiş menüsü de Kontrol edilecekler
+  // satırı gibi (1.15.71'e kadar Geçmiş "Yine de banla" sunuyordu)
+  if ((st.review || []).some(r => r.cidr === BLK && r.type === 'part_open')) {
+    const g = scr['Geçmiş ' + BLK] || [];
+    if (g.some(x => x[0] === 'banforce') || !g.some(x => x[0] === 'chg')) fail(s, `Geçmiş ${BLK}: açık servis satırında "Banı değiştir" yok ya da "Yine de banla" var (${g.map(x => x[2]).join(' · ')})`);
+  }
   // K4: IP kartı ile Geçmiş'teki aynı IP aynı ban eylemlerini sunar (Geçmiş bir şey sunuyorsa)
   const ka = scr['IP kartı ' + IP].filter(x => BAN.test(x[0])).map(x => x[0]).sort().join(','),
         ha = scr['Geçmiş ' + IP].filter(x => BAN.test(x[0])).map(x => x[0]).sort().join(',');

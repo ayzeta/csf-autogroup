@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.71"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.72"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -265,7 +265,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_TEMP_FULL="Geçici liste: %s / %s satır (%%%s) — dolmak üzere"
   M_NOLIMIT="ATLANDI: %s limiti bulunamadı/sıfır, doluluk kontrolü atlandı"
   M_C24_DND="Auto-grouped /24: %s kalıcı tekil nedeniyle kalıcı ban - do not delete"
-  M_TMIN_LEFT="%s dk kaldı"
+  M_TMIN_LEFT="%s dk kaldı"; M_TMIN_GONE="süresi doldu, lfd kaldırıyor"
   M_C24_PERM="Auto-grouped /24: %s kalıcı tekil nedeniyle kalıcı banlandı"
   M_OK24_DND="BLOK BANI: %s.0/24 (%s kalıcı tekil) [do not delete]"
   M_OK24="BLOK BANI: %s.0/24 (%s kalıcı tekil)"
@@ -294,7 +294,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_PERMB="Tekrar ban (PERMBLOCK): son %s içinde en az %s geçici ban aldı, kalıcıya alındı"; M_PB_SVC="önceki ban: %s"
   M_T_H="%s saat"; M_T_M="%s dakika"; M_T_S="%s saniye"
   # servis adları panelle aynı (ag.js svc_*)
-  M_SVCN_web="Web"; M_SVCN_ssh="SSH"; M_SVCN_ftp="FTP"; M_SVCN_cp="cPanel · WHM · Webmail"; M_SVCN_min="Gelen posta"; M_SVCN_mout="Giden posta"
+  M_SVCN_web="Web"; M_SVCN_ssh="SSH"; M_SVCN_ftp="FTP"; M_SVCN_cp="cPanel · WHM · Webmail"; M_SVCN_min="Gelen posta"; M_SVCN_mout="Giden posta"; M_SVCN_wout="Giden web"
   M_SVCN_smtp="Posta gönderme (SMTP)"; M_SVCN_mread="Posta okuma (IMAP/POP)"; M_SVCN_sync="E-posta istemcisi"; M_SVCN_dns="DNS"; M_SVCN_scan="port taraması"; M_SVCN_repeat="tekrar banlanan"; M_SVCN_other="diğer"; M_SVCN_norec="sebebi kayıtlı değil"
   M_AVK_b="ban işlemiyor"; M_AVK_i="lfd yoksaydı"; M_AVK_y="yoksayılıyor"; M_AVK_s="sunucu IP'si"
   M_POPEN_SUBJ="%s açık servis"; M_POPEN_BODY="Kısmi banın açık bıraktığı servislere eşik kadar ihlal geldi; banı değiştirip onları da kapatabilirsiniz:"; M_POPEN_L="kapalı: %s · açık servislere %s ihlal"
@@ -317,12 +317,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_MAILT24P_BODY="Aşağıdaki bloklar (/24) daha önce geçici banlanmıştı; tekrar geldikleri için kalıcı ve silinmez (do not delete) olarak banlandı:"
   M_MAILT24P_SUBJ="%s blok kalıcıya alındı"
   M_PROV16="%s.0.0/16: ihlal eden IP'lerin hepsi sağlayıcı banıyla zaten kapalı (%s), uyarı atlandı"
-  M_TWARN16="ŞÜPHELİ AĞ: %s.0.0/16 - geçici banlardan %s IP, %s farklı blok - elle bakın"
   M_TSKIP16="ATLANDI şüpheli ağ: %s.0.0/16 zaten kalıcı banlı"
-  M_TSKIP16D="ATLANDI şüpheli ağ (geçici): %s.0.0/16 bugün zaten bildirildi"
-  M_T16_DONE="Şüpheli ağ turu (geçici banlar) bitti. %s bildirim."
-  M_MAILT16_BODY="Aşağıdaki ağlarda (/16) çok sayıda geçici ban birikti. Ağ banlanmadı;\nelle bakmanız önerilir:"
-  M_MAILT16_SUBJ="%s şüpheli ağ (geçici banlar)"
   M_WL_LOADED="Beyaz liste yüklendi: %s aralık, %s rignore alan adı"
   M_WL_SELF="sunucu IP'si"; M_FOREVER="süresiz"
   M_A_SELF="%s sunucunun kendi IP'sini (%s) içeriyor; banlanamaz"
@@ -429,7 +424,6 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_ASN_SELF="Sağlayıcı banı uygulanmadı: %s bu sunucunun kendi sağlayıcısı"
   M_C24_CLOSED="%s.0/24 banlanmadı: %s tekilin yalnız %s tanesi açık bir servise; ötekilerin servisi zaten kapalı (sağlayıcı banı, kiralık liste, ülke ya da kısmi ban)"
   M_ASN_NOSELF="Sağlayıcı banı uygulanmadı: %s — sunucunun kendi sağlayıcısı öğrenilemedi (DNS ve CSF'in ASN verisi yok); kendi sağlayıcısını banlamamak için yeni sağlayıcı eklenmiyor"
-  M_SVC_APPLIED="İzinli servisler güncellendi: %s"
   M_SVC_REMOVED="İzinli servisler kapatıldı; csf.allow'daki Include satırı ve liste kaldırıldı"
   M_PAUSED="CSF Auto-Group duraklatıldı: yeni ban konmuyor; sağlayıcı banı ve kiralık sunucu banı CSF'te kaldırıldı (Ayarlar → Zamanlama'dan açılır)"
   M_CLOUD_REMOVED="Kiralık sunucu banı kapatıldı; kural, adres kümesi ve csfpost.sh satırı kaldırıldı"
@@ -547,7 +541,7 @@ else
   M_TEMP_FULL="Temp list: %s / %s lines (%s%%) — almost full"
   M_NOLIMIT="SKIPPED: %s limit missing/zero, usage check skipped"
   M_C24_DND="Auto-grouped /24: %s permanent singles -> permanent ban - do not delete"
-  M_TMIN_LEFT="%s min left"
+  M_TMIN_LEFT="%s min left"; M_TMIN_GONE="expired, lfd is removing it"
   M_C24_PERM="Auto-grouped /24: %s permanent singles -> permanent ban"
   M_OK24_DND="BLOCK BAN: %s.0/24 (%s permanent singles) [do not delete]"
   M_OK24="BLOCK BAN: %s.0/24 (%s permanent singles)"
@@ -574,7 +568,7 @@ else
   M_ACCT_cp="cPanel/WHM logins tried: %s"; M_ACCT_htp="web password users tried: %s"; M_ACCT_web="targets: %s"; M_ACCT_N="failed"; M_ACCT_NW="blocked"
   M_PERMB="Repeat ban (PERMBLOCK): in the last %s, at least %s temp bans, made permanent"; M_PB_SVC="earlier ban: %s"
   M_T_H="%s hour(s)"; M_T_M="%s minute(s)"; M_T_S="%s second(s)"
-  M_SVCN_web="Web"; M_SVCN_ssh="SSH"; M_SVCN_ftp="FTP"; M_SVCN_cp="cPanel · WHM · Webmail"; M_SVCN_min="Incoming mail"; M_SVCN_mout="Outgoing mail"
+  M_SVCN_web="Web"; M_SVCN_ssh="SSH"; M_SVCN_ftp="FTP"; M_SVCN_cp="cPanel · WHM · Webmail"; M_SVCN_min="Incoming mail"; M_SVCN_mout="Outgoing mail"; M_SVCN_wout="Outgoing web"
   M_SVCN_smtp="Mail sending (SMTP)"; M_SVCN_mread="Mail reading (IMAP/POP)"; M_SVCN_sync="Mail client"; M_SVCN_dns="DNS"; M_SVCN_scan="port scan"; M_SVCN_repeat="banned repeatedly"; M_SVCN_other="other"; M_SVCN_norec="reason not recorded"
   M_AVK_b="ban not working"; M_AVK_i="ignored by lfd"; M_AVK_y="ignored"; M_AVK_s="server IP"
   M_POPEN_SUBJ="%s open services"; M_POPEN_BODY="The services a partial ban leaves open took violations up to the threshold; change the ban to close them too:"; M_POPEN_L="closed: %s · %s violations on the open services"
@@ -597,12 +591,7 @@ else
   M_MAILT24P_BODY="The following blocks (/24) had been temp-banned before and came back, so they are now permanently banned (do not delete):"
   M_MAILT24P_SUBJ="%s block(s) made permanent"
   M_PROV16="%s.0.0/16: every offending IP is already blocked by the provider ban (%s), warning skipped"
-  M_TWARN16="SUSPICIOUS RANGE: %s.0.0/16 - %s IPs from temp bans, %s distinct blocks - review manually"
   M_TSKIP16="SKIPPED suspicious network: %s.0.0/16 already permanently banned"
-  M_TSKIP16D="SKIPPED suspicious network (temp): %s.0.0/16 already reported today"
-  M_T16_DONE="Suspicious network pass (temp bans) done. %s report(s)."
-  M_MAILT16_BODY="Many temp bans have piled up in the following networks (/16). The network was not banned;\nmanual review recommended:"
-  M_MAILT16_SUBJ="%s suspicious network(s) (temp bans)"
   M_WL_LOADED="Whitelist loaded: %s ranges, %s rignore domains"
   M_WL_SELF="server IP"; M_FOREVER="indefinitely"
   M_A_SELF="%s contains this server's own IP (%s); it can't be banned"
@@ -709,7 +698,6 @@ else
   M_ASN_SELF="Provider ban not applied: %s is this server's own provider"
   M_C24_CLOSED="%s.0/24 not banned: only %s of %s singles hit an open service; the others' service is already closed (provider ban, rented-server list, country or partial ban)"
   M_ASN_NOSELF="Provider ban not applied: %s — this server's own provider is unknown (no DNS answer, no CSF ASN data); no new provider is added so the server's own isn't banned"
-  M_SVC_APPLIED="Allowed services updated: %s"
   M_SVC_REMOVED="Allowed services turned off; the Include line in csf.allow and the list were removed"
   M_PAUSED="CSF Auto-Group is paused: no new bans; the provider ban and the rented-server ban are off in CSF (turn it back on in Settings → Schedule)"
   M_CLOUD_REMOVED="Rented-server ban turned off; the rule, the address set and the csfpost.sh line were removed"
@@ -1111,7 +1099,7 @@ temp_added() {   # CIDR → csf -td gerçekten tuttu mu? Sayaç kaydı buna bağ
     # Önce kanıt: kayıt CSF'in geçici listesindeyse tuttu. Sonra csf'in kendi ret satırları ("deny failed: …", "failed: …");
     # çıktıdaki her "failed" değil — perl'ün yerel ayar uyarısı ("Setting locale failed") da geçer (ölçüldü) ve banı
     # başarısız saydırıyordu.
-    [ -r "$CSF_VAR/csf.tempban" ] && grep -qF "|$1|" "$CSF_VAR/csf.tempban" && return 0
+    tb_present "$1" && return 0
     [[ "$CSF_OUT" =~ (^|$'\n')(deny\ )?failed: ]] && return 1
     [[ "$CSF_OUT" =~ (not\ a\ valid|servers\ addresses) ]] && return 1
     [[ "$CSF_OUT" == *blocked* ]] && return 0      # "... blocked on port" / "already temporarily blocked"
@@ -1130,6 +1118,7 @@ csf_run() {      # csf'i çalıştır, çıktıyı log'a yaz, CSF_OUT'ta sakla (
     local c0; c0=$(date +%s%N)
     [ "$1" = -r ] && hits_capture       # yükleme banlı blok sayaçlarını siler: önce okunur
     CSF_OUT=$("$CSF_BIN" "$@" 2>&1 9>&-)
+    tb_reset                        # geçici liste değişmiş olabilir: sonraki okuyucu dosyayı yeniden okur
     CSF_TN[$1]=$(( ${CSF_TN[$1]:-0} + 1 )); CSF_TMS[$1]=$(( ${CSF_TMS[$1]:-0} + ($(date +%s%N) - c0) / 1000000 ))
     log_flush                       # csf çıktısı dosyaya doğrudan yazılıyor: önce bağlam satırları
     [ -n "$CSF_OUT" ] && printf '%s\n' "$CSF_OUT" >> "$LOG_FILE"
@@ -1229,9 +1218,8 @@ part_open_events() {
             awk '$1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ { print $1 "|" substr($0, length($1) + 1) }' "$DENY_FILE" 2>/dev/null
             bl_tlines)
         ps="$REPLY"; aan=$(grep -oE ':[0-9]+' <<< "$ps" | tr -d ':' | awk '{ s += $1 } END { print s + 0 }')
-        aat=$THRESHOLD_16; [ "${c#*/}" -ge 24 ] && aat=$THRESHOLD_24
-        [ "$aan" -ge "$aat" ] || continue
-        ign_until "$c" && continue
+        part_thr "$c"; [ "$aan" -ge "$REPLY" ] || continue
+        ign_covers "$c" && continue
         ev part_open "$c" "svc=\"${PB_S[$c]}\"" "extra=\"${PB_X[$c]}\"" "since=$ps" "n=$aan"
         log "$(m "$M_POPEN" "$c" "$aan")"; new+=("$c")
         # panelin satırıyla aynı: aralık, kapalı servisler, açık servislere ihlal (servis başına), sahibi
@@ -1568,8 +1556,16 @@ guard_remove() { # duraklatma: kural ve csfpost satırı kaldırılır
     iptables -t mangle -L AG_GUARD -n >/dev/null 2>&1 || iptables -L AG_GUARD -n >/dev/null 2>&1 || grep -qF "# csf_autogroup guard" "$CSF_POST" 2>/dev/null || return 0
     STATE="$(dirname "$SAYAC_FILE")/guard.sum" CSF_DIR="$CSF_DIR" CSF_VAR="$CSF_VAR" LOG_FILE="$LOG_FILE" timeout 60 bash "$tool" --remove >/dev/null 2>&1 9>&-
 }
+blk_old() {      # CIDR EKLENME_EPOCH NOW → 0 = eski (kaldırılabilir), 2 = son BLOCK_ACTIVE_DAYS içinde denendi (HIT), 1 = değil.
+    # Yalnız otomatik eklenmiş, "do not delete" olmayan /24 banı için çağrılır. expire_blocks ve durum çıktısının "old" alanı ikisi de
+    # bunu kullanır (panel önce aynı kuralı "30 gün" sabitiyle yeniden hesaplıyordu; ayar farklıysa sayı tutmuyordu)
+    [[ "$1" == */24 ]] || return 1
+    [ -n "${HIT[$1]}" ] && (( $3 - HIT[$1] < BLOCK_ACTIVE_DAYS * 86400 )) && return 2
+    [[ "${2:-0}" =~ ^[0-9]+$ ]] && [ "$2" -gt 86400 ] || return 1
+    (( ($3 - $2) / 86400 >= BLOCK_EXPIRE_DAYS ))
+}
 expire_blocks() { # KİM → BLOCK_EXPIRE_DAYS'ten eski blok banlarını kaldır (yalnız otomatik eklenenler) → EXP_N, EXP_BODY
-    local line tok ds ep age now re_d='- ([A-Z][a-z]{2} [A-Z][a-z]{2} +[0-9]{1,2} [0-9:]{8} [0-9]{4})[[:space:]]*$' list=()
+    local line tok ds ep age now re_d='- ([A-Z][a-z]{2} [A-Z][a-z]{2} +[0-9]{1,2} [0-9:]{8} [0-9]{4})[[:space:]]*$' list=() rc
     EXP_N=0; EXP_BODY=""
     now=$(date +%s); hits_load
     while IFS= read -r line; do
@@ -1577,12 +1573,10 @@ expire_blocks() { # KİM → BLOCK_EXPIRE_DAYS'ten eski blok banlarını kaldır
         [[ "$tok" =~ $CIDR4_RE && "$tok" == */24 ]] || continue
         [[ "$line" == *Auto-grouped* ]] || continue          # elle eklenenlere (csf_autogroup:) dokunulmaz
         is_dnd "$line" && continue                           # do not delete (tekrar gelip kalıcıya alınan / elle işaretlenen) korunur
-        [ -n "${HIT[$tok]}" ] && (( now - HIT[$tok] < BLOCK_ACTIVE_DAYS * 86400 )) && { logr "$(m "$M_EXP_ACTIVE" "$tok" "$(( (now - HIT[$tok]) / 86400 ))")"; continue; }   # hâlâ deneniyor
-        [[ "$line" =~ $re_d ]] || continue
-        ds="${BASH_REMATCH[1]}"
-        ep=$(LC_ALL=C date -d "$ds" +%s 2>/dev/null) || continue
-        age=$(( (now - ep) / 86400 ))
-        [ "$age" -ge "$BLOCK_EXPIRE_DAYS" ] && list+=("$tok $age")
+        ep=0; [[ "$line" =~ $re_d ]] && { ds="${BASH_REMATCH[1]}"; ep=$(LC_ALL=C date -d "$ds" +%s 2>/dev/null) || ep=0; }
+        blk_old "$tok" "$ep" "$now"; rc=$?
+        [ "$rc" = 2 ] && { logr "$(m "$M_EXP_ACTIVE" "$tok" "$(( (now - HIT[$tok]) / 86400 ))")"; continue; }   # hâlâ deneniyor
+        [ "$rc" = 0 ] && list+=("$tok $(( (now - ep) / 86400 ))")
     done < "$DENY_FILE"
     for line in "${list[@]}"; do
         tok="${line% *}"; age="${line#* }"
@@ -1746,7 +1740,7 @@ listed_prefixes() { # tekil ve csf.deny aralıkları dışında listelerde gör�
     # çıktısının sahip haritası aynı listeyi kullanır: önce ikisi de bunları atlıyordu, Aktif aralık banları / Susturulanlar'da "—"
     local c i
     pb_load; for c in "${!PB_P[@]}"; do c="${c%/*}"; echo "${c%.*}"; done
-    [ -r "$CSF_VAR/csf.tempban" ] && awk -F'|' '$2 ~ /^[0-9.]+\/[0-9]+$/ { c = $2; sub(/\/.*/, "", c); sub(/\.[0-9]+$/, "", c); print c }' "$CSF_VAR/csf.tempban"
+    tb_load; for i in "${TB_RI[@]}"; do c="${TB_A[i]%/*}"; echo "${c%.*}"; done
     ign_load; for i in "${!IGN_C[@]}"; do c="${IGN_C[i]%/*}"; echo "${c%.*}"; done
     return 0
 }
@@ -2122,7 +2116,11 @@ load_whitelist() {
                 cm = $6; for (j = 7; j <= NF; j++) cm = cm "|" $j
                 if (cm ~ /^csf_autogroup: /) { if (!sub(/^[^)]*\) - /, "", cm)) cm = "" }   # eklentinin izni: yalnız kullanıcının notu
                 cm = scm(cm)
-                if ($3 == "" || $3 == "*") lab = "csf.tempallow: " $2
+                # portsuz izin yönüne göre (csf.pl dotempallow, ölçüldü 2026-11-10): "in" yalnız ALLOWIN -s, "out" yalnız ALLOWOUT -d,
+                # "inout" ikisi. Tek yönlü olan, gelişmiş satırın tek yönlüsü gibi okunur (wl_full_idx: in = yalnız gelen yönü kesen bana
+                # karşı, out tek başına izin değil; ikisi birlikte tam izin). Önce yönüne bakılmadan tam izin sayılıyordu.
+                if (($3 == "" || $3 == "*") && ($4 == "in" || $4 == "out")) lab = "csf.tempallow (tcp " $4 " d=1:65535): " $2
+                else if ($3 == "" || $3 == "*") lab = "csf.tempallow: " $2
                 else { pr = "tcp"; pt = $3; k = index(pt, ";"); if (k) { pr = substr(pt, k + 1); pt = substr(pt, 1, k - 1) }
                        if (pr !~ /^[a-z]+$/) pr = "?"; if (pt !~ /^[0-9,:_*-]*$/) pt = ""
                        lab = "csf.tempallow (" pr " " ($4 == "out" ? "out" : "in") " d=" pt "): " $2 }
@@ -2179,8 +2177,10 @@ wl_best() {      # LO HI → WL_HIT gibi, ama çakışan kayıtlardan bütün po
         [ "$b" -lt 0 ] && b=$i
         wl_full_idx "$i"; [ "$REPLY" = 1 ] && { b=$i; break; }
     done
+    WL_BEST_FF=0
     [ "$b" -ge 0 ] || return 1
     WL_HIT="${WL_TXT[b]}${WL_CM[b]:+ (${WL_CM[b]})}"; WL_HIT_CM="${WL_CM[b]}"
+    wl_full_idx "$b"; WL_BEST_FF=$REPLY     # 1 bütün portlara izin, 2 sunucunun kendi IP'si, 3 yalnız gelen yönü kesen bana karşı, 0 değil
 }
 wl_label() {     # İZİN_KAYDI_İNDİSİ → REPLY = "kaynak: kayıt (yorum)"; indis yoksa boş
     REPLY=""; [ -n "$1" ] && [ "$1" -ge 0 ] 2>/dev/null || return 0
@@ -2261,7 +2261,7 @@ wl_skip() {      # CIDR COUNT PREFIX24 "IPS" KIND — doğrulanamadıysa yalnız
 wl_skip_body=""; wl_skipped=0
 wl_report() {    # CIDR COUNT PREFIX24 "IPS" KIND — günde bir kez maile ekle
     # panelde yoksayılan aralık: Kontrol edilecekler'de olduğu gibi olay ve bildirim de yok (yalnız günlükte)
-    if ign_until "$1"; then logr "$(m "$M_WL_SKIPD" "$1" "$WL_HIT")"; return; fi
+    if ign_covers "$1"; then logr "$(m "$M_WL_SKIPD" "$1" "$WL_HIT")"; return; fi
     if grep -qF "WLSKIP_$3 $TODAY" "$SAYAC_FILE"; then logr "$(m "$M_WL_SKIPD" "$1" "$WL_HIT")"; return; fi
     log "$(m "$M_WL_SKIP" "$1" "$WL_HIT")"
     cnt_add "WLSKIP_$3 $TODAY"
@@ -2340,9 +2340,10 @@ wl_full_idx() {  # İZİN_İNDİSİ → REPLY = 1 bütün portlara izin (csf.all
     REPLY=0
     case "${WL_TXT[$1]}" in csf.allow*|GLOBAL_ALLOW*|csf.tempallow*|DYNDNS*|GLOBAL_DYNDNS*) REPLY=1 ;; "$M_WL_SELF: "*) REPLY=2 ;; esac
     if [[ "${WL_TXT[$1]}" =~ $pre ]]; then
-        REPLY=0
+        REPLY=0; c="${BASH_REMATCH[4]}"     # adres önce alınır: aşağıdaki [[ =~ ]] BASH_REMATCH'i ezer (önce c boş kalıyor, 1:65535
+        # giriş+çıkış çifti bu yolda hiç tam izin sayılmıyordu; wl_ff_lines'ın awk kopyası doğruydu)
         if [ "${BASH_REMATCH[1]}" = tcp ] && [ "${BASH_REMATCH[2]}" = in ] && [[ "${BASH_REMATCH[3]}" =~ ^[01][:_]65535$ ]]; then
-            REPLY=3; c="${BASH_REMATCH[4]}"
+            REPLY=3
             for i in "${!WL_TXT[@]}"; do [[ "${WL_TXT[i]}" =~ \(tcp\ out\ [sd]=[01][:_]65535\):\ (.*)$ ]] && [ "${BASH_REMATCH[1]}" = "$c" ] && { REPLY=1; break; }; done
         fi
     fi
@@ -2375,7 +2376,9 @@ ineff_load() {   # → INEFF[IP] = izin kaydı ("csf.allow: IP (yorum)"), INEFF_
     [ "$was" = 1 ] || [ "${INEFF_RESET:-0}" != 1 ] || rst=1    # yalnız tur (izinleri sonradan değiştirebilir); panel bırakmaz
     while IFS='|' read -r ip i; do
         wl_label "$i"; INEFF[$ip]="$REPLY"; INEFF_S+="$ip "
-        if [ -n "${SINGLE_NOTE[$ip]+x}" ]; then          # blok eşiği sayımından çıkar (tekil satırı yerinde kalır)
+        # blok eşiği sayımından çıkar (tekil satırı yerinde kalır); kalıcı tekil penceresinden eski tekil (OLD_SGL) zaten sayılmamıştı
+        # (önce o da düşülüyordu: blok bir eksik sayılıyordu)
+        if [ -n "${SINGLE_NOTE[$ip]+x}" ] && [ -z "${OLD_SGL[$ip]+x}" ]; then
             p="${ip%.*}"; count24[$p]=$(( ${count24[$p]:-1} - 1 )); out=""
             for x in ${ips24[$p]}; do [ "$x" = "$ip" ] || out+=" $x"; done; ips24[$p]="$out"
         fi
@@ -2384,7 +2387,7 @@ ineff_load() {   # → INEFF[IP] = izin kaydı ("csf.allow: IP (yorum)"), INEFF_
         echo "#--"
         local bio=0; [ "$(conf_val LF_BLOCKINONLY)" = 1 ] && bio=1
         for ip in "${!SINGLE_NOTE[@]}"; do echo "$ip $(( 1 - bio ))"; done     # kalıcı tekil: giden yönü de keser (LF_BLOCKINONLY=0)
-        [ -r "$CSF_VAR/csf.tempban" ] && awk -F'|' '$2 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ { print $2, (index($4, "out") ? 1 : 0) }' "$CSF_VAR/csf.tempban"
+        tb_lines | awk -F'|' '$1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ { print $1, (index($5, "out") ? 1 : 0) }'
     } | awk '
         # izin aralıkları /16 kovalarına (256 kovadan geniş olanlar ayrı listede): her IP yalnız kendi kovasıyla karşılaştırılır.
         # Önce her IP bütün aralıklarla karşılaştırılıyordu (3.000 tekil × 4.300 izinli servis aralığı ≈ 5 sn). En küçük indisli
@@ -2454,14 +2457,16 @@ ign_load() {     # → IGN_C / IGN_U / IGN_B / IGN_S (satırlar sırayla), IGN_O
         i=$((i + 1))
     done < "$IGNORE_FILE"
 }
-ign_covers() {   # IP → 0 = IP'nin kendisi ya da onu içine alan bir aralık yoksayılmış, süresi dolmamış (IGN_HIT = kayıt)
-    local i c n
+ign_covers() {   # IP|CIDR → 0 = hedefin kendisi ya da onu bütünüyle içine alan bir aralık susturulmuş, süresi dolmamış (IGN_HIT = kayıt).
+    # Tur bildirimi, Kontrol edilecekler satırları (tek IP, /24, /16, izin aralığı grupları) ve IP kartı aynı ölçütü kullanır: önce
+    # Kontrol edilecekler yalnız birebir kayda bakıyordu (/24 susturulunca mail gelmiyor, IP'ler listede tek tek görünüyordu)
+    local i c lo hi
     IGN_HIT=""
     ign_load
-    ip2int "$1"; n=$REPLY
+    if [[ "$1" == */* ]]; then cidr_range "$1" || return 1; lo=$R_LO; hi=$R_HI; else ip2int "$1"; lo=$REPLY; hi=$REPLY; fi
     for i in "${!IGN_C[@]}"; do
         c="${IGN_C[i]}"; [[ "${IGN_U[i]}" < "$TODAY" ]] && continue
-        if [[ "$c" == */* ]]; then cidr_range "$c" && (( R_LO <= n && R_HI >= n )) || continue
+        if [[ "$c" == */* ]]; then cidr_range "$c" && (( R_LO <= lo && R_HI >= hi )) || continue
         else [ "$c" = "$1" ] || continue; fi
         IGN_HIT="$c"; return 0
     done
@@ -2532,7 +2537,7 @@ bl_load() {      # → BLV (birleşik ban geçmişi, satırlar "ip|k|başlangı�
     BLV=$( {
         [ -n "$mark" ] && awk -F'|' 'NF >= 5 { print "B|" $0 }' "$BANLOG_FILE"
         [ "${#files[@]}" -gt 0 ] && zcat -f "${files[@]}" 2>/dev/null | bl_lfd_parse "$([ -n "$mark" ] && echo $(( mark - 300 )) || echo 0)"
-        [ "$tbok" = 1 ] && awk -F'|' '$2 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && $1 ~ /^[0-9]+$/ && $5 ~ /^[0-9]+$/ { gsub(/\|/, " ", $6); print "T|" $2 "|t|" $1 "|" $1 + $5 "|" $6 }' "$CSF_VAR/csf.tempban"
+        [ "$tbok" = 1 ] && tb_lines | awk -F'|' '$1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && $2 + 0 > 0 { print "T|" $1 "|t|" $2 "|" $3 "|" $6 }'
         [ -r "$EVENTS_FILE" ] && grep -E '"type":"(warn16|warn16t|temp24|add24|promote|manual_ban)"' "$EVENTS_FILE" 2>/dev/null | grep -F '"ips":[{' | LC_ALL=C awk '
             { t = 0; if (match($0, /"t":[0-9]+/)) t = substr($0, RSTART + 4, RLENGTH - 4) + 0; if (!t) next
               ty = ""; if (match($0, /"type":"[a-z0-9_]+"/)) ty = substr($0, RSTART + 8, RLENGTH - 9)
@@ -2675,43 +2680,146 @@ temp_peak() {    # stdin "ip|başlangıç|bitiş|…" → stdout "önek|en çok|
                     if (c > best) { best = c; bl = l } }
                 if (best) print p "|" best "|" bl } }'
 }
-declare -A TPK_N=() TPK_I=()
-tpk_load() {     # panel için: TPK_N[önek] / TPK_I[önek] = turun geçici eşik sayımıyla aynı (son turdan bu yana aynı anda geçici banlı
-    # en çok tekil); kalıcı listede, kalıcı ya da geçici aralık banının içinde ve izinli olanlar sayılmaz. parse_deny'den sonra çağrılır.
-    [ -n "${TPK_OK:-}" ] && return 0; TPK_OK=1
-    local t0 twl ip n x ok=" " lo=() hi=()
-    temp_t0; t0=$REPLY; twl=$(temp_window "$t0")
-    [ -r "$CSF_VAR/csf.tempban" ] && while IFS='|' read -r _ x _; do [[ "$x" == */* ]] && cidr_range "$x" && { lo+=("$R_LO"); hi+=("$R_HI"); }; done < "$CSF_VAR/csf.tempban"
-    local -A seen=()
-    while IFS='|' read -r ip _; do
-        [ -n "$ip" ] && [ -z "${seen[$ip]+x}" ] || continue; seen[$ip]=1
-        [ -n "${DENY_IP[$ip]+x}" ] || [ -n "${INEFF[$ip]+x}" ] && continue
-        ip2int "$ip"; n=$REPLY; perm_covers "$n" "$n" && continue
-        for x in "${!lo[@]}"; do [ "$n" -ge "${lo[x]}" ] && [ "$n" -le "${hi[x]}" ] && continue 2; done
-        ok+="$ip "
+# ── Geçici tekillerin eşik sayımı: TEK HESAP (tur, durum, IP kartı, ağ sayımı) ─────────────────────────────────────────
+# Aday: şu an geçici listede duran tek IP'ler (tb_load) ve son turdan bu yana geçici banlı olmuşlar (temp_window). Sayılmaz: kalıcı
+# listede (DENY_IP) ya da kalıcı aralık banının içinde (perm_covers), geçici aralık banının içinde, izinli (INEFF: ban işlemiyor).
+# Blok sayısı: pencerede aynı anda geçici banlı en çok tekil (temp_peak); şu an duranlar "şimdi" anında da sayılır.
+# Önce tur bunu kendi döngüsünde, panel tpk_load'da (şu an duranları "şimdi"de saymadan), IP kartının ağ satırı da anlık sayıyla
+# (izinlileri de sayarak) ayrı ayrı yapıyordu.
+declare -A TPK_N=() TPK_I=() TEL_OK=() TEL_NOTE=()
+TEL_IPS=()
+temp_elig() {    # T0 NOW → TEL_IPS (sayılan tekiller: önce şu an duranlar dosya sırasıyla, sonra pencereden gelenler), TEL_OK[ip]=1|0,
+    # TEL_NOTE[ip] (ban sebebi), TPK_N[önek] / TPK_I[önek] (blok başına en çok aynı anda banlı ve o IP'ler). parse_deny'den sonra.
+    local t0="$1" now="$2" twl ip n x tr cur=() lo=() hi=()
+    TEL_IPS=(); TEL_OK=(); TEL_NOTE=(); TPK_N=(); TPK_I=()
+    tb_load
+    for x in "${TB_RI[@]}"; do cidr_range "${TB_A[x]}" && { lo+=("$R_LO"); hi+=("$R_HI"); }; done
+    tel_ok() {   # IP → 0 = sayılır
+        [ -n "${DENY_IP[$1]+x}" ] || [ -n "${INEFF[$1]+x}" ] && return 1
+        ip2int "$1"; perm_covers "$REPLY" "$REPLY" && return 1
+        local k; for k in "${!lo[@]}"; do (( REPLY >= lo[k] && REPLY <= hi[k] )) && return 1; done
+        return 0
+    }
+    for x in "${!TB_A[@]}"; do
+        ip="${TB_A[x]}"; [[ "$ip" == */* ]] && continue; [ -n "${TEL_OK[$ip]+x}" ] && continue
+        TEL_NOTE[$ip]="${TB_C[x]}"
+        if tel_ok "$ip"; then TEL_OK[$ip]=1; TEL_IPS+=("$ip"); cur+=("$ip"); else TEL_OK[$ip]=0; fi
+    done
+    twl=$(temp_window "$t0")
+    while IFS='|' read -r ip _ _ tr; do
+        [ -n "$ip" ] && [ -z "${TEL_OK[$ip]+x}" ] || continue
+        [ -n "${TEL_NOTE[$ip]+x}" ] || TEL_NOTE[$ip]="$tr"
+        if tel_ok "$ip"; then TEL_OK[$ip]=1; TEL_IPS+=("$ip"); else TEL_OK[$ip]=0; fi
     done <<< "$twl"
-    while IFS='|' read -r x n ip; do TPK_N[$x]=$n; TPK_I[$x]="$ip"; done < <(printf '%s\n' "$twl" | awk -F'|' -v ok="$ok" 'NF >= 3 && index(ok, " " $1 " ")' | temp_peak "$t0")
+    local ok=" "; for ip in "${TEL_IPS[@]}"; do ok+="$ip "; done
+    while IFS='|' read -r x n ip; do TPK_N[$x]=$n; TPK_I[$x]="$ip"; done < <(
+        { printf '%s\n' "$twl"; for ip in "${cur[@]}"; do printf '%s|%s|%s|\n' "$ip" "$now" "$((now + 1))"; done; } |
+            awk -F'|' -v ok="$ok" 'NF >= 3 && index(ok, " " $1 " ")' | temp_peak "$t0")
+}
+tpk_load() {     # panel için: temp_elig son turun başından (turla aynı pencere) bir kez
+    [ -n "${TPK_OK:-}" ] && return 0; TPK_OK=1
+    temp_t0; temp_elig "$REPLY" "$(date +%s)"
+}
+# ── Ağ (/16) sayımı: TEK HESAP (tur uyarısı, Kontrol edilecekler, IP kartı) ─────────────────────────────────────────────
+# Sayılan tekiller: kalıcı tekiller (izinli — ban işlemeyen — ve kalıcı tekil penceresinden eski olanlar hariç) ve geçici eşiğin
+# saydığı tekiller (temp_elig). Kendi bloğu eşiği aşmış (blok banına giden) tekil ağda sayılmaz: blok ile ele alınır. Her IP bir kez
+# (iki listede birden varsa kalıcı). Önce bu sayım dört yerde ayrı yapılıyordu: Kontrol edilecekler'in sayaçtan gelen eski
+# satırları eski ve eşiği aşmış tekilleri de sayıyor, süresi dolmuş geçici satırları alıyordu; IP kartı geçicide anlık sayıya ve
+# izinlileri de sayan blok sayısına bakıyordu.
+declare -A SGL_E=()
+SGL_ORD=()
+sgl_elig() {     # → SGL_E[ip] = sebep, SGL_ORD (sıra: kalıcılar, sonra geçiciler): eşiklerin saydığı tekiller — kalıcı tekiller (izinli
+    # — ban işlemeyen — ve kalıcı tekil penceresinden eski olanlar hariç) ve geçici eşiğin saydıkları (temp_elig). Her IP bir kez.
+    [ -n "${SGL_OK:-}" ] && return 0; SGL_OK=1
+    tpk_load
+    SGL_E=(); SGL_ORD=()
+    local ip
+    for ip in "${!SINGLE_NOTE[@]}" "${TEL_IPS[@]}"; do
+        [ -n "${SGL_E[$ip]+x}" ] && continue
+        [ -n "${INEFF[$ip]+x}" ] && continue        # izinli IP'nin banı işlemiyor
+        [ -n "${OLD_SGL[$ip]+x}" ] && continue      # kalıcı tekil penceresinden (PERM_WINDOW_DAYS) eski
+        if [ -n "${SINGLE_NOTE[$ip]+x}" ]; then SGL_E[$ip]="${SINGLE_NOTE[$ip]}"; else SGL_E[$ip]="${TEL_NOTE[$ip]}"; fi
+        SGL_ORD+=("$ip")
+    done
+}
+NC_DONE=""
+net_count() {    # → NC_N[A.B] tekil sayısı, NC_P / NC_T kalıcı / geçici, NC_IPS[A.B] (" ip ip …", sayım sırasıyla), NC_SUB[A.B] farklı /24
+    [ -n "$NC_DONE" ] && return 0; NC_DONE=1
+    sgl_elig
+    declare -gA NC_N=() NC_P=() NC_T=() NC_IPS=() NC_SUB=(); NC_N=(); NC_P=(); NC_T=(); NC_IPS=(); NC_SUB=()
+    local ip p24 p16; local -A sb=()
+    for ip in "${SGL_ORD[@]}"; do
+        p24="${ip%.*}"; p16="${p24%.*}"
+        [ "${count24[$p24]:-0}" -ge "$THRESHOLD_24" ] && continue
+        [ "${TPK_N[$p24]:-0}" -ge "$THRESHOLD_TEMP_24" ] && continue
+        NC_N[$p16]=$(( ${NC_N[$p16]:-0} + 1 )); NC_IPS[$p16]+=" $ip"
+        if [ -n "${SINGLE_NOTE[$ip]+x}" ]; then NC_P[$p16]=$(( ${NC_P[$p16]:-0} + 1 )); else NC_T[$p16]=$(( ${NC_T[$p16]:-0} + 1 )); fi
+        [ -n "${sb[$p24]}" ] || { sb[$p24]=1; NC_SUB[$p16]=$(( ${NC_SUB[$p16]:-0} + 1 )); }
+    done
+}
+net_reset() { NC_DONE=""; }
+
+# ── Geçici liste: TEK OKUYUCU ────────────────────────────────────────────────
+# csf.tempban (zaman|adres|portlar|yön|süre|yorum). "Şu an geçici banlı" = satır dosyada: lfd 16.34 ipunblock() (lfd.pl) her
+# LF_PARSE turunda (şimdi − zaman) >= süre olan satırı iptables kuralıyla BİRLİKTE siler; satır duruyorsa kural da duruyor
+# (ölçüldü 2026-11-10). csf -t de dosyanın tamamını basar (süresi dolana "<1"). DENY_TEMP_IP_LIMIT lfd'de satır sayısıyla
+# karşılaştırılır (port başına değil). Bütün okuyanlar (tur, durum, IP kartı, aralık kartı, Etkisini ölç, ban geçmişi) bunu
+# kullanır; önce ~20 ayrı okuyucu ve 6 ayrı "canlı" tanımı vardı (süresi dolmuş satırı biri sayıyor öbürü saymıyordu).
+TB_LD=""
+tb_load() {      # → TB_T başlangıç, TB_E bitiş, TB_A adres, TB_P portlar, TB_D yön, TB_C yorum (dosya sırasıyla, boş satırlar yok);
+    # TB_IP[ip] = tek IP'nin ilk satırının indisi; TB_RI = aralık satırlarının indisleri; TB_NL = dosyanın satır sayısı (lfd'nin sınırı)
+    [ -n "$TB_LD" ] && return 0; TB_LD=1
+    TB_T=(); TB_E=(); TB_A=(); TB_P=(); TB_D=(); TB_C=(); TB_RI=(); TB_NL=0; declare -gA TB_IP=(); TB_IP=()
+    [ -r "$CSF_VAR/csf.tempban" ] || return 0
+    local t a p d s c i=0
+    while IFS='|' read -r t a p d s c || [ -n "$t$a" ]; do
+        TB_NL=$((TB_NL + 1))
+        [ -n "$a" ] || continue
+        [[ "$t" =~ ^[0-9]+$ ]] || t=0; [[ "$s" =~ ^[0-9]+$ ]] || s=0
+        TB_T+=("$t"); TB_E+=("$(( t + s ))"); TB_A+=("$a"); TB_P+=("$p"); TB_D+=("$d"); TB_C+=("$c")
+        if [[ "$a" == */* ]]; then TB_RI+=("$i"); elif [ -z "${TB_IP[$a]+x}" ]; then TB_IP[$a]=$i; fi
+        i=$((i + 1))
+    done < "$CSF_VAR/csf.tempban"
+}
+tb_reset() { TB_LD=""; }   # geçici listeye yazan eylemden (csf -td / -tr) sonra
+tb_lines() {     # → stdout "adres|başlangıç|bitiş|portlar|yön|yorum" (awk ile okuyanlar için; satır sırası dosyanınki; yorumdaki
+    # "|" boşluk olur: alan sayısı sabit)
+    tb_load; local i
+    for i in "${!TB_A[@]}"; do printf '%s|%s|%s|%s|%s|%s\n' "${TB_A[i]}" "${TB_T[i]}" "${TB_E[i]}" "${TB_P[i]}" "${TB_D[i]}" "${TB_C[i]//|/ }"; done
+}
+tb_cover() {     # N(int) → REPLY = N'yi içine alan ilk satırın indisi (dosya sırasıyla; tek IP ya da aralık); yoksa 1 döner
+    tb_load; local i
+    REPLY=""
+    for i in "${!TB_A[@]}"; do
+        cidr_range "${TB_A[i]}" 2>/dev/null || continue
+        (( R_LO <= $1 && R_HI >= $1 )) && { REPLY=$i; return 0; }
+    done
+    return 1
+}
+tb_present() {   # ADRES → 0 = dosyada şimdi (önbelleksiz; bir eylemin gerçekten tutup tutmadığını denetlemek için)
+    [ -r "$CSF_VAR/csf.tempban" ] && awk -F'|' -v a="$1" '$2 == a { f = 1; exit } END { exit !f }' "$CSF_VAR/csf.tempban"
 }
 
 # ── Temp group bans: csf.tempban içinde bizim eklediğimiz /24'ler ────────────
 declare -A TG_TTL TG_NOTE TG_T TG_K
 read_temp_groups() {
-    local t ip port dir to note now p re_m='csf_autogroup: (elle geçici|manual temporary) /'
+    local i ip note now p re_m='csf_autogroup: (elle geçici|manual temporary) /'
     now=$(date +%s)
-    [ -r "$CSF_VAR/csf.tempban" ] || return
-    while IFS='|' read -r t ip port dir to note; do
+    tb_load
+    for i in "${TB_RI[@]}"; do
+        ip="${TB_A[i]}"; note="${TB_C[i]}"
         # elle süreli aralık banı (panel, her genişlik): kind "manual" + kalan süre
-        if [[ "$ip" == */* && "$note" =~ $re_m ]]; then
-            TG_TTL[$ip]=$(( $(num "$t") + $(num "$to") - now )); TG_NOTE[$ip]="$note"; TG_T[$ip]=$(num "$t"); TG_K[$ip]=manual
+        if [[ "$note" =~ $re_m ]]; then
+            TG_TTL[$ip]=$(( TB_E[i] - now )); TG_NOTE[$ip]="$note"; TG_T[$ip]=${TB_T[i]}; TG_K[$ip]=manual
             continue
         fi
         [[ "$ip" == */24 ]] || continue
         # Yorumdan (v1.2+) ya da sayaç kaydından (daha eski sürümlerin eklediği) tanınır.
         p="${ip%.0/24}"
         if [[ "$note" == *Auto-grouped* ]] || grep -qE "^${p//./\\.} " "$SAYAC_FILE" 2>/dev/null; then
-            TG_TTL[$ip]=$(( $(num "$t") + $(num "$to") - now )); TG_NOTE[$ip]="$note"; TG_T[$ip]=$(num "$t")
+            TG_TTL[$ip]=$(( TB_E[i] - now )); TG_NOTE[$ip]="$note"; TG_T[$ip]=${TB_T[i]}
         fi
-    done < "$CSF_VAR/csf.tempban"
+    done
 }
 
 # Olay kaydından önceki işler: günlükteki (ve arşivlerindeki) iş satırları bir kez olaya çevrilir ve
@@ -2824,10 +2932,8 @@ do_status() {
     hits_load; prof hits_load
     limit=$(num "$(conf_val DENY_IP_LIMIT)"); tlimit=$(num "$(conf_val DENY_TEMP_IP_LIMIT)")
     pc=$(deny_count)
-    # Geçici liste doluluğu: her sayfa yoklamasında csf -t (Perl) başlatmak yerine csf.tempban'ın
-    # satırları sayılır; csf.pl dotempban ile aynı: boş olmayan her satır, port listesindeki her port için
-    # bir DENY satırı (port yoksa bir).
-    tc=0; [ -r "$CSF_VAR/csf.tempban" ] && tc=$(awk -F'|' '$0 != "" { k = split($3, a, ","); c += (k > 0 ? k : 1) } END { print c + 0 }' "$CSF_VAR/csf.tempban")
+    # Geçici liste doluluğu: turla aynı ölçü (tb_load: lfd'nin DENY_TEMP_IP_LIMIT'i satır sayısıdır)
+    tb_load; tc=$TB_NL
     lock_busy && running=true
     last=$(grep '"type":"run"' "$EVENTS_FILE" 2>/dev/null | grep -E '^\{"t":[0-9]+,.*\}$' | tail -1)   # yarım satır JSON'u bozmasın
     local cronm; cronm=$(cron_now)
@@ -2890,6 +2996,7 @@ do_status() {
         local gx=""
         [ "$grn" -gt 0 ] && gx+=",\"restore\":$grn,\"rips\":\"$grip\""
         [ -n "${EXC_S[$tok]+x}" ] && gx+=",\"open\":\"${EXC_S[$tok]}\",\"open_extra\":\"${EXC_X[$tok]}\""
+        [ "$kind" != manual ] && [ "$dnd" = false ] && blk_old "$tok" "$added" "$now" && gx+=",\"old\":true"   # expire_blocks'un ölçütü
         groups+=("{\"cidr\":\"$tok\",\"kind\":\"$kind\",\"dnd\":$dnd,${HIT[$tok]:+\"hit\":${HIT[$tok]},}\"n\":${g_n[gi]},\"added\":$added,\"ttl\":0${gu:+,\"under\":\"$gu\"}${PCOV[$tok]:+,\"pcov\":\"${PCOV[$tok]}\"}$gx}")
         pa "gj · json satırı"
         [ "$added" -gt 0 ] && ghist+="$added $kind $tok"$'\n'
@@ -2968,7 +3075,7 @@ do_status() {
             pc "rv_ev satır"; pa "rv_ev okuma"
             [ -n "${seen[$c]}" ] && continue; seen[$c]=1
             pc "rv_ev benzersiz"
-            ign_until "$c" && continue
+            ign_covers "$c" && continue
             cidr_range "$c" && perm_covers "$R_LO" "$R_HI" && { pa "rv_ev ign+perm_covers"; continue; }
             pa "rv_ev ign+perm_covers"
             { cover_any; } && [[ "$line" == *'"ips":[{'* ]] && prov_cover < <(ev_ipsrc "$line") && { pa "rv_ev prov_cover"; continue; }   # boru değil: alt kabukta CLOUD_MEMO kaybolurdu
@@ -3000,12 +3107,14 @@ do_status() {
         local rsince k u hx hl hn hp ht hj hw hq hs hk hc
         local -A H16=()
         rsince=$(date -d "$REVIEW_DAYS days ago" +%Y-%m-%d)
-        # eski uyarının IP ayrıntısı olayda yok: CSF'te şu an duran tekil banlar /16'ya göre bir kez gruplanır ("ip|not|k" satırları;
-        # k = p kalıcı, t geçici)
-        for hx in "${!SINGLE_NOTE[@]}"; do [ -n "${INEFF[$hx]+x}" ] && continue; H16[${hx%.*.*}]+="$hx|${SINGLE_NOTE[$hx]}|p"$'\n'; done   # izinli IP'nin banı sayılmaz
-        if [ -r "$CSF_VAR/csf.tempban" ]; then
-            while IFS='|' read -r hx hl; do [ -n "${SINGLE_NOTE[$hx]+x}" ] || [ -n "${INEFF[$hx]+x}" ] || H16[${hx%.*.*}]+="$hx|$hl|t"$'\n'; done < <(awk -F'|' '$2 ~ /^[0-9.]+$/ { gsub(/\|/, " ", $6); print $2 "|" $6 }' "$CSF_VAR/csf.tempban")
-        fi
+        # eski uyarının IP ayrıntısı olayda yok: bugünkü ağ sayımı (net_count, turun ölçütü) ağ başına "ip|not|k" satırlarına
+        # (k = p kalıcı, t geçici)
+        net_count
+        for hq in "${!NC_IPS[@]}"; do
+            for hx in ${NC_IPS[$hq]}; do
+                if [ -n "${SINGLE_NOTE[$hx]+x}" ]; then H16[$hq]+="$hx|${SINGLE_NOTE[$hx]//|/ }|p"$'\n'; else H16[$hq]+="$hx|${TEL_NOTE[$hx]//|/ }|t"$'\n'; fi
+            done
+        done
         while read -r k u; do
             [[ "$u" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || continue
             [[ "$u" < "$rsince" ]] && continue
@@ -3018,7 +3127,7 @@ do_status() {
             esac
             [[ "$c" =~ $CIDR4_RE ]] || continue
             [ -n "${seen[$c]}" ] && continue; seen[$c]=1
-            ign_until "$c" && continue
+            ign_covers "$c" && continue
             cidr_range "$c" && perm_covers "$R_LO" "$R_HI" && continue
             [ -n "${PB_P[$c]+x}" ] && continue        # olay kaydından önceki uyarı; aralığa sonradan kısmi ban konmuş
             hj=""
@@ -3080,21 +3189,21 @@ do_status() {
     for aaj in "${review[@]}"; do while read -r aaq; do RVIP[$aaq]=1; done < <(grep -oE '"ip":"[0-9.]+"' <<< "$aaj" | cut -d'"' -f4); done
     for aai in "${!AA_IP[@]}"; do [ -n "${RVIP[${AA_IP[aai]}]}" ] && AAU[$aai]=1; done
     pa "aa · önceki satırlar"
-    # izinsiz tekiller (kalıcı + geçici) /24 ve /16'ya göre: karışık grupların sayımı için
-    for aai in "${!SINGLE_NOTE[@]}"; do [ -n "${INEFF[$aai]+x}" ] || [ -n "${OLD_SGL[$aai]+x}" ] && continue; RSI[$aai]="${SINGLE_NOTE[$aai]}"; done
-    # geçici tekiller: geçici eşikle aynı pencere (son turdan bu yana geçici banlı olanlar; ban geçmişi)
-    temp_t0
+    # izinsiz tekiller (kalıcı + geçici) /24 ve /16'ya göre: karışık grupların sayımı için — turun eşiklerinin saydığı küme
+    # (sgl_elig; önce geçicide yalnız pencere okunuyor, kalıcıya alınmış ya da aralık banının içinde kalanlar da giriyordu)
+    sgl_elig
+    for aai in "${!SGL_E[@]}"; do RSI[$aai]="${SGL_E[$aai]}"; done
     pa "aa · izinsiz tekiller"
-    while IFS='|' read -r aai _ _ aaw; do [ -n "${RSI[$aai]+x}" ] || [ -n "${INEFF[$aai]+x}" ] || RSI[$aai]="$aaw"; done < <(temp_window "$REPLY")
-    pa "aa · temp_window"
     for aai in "${!AA_IP[@]}"; do unset "RSI[${AA_IP[aai]}]"; done
     for aai in "${!RSI[@]}"; do RS24[${aai%.*}]+=" $aai"; RS16[${aai%.*.*}]+=" $aai"; done
     cls_map < <(for aai in "${!RSI[@]}"; do printf 'rs%s|%s\n' "$aai" "${RSI[$aai]//|/ }"; done)
     pa "aa · cls izinsiz"; pc "aa izinsiz tekil" "${#RSI[@]}"; pc "aa izinli IP" "${#AA_IP[@]}"
     rv_add() {   # TÜR CIDR WL_ETİKETİ "izinli indisleri" "izinsiz IP'ler" EK_JSON
-        local js="" x n=0 nb=0 t=0 aa=0 bl=" "
-        # satırın zamanı (İşaretlendi) = kontrol süresindeki İLK kayıt; IP listesindeki t son kayıt (satır notunda "Son kayıt: … (ne zaman)")
-        for x in $4; do n=$((n + 1)); aa=$((aa + 1)); { [ "$t" -eq 0 ] || [ "${AA_T0[x]:-${AA_T[x]}}" -lt "$t" ]; } && t=${AA_T0[x]:-${AA_T[x]}}; [[ "$bl" == *" ${AA_IP[x]%.*} "* ]] || bl+="${AA_IP[x]%.*} "; done
+        local js="" x n=0 nb=0 t=0 aa=0 bl=" " tl=0
+        # satırın zamanı (İşaretlendi) = kontrol süresindeki İLK kayıt; IP listesindeki t son kayıt (satır notunda "Son kayıt: … (ne zaman)").
+        # Satır, izinli IP'lerin son kaydı pencerede kaldıkça durur: düşme anı = en son kayıt + REVIEW_DAYS ("drop"; panel bunu yazar —
+        # önce satırın ilk kaydından hesaplıyordu, geçmiş bir tarih yazarken satır listede duruyordu)
+        for x in $4; do n=$((n + 1)); aa=$((aa + 1)); { [ "$t" -eq 0 ] || [ "${AA_T0[x]:-${AA_T[x]}}" -lt "$t" ]; } && t=${AA_T0[x]:-${AA_T[x]}}; [ "${AA_T[x]:-0}" -gt "$tl" ] && tl=${AA_T[x]}; [[ "$bl" == *" ${AA_IP[x]%.*} "* ]] || bl+="${AA_IP[x]%.*} "; done
         aa_ipj $4; js="$REPLY"
         for x in $5; do n=$((n + 1)); [[ "$bl" == *" ${x%.*} "* ]] || bl+="${x%.*} "
             short_reason "${RSI[$x]}" "$x"; jstr "$REPLY"; local w="$REPLY"; local v="${CLSM[rs$x]:-other}"
@@ -3103,7 +3212,7 @@ do_status() {
         set -f; local -a ba=($bl); set +f; nb=${#ba[@]}
         local cmj=""; [ -n "${aalc:-}" ] && { jstr "$aalc"; cmj=",\"wlc\":$REPLY"; }   # izin satırındaki yorum
         jstr "$3"
-        review+=("{\"t\":$t,\"type\":\"$1\",\"cidr\":\"$2\",\"wl\":$REPLY$cmj,\"aa\":$aa,\"n\":$n,\"subnets\":$nb,\"total\":$n,\"ips\":[$js]$6}")
+        review+=("{\"t\":$t,\"type\":\"$1\",\"cidr\":\"$2\",\"wl\":$REPLY$cmj,\"aa\":$aa,\"n\":$n,\"subnets\":$nb,\"total\":$n,\"drop\":$(( tl + REVIEW_DAYS * 86400 )),\"ips\":[$js]$6}")
         rtext+=("$(printf '%-18s %s · %s izinli' "$2" "$1" "$aa")")
     }
     # a) izin kaydına göre
@@ -3111,7 +3220,7 @@ do_status() {
     for aaw in "${!AAG[@]}"; do
         read -r -a aaa <<< "${AAG[$aaw]}"; [ "${#aaa[@]}" -ge 2 ] || continue
         aac="${WL_TXT[aaw]##*: }"; [[ "$aac" =~ $CIDR4_RE ]] || continue
-        [ -n "${seen[$aac]}" ] && continue; ign_until "$aac" && continue; seen[$aac]=1
+        [ -n "${seen[$aac]}" ] && continue; ign_covers "$aac" && continue; seen[$aac]=1
         aalc="${WL_CM[aaw]}"
         rv_add allow_grp "$aac" "${WL_TXT[aaw]}" "${aaa[*]}" "" ""; aalc=""
         for aai in "${aaa[@]}"; do AAU[$aai]=1; done
@@ -3123,7 +3232,7 @@ do_status() {
     for aap in "${!A24[@]}"; do
         read -r -a aaa <<< "${A24[$aap]}"; aaq=$(printf '%s\n' ${RS24[$aap]} | grep -c .)
         [ $(( ${#aaa[@]} + aaq )) -ge "$THRESHOLD_24" ] || continue
-        aac="$aap.0/24"; [ -n "${seen[$aac]}" ] && continue; ign_until "$aac" && continue
+        aac="$aap.0/24"; [ -n "${seen[$aac]}" ] && continue; ign_covers "$aac" && continue
         cidr_range "$aac" && perm_covers "$R_LO" "$R_HI" && continue
         seen[$aac]=1; aal="${WL_TXT[${AA_W[${aaa[0]}]}]}"; aalc="${WL_CM[${AA_W[${aaa[0]}]}]}"; [ "${AA_W[${aaa[0]}]}" -ge 0 ] || { aal=""; aalc=""; }
         rv_add skip_wl "$aac" "$aal" "${aaa[*]}" "${RS24[$aap]}" ""; aalc=""
@@ -3136,7 +3245,7 @@ do_status() {
         read -r -a aaa <<< "${A16[$aap]}"; aaq=$(printf '%s\n' ${RS16[$aap]} | grep -c .)
         [ $(( ${#aaa[@]} + aaq )) -ge "$THRESHOLD_16" ] || continue
         [ "$(printf '%s\n' ${RS16[$aap]} $(for aai in "${aaa[@]}"; do echo "${AA_IP[aai]}"; done) | sed 's/\.[0-9]*$//' | sort -u | grep -c .)" -ge 2 ] || continue
-        aac="$aap.0.0/16"; [ -n "${seen[$aac]}" ] && continue; ign_until "$aac" && continue
+        aac="$aap.0.0/16"; [ -n "${seen[$aac]}" ] && continue; ign_covers "$aac" && continue
         cidr_range "$aac" && perm_covers "$R_LO" "$R_HI" && continue
         seen[$aac]=1; aal=""; aalc=""; [ "${AA_W[${aaa[0]}]}" -ge 0 ] && { aal="${WL_TXT[${AA_W[${aaa[0]}]}]}"; aalc="${WL_CM[${AA_W[${aaa[0]}]}]}"; }
         rv_add warn16 "$aac" "$aal" "${aaa[*]}" "${RS16[$aap]}" ",\"perm\":null"; aalc=""
@@ -3146,7 +3255,7 @@ do_status() {
     # d) kalanlar tek IP
     for aai in "${!AA_IP[@]}"; do
         [ -n "${AAU[$aai]}" ] && continue
-        aac="${AA_IP[aai]}"; [ -n "${seen[$aac]}" ] && continue; ign_until "$aac" && continue; seen[$aac]=1
+        aac="${AA_IP[aai]}"; [ -n "${seen[$aac]}" ] && continue; ign_covers "$aac" && continue; seen[$aac]=1
         aal="${AA_S[aai]}"; aalc=""; [ "${AA_W[aai]}" -ge 0 ] && { aal="${WL_TXT[${AA_W[aai]}]}"; aalc="${WL_CM[${AA_W[aai]}]}"; }
         # sunucu IP'sinin denediği hesaplar satırda değil: durum çıktısının "accts" haritasında (denemeler önbelleği, IP kartıyla aynı);
         # önce burada her istekte posta günlükleri yeniden taranıyordu (sunucuda ölçüldü: 1,04 sn)
@@ -3171,9 +3280,8 @@ do_status() {
         attack_json "$R_LO" "$R_HI" "$pws" "${PB_S[$aac]}" <<< "$pso"
         pjs="$REPLY"
         aan=$(grep -oE ':[0-9]+' <<< "$pjs" | tr -d ':' | awk '{ s += $1 } END { print s + 0 }')
-        aat=$THRESHOLD_16; [ "${aac#*/}" -ge 24 ] && aat=$THRESHOLD_24
-        [ "$aan" -ge "$aat" ] || continue
-        ign_until "$aac" && continue; seen[$aac]=1
+        part_thr "$aac"; [ "$aan" -ge "$REPLY" ] || continue
+        ign_covers "$aac" && continue; seen[$aac]=1
         review+=("{\"t\":$now,\"type\":\"part_open\",\"cidr\":\"$aac\",\"svc\":\"${PB_S[$aac]}\",\"extra\":\"${PB_X[$aac]}\",\"since\":$pjs,\"n\":$aan,\"last\":$ATK_LAST}")
         rtext+=("$(printf '%-18s %s · %s' "$aac" "part_open" "$aan")")
     done
@@ -3531,16 +3639,17 @@ inside_scan() {  # CIDR
         pf[${ip%.*}]=1
         short_reason "${SINGLE_NOTE[$ip]}" "$ip"; inside_ev "$ip" "$REPLY"
     done
-    if [ -r "$CSF_VAR/csf.tempban" ]; then
-        while IFS='|' read -r t tip port dir to note; do
-            [ -n "$tip" ] && [ -z "${seen[$tip]}" ] || continue
-            cidr_range "$tip" 2>/dev/null || continue
-            (( R_LO >= lo && R_HI <= hi )) || continue
-            seen[$tip]=1; IN_TMP+=("$tip"); IN_TNOTE[$tip]="$note"; IN_TEND[$tip]=$(( $(num "$t") + $(num "$to") ))
-            x="${tip%/*}"; pf[${x%.*}]=1
-            if [[ "$tip" != */* ]] && [ -z "${SINGLE_NOTE[$tip]+x}" ]; then short_reason "$note" "$tip"; inside_ev "$tip" "$REPLY"; fi
-        done < "$CSF_VAR/csf.tempban"
-    fi
+    tb_load
+    local ti
+    for ti in "${!TB_A[@]}"; do
+        tip="${TB_A[ti]}"; note="${TB_C[ti]}"
+        [ -z "${seen[$tip]}" ] || continue
+        cidr_range "$tip" 2>/dev/null || continue
+        (( R_LO >= lo && R_HI <= hi )) || continue
+        seen[$tip]=1; IN_TMP+=("$tip"); IN_TNOTE[$tip]="$note"; IN_TEND[$tip]=${TB_E[ti]}
+        x="${tip%/*}"; pf[${x%.*}]=1
+        if [[ "$tip" != */* ]] && [ -z "${SINGLE_NOTE[$tip]+x}" ]; then short_reason "$note" "$tip"; inside_ev "$tip" "$REPLY"; fi
+    done
     # IN_WATCH bütün sayaç satırları (ban konunca hepsi temizlenir); IN_WATCHA yalnız izleme süresi içindekiler (kart "izleniyor"
     # der; turun ölçütü, süresi dolan satır turun sonunda silinir)
     local wcut; wcut=$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d'); IN_WATCHA=()
@@ -3607,6 +3716,12 @@ function datekey(n,  a, k, M, i, h) {   # "… - Sat Sep 26 12:00:00 2026" → 2
     for (i = 1; i <= 12; i++) if (M[i] == a[k - 3]) return (a[k] sprintf("%02d%02d", i, a[k - 2]) h) + 0
     return 0
 }'
+part_thr() {     # CIDR|IP → REPLY = kısmi banı yetmeyen aralığın eşiği: /24 ve daha dar (tek IP = /32) blok eşiği, daha geniş ağ eşiği.
+    # Tur bildirimi (part_open_events) ve Kontrol edilecekler satırı ikisi de bunu kullanır (önce ikisinde ayrı kopya vardı ve tek IP
+    # hedefinde "${c#*/}" IP'nin kendisini verip [ -ge ] sözdizimi hatasıyla ağ eşiğine düşüyordu)
+    local b=32; [[ "$1" == */* ]] && b="${1#*/}"
+    if [ "$b" -ge 24 ]; then REPLY=$THRESHOLD_24; else REPLY=$THRESHOLD_16; fi
+}
 attack_json() {  # LO HI [SONRA_EPOCH ATLANACAK_SERVİSLER] < "ip|sebep[|e:epoch]" → REPLY = {"ssh":12,…}
     # her IP bir kez; SONRA verilirse yalnız o zamandan sonra konan banlar (tekilde nottaki tarih, geçicide epoch).
     # ATK_LAST = sayılan banların en yenisinin zamanı (epoch; bilinmiyorsa 0) — Kontrol edilecekler'in düşme tarihi için
@@ -3924,15 +4039,12 @@ do_lookup() {
     done
     if cloud_has "$ip"; then local cwn="$REPLY"; cl_desc "$cwn"; covers+=("4294967299|{\"kind\":\"cloud\",\"what\":\"$cwn\",$REPLY}"); fi
     cvj=$(printf '%s\n' "${covers[@]}" | grep . | sort -t'|' -k1,1n | cut -d'|' -f2- | paste -sd, -)
-    if [ -r "$CSF_VAR/csf.tempban" ]; then
-        while IFS='|' read -r t tip port dir to note; do
-            cidr_range "$tip" 2>/dev/null || continue
-            if (( R_LO <= n && R_HI >= n )); then
-                temp="$tip · $(m "$M_TMIN_LEFT" "$(( ($(num "$t") + $(num "$to") - now) / 60 ))") · $note"; tdir="$dir"; break
-            fi
-        done < "$CSF_VAR/csf.tempban"
+    if tb_cover "$n"; then                 # geçici liste: tek okuyucu (satır dosyadaysa ban duruyor; süresi dolmuşsa lfd kaldırıyor)
+        local tbi=$REPLY tleft=$(( TB_E[REPLY] - now ))
+        if [ "$tleft" -gt 0 ]; then tleft=$(m "$M_TMIN_LEFT" "$(( tleft / 60 ))"); else tleft="$M_TMIN_GONE"; fi
+        temp="${TB_A[tbi]} · $tleft · ${TB_C[tbi]}"; tdir="${TB_D[tbi]}"
     fi
-    wl_best "$n" "$n" && wl="$WL_HIT"   # satır yorumuyla: "csf.allow: IP (ofis)"; tam izin tek portluk satırdan önce
+    local wff=0; wl_best "$n" "$n" && { wl="$WL_HIT"; wff=$WL_BEST_FF; }   # satır yorumuyla: "csf.allow: IP (ofis)"; tam izin tek portluk satırdan önce
     # gelişmiş izin satırı banla birlikte ne yapar (ölçüldü, CSF 16.33): ban gelen yönü, iki yönlüyse giden yönü de keser ve
     # kurulmuş bağlantıların kabulü ondan sonra gelir; tek yönlü satırın açtığı bağlantının cevabı öbür yönde düşer.
     # wle: pair = karşı yön satırı da var (aynı protokol, aralık ve port; port alanı karşı türde: gelen d=P ↔ giden s=P, gelen
@@ -3973,6 +4085,9 @@ do_lookup() {
         for k in host asname pfx cc reg alloc deny temp wl wle rig pend ign ign_by; do
             v="${!k}"; jstr "$v"; o+=",\"$k\":$REPLY"
         done
+        # izin bütün portları açıyor mu: motorun ölçütü (wl_full_idx; ineff ve izinli saldırgan sayımıyla aynı). Panel ban / izin
+        # düğmelerini ve sonucu buna göre çizer (önce etiketten kendisi tahmin ediyordu: Imunify etiketini tam izin sayıyordu)
+        o+=",\"wfull\":$([ "$wff" = 1 ] && echo 1 || echo 0)"
         [ -n "$ign_t" ] && o+=",\"ign_t\":$ign_t"
         # IP'nin kendi izni (panelden kaldırılabilen): csf.allow'daki kendi satırı ve geçici izin (kalan saniye)
         local al_l al_t
@@ -4003,26 +4118,9 @@ do_lookup() {
         fi
         local bold=(${ipsold24[$bp]:-})     # kalıcı tekil penceresinden eski (eşiğe sayılmayan) tekiller
         o+=",\"blk\":{\"s\":${count24[$bp]:-0},\"o\":${#bold[@]},\"t\":$btc,\"ts\":$THRESHOLD_24,\"tt\":$THRESHOLD_TEMP_24,\"pw\":$PERM_WINDOW_DAYS}"
-        # ağ (/16): turun şüpheli ağ sayımıyla aynı — ağdaki kalıcı tekiller ve süren geçici banlar; izinli (işlemeyen), kalıcı tekil
-        # penceresinden eski ve kendi bloğu eşiği aşmış (blok banına gidecek) IP'ler sayılmaz. Eşik THRESHOLD_16 ve en az 2 farklı blok
-        local p16="${bp%.*}" n16=0 x px tb_t tb_ip tb_p tb_d tb_ttl; local -A S16=() TA16=() TC24=()
-        if [ -r "$CSF_VAR/csf.tempban" ]; then
-            local tnow; printf -v tnow '%(%s)T' -1
-            while IFS='|' read -r tb_t tb_ip tb_p tb_d tb_ttl _; do
-                [[ "$tb_t" =~ ^[0-9]+$ && "$tb_ttl" =~ ^[0-9]+$ && "$tb_ip" == "$p16".* && "$tb_ip" != */* ]] || continue
-                [ $(( tb_t + tb_ttl )) -gt "$tnow" ] || continue
-                [ -n "${TA16[$tb_ip]}" ] || TC24[${tb_ip%.*}]=$(( ${TC24[${tb_ip%.*}]:-0} + 1 )); TA16[$tb_ip]=1
-            done < "$CSF_VAR/csf.tempban"
-        fi
-        local -A SEEN16=()
-        for x in "${!SINGLE_NOTE[@]}" "${!TA16[@]}"; do
-            [[ "$x" == "$p16".* ]] || continue; [ -n "${SEEN16[$x]}" ] && continue; SEEN16[$x]=1
-            [ -n "${INEFF[$x]+x}" ] && continue; [ -n "${OLD_SGL[$x]+x}" ] && continue
-            px="${x%.*}"
-            [ "${count24[$px]:-0}" -ge "$THRESHOLD_24" ] && continue; [ "${TC24[$px]:-0}" -ge "$THRESHOLD_TEMP_24" ] && continue
-            n16=$((n16 + 1)); S16[$px]=1
-        done
-        o+=",\"net\":{\"n\":$n16,\"b\":${#S16[@]},\"t\":$THRESHOLD_16}"
+        # ağ (/16): turun şüpheli ağ sayımının kendisi (net_count). Eşik THRESHOLD_16 ve en az 2 farklı blok
+        local p16="${bp%.*}"; net_count
+        o+=",\"net\":{\"n\":${NC_N[$p16]:-0},\"b\":${NC_SUB[$p16]:-0},\"t\":$THRESHOLD_16}"
         o+=",\"covers\":[$cvj],\"asn\":\"$asn\",\"fwd\":$fwd,\"lookup\":$([ "$LOOK_INIT" = 1 ] && echo true || echo false)}"
         echo "$o"; return 0
     fi
@@ -4125,6 +4223,22 @@ svc_ports() {    # SERVİS → REPLY = TCP portları (elle bandaki servis seçim
         dns)  REPLY="53" ;;
         *)    REPLY=""; return 1 ;;
     esac
+}
+WEBQ_MEMO=""
+web_quic() {     # → 0: sunucuda UDP 443'ü dinleyen var (HTTP/3 / QUIC; LiteSpeed, yeni Apache/nginx). ss yoksa ya da taklit kökte
+    # dinliyor sayılır (kısmi ban UDP 443 satırını her durumda yazar; bu yalnız "web kapalı mı" kararını etkiler)
+    if [ -z "$WEBQ_MEMO" ]; then
+        WEBQ_MEMO=1
+        if [ -z "${SIM_ROOT:-}" ] && command -v ss >/dev/null 2>&1; then
+            ss -lun 2>/dev/null | awk '$1 == "UNCONN" && $4 ~ /:443$/ { f = 1 } END { exit !f }' || WEBQ_MEMO=0
+        fi
+    fi
+    [ "$WEBQ_MEMO" = 1 ]
+}
+svc_uports() {   # SERVİS → REPLY = "servis kapalı mı" denetiminin istediği UDP portları: web 443 (sunucu HTTP/3 dinliyorsa: web_quic),
+    # dns 53. Sağlayıcı / ülke banı, kiralık liste ve eklentinin kısmi banı kararları hepsi bunu kullanır: önce ban web için UDP 443'ü
+    # de kapatırken "web kapalı mı" denetimi yalnız TCP 80/443'e bakıyordu (HTTP/3 açıkken web kapalı sayılıyordu)
+    case "$1" in web|wout) REPLY=""; web_quic && REPLY="443" ;; dns) REPLY="53" ;; *) REPLY="" ;; esac
 }
 uniq_ports() {   # "443,80,80,30000_35000" → "80,443,30000_35000" (tekil portlar ve CSF aralıkları, tekrarsız)
     tr ',' '\n' <<< "$1" | awk '($1 ~ /^[0-9]+$/ && $1 >= 1 && $1 <= 65535) || $1 ~ /^[0-9]+_[0-9]+$/' | sort -t_ -k1,1n -k2,2n -u | paste -sd, -
@@ -4663,7 +4777,7 @@ cloud_pot() {    # → REPLY = JSON nesnesi {"gcp":12,…}: olay kaydındaki ve 
     qf=$(mktemp) || return 0
     { grep -ohE '"ip":"[0-9.]+"' "$EVENTS_FILE" 2>/dev/null | cut -d'"' -f4
       grep -oE '^[0-9]{1,3}(\.[0-9]{1,3}){3}([[:space:]]|$)' "$DENY_FILE" 2>/dev/null | tr -d ' \t'
-      [ -r "$CSF_VAR/csf.tempban" ] && awk -F'|' '$2 ~ /^[0-9.]+$/ { print $2 }' "$CSF_VAR/csf.tempban"
+      tb_lines | awk -F'|' '$1 ~ /^[0-9.]+$/ { print $1 }'
     } | sort -u | awk -F. 'NF == 4 { printf "%.0f\n", (($1 * 256 + $2) * 256 + $3) * 256 + $4 }' | sort -n > "$qf"
     pa "cpot sorgu IP listesi"; [ -n "${AG_PROF:-}" ] && pc "cpot sorgu IP" "$(wc -l < "$qf")"
     if [ -s "$qf" ]; then
@@ -4804,12 +4918,13 @@ cl_port_closed() { # AD tcp|udp PORT → 0: listenin kuralı bu portu (aralığ�
 cl_ports_closed() { # AD PORTLAR (virgüllü TCP; a_b ya da a:b) → 0: hepsi kapalı
     local p; for p in ${2//,/ }; do cl_port_closed "$1" tcp "$p" || return 1; done
 }
-cl_svc_closed() { # AD SERVİS → 0: kural servisin bütün TCP portlarını kapatıyor. Giden servisler (mout, wout) hiç kapanmaz; servisi belli
+cl_svc_closed() { # AD SERVİS → 0: kural servisin bütün TCP ve UDP (svc_uports) portlarını kapatıyor. Giden servisler (mout, wout) hiç kapanmaz; servisi belli
     # olmayan ihlal (diğer, tekrar ban, tarama, kayıtsız) yalnız "her şey" kipinde kapanmış sayılır
     case "$2" in mout|wout) return 1 ;; esac
     cl_pol "$1"; [ "$CP_K" = all ] && return 0
     svc_ports "$2" || return 1
-    cl_ports_closed "$1" "$REPLY"
+    cl_ports_closed "$1" "$REPLY" || return 1
+    local p; svc_uports "$2"; for p in ${REPLY//,/ }; do cl_port_closed "$1" udp "$p" || return 1; done
 }
 cl_desc() {      # AD → REPLY = JSON alanları: "mode","tcp","udp" (exc'te tcp / udp açık kalanlar)
     cl_pol "$1"; REPLY="\"mode\":\"$CP_K\",\"tcp\":\"$CP_T\",\"udp\":\"$CP_U\""
@@ -5157,7 +5272,7 @@ do_src_ips() {   # ANAHTAR (ASnnn | cl:ad) → JSON: o sağlayıcıya / kiralık
         { c = $0; sub(/[ \t]*#.*/, "", c); cm = ""; if (index($0, "#")) { cm = $0; sub(/^[^#]*#[ \t]*/, "", cm) }
           if (c ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) print "D\t" c "\t0\t\t" cm
           else if (c ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\/[0-9]+$/) print "C\t" c }' "$DENY_FILE" 2>/dev/null
-      [ -r "$CSF_VAR/csf.tempban" ] && awk -F'|' -v now="$now" '$1 + $5 > now + 0 { k = ($2 ~ /\//) ? "R" : "T"; print k "\t" $2 "\t" $1 "\t" ($1 + $5) "\t" $6 }' "$CSF_VAR/csf.tempban"
+      tb_lines | awk -F'|' '{ k = ($1 ~ /\//) ? "R" : "T"; print k "\t" $1 "\t" $2 "\t" $3 "\t" $6 }'   # dosyadaki satır = ban duruyor
     } | awk -F'\t' -v rf="$rng" -v pc="$svm" -v af="$alw" "$AWK_CLS"'
         function v4(x,  p) { split(x, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
         function de(x,  a, k, M, i, h) { split("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec", M, " "); k = split(x, a, /[ \t]+/)
@@ -5262,16 +5377,17 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad) → son 24 saatin web günlüklerind
     else find -L "$dir" -type f -mmin -1440 ! -name '*bytes_log*' ! -name '*.offset*' ! -name '*.gz' 2>/dev/null > "$lst"; fi
     since=$(date -d '24 hours ago' +%Y%m%d%H%M%S)
     # dosyalar tek awk'a verilir (xargs çok dosyada gruplara bölüp yalnız son grubun sonucunu bırakıyordu)
-    awk -v sts="$IMP_STATES" -v rf="$rng" -v lf="$lst" -v since="$since" -v af="$alw" -v cf="$clf" -v cdf="$CDN_FILE" -v cweb="$cweb" -v cact="$cwl" -v ban="$ban" -v bkey="$bkey" -v bkey2="$([ -n "$bkey" ] && date -d "@$(( bsince + 120 ))" +%Y%m%d%H%M%S)" -v bsince="$bsince" -v bweb="$bweb" -v tbf="$CSF_VAR/csf.tempban" -v dnf="$DENY_FILE" -v wf="$SAYAC_FILE" -v wcut="$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')" -v imf="$IMUNIFY_FILE" -v xf="$xcf" -v now="$(date +%s)" '
+    awk -v sts="$IMP_STATES" -v rf="$rng" -v lf="$lst" -v since="$since" -v af="$alw" -v cf="$clf" -v cdf="$CDN_FILE" -v cweb="$cweb" -v cact="$cwl" -v ban="$ban" -v bkey="$bkey" -v bkey2="$([ -n "$bkey" ] && date -d "@$(( bsince + 120 ))" +%Y%m%d%H%M%S)" -v bsince="$bsince" -v bweb="$bweb" -v tbf=<(tb_lines) -v dnf="$DENY_FILE" -v wf="$SAYAC_FILE" -v wcut="$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')" -v imf="$IMUNIFY_FILE" -v xf="$xcf" -v now="$(date +%s)" '
         BEGIN { while ((getline l < rf) > 0) { split(l, x, " "); m++; LO[m] = x[1] + 0; HI[m] = x[2] + 0 }
                 while ((getline l < cf) > 0) { split(l, x, " "); cn++; CL[cn] = x[1] + 0; h = x[2] + 0   # 4. alan: kapattığı web portları (8 = 80, 4 = 443)
                     if (cn == 1 || h > CP[cn - 1]) { CP[cn] = h; CN[cn] = x[3]; CF[cn] = x[4] } else { CP[cn] = CP[cn - 1]; CN[cn] = CN[cn - 1]; CF[cn] = CF[cn - 1] } }
                 # şu anki banlar: geçici (kalan saniye), csf.deny içindeki tek IP ve /24 blok satırları, Imunify360 kara listesi
                 # aralık banları da (kalıcı ve geçici; /24, /16, …): adresi kapsayan ban şu anki durumda söylenir. İzlenen bloklar sayaçtan
                 # (geçici blok banından sonra izleme süresi içinde): kartı açmadan görülsün
-                while ((getline l < tbf) > 0) { split(l, x, "|"); if (x[1] + x[5] <= now) continue
-                    if (x[2] ~ /^[0-9.]+$/) TB[x[2]] = x[1] + x[5] - now
-                    else if (x[2] ~ /^[0-9.]+\/[0-9]+$/) { split(x[2], y, "/"); tn++; TL[tn] = v4(y[1]); TH[tn] = TL[tn] + 2 ^ (32 - y[2]) - 1; TT[tn] = x[1] + x[5] - now } }
+                # tb_lines: "adres|başlangıç|bitiş|…"; dosyadaki satır = ban duruyor (süresi dolmuşu lfd kaldırana dek kalan 1 sn)
+                while ((getline l < tbf) > 0) { split(l, x, "|"); tbr = x[3] - now; if (tbr < 1) tbr = 1
+                    if (x[1] ~ /^[0-9.]+$/) TB[x[1]] = tbr
+                    else if (x[1] ~ /^[0-9.]+\/[0-9]+$/) { split(x[1], y, "/"); tn++; TL[tn] = v4(y[1]); TH[tn] = TL[tn] + 2 ^ (32 - y[2]) - 1; TT[tn] = tbr } }
                 while ((getline l < xf) > 0) { split(l, x, " "); xn++; XL[xn] = x[1] + 0; XH[xn] = x[2] + 0; XS[xn] = x[3] }
                 while ((getline l < dnf) > 0) { sub(/[ \t#].*/, "", l)
                     # port satırı (kısmi ban): yönden sonraki ilk s= / d= port, sonraki adres; yalnız gelen yön
@@ -5552,8 +5668,8 @@ do_action() {    # NAME TARGET [DAYS]
             local rp1=0
             if [ "$REPLACE" = 1 ] && grep -qF "|s=$t # csf_autogroup:" "$DENY_FILE" 2>/dev/null && ! deny_has "$t" &&
                ! grep -F "|s=$t # " "$DENY_FILE" 2>/dev/null | grep -qvF "# csf_autogroup:" &&
-               ! { [ -r "$CSF_VAR/csf.tempban" ] && grep -qF "|$t|" "$CSF_VAR/csf.tempban"; }; then rp1=1
-            elif deny_has "$t" || grep -qF "|s=$t # " "$DENY_FILE" 2>/dev/null || { [ -r "$CSF_VAR/csf.tempban" ] && grep -qF "|$t|" "$CSF_VAR/csf.tempban"; }; then
+               ! tb_present "$t"; then rp1=1
+            elif deny_has "$t" || grep -qF "|s=$t # " "$DENY_FILE" 2>/dev/null || tb_present "$t"; then
                 act_out 1 "$(m "$M_A1_EXISTS" "$t")"; return
             fi
             perm_covers "$lo" "$hi" && { act_out 1 "$(m "$M_A_EXISTS" "$t")"; return; }
@@ -5575,7 +5691,7 @@ do_action() {    # NAME TARGET [DAYS]
                 cm="$(m "$M_A_PBANNED" "$t" "$(part_shown "$pp")")"
             elif [ "$BTTL" -gt 0 ]; then
                 csf_run -td "$t" "$BTTL" -d inout "$(m "$M_A1_TCOMMENT" "$AG_BY")"
-                grep -qF "|$t|" "$CSF_VAR/csf.tempban" 2>/dev/null || { [ -n "$old1" ] && file_append_locked "$DENY_FILE" "$old1"$'\n'
+                tb_present "$t" || { [ -n "$old1" ] && file_append_locked "$DENY_FILE" "$old1"$'\n'
                     act_out 1 "$(m "$M_A_BANFAIL" "$t" "${CSF_OUT%%$NL*}")"; return; }
                 cm="$(m "$M_A1_TBANNED" "$t" "$(dur_text "$BTTL")")"
             else
@@ -5680,11 +5796,11 @@ do_action() {    # NAME TARGET [DAYS]
             # süreli ban (yalnız "Her şey"): csf -td, iki yönlü. İçindeki banlara, izlemelere ve kısmi banlara dokunulmaz: süre bitince
             # aralık banından önceki hâline döner (kalıcı bandaki temizlik ve geri yükleme kopyası yok)
             if [ "$BTTL" -gt 0 ]; then
-                if [ -r "$CSF_VAR/csf.tempban" ] && awk -F'|' -v c="$cidr" '$2 == c { f = 1 } END { exit !f }' "$CSF_VAR/csf.tempban"; then
+                if tb_present "$cidr"; then
                     act_out 1 "$(m "$M_AR_TEXISTS" "$cidr")"; return
                 fi
                 csf_run -td "$cidr" "$BTTL" -d inout "$(m "$M_AR_TCOMMENT" "$bits" "$AG_BY")"
-                awk -F'|' -v c="$cidr" '$2 == c { f = 1 } END { exit !f }' "$CSF_VAR/csf.tempban" 2>/dev/null || { act_out 1 "$(m "$M_A_BANFAIL" "$cidr" "${CSF_OUT%%$NL*}")"; return; }
+                tb_present "$cidr" || { act_out 1 "$(m "$M_A_BANFAIL" "$cidr" "${CSF_OUT%%$NL*}")"; return; }
                 jstr "$WL_HIT"; jw="$REPLY"
                 owners_load; inside_owner "${t%.*}" "$t"; owner_kv
                 local msg; msg="$(m "$M_AR_TBANNED" "$cidr" "$(dur_text "$BTTL")")"
@@ -5749,7 +5865,7 @@ do_action() {    # NAME TARGET [DAYS]
             for x in "${ownp[@]}"; do grep -qF "|s=$x # csf_autogroup:" "$DENY_FILE" || rp=$((rp + 1)); done
             if [ ${#rem[@]} -gt 0 ] || [ ${#ownp[@]} -gt 0 ] || [ "$BMODE" = exc ]; then csf_run -r; fi
             if [ "$CLEAN" = 1 ]; then
-                for x in "${IN_TMP[@]}"; do csf_run -tr "$x"; grep -qF "|$x|" "$CSF_VAR/csf.tempban" 2>/dev/null || rt=$((rt + 1)); done
+                for x in "${IN_TMP[@]}"; do csf_run -tr "$x"; tb_present "$x" || rt=$((rt + 1)); done
             fi
             jstr "$WL_HIT"; jw="$REPLY"
             owners_load; inside_owner "${t%.*}" "$t"; owner_kv
@@ -5788,9 +5904,9 @@ do_action() {    # NAME TARGET [DAYS]
             UB_RN=0
             if [ -n "$line" ]; then
                 unban_full_core "$t" || { act_out 1 "$UB_ERR"; return; }
-            elif [ -r "$CSF_VAR/csf.tempban" ] && grep -qF "|$t|" "$CSF_VAR/csf.tempban"; then
+            elif tb_present "$t"; then
                 csf_run -tr "$t"
-                grep -qF "|$t|" "$CSF_VAR/csf.tempban" && { act_out 1 "$(m "$M_A_UNBANFAIL" "$t" "${CSF_OUT%%$NL*}")"; return; }
+                tb_present "$t" && { act_out 1 "$(m "$M_A_UNBANFAIL" "$t" "${CSF_OUT%%$NL*}")"; return; }
             else
                 act_out 1 "$(m "$M_A_NOTFOUND" "$t")"; return
             fi
@@ -5861,9 +5977,10 @@ asn_setn() {     # ASNNN → REPLY = CSF'in yüklediği aralık sayısı (-1: ip
     [ "$REPLY" = x ] && REPLY=$(ipset list "cc_${1,,}" 2>/dev/null | grep -cE '^[0-9]')   # başlıkta sayı olmayan eski ipset
     [[ "$REPLY" =~ ^-?[0-9]+$ ]] || REPLY=-1
 }
-pc_ports() {     # SERVİS ",port,listesi," → 0: servisin bütün portları listede
+pc_ports() {     # SERVİS ",tcp,listesi," ",udp,listesi," → 0: servisin bütün TCP portları ve UDP portları (svc_uports) listelerde
     svc_ports "$1" || return 1
     local p; for p in ${REPLY//,/ }; do port_in "$p" "$2" || return 1; done
+    svc_uports "$1"; for p in ${REPLY//,/ }; do port_in "$p" "${3:-,}" || return 1; done
 }
 port_in() {      # PORT ",liste," → 0: port (ya da "a_b" / "a:b" aralığının tamamı) listede; liste "a:b" aralıkları içerebilir
     local p="${1//_/:}" lo hi x a b
@@ -5875,23 +5992,29 @@ port_in() {      # PORT ",liste," → 0: port (ya da "a_b" / "a:b" aralığını
     done
     return 1
 }
-PCV_LO=(); PCV_HI=(); PCV_P=(); PCV_OK=0
+PCV_LO=(); PCV_HI=(); PCV_P=(); PCV_U=(); PCV_OK=0
 part_covers() {  # IP SERVİS → 0: IP'yi kapsayan eklenti kısmi banı (csf.deny'de "tcp|in|d=PORTLAR|s=CIDR # csf_autogroup:") servisin
     # bütün portlarını kapatıyor. Satırlar turda bir kez okunur.
-    local ip="$1" k="$2" i n l c pt
+    local ip="$1" k="$2" i n l c pt pr
     if [ "$PCV_OK" = 0 ]; then
         PCV_OK=1
+        # aralık başına TCP ve UDP portları birlikte (15 portluk bölünmüş satırlar ve web'in UDP 443 satırı aynı banın parçası)
+        local -A pt_t=() pt_u=(); local ord=()
         while IFS= read -r l; do
-            [[ "$l" =~ ^tcp\|in\|d=([0-9,_:]+)\|s=([0-9./]+)[[:space:]] ]] || continue
-            pt="${BASH_REMATCH[1]}"; c="${BASH_REMATCH[2]}"
-            cidr_range "$c" || continue
-            PCV_LO+=("$R_LO"); PCV_HI+=("$R_HI"); PCV_P+=(",${pt//_/:},")
+            [[ "$l" =~ ^(tcp|udp)\|in\|d=([0-9,_:]+)\|s=([0-9./]+)[[:space:]] ]] || continue
+            pr="${BASH_REMATCH[1]}"; pt="${BASH_REMATCH[2]}"; c="${BASH_REMATCH[3]}"
+            [ -n "${pt_t[$c]+x}${pt_u[$c]+x}" ] || ord+=("$c")
+            if [ "$pr" = udp ]; then pt_u[$c]+="${pt//_/:},"; else pt_t[$c]+="${pt//_/:},"; fi
         done < <(grep -F '# csf_autogroup:' "$DENY_FILE" 2>/dev/null)
+        for c in "${ord[@]}"; do
+            cidr_range "$c" || continue
+            PCV_LO+=("$R_LO"); PCV_HI+=("$R_HI"); PCV_P+=(",${pt_t[$c]}"); PCV_U+=(",${pt_u[$c]}")
+        done
     fi
     [ "${#PCV_LO[@]}" -gt 0 ] || return 1
     ip2int "$ip"; n="$REPLY"
     for i in "${!PCV_LO[@]}"; do
-        (( PCV_LO[i] <= n && PCV_HI[i] >= n )) && pc_ports "$k" "${PCV_P[i]}" && return 0
+        (( PCV_LO[i] <= n && PCV_HI[i] >= n )) && pc_ports "$k" "${PCV_P[i]}" "${PCV_U[i]}" && return 0
     done
     return 1
 }
@@ -6013,9 +6136,8 @@ aa_ineff_rows() {  # SINCE_EPOCH → stdout "Z|ip|zaman|sebep": CSF'te banı ola
     local ip t note
     [ "${#INEFF[@]}" -gt 0 ] || return 0
     local -A TB=()
-    [ -r "$CSF_VAR/csf.tempban" ] && while IFS='|' read -r t ip _ _ _ note; do
-        [ -n "${INEFF[$ip]+x}" ] && [ -z "${TB[$ip]}" ] && TB[$ip]="$t|$note"
-    done < "$CSF_VAR/csf.tempban"
+    tb_load
+    for ip in "${!TB_IP[@]}"; do [ -n "${INEFF[$ip]+x}" ] && TB[$ip]="${TB_T[${TB_IP[$ip]}]}|${TB_C[${TB_IP[$ip]}]}"; done
     for ip in "${!INEFF[@]}"; do
         if [ -n "${TB[$ip]}" ]; then t="${TB[$ip]%%|*}"; note="${TB[$ip]#*|}"
         elif [ -n "${SINGLE_NOTE[$ip]+x}" ]; then note="${SINGLE_NOTE[$ip]}"
@@ -6272,8 +6394,8 @@ perm_cls_preload() { # tekillerin PERMBLOCK olanları → PERM_CLS (tek tarama)
 }
 prov_cover() {   # stdin "ip|sebep|asn" → 0: her IP CSF'te banlı bir sağlayıcıda ve ban saldırılan servisi kapatıyor
     # (her şey banında her servis; port listesi banında saldırının servisinin portları listede olmalı). Sahibi bilinmeyen IP: kapsanmıyor.
-    local ip r a p n=0 k tcp cc ccd ccp gs hit w IFS=$' \t\n'
-    tcp=",$(conf_val CC_DENY_PORTS_TCP | tr -d ' '),"
+    local ip r a p n=0 k tcp udp cc ccd ccp gs hit w IFS=$' \t\n'
+    tcp=",$(conf_val CC_DENY_PORTS_TCP | tr -d ' '),"; udp=",$(conf_val CC_DENY_PORTS_UDP | tr -d ' '),"
     # ülke banı da kapsar: CC_DENY'deki ülke her şeyi, CC_DENY_PORTS'taki ülke yalnız o portları (IP kartı ve ban penceresi
     # bunu zaten biliyordu; uyarı kararı bilmiyor, ülkesi banlı ağ Kontrol edilecekler'de kalıyordu)
     ccd=",$(conf_val CC_DENY | tr -d ' ' | tr '[:lower:]' '[:upper:]'),"; ccp=",$(conf_val CC_DENY_PORTS | tr -d ' ' | tr '[:lower:]' '[:upper:]'),"
@@ -6302,7 +6424,7 @@ prov_cover() {   # stdin "ip|sebep|asn" → 0: her IP CSF'te banlı bir sağlay�
         [ -n "$a" ] && [[ "$GEO_HAS" != *" AS$a "* ]] && gs+=" AS$a "
         hit=""
         for w in $gs; do
-            if [[ "$ccd" == *",$w,"* ]] || { [[ "$ccp" == *",$w,"* ]] && pc_ports "$k" "$tcp"; }; then hit="$w"; break; fi
+            if [[ "$ccd" == *",$w,"* ]] || { [[ "$ccp" == *",$w,"* ]] && pc_ports "$k" "$tcp" "$udp"; }; then hit="$w"; break; fi
         done
         if [ -n "$hit" ]; then
             [[ "$hit" == AS* ]] || hit="CC_DENY $hit"
@@ -6370,8 +6492,8 @@ prov_covmap() {  # "CIDR:TÜR:TCP:SERVİS" … → PCOV[CIDR]=ASNNN (çağıran 
 }
 prov_near() {    # stdin "ip|sebep|asn" → 0: her IP banlı bir sağlayıcıda ya da bulut listesinde ama bazı saldırılar
     # kapalı olmayan portlara (PN_SRC = kapsayanlar, PN_SVC = kapanmayan servisler; panel "port listesine ekleyin" der)
-    local IFS=$' \t\n' ip r a k n=0 tcp ct lab pl
-    tcp=",$(conf_val CC_DENY_PORTS_TCP | tr -d ' '),"; ct=""
+    local IFS=$' \t\n' ip r a k n=0 tcp udp ct lab pl
+    tcp=",$(conf_val CC_DENY_PORTS_TCP | tr -d ' '),"; udp=",$(conf_val CC_DENY_PORTS_UDP | tr -d ' '),"; ct=""
     PN_SRC=""; PN_SVC=""
     pa "pnear · başı"
     local -a pnl=(); mapfile -t pnl; cloud_prefill $(printf '%s\n' "${pnl[@]}" | cut -d'|' -f1)
@@ -6391,8 +6513,8 @@ prov_near() {    # stdin "ip|sebep|asn" → 0: her IP banlı bir sağlayıcıda 
         else return 1; fi
         [[ ", $PN_SRC, " == *", $lab, "* ]] || PN_SRC+="${PN_SRC:+, }$lab"
         # sağlayıcının port listesi bu servisi kapatmıyorsa kiralık liste kapatıyor olabilir (ikisi birden geçerli)
-        if [ "$pl" = "$tcp" ] && ! pc_ports "$k" "$pl" && cloud_has "$ip" && cl_svc_closed "$REPLY" "$k"; then continue; fi
-        if { [ "$pl" = "$tcp" ] && ! pc_ports "$k" "$pl"; } || { [[ "$pl" == cl:* ]] && ! cl_svc_closed "${pl#cl:}" "$k"; }; then case "$k" in other|repeat|scan) ;; *) [[ ",$PN_SVC," == *",$k,"* ]] || PN_SVC+="${PN_SVC:+,}$k" ;; esac; fi
+        if [ "$pl" = "$tcp" ] && ! pc_ports "$k" "$pl" "$udp" && cloud_has "$ip" && cl_svc_closed "$REPLY" "$k"; then continue; fi
+        if { [ "$pl" = "$tcp" ] && ! pc_ports "$k" "$pl" "$udp"; } || { [[ "$pl" == cl:* ]] && ! cl_svc_closed "${pl#cl:}" "$k"; }; then case "$k" in other|repeat|scan) ;; *) [[ ",$PN_SVC," == *",$k,"* ]] || PN_SVC+="${PN_SVC:+,}$k" ;; esac; fi
         pa "pnear · kapsama"
     done
     [ "$n" -gt 0 ] && [ -n "$PN_SVC" ]
@@ -6424,7 +6546,7 @@ asn_top() {      # [N] [evidence|blocks] → ASN_TOP satırları: "ASN|KURUM|CC|
     # Sıralama saldırı kanıtına göre: kendi grup banlarımız + tekil banlar (lfd'nin yakaladıkları).
     # csf.deny'deki başka kaynaklı bloklar (elle / başka araç) gösterilir ama sıralamaya girmez.
     local -A G=() B=() T=() NM=() CC=() IS_AG=() DEN=() M=() IS_M=() CCOV=() CV=() CVS=() SCL=() PBC=() SVN=() SEP=() LA=()
-    local c i p a qf k src ptl sv pb rp=()
+    local c i p a qf k src ptl ptu sv pb rp=()
     if [ "${3:-}" = reuse ] && [ -n "${ASN_ROWS_SET:-}" ]; then asn_top_sort "${1:-10}" "${2:-evidence}"; return 0; fi
     asn_banned
     # sayılan tekiller (blok ve şüpheli ağ eşiğiyle aynı pencere): kalıcı tekil penceresindeki (PERM_WINDOW_DAYS) csf.deny
@@ -6443,7 +6565,7 @@ asn_top() {      # [N] [evidence|blocks] → ASN_TOP satırları: "ASN|KURUM|CC|
     perm_cls_load "${rp[@]}"
     for c in "${rp[@]}"; do [ -n "${PERM_CLS[$c]}" ] && SCL[$c]="${PERM_CLS[$c]}"; done
     pa "asn PERMBLOCK servisi"
-    ptl=",$(conf_val CC_DENY_PORTS_TCP | tr -d ' '),"
+    ptl=",$(conf_val CC_DENY_PORTS_TCP | tr -d ' '),"; ptu=",$(conf_val CC_DENY_PORTS_UDP | tr -d ' '),"
     while read -r c k; do SEP[$c]="$k"; done < <(for c in "${!ASG[@]}"; do printf '%s|%s\n' "$c" "${ASG[$c]}"; done |
         awk -F'|' '{ n = split($2, a, /[ \t]+/); if (n < 5 || a[n] !~ /^[0-9]{4}$/ || a[n-1] !~ /^[0-9]{2}:[0-9]{2}:[0-9]{2}$/) next
                    m = index("JanFebMarAprMayJunJulAugSepOctNovDec", a[n-3]); if (!m) next
@@ -6475,7 +6597,7 @@ asn_top() {      # [N] [evidence|blocks] → ASN_TOP satırları: "ASN|KURUM|CC|
         NM[$a]="${OWN_N[$p]}"; CC[$a]="${OWN_C[$p]}"
         if [ -n "${CCOV[$c]}" ]; then CV[$a]=$(( ${CV[$a]:-0} + 1 )); CVS[$a]="${CCOV[$c]}"; continue; fi
         # port listesiyle banlı sağlayıcı: o portlara yapılan saldırı kapalı (sayılmaz); açık servislere olanlar sayılır
-        if [ -n "${ASB[$a]}" ] && [ "${ASB[$a]}" != all ] && pc_ports "${SCL[$c]}" "$ptl"; then PBC[$a]=$(( ${PBC[$a]:-0} + 1 )); continue; fi
+        if [ -n "${ASB[$a]}" ] && [ "${ASB[$a]}" != all ] && pc_ports "${SCL[$c]}" "$ptl" "$ptu"; then PBC[$a]=$(( ${PBC[$a]:-0} + 1 )); continue; fi
         T[$a]=$(( ${T[$a]:-0} + 1 )); SVN[$a|${SCL[$c]:-other}]=$(( ${SVN[$a|${SCL[$c]:-other}]:-0} + 1 ))   # saldırılan servis
         [ -n "${SEP[$c]}" ] && (( ${SEP[$c]} > ${LA[$a]:-0} )) && LA[$a]="${SEP[$c]}"                  # son saldırı
     done
@@ -6662,7 +6784,7 @@ digest_build() { # → DG_SUBJ, DG_BODY
     [ -n "${C[perm0]}" ] && perm0="${C[perm0]}"
     limit=$(num "$(conf_val DENY_IP_LIMIT)"); tlimit=$(num "$(conf_val DENY_TEMP_IP_LIMIT)")
     pc=$(deny_count)
-    tc=$("$CSF_BIN" -t 2>/dev/null 9>&- | grep -c "^DENY")
+    tb_load; tc=$TB_NL                 # turla ve panelle aynı ölçü (lfd'nin sınırı satır sayısıdır)
     DG_SUBJ=$(m "$M_DG_SUBJ" "$(hostname 2>/dev/null || echo "$HOSTNAME")")
     DG_BODY="$(m "$M_DG_HEAD" "$(date -d "@$since" '+%d.%m')" "$(date -d "@$now" '+%d.%m')")$NL$NL"
     local DGH="" hr hi hlab hv hk hcls
@@ -7089,19 +7211,11 @@ fi
 prof "turn kalıcı liste sınırı"
 # ── Temp deny limit ─────────────────────────────────────────────────────────
 temp_limit=$(grep "^DENY_TEMP_IP_LIMIT" "$CSF_CONF" | cut -d'=' -f2 | tr -d ' "')
-# Geçici liste turda bir kez okunur; aşağıda geçici banlar okunurken aynı çıktı kullanılır (aradaki adımlar geçici listeye yazmaz,
-# geçici blok banları ondan sonra konur). CSF'in kendi dosyasından (csf.tempban: zaman|adres|port|yön|süre|yorum), csf -t'nin
-# biçiminde: "DENY adres", çok portlu ban port başına bir satır (csf -t gibi; doluluk bu satırlarla sayılır). Süresi dolmuş satır
-# (lfd silmemişse) alınmaz. csf -t (Perl) sunucuda her çağrıda ~1,1 sn ölçüldü; gerçek CSF 16.33'te tek IP, port, çok port,
-# çıkış, iki yön, aralık ve IPv6 banlarında ikisi aynı listeyi verdi (2026-10-23). Dosya okunamıyorsa csf -t.
-if [ -r "$CSF_VAR/csf.tempban" ]; then
-    TEMP_LIST=$(awk -F'|' -v now="$(date +%s)" '$2 != "" {
-        if ($1 ~ /^[0-9]+$/ && $5 ~ /^[0-9]+$/ && $5 + 0 > 0 && $1 + $5 <= now + 0) next
-        k = split($3, p, ","); if (k < 1) k = 1; for (i = 1; i <= k; i++) print "DENY", $2 }' "$CSF_VAR/csf.tempban")
-else
-    TEMP_LIST=$("$CSF_BIN" -t 2>/dev/null 9>&-)
-fi
-temp_current=$(grep -c "^DENY" <<< "$TEMP_LIST" || true)
+# Geçici liste turda bir kez okunur (tb_load; aradaki adımlar geçici listeye yazmaz, geçici blok banları ondan sonra konur).
+# Doluluk lfd'nin kendi ölçüsüyle: DENY_TEMP_IP_LIMIT dosyanın satır sayısıyla karşılaştırılır, aşınca en eskiler kalkar (lfd
+# ipunblock; ölçüldü 2026-11-10). Önce çok portlu satır port başına sayılıyordu (csf -t'nin gösterimi) ve yüzde yüksek çıkıyordu.
+tb_load
+temp_current=$TB_NL
 if [ -n "$temp_limit" ] && [ "$temp_limit" -gt 0 ] 2>/dev/null; then
     temp_percent=$((temp_current * 100 / temp_limit))
     logr "$(m "$M_TEMP_USAGE" "$temp_current" "$temp_limit" "$temp_percent")"
@@ -7207,53 +7321,30 @@ prof "turn /24 kalıcı gruplama"
 # ── /16: şüpheli ağ uyarısı geçici banlar okunduktan sonra, kalıcı ve geçici tekiller birlikte (aşağıda) ─
 warn16=0
 # ── Read temp bans + clear singles already covered permanently ──────────────
-# csf -t çok portlu bir bani her port için ayrı satır basar → IP'ler tekilleştirilir.
 # IPv6 satırları (ör. "2001:db8::1") IPv4 sayılmasın diye adres tam eşleşmeli.
-declare -A temp_count24 temp_ips24 TSEEN TNOTE
-TC_LO=(); TC_HI=(); temp_order=(); temp_alive=()
-while read -r kind addr _; do      # TEMP_LIST: geçici liste sınırı denetiminde okunan csf -t çıktısı
-    [ "$kind" = "DENY" ] || continue
-    if [[ "$addr" =~ $IPV4_RE ]]; then
-        [ -z "${TSEEN[$addr]+x}" ] && { TSEEN[$addr]=1; temp_order+=("$addr"); }
-    elif [[ "$addr" =~ $CIDR4_RE ]]; then
-        cidr_range "$addr" && { TC_LO+=("$R_LO"); TC_HI+=("$R_HI"); }
-    fi
-done <<< "$TEMP_LIST"
-if [ -r "$CSF_VAR/csf.tempban" ]; then   # zaman|ip|port|yön|süre|yorum
-    while IFS='|' read -r _ tip _ _ _ tnote; do
-        [ -n "$tip" ] && [ -z "${TNOTE[$tip]+x}" ] && TNOTE[$tip]="$tnote"
-    done < "$CSF_VAR/csf.tempban"
-fi
-for ip in "${temp_order[@]}"; do
+declare -A temp_count24 temp_ips24 TNOTE
+TC_LO=(); TC_HI=()
+for x in "${TB_RI[@]}"; do cidr_range "${TB_A[x]}" && { TC_LO+=("$R_LO"); TC_HI+=("$R_HI"); }; done   # temp_covers
+for x in "${!TB_A[@]}"; do
+    ip="${TB_A[x]}"; [[ "$ip" =~ $IPV4_RE ]] || continue
+    [ -z "${TNOTE[$ip]+x}" ] || continue; TNOTE[$ip]="${TB_C[x]}"
     ip2int "$ip"; n=$REPLY
     if [ -n "${DENY_IP[$ip]+x}" ] || perm_covers "$n" "$n"; then
         csf_run -tr "$ip"; log "$(m "$M_TCLEAN" "$ip")"
         short_reason "${TNOTE[$ip]}" "$ip"; jstr "$REPLY"
-        ev clean_temp "$ip" "why=$REPLY"; continue
+        ev clean_temp "$ip" "why=$REPLY"
     fi
-    temp_covers "$n" "$n" && continue
-    [ -n "${INEFF[$ip]+x}" ] && continue     # izinli IP'nin geçici banı işlemez: blok ve şüpheli ağ sayımına girmez
-    temp_alive+=("$ip")
 done
-# eşik sayımı: son turdan bu yana her blokta AYNI ANDA geçici banlı en çok tekil (temp_window + temp_peak; lfd günlüğü + geçici
+# eşik sayımı (temp_elig; panelle ortak): son turdan bu yana her blokta AYNI ANDA geçici banlı en çok tekil (ban geçmişi + geçici
 # liste). Şu an listede olmayan (iki tur arasında açılıp kapanmış) banlar da sayılır; kalıcıya alınmış, aralık banının içinde
-# kalan ve izinli IP'ler sayılmaz (yukarıdaki kurallar)
+# kalan ve izinli IP'ler sayılmaz
 bl_update                           # ban geçmişi: son turdan beri gelen banlar dosyaya (eşik de aynı görünümden sayar)
 temp_t0; TURN_T0=$REPLY; TURN_NOW=$(date +%s)
-TWL=$(temp_window "$TURN_T0")
-declare -A TW_OK=()
-cur_alive=("${temp_alive[@]}")      # şu an geçici listede olanlar (aşağıdaki pencere döngüsü temp_alive'a geçmişten gelenleri ekler)
-for ip in "${cur_alive[@]}"; do TW_OK[$ip]=1; done
-while IFS='|' read -r ip _ _ tr; do
-    [ -n "$ip" ] && [ -z "${TW_OK[$ip]+x}" ] || continue
-    ip2int "$ip"; n=$REPLY
-    if [ -n "${DENY_IP[$ip]+x}" ] || perm_covers "$n" "$n" || temp_covers "$n" "$n" || [ -n "${INEFF[$ip]+x}" ]; then TW_OK[$ip]=0; continue; fi
-    TW_OK[$ip]=1; temp_alive+=("$ip"); [ -n "${TNOTE[$ip]+x}" ] || TNOTE[$ip]="$tr"
-done <<< "$TWL"
-# geçici liste dosyası okunamadıysa (csf -t'ye düşüldü) şu an listede olanlar pencereye "şimdi" olarak girer
-while IFS='|' read -r p c l; do temp_count24[$p]=$c; temp_ips24[$p]="$l"; done < <(
-    { printf '%s\n' "$TWL"; for ip in "${cur_alive[@]}"; do printf '%s|%s|%s|\n' "$ip" "$TURN_NOW" "$((TURN_NOW + 1))"; done; } |
-        awk -F'|' -v ok=" $(for ip in "${!TW_OK[@]}"; do [ "${TW_OK[$ip]}" = 1 ] && printf '%s ' "$ip"; done)" 'NF >= 3 && index(ok, " " $1 " ")' | temp_peak "$TURN_T0")
+temp_elig "$TURN_T0" "$TURN_NOW"
+temp_alive=("${TEL_IPS[@]}")
+for ip in "${!TEL_NOTE[@]}"; do [ -n "${TNOTE[$ip]+x}" ] || TNOTE[$ip]="${TEL_NOTE[$ip]}"; done
+for p in "${!TPK_N[@]}"; do temp_count24[$p]=${TPK_N[$p]}; temp_ips24[$p]="${TPK_I[$p]}"; done
+TPK_OK=1                            # aynı süreçte panel yolu (lookup) yeniden hesaplamasın
 [ "$DRY" = 1 ] || echo "$TURN_NOW" > "$TEMP_SINCE_FILE"
 
 prof "turn geçici okuma"
@@ -7313,17 +7404,14 @@ logr "$(m "$M_T24_DONE" "$temp_added24" "$temp_perm_added24")"
 prof "turn /24 geçici gruplama"
 # ── /16: şüpheli ağ, kalıcı ve geçici tekiller birlikte; yalnız uyarı, günde bir kez ──────────────
 # Aynı ağdan gelen saldırı, LFD'nin onu hangi listeye koyduğuna bakılmadan görülsün: bir IP bir kez sayılır
-# (iki listede birden varsa kalıcı sayılır). Bu turda banlanan bloklar (kalıcı ya da geçici) sayılmaz.
-declare -A count16 seen_subnets ips16 perm16 tmp16 seen16
-for ip in "${!SINGLE_NOTE[@]}" "${temp_alive[@]}"; do
-    [ -n "${seen16[$ip]}" ] && continue; seen16[$ip]=1
-    [ -n "${INEFF[$ip]+x}" ] && continue     # izinli IP'nin banı (işlemiyor) sayılmaz
-    [ -n "${OLD_SGL[$ip]+x}" ] && continue   # kalıcı tekil penceresinden (PERM_WINDOW_DAYS) eski
-    prefix24="${ip%.*}"; prefix16="${prefix24%.*}"
-    [ "${count24[$prefix24]:-0}" -ge "$THRESHOLD_24" ] && continue
-    [ "${temp_count24[$prefix24]:-0}" -ge "$THRESHOLD_TEMP_24" ] && continue
-    count16[$prefix16]=$((${count16[$prefix16]:-0} + 1)); seen_subnets[$prefix16]+=" $prefix24"; ips16[$prefix16]+=" $ip"
-    if [ -n "${SINGLE_NOTE[$ip]+x}" ]; then perm16[$prefix16]=$((${perm16[$prefix16]:-0} + 1)); else tmp16[$prefix16]=$((${tmp16[$prefix16]:-0} + 1)); fi
+# (iki listede birden varsa kalıcı sayılır). Bu turda banlanan bloklar (kalıcı ya da geçici) sayılmaz. Sayım net_count'ta
+# (Kontrol edilecekler ve IP kartıyla ortak).
+declare -A count16 seen_subnets ips16 perm16 tmp16
+net_count
+for prefix16 in "${!NC_N[@]}"; do
+    count16[$prefix16]=${NC_N[$prefix16]}; ips16[$prefix16]="${NC_IPS[$prefix16]}"
+    perm16[$prefix16]=${NC_P[$prefix16]:-0}; tmp16[$prefix16]=${NC_T[$prefix16]:-0}
+    for ip in ${NC_IPS[$prefix16]}; do seen_subnets[$prefix16]+=" ${ip%.*}"; done
 done
 pa "t16 · /16 sayımı"
 warn16=0; warn_body=""; temp_warn16=0
@@ -7343,7 +7431,7 @@ for prefix in $(printf '%s\n' "${!count16[@]}" | sort -V); do
         pc "t16 eşiği aşan /16"
         ip2int "$prefix.0.0"; lo=$REPLY
         if perm_covers "$lo" $((lo + 65535)); then logr "$(m "$M_TSKIP16" "$prefix")"; continue; fi
-        if ign_until "$prefix.0.0/16"; then logr "$(m "$M_IGN16" "$prefix" "$IGN_UNTIL_TXT")"; continue; fi
+        if ign_covers "$prefix.0.0/16" && ign_until "$IGN_HIT"; then logr "$(m "$M_IGN16" "$prefix" "$IGN_UNTIL_TXT")"; continue; fi
         np="${perm16[$prefix]:-0}"; nt="${tmp16[$prefix]:-0}"
         # ağa eklentinin kısmi banı konmuşsa ondan önceki tekiller o kararla ele alınmıştır: yalnız sonrakiler sayılır
         pe=0; pnote=""; pl=$(grep -F "|s=$prefix.0.0/16 # csf_autogroup:" "$DENY_FILE" | head -n 1)
@@ -7485,7 +7573,7 @@ if [ "$DRY" != 1 ] && [ -f "$EVENTS_FILE" ]; then
     # duran banlar ve izlemeler: csf.deny'deki aralıklar (gelişmiş satırın s= aralığı dahil), geçici aralık banları, izlenen /24'ler
     ev_keep=$(mktemp) || ev_keep=/dev/null
     { awk '{ l = $0; sub(/[ \t]*#.*/, "", l); n = split(l, f, "|"); for (i = 1; i <= n; i++) { x = f[i]; sub(/^[sd]=/, "", x); if (x ~ /^[0-9.]+\/[0-9]+$/) print x } }' "$DENY_FILE" 2>/dev/null
-      awk -F'|' '$2 ~ /\// { print $2 }' "$CSF_VAR/csf.tempban" 2>/dev/null
+      tb_reset; tb_load; for x in "${TB_RI[@]}"; do echo "${TB_A[x]}"; done      # turda konan geçici blok banları dahil
       awk '$1 ~ /^[0-9]+\.[0-9]+\.[0-9]+$/ { print $1 ".0/24" }' "$SAYAC_FILE" 2>/dev/null; } > "$ev_keep"
     EV_TRIM='FILENAME == ARGV[1] { K[$0] = 1; next }
         { old = 0 }

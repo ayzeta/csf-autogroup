@@ -1,5 +1,61 @@
 # Changelog
 
+## 1.15.72 — 2026-11-10
+
+Consistency pass: questions that were answered in several places with
+slightly different rules now have one answer, used by the run, the email,
+the status page and the IP card alike.
+
+- **Temp list read once, the way CSF reads it.** A line in `csf.tempban` means
+  the ban is in place: lfd removes the line and the firewall rule together
+  (measured in lfd's own code). The run, the status page, the weekly summary,
+  the IP card, the range card and Measure impact used to read the file
+  separately with different rules; an expired line that lfd had not removed
+  yet was counted by some and not by others, and the IP card showed a negative
+  time left ("-5422 min left"). It now says "expired, lfd is removing it".
+- **Temp list usage is counted like lfd counts it.** `DENY_TEMP_IP_LIMIT` is
+  compared with the number of lines; a ban on several ports is one line. The
+  usage figure counted one line per port and could read higher than lfd's.
+- **One count for temp singles and suspicious networks.** The block threshold
+  for temp bans, the suspicious-network (/16) count, the IP card's block and
+  network lines and the older rows in Needs review now use the run's own
+  count. Older rows used to count permanent singles that are past the
+  permanent single window and singles whose block was already over its
+  threshold, so a row could stay while the run did not warn.
+- **A permanent single past the window that is also on the allow list** no
+  longer lowers its block's count a second time.
+- **"Is the web closed?" includes HTTP/3.** A partial web ban closes UDP 443
+  as well, but the check whether a country, provider or rented-server list
+  ban already closes the attacked web service looked at TCP 80/443 only. It
+  now also wants UDP 443 closed when the server listens on UDP 443.
+- **Muting a range mutes everything inside it everywhere.** Needs review
+  matched a muted range only when it was the exact same entry; muting a /24
+  hid the email but its IPs stayed in the list one by one.
+- **"Drops off the list on …"** for rows with allowed IPs is the time the row
+  actually drops (last attempt + review days), given by the engine; mixed rows
+  showed a date already in the past.
+- **Old block bans**: the panel's old-ban count and **Remove old ones** use the
+  engine's own rule (including *A tried block is not old*), not a fixed 30
+  days.
+- **Full allow** on the IP card is the engine's decision: an Imunify360 allow
+  entry was taken as a full allow (no ban button), a `1:65535` in+out pair as
+  a port allow. Temporary allows without a port follow their direction (`in`
+  only or `out` only is not a full allow), as `csf -ta` sets them up.
+- `tools/ban-leak.sh` lists ineffective bans from the same allow list as the
+  rented-server list and the ban guard.
+- History menu of a partial ban that is not enough offers **Change ban**, as
+  the Needs review row does (it offered **Ban anyway**).
+- A single IP's partial ban no longer prints `integer expression expected`
+  in the status and run output.
+- English panel: the server's own IP result was shown as `v_self`. Mail showed
+  the raw service key `wout`. The provider list error appeared under the wrong
+  field. The rented-server list rule check in the panel did not know the SMTP
+  and mail reading services.
+- Glossary: **Mute** (not Ignore), section name **Needs review** everywhere.
+- Tests: the engine rules can be run against an older engine (`AG_ENGINE`),
+  the text test finds unused engine messages, the settings test compares the
+  panel's rented-server list rule with the engine's.
+
 ## 1.15.71 — 2026-11-08
 
 - **The Imunify360 list is fetched as often as the setting says, and the run

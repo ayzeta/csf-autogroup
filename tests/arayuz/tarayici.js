@@ -236,7 +236,9 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
   await page.route('**/api.php', async route => {
     const pd = route.request().postData() || '';
     if (!/^a=(lookup|status)(&|$)/.test(pd)) return route.continue();
-    const r = await route.fetch(); let j = null;
+    // sayfa / bağlam kapanırken yoldaki istek: route.fetch atar, yakalanmazsa bütün test düşüyordu (2026-11-10, son denetimde)
+    let r; try { r = await route.fetch(); } catch (e) { return; }
+    let j = null;
     try { j = await r.json(); } catch (e) { return route.fulfill({ response: r }); }
     if (/^a=lookup/.test(pd) && j && j.ok && !j.asn) { j.asn = '64500'; j.asname = 'TEST-AS - Example Network, US'; j.cc = j.cc || 'US'; }
     // duyurulan aralık da (canlıda sahip sorgusu açıkken her kartta): "Duyurulan aralığı banla (/17)" düğmesi çizilsin — testte
