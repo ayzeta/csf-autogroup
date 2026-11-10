@@ -165,6 +165,11 @@ echo "SENDMAIL_BIN=$R/sm-fail" >> "$R/app/config.env"; for x in 1 2 3; do single
 mcheck "mail kuyruğu: gönderilemeyen mail kuyrukta, günlükte sebebiyle" "ls '$R/var/lib/csf_autogroup/mailq/'*.s >/dev/null 2>&1 && grep -q 'Mail gönderilemedi (sendmail: bağlantı reddedildi)' '$R/autogroup.log'"
 echo "SENDMAIL_BIN=$W/bin/sendmail" >> "$R/app/config.env"; quiet
 mcheck "mail kuyruğu: sonraki tur bekleyen maili gönderir, kuyruk boşalır" "! ls '$R/var/lib/csf_autogroup/mailq/'*.s >/dev/null 2>&1 && mtext | grep -q '151.80.7.0/24'"
+# uzun süren tur sebebini söyler: 2 saniyeyi aşan bölüm run olayına "steps" (yavaş mail gönderimi → "notify:N"), durum çıktısının
+# tur listesinde 8. alan (panelin Tur süresi ipucu)
+mkm slowmail 1; printf '%s\n' '#!/bin/bash' 'cat >/dev/null; sleep 3' > "$R/sm-slow"; chmod +x "$R/sm-slow"; echo "SENDMAIL_BIN=$R/sm-slow" >> "$R/app/config.env"
+for x in 1 2 3; do single 151.80.7.$x sshd; done; quiet
+mcheck "tur süresi: yavaş mail gönderimi run olayında 'notify' adımı olarak, durum listesinde de" "grep '\"type\":\"run\"' '$R/var/lib/csf_autogroup/events.jsonl' | tail -n 1 | grep -qE '\"steps\":\"([a-z0-9]+:[0-9]+,)*notify:[3-9]' && run --status --json 2>/dev/null | grep -qE '\"list\":\[\[[0-9]+,[0-9]+,\"[^\"]*\",[0-9]+,[0-9]+,[0-9]+,[0-9]+,\"[^\"]*notify:[3-9]'"
 # izinli IP'den ihlal: kendi sınıfı (IE_REVIEW), maildeki izin kaydı panelle aynı (satır yorumuyla); yoksayılan IP bildirilmez
 mkav() { mkm "$1" 1; echo "LFD_LOG=$R/lfd.log" >> "$R/app/config.env"; : > "$R/lfd.log"; printf '151.80.7.9 # Ofis yedek - Tue Oct 31 2023\n' >> "$A"; lfdb 3600 151.80.7.9; }
 mkav avmail; quiet
@@ -726,7 +731,7 @@ geo() {   # ad yaş-dakika
 geo geo25 $((25 * 1440 + 30))
 mcheck "ASN verisi: ayar 25 gün, veri 25 günlük → yenilenir (lfd yeniden başlatılır)" "[ ! -e '$G' ] && [ -e '$G.old' ] && grep -q 'restart lfd' '$R/systemctl.log'"
 mcheck "tur kaydı: ASN verisi yenilenen turda run olayı yapılan işi ve lfd yeniden başlatmasını taşır" "tail -n 1 '$R/var/lib/csf_autogroup/events.jsonl' | grep -q '\"jobs\":\"geo,imu\".*\"lfdr\":1'"
-mcheck "tur kaydı: durum çıktısının son turu [zaman, süre, işler, csf -r, ms, lfd] (Tur süresi ipucu)" "run --status --json 2>/dev/null | grep -qE '\[[0-9]+,[0-9]+,\"geo,imu\",[0-9]+,[0-9]+,1,0\]\]'"
+mcheck "tur kaydı: durum çıktısının son turu [zaman, süre, işler, csf -r, ms, lfd, izinli servis csf -r, uzun adımlar] (Tur süresi ipucu)" "run --status --json 2>/dev/null | grep -qE '\[[0-9]+,[0-9]+,\"geo,imu\",[0-9]+,[0-9]+,1,0,\"[a-z0-9,:]*\"\]\]'"
 geo geo24 $((24 * 1440))
 mcheck "ASN verisi: ayar 25 gün, veri 24 günlük → yenilenmez" "[ -e '$G' ] && [ ! -e '$R/systemctl.log' ]"
 # Imunify360 listesi IMUNIFY_REFRESH_MIN (60) dakikada bir: liste turun birkaç saniye içinde alınır, karşılaştırmada pay olmazsa

@@ -25,6 +25,20 @@ Planned, in this order:
 Thresholds and the `/64` / `/48` choice will be tested against a real CSF with
 IPv6 before release.
 
+## Log page in the panel
+The plugin's own log (`/var/log/csf_autogroup.log`) has the step-by-step
+record of every run: how long each step took, what CSF answered, which list
+could not be downloaded. Today it is only readable over SSH
+(`csf-autogroup log`). A read-only page in the panel would show it without
+SSH:
+- the lines of one run (picked from the run-duration chart), or a time range;
+- a search box, and the log's rotated archives;
+- a long run's slowest steps highlighted, so the run-duration tooltip can link
+  to the reason when a run took longer than usual.
+
+The log can contain addresses and email account names; the page is shown only
+to the WHM root user, like the rest of the plugin.
+
 ## More notification channels
 Besides email and Slack, WHM can be set up with a "Post URL" (generic webhook)
 channel, which is how services such as Discord or Microsoft Teams are usually

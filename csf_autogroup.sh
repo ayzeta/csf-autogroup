@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.73"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.74"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -2943,7 +2943,24 @@ prof_dump() {    # tanı: pa toplamları (çoktan aza) ve pc sayaçları; bölü
       local v; for k in "${!PROF_A[@]}"; do v="${PROF_A[$k]}"; printf 'PROF %6d ms  · %s (%d kez)\n' $(( v / 1000 )) "$k" "${PROF_N[$k]}"; done | sort -k2,2nr   # etiket aritmetiğe girmez (kesme işareti indisi bozuyordu)
       for k in "${!PROF_C[@]}"; do printf 'PROF  sayı %6d  # %s\n' "${PROF_C[$k]}" "$k"; done | sort -k5; } >&2
 }
+RF_STEPS=""; ST_LAST=0     # $SECONDS betiğin başında 0: ilk bölüm (başlangıç) yüklemeyi de sayar
 prof() {   # tanı: AG_PROF=1 → durum bölümlerinin süresi (ms, bir önceki işaretten beri) stderr'e
+    # turun bölümleri ("turn …") her turda da ölçülür ($SECONDS: alt süreç yok): 2 saniyeyi aşan bölüm run olayına "steps"
+    # ("kod:sn,…") — panelin Tur süresi ipucu uzun turun sebebini söyler. Önce yalnız yenileme işleri yazılıyordu; bildirim gönderen
+    # ya da sorgu bekleyen tur sebepsiz uzun görünüyordu (sunucuda 12–53 sn'lik turlar, 2026-11-10)
+    if [[ "$1" == "turn "* ]]; then
+        if [ "$ST_LAST" -ge 0 ] && [ $(( SECONDS - ST_LAST )) -ge 2 ]; then
+            local k
+            case "${1#turn }" in
+                "başlangıç") k=start ;; "kalıcı liste sınırı") k=plim ;; "geçici liste sınırı") k=tlim ;; "denetim+zorlama") k=enforce ;;
+                "/24 kalıcı gruplama") k=b24 ;; "geçici okuma") k=tread ;; "/24 geçici gruplama") k=t24 ;; "/16 şüpheli ağ") k=w16 ;;
+                "izinli ihlal+açık servis") k=aviol ;; "atlananlar") k=skip ;; "eski banlar") k=expire ;; "sağlık") k=health ;;
+                "bildirim") k=notify ;; "sayaç+günlük") k=counter ;; "sahip/Imunify zenginleştirme") k=enrich ;; *) k=other ;;
+            esac
+            RF_STEPS+="${RF_STEPS:+,}$k:$(( SECONDS - ST_LAST ))"
+        fi
+        ST_LAST=$SECONDS
+    fi
     [ -n "${AG_PROF:-}" ] || return 0
     prof_now
     [ "${PROF_T:-0}" -gt 0 ] && printf 'PROF %6d ms  %s\n' $(( (PROF_NOW - PROF_T) / 1000 )) "$1" >&2
@@ -3462,6 +3479,7 @@ do_status() {
               RM[NR] = match($0, /"csfr_ms":[0-9]+/) ? substr($0, RSTART + 10, RLENGTH - 10) + 0 : 0
               LR[NR] = match($0, /"lfdr":[0-9]+/) ? substr($0, RSTART + 7, RLENGTH - 7) + 0 : 0
               RX[NR] = match($0, /"csfr_t":[0-9]+/) ? substr($0, RSTART + 9, RLENGTH - 9) + 0 : 0
+              SP[NR] = match($0, /"steps":"[a-z0-9,:]*"/) ? substr($0, RSTART + 9, RLENGTH - 10) : ""   # 2 saniyeyi aşan bölümler
               if (!got && t >= w && match($0, /"perm_used":[0-9]+/)) {
                   p7 = substr($0, RSTART + 12, RLENGTH - 12) + 0
                   if (match($0, /"temp_used":[0-9]+/)) t7 = substr($0, RSTART + 12, RLENGTH - 12) + 0; else t7 = -1
@@ -3474,7 +3492,7 @@ do_status() {
                   # diye gösteriliyordu, oysa o kayıt kurulum günü değil saklanan en eski tur
                   if (f > w + 3600) got = 0; if (f > w30 + 3600) got30 = 0
                   s = NR > 36 ? NR - 35 : 1; o = ""
-                  for (i = s; i <= NR; i++) o = o (o != "" ? "," : "") "[" T[i] "," D[i] ",\"" J[i] "\"," R[i] "," RM[i] "," LR[i] "," RX[i] "]"
+                  for (i = s; i <= NR; i++) o = o (o != "" ? "," : "") "[" T[i] "," D[i] ",\"" J[i] "\"," R[i] "," RM[i] "," LR[i] "," RX[i] ",\"" SP[i] "\"]"
                   printf "{\"n24\":%d,\"first\":%d,\"p7\":%d,\"t7\":%d,\"p30\":%d,\"t30\":%d,\"list\":[%s]}", n, f, (got ? p7 : -1), (got ? t7 : -1), (got30 ? p30 : -1), (got30 ? t30 : -1), o }')
     fi
 
@@ -7656,7 +7674,7 @@ fi
 ev run "" "v=\"$VERSION\"" "dur=$(( $(date +%s) - RUN_T0 ))" "added=$added24" "warn16=$warn16" \
     "temp_added=$temp_added24" "promoted=$temp_perm_added24" "temp_warn16=$temp_warn16" "wl_skipped=$wl_skipped" \
     "perm_used=$(num "$current_count")" "perm_limit=$(num "$limit")" "temp_used=$(num "$temp_current")" "temp_limit=$(num "$temp_limit")" \
-    "jobs=\"$RF_JOBS\"" "csfr=$(num "${CSF_TN[-r]:-0}")" "csfr_ms=$(num "${CSF_TMS[-r]:-0}")" "lfdr=$(num "$LFD_RN")" \
+    "jobs=\"$RF_JOBS\"" "steps=\"$RF_STEPS\"" "csfr=$(num "${CSF_TN[-r]:-0}")" "csfr_ms=$(num "${CSF_TMS[-r]:-0}")" "lfdr=$(num "$LFD_RN")" \
     "csfr_t=$(num "$(tail -c +$(( RUN_LB + 1 )) "$LOG_FILE" 2>/dev/null | grep -c 'services-allow: csf -r çalıştı')")"   # turu uzatan işler (Tur süresi ipucu); csfr_t: izinli servis aracının kendi csf -r'si (günlüğünden)
 RUN_DUR=$(( $(date +%s) - RUN_T0 ))
 if [ "$EVENTFUL" = 0 ] && [ "$DRY" != 1 ] && [ "$LOG_MODE" = tee ]; then

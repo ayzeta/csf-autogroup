@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.15.74 — 2026-11-10
+
+- **A long run says why.** Each run now records the steps that took longer
+  than two seconds, and the run-duration tooltip lists the longest ones
+  (for example *sending notifications (email, Slack) 8 s* or *suspicious
+  network (message, IP lookups) 11 s*). Before, only refresh jobs were named,
+  so a run that waited on lookups or on the mail server looked long for no
+  reason.
+- Roadmap: a log page in the panel.
+
 ## 1.15.73 — 2026-11-10
 
 Behaviour fixes: decisions the plugin took differently from what the firewall
