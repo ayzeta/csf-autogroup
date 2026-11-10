@@ -153,7 +153,7 @@ switch ($a) {
         // Hiçbir şeyi değiştirmez; çıktı olduğu gibi gösterilir. "Kaydetmeden önce dene" için
         // kaydedilmemiş eşikler --set ile geçer (script yalnız bu anahtarları kabul eder).
         $args = ['--dry-run'];
-        $try = ['THRESHOLD_24', 'THRESHOLD_24_PERMANENT', 'THRESHOLD_16', 'THRESHOLD_TEMP_24', 'THRESHOLD_TEMP_16',
+        $try = ['THRESHOLD_24', 'THRESHOLD_24_PERMANENT', 'THRESHOLD_16', 'THRESHOLD_PFX', 'THRESHOLD_TEMP_24', 'THRESHOLD_TEMP_16',
                 'LOOKUP', 'LOOKUP_TIMEOUT', 'SAYAC_RETENTION_DAYS', 'REVIEW_DAYS'];
         foreach ((array) ($_POST['set'] ?? []) as $k => $v) {
             if (in_array($k, $try, true) && preg_match('/^[0-9]{1,6}$/', (string) $v)) {
@@ -169,7 +169,7 @@ switch ($a) {
 
     case 'config_set':
         // Anahtar listesi ve kaba karakter süzgeci burada; asıl doğrulama script'te (cfg_check).
-        $keys = ['MSG_LANG', 'ALERT_MAIL', 'DIGEST', 'DIGEST_DAY', 'NOTIFY', 'IC_FIREWALL', 'IC_LISTFULL', 'IC_RUN', 'IC_DIGEST', 'IE_FIREWALL', 'IE_LISTFULL', 'IE_RUN', 'IE_DIGEST', 'IC_REVIEW', 'IE_REVIEW', 'THRESHOLD_24', 'THRESHOLD_24_PERMANENT', 'THRESHOLD_16', 'THRESHOLD_TEMP_24',
+        $keys = ['MSG_LANG', 'ALERT_MAIL', 'DIGEST', 'DIGEST_DAY', 'NOTIFY', 'IC_FIREWALL', 'IC_LISTFULL', 'IC_RUN', 'IC_DIGEST', 'IE_FIREWALL', 'IE_LISTFULL', 'IE_RUN', 'IE_DIGEST', 'IC_REVIEW', 'IE_REVIEW', 'THRESHOLD_24', 'THRESHOLD_24_PERMANENT', 'THRESHOLD_16', 'THRESHOLD_PFX', 'THRESHOLD_TEMP_24',
                  'THRESHOLD_TEMP_16', 'LOOKUP', 'LOOKUP_TIMEOUT', 'SAYAC_RETENTION_DAYS', 'REVIEW_DAYS', 'LOG_KEEP_DAYS', 'EVENTS_DAYS', 'RUN_DAYS', 'PERM_WINDOW_DAYS', 'BANLOG_DAYS', 'LOG_ROTATE_MB', 'LOG_ROTATE_KEEP', 'BLOCK_EXPIRE_DAYS', 'BLOCK_EXPIRE_AUTO', 'CRON_MIN',
                  'SVC_ALLOW', 'SVC_SOURCES', 'SVC_EXTRA', 'SVC_URLS', 'SVC_SKIP', 'SVC_EXCEPT', 'ASN_BAN', 'ASN_LIST', 'ASN_ALL', 'ASN_MODE', 'ASN_TCP', 'ASN_UDP',
                  'CLOUD_BAN', 'CLOUD_SOURCES', 'CLOUD_TCP', 'CLOUD_UDP', 'CLOUD_MODES', 'CLOUD_URLS', 'CLOUD_EXTRA', 'SRC_LABELS', 'ENABLED',

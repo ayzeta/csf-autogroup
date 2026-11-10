@@ -441,6 +441,26 @@ R="$W/roots/review16"
 ncsame() { local n; n=$(grep -o '"type":"warn16","cidr":"151.80.0.0/16","n":[0-9]*' "$R/var/lib/csf_autogroup/events.jsonl" | tail -n 1 | grep -o '[0-9]*$')
     [ -n "$n" ] && run --lookup 151.80.7.1 --json 2>/dev/null | grep -q "\"net\":{\"n\":$n,"; }
 mcheck "ağ sayımı: IP kartının ağ sayısı turun uyarısındaki sayıyla aynı" "ncsame"
+# Şüpheli aralık hiyerarşisi (1.15.75): duyurulan aralık /17–/23 (sahip önbelleğinin 6. alanı) → "şüpheli aralık"; /16 yalnız aynı
+# sahibin tekilleri en az 2 farklı alt birimden (aralık ya da blok; banlı blok da) geliyorsa; farklı sahiplerin banları birbirine eklenmez
+own() { printf '%s|%s|FR|%s|%s|%s\n' "$1" "$2" "$3" "$NOW" "$4" >> "$R/var/lib/csf_autogroup/owners"; }   # blok ASN ad aralık
+EVF() { echo "$R/var/lib/csf_autogroup/events.jsonl"; }
+mk hpfx1; for p in 7 8 9; do own 151.80.$p 16276 OVH 151.80.0.0/20; done
+for x in 7.1 7.2 8.1 8.2 9.1; do single 151.80.$x sshd; done; quiet
+mcheck "hiyerarşi: tekiller tek duyurulan aralıkta (/20, 3 blok, 5 tekil) → şüpheli aralık uyarısı" "grep -q '\"type\":\"warnpfx\",\"cidr\":\"151.80.0.0/20\",\"n\":5,' \"\$(EVF)\""
+mcheck "hiyerarşi: tek aralıktaki tekiller /16 uyarısı vermez (öneri o aralık)" "! grep -q '\"type\":\"warn16\"' \"\$(EVF)\""
+mcheck "hiyerarşi: Kontrol edilecekler'de şüpheli aralık satırı, /16 satırı yok" "rvrow 151.80.0.0/20 | grep -q '\"type\":\"warnpfx\"' && [ -z \"\$(rvrow 151.80.0.0/16)\" ]"
+mcheck "hiyerarşi: IP kartı aralık basamağı turla aynı (5 tekil, 3 blok, tutuyor), ağ basamağı tutmuyor (1 alt birim)" "run --lookup 151.80.7.1 --json 2>/dev/null | grep -q '\"net\":{\"n\":5,\"b\":3,\"u\":1,\"t\":5,\"h\":false},\"pnet\":{\"p\":\"151.80.0.0/20\",\"n\":5,\"b\":3,\"t\":4,\"h\":true}'"
+mk hpfx2; for p in 7 8; do own 151.80.$p 16276 OVH 151.80.0.0/20; done; for p in 200 201; do own 151.80.$p 16276 OVH 151.80.192.0/20; done
+for x in 7.1 7.2 8.1 200.1 201.1; do single 151.80.$x sshd; done; quiet
+mcheck "hiyerarşi: aynı sahibin tekilleri 2 duyurulan aralıkta (3 + 2, eşik 5) → şüpheli ağ; aralıklar eşiğin altında" "grep -q '\"type\":\"warn16\",\"cidr\":\"151.80.0.0/16\",\"n\":5,' \"\$(EVF)\" && ! grep -q '\"type\":\"warnpfx\"' \"\$(EVF)\""
+mk hown; for p in 7 8; do own 151.80.$p 16276 OVH 151.80.0.0/16; done; for p in 9 10; do own 151.80.$p 64500 BASKA 151.80.$p.0/24; done
+for x in 7.1 7.2 8.1 9.1 9.2 10.1; do single 151.80.$x sshd; done; quiet
+mcheck "hiyerarşi: aynı /16'da iki sahibin tekilleri (3 + 3, eşik 5) birbirine eklenmez → uyarı yok" "! grep -q '\"type\":\"warn16\"' \"\$(EVF)\""
+mk hblk; for p in 7 8 9; do own 151.80.$p 16276 OVH 151.80.0.0/20; done; own 151.80.100 16276 OVH 151.80.96.0/19
+printf '151.80.100.0/24 # csf_autogroup: Auto-grouped /24 - Mon Nov 09 10:00:00 2026\n' >> "$D"
+for x in 7.1 7.2 8.1 8.2 9.1; do single 151.80.$x sshd; done; quiet
+mcheck "hiyerarşi: banlı blok alt birim sayılır (5 tekil tek aralıkta + başka aralıkta banlı blok) → aralık ve ağ uyarısı" "grep -q '\"type\":\"warnpfx\",\"cidr\":\"151.80.0.0/20\"' \"\$(EVF)\" && grep -q '\"type\":\"warn16\",\"cidr\":\"151.80.0.0/16\",\"n\":5,.*\"apx\":\"151.80.0.0/20\"' \"\$(EVF)\""
 mk tbexp2; printf '%s\n' "$(( NOW - 7200 ))|151.80.7.9||in|3600|lfd: (sshd) Failed SSH login from 151.80.7.9" "$NOW|151.80.7.10||in|3600|lfd: (sshd) Failed SSH login from 151.80.7.10" >> "$T"
 mcheck "geçici liste: IP kartının blok geçici sayısı duran satırları sayar (tur gibi: 2)" "run --lookup 151.80.7.10 --json 2>/dev/null | grep -q '\"blk\":{[^}]*\"t\":2,'"
 # İzlemeyi yeniden başlat: sayaç satırının tarihi bugün olur, olay yazılır; izlenmeyen blok reddedilir

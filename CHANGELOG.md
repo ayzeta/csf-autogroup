@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.15.75 — 2026-11-11
+
+- **Suspicious ranges before suspicious networks.** Bans that pile up in the
+  range their owner announces on the internet (`/17`–`/23`, from the IP
+  lookup) are now reported as a *suspicious range*, with *Ban announced range*
+  as the suggestion, instead of as a whole `/16`. New setting *Suspicious range
+  threshold* (`THRESHOLD_PFX`, default 4 singles from at least 2 blocks).
+- **A `/16` is flagged only when the bans spread.** The suspicious network
+  check now counts each owner separately (bans of two companies sharing a
+  `/16` are no longer added together) and needs at least two different
+  sub-units: announced ranges, or blocks when the range is unknown. Banned
+  blocks count as sub-units. Singles that all sit in one announced range no
+  longer flag the `/16`. The run, the emails, Needs review, the weekly summary,
+  the activity chart and the IP card all use this one count.
+- The row button in Needs review is always the narrowest suggestion (block,
+  then announced range, then network), in the same order as the range card.
+  Before, the announced range was always hidden in the menu.
+- The IP card shows the announced range's own count next to the network's.
+- The suggested announced range on a suspicious network comes from the engine
+  (the same one the email names) instead of being worked out again in the panel.
+
 ## 1.15.74 — 2026-11-10
 
 - **A long run says why.** Each run now records the steps that took longer

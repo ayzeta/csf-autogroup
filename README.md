@@ -8,8 +8,9 @@ Most floods come from the same neighbourhood. When 3–5 already-banned IPs pile
 up in a single `/24`, the rest of that range is almost always the same offender
 still coming. CSF Auto-Group bans the **whole `/24`** and drops the singles, so
 the violation is blocked before you have to touch anything. A range that comes back
-is escalated to a **permanent** ban. `/16` networks are only flagged for review
-(never auto-banned, too broad).
+is escalated to a **permanent** ban. Wider ranges are only flagged for review,
+never auto-banned: first the range the owner announces (`/17`–`/23`), and the
+`/16` only when the bans spread over more than one of those ranges.
 
 ![Overview page in WHM](docs/overview.png)
 
@@ -32,8 +33,9 @@ cPanel the same engine runs from cron and the command line
 ([details](#without-cpanel)).
 
 **Terms used everywhere** (plugin, emails, log): a *single* is one banned IP, a
-*block* is a `/24` (banned automatically), a *network* is a `/16` (never banned,
-only flagged as *suspicious*), a *provider* is an ASN.
+*block* is a `/24` (banned automatically), an *announced range* is the `/17`–`/23`
+its owner announces on the internet, a *network* is a `/16` (ranges and networks
+are never banned, only flagged as *suspicious*), a *provider* is an ASN.
 
 ---
 
@@ -49,7 +51,7 @@ a banned `/24`, can lock people out.
 - **Start with high thresholds** and watch the page (or
   `/var/log/csf_autogroup.log`) for a few days before trusting it. *Try before
   saving* in the Settings tab shows what new thresholds would do.
-- `/16` is warn-only by design; only `/24`s are auto-banned.
+- Announced ranges and `/16`s are warn-only by design; only `/24`s are auto-banned.
 - **Every `csf -r` leaves a short gap.** While CSF reloads, it flushes its
   rules and rebuilds them; for a few seconds no ban works (more with large
   country / provider lists). This is CSF's behaviour, whoever runs the reload
@@ -128,7 +130,7 @@ settings, with no prompts. `config.env` is left untouched.
 - **Colors** — one meaning, one color everywhere (badges, icons, chart): red full
   ban, violet made permanent, teal temp ban, blue partial ban, amber suspicious
   network, gray whitelist skip.
-- **Needs review** — suspicious networks and whitelist-skipped blocks from the last 7
+- **Needs review** — suspicious ranges, suspicious networks and whitelist-skipped blocks from the last 7
   days, as a table: why it was flagged (how many IPs hit which services),
   owner, when, and the narrowest ban that would do; clicking the IP count lists
   every IP's hostname, owner and ban reason, with what it tried in the last
@@ -220,8 +222,8 @@ settings, with no prompts. `config.env` is left untouched.
   tagged *inside /16* in Active range bans and Watched, and listed under
   *Bans no longer needed* in the Providers tab.
 - **Ban announced range** — when the range the IP's owner announces is between
-  /17 and /23, the IP card offers to ban just that range instead of the /16;
-  a suspicious network whose IPs mostly sit in one such range offers it too.
+  /17 and /23, the IP card offers to ban just that range instead of the /16,
+  and shows how far that range is from the suspicious-range threshold.
 - **Most blocked providers** (by ASN) — three tabs:
   - *Violations* — ranked by block bans and single bans, with each provider's most
     common ban reason, the services hit (web, mail, SSH…) with their
@@ -438,7 +440,8 @@ block that comes back turns into a permanent one.
 |--------|--------|
 | `/24` with **≥3** permanent single bans | permanently ban the `/24`, remove the singles |
 | `/24` with **≥5** permanent singles | ban `/24` + `do not delete` |
-| `/16` with **≥5** singles across **≥2** `/24`s (permanent and temp counted together, each IP once) | flag as suspicious network by email, no auto-ban; reported again only when a new IP comes in (at most once a day). With a partial ban on the network, only bans after it count |
+| announced range (`/17`–`/23`, from the IP lookup) with **≥4** singles across **≥2** `/24`s (permanent and temp counted together, each IP once) | flag as suspicious range by email, suggest banning that range, no auto-ban; reported again only when a new IP comes in (at most once a day). With a partial ban on the range, only bans after it count |
+| `/16` with **≥5** singles of the same owner across **≥2** sub-units (announced ranges; a `/24` when the range is unknown, `/24` or `/16` and wider; banned blocks count as sub-units, their singles do not) | flag as suspicious network by email, no auto-ban, same repeat rules. Singles that all sit in one announced range report that range instead; bans of different owners in the same `/16` are not added together |
 | `/24` with **≥3** temp bans at the same time (first time) | temp-ban the `/24` for 12h, watch it |
 | same `/24` seen again (temp bans or permanent singles while watched) | permanent ban + `do not delete` |
 | plugin's block ban left `csf.deny` without the plugin (CSF drops the oldest unmarked lines when `DENY_IP_LIMIT` is reached) | watch the `/24`, alert by email and in History |

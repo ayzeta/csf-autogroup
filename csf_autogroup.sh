@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.74"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.75"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -92,6 +92,7 @@ LOCK_FILE="${LOCK_FILE:-${SAYAC_FILE}.lock}"
 THRESHOLD_24="${THRESHOLD_24:-3}"
 THRESHOLD_24_PERMANENT="${THRESHOLD_24_PERMANENT:-5}"
 THRESHOLD_16="${THRESHOLD_16:-5}"
+THRESHOLD_PFX="${THRESHOLD_PFX:-4}"          # şüpheli aralık: duyurulan aralıkta (/17–/23) bu kadar tekil, en az 2 bloktan
 THRESHOLD_TEMP_24="${THRESHOLD_TEMP_24:-3}"
 THRESHOLD_TEMP_16="${THRESHOLD_TEMP_16:-5}"
 LOOKUP="${LOOKUP:-1}"                            # 1 = hostname/owner lookups in emails
@@ -283,8 +284,15 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_OWNER="   Sahibi: %s"
   M_WARN16="ŞÜPHELİ AĞ: %s.0.0/16 - %s IP (%s kalıcı, %s geçici), %s farklı blok - elle bakın"
   M_WARN16_B="%s.0.0/16 -> %s IP (%s kalıcı, %s geçici), %s farklı bloktan"
-  M_SKIP16="ATLANDI şüpheli ağ: %s.0.0/16 bugün zaten bildirildi"
-  M_16_DONE="Şüpheli ağ turu bitti. %s bildirim."
+  M_SKIP16="ATLANDI şüpheli %s: %s bugün zaten bildirildi"
+  M_16_DONE="Şüpheli aralık / ağ turu bitti. %s aralık, %s ağ bildirimi."
+  M_LV_PFX="aralık"
+  M_LV_NET="ağ"
+  M_WARNPFX="ŞÜPHELİ ARALIK: %s - %s IP (%s kalıcı, %s geçici), %s farklı blok - elle bakın"
+  M_WARNPFX_B="%s -> %s IP (%s kalıcı, %s geçici), %s farklı bloktan"
+  M_WARN16_APX="    Tekillerin çoğu duyurulan %s aralığında (şüpheli aralık); /16 yerine o aralığı banlamak yetebilir."
+  M_MAILPFX_SUBJ="%s şüpheli aralık"
+  M_MAILPFX_BODY="Aşağıdaki duyurulan aralıklarda (sahibinin internete duyurduğu /17–/23) birçok bloktan tekil ban (kalıcı ve geçici) birikti.\nAralık banlanmadı; elle bakmanız önerilir (panelde: Duyurulan aralığı banla):"
   M_AVIOL="İzinli IP'den ihlal (Geçmiş'e yazıldı): %s → %s, son 24 saatte %s kez"
   M_POPEN="Açık servis (Geçmiş'e yazıldı): %s kısmi banından sonra açık kalan servislere %s ihlal"
   M_AVIOL_SUBJ="%s izinli IP'den ihlal"; M_AVIOL_BODY="lfd kuralına takılan ama banlanmayan IP'ler (izinli, yoksayılan ya da sunucunun kendi adresi); IP başına günde bir kez:"
@@ -317,8 +325,8 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_MAILT24_SUBJ="%s geçici blok banı"
   M_MAILT24P_BODY="Aşağıdaki bloklar (/24) daha önce geçici banlanmıştı; tekrar geldikleri için kalıcı ve silinmez (do not delete) olarak banlandı:"
   M_MAILT24P_SUBJ="%s blok kalıcıya alındı"
-  M_PROV16="%s.0.0/16: ihlal eden IP'lerin hepsi sağlayıcı banıyla zaten kapalı (%s), uyarı atlandı"
-  M_TSKIP16="ATLANDI şüpheli ağ: %s.0.0/16 zaten kalıcı banlı"
+  M_PROV16="%s: ihlal eden IP'lerin hepsi sağlayıcı banıyla zaten kapalı (%s), uyarı atlandı"
+  M_TSKIP16="ATLANDI şüpheli %s: %s zaten kalıcı banlı"
   M_WL_LOADED="Beyaz liste yüklendi: %s aralık, %s rignore alan adı"
   M_WL_SELF="sunucu IP'si"; M_FOREVER="süresiz"
   M_A_SELF="%s sunucunun kendi IP'sini (%s) içeriyor; banlanamaz"
@@ -358,7 +366,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_PANEL_GEN="Panel: %s → Eklentiler → CSF Auto-Group"
   M_DRY_ON="KURU ÇALIŞTIRMA — hiçbir şey değiştirilmeyecek, mail gönderilmeyecek"
   M_DRY_MAIL="[gönderilmeyecek mail] Kime: %s — Konu: %s"
-  M_IGN16="ATLANDI şüpheli ağ: %s.0.0/16 susturuldu (%s tarihine kadar)"
+  M_IGN16="ATLANDI şüpheli %s: %s susturuldu (%s tarihine kadar)"
   M_BUSY="Başka bir çalışma sürüyor, biraz sonra tekrar deneyin"
   M_BAD_TARGET="Geçersiz hedef: %s"
   M_BAD_IP="Geçersiz IPv4 adresi: %s"
@@ -446,8 +454,8 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_PART_AFTER="   Yalnız kısmi bandan (%s) sonra gelen banlar sayıldı."
   M_PART_LEAK="   Dikkat: kapatılan servislere (%s) bandan sonra yine ihlal kaydı var; kuralın yüklü olduğunu kontrol edin: iptables -S DENYIN | grep %s"
   M_PART_MORE="   Kısmi bandan sonraki ihlaller başka servislere de: %s. Tam ban daha uygun olabilir."
-  M_PSKIP16="ATLANDI şüpheli ağ: %s.0.0/16 kısmi banlı; bandan sonra %s yeni tekil var, eşiğin altında"
-  M_SAME16="ATLANDI şüpheli ağ: %s.0.0/16 son uyarıdan beri yeni IP yok"
+  M_PSKIP16="ATLANDI şüpheli %s: %s kısmi banlı; bandan sonra %s yeni tekil var, eşiğin altında"
+  M_SAME16="ATLANDI şüpheli %s: %s son uyarıdan beri yeni IP yok"
   M_FIX_UDP="%s: kısmi ban/istisnaya eksik UDP 443 satırı eklendi (HTTP/3)"
   M_A_UNBANFAIL="%s kaldırılamadı: %s"
   M_A_NOTFOUND="%s ne csf.deny'de ne geçici listede birebir bulunamadı"
@@ -483,7 +491,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_TM_FAIL="mail komutu hata verdi: %s"
   M_DG_SUBJ="CSF Auto-Group haftalık özet (%s)"
   M_DG_HEAD="Son 7 gün: %s – %s"
-  M_DG_COUNTS="%s blok banı · %s geçici blok banı · %s kalıcıya alındı · %s şüpheli ağ · %s atlandı (beyaz liste) · %s elle işlem · %s ayar değişikliği"
+  M_DG_COUNTS="%s blok banı · %s geçici blok banı · %s kalıcıya alındı · %s şüpheli aralık / ağ · %s atlandı (beyaz liste) · %s elle işlem · %s ayar değişikliği"
   M_DG_USAGE="Kalıcı liste: %s / %s satır (%%%s) · 7 gün önce: %s"
   M_DG_TUSAGE="Geçici liste: %s / %s satır"
   M_DG_NEW="Yeni blok banları:"
@@ -560,8 +568,15 @@ else
   M_OWNER="   Owner: %s"
   M_WARN16="SUSPICIOUS NETWORK: %s.0.0/16 - %s IPs (%s permanent, %s temp), %s distinct blocks - review manually"
   M_WARN16_B="%s.0.0/16 -> %s IPs (%s permanent, %s temp) across %s distinct blocks"
-  M_SKIP16="SKIPPED suspicious network: %s.0.0/16 already reported today"
-  M_16_DONE="Suspicious network pass done. %s report(s)."
+  M_SKIP16="SKIPPED suspicious %s: %s already reported today"
+  M_16_DONE="Suspicious range / network pass done. %s range, %s network report(s)."
+  M_LV_PFX="range"
+  M_LV_NET="network"
+  M_WARNPFX="SUSPICIOUS RANGE: %s - %s IPs (%s permanent, %s temp), %s distinct blocks - review manually"
+  M_WARNPFX_B="%s -> %s IPs (%s permanent, %s temp) across %s distinct blocks"
+  M_WARN16_APX="    Most singles are in the announced range %s (suspicious range); banning it instead of the /16 may be enough."
+  M_MAILPFX_SUBJ="%s suspicious range(s)"
+  M_MAILPFX_BODY="Single bans (permanent and temp) have piled up across several blocks of the following announced ranges (the /17-/23 its owner announces on the internet).\nThe range was not banned; manual review recommended (in the panel: Ban announced range):"
   M_AVIOL="Violation from allowed IP (recorded in History): %s → %s, %s times in the last 24 hours"
   M_POPEN="Open service (recorded in History): %s violations on the services the partial ban on %s leaves open"
   M_AVIOL_SUBJ="%s violations from allowed IPs"; M_AVIOL_BODY="IPs that tripped an lfd rule but were not banned (allowed, ignored or the server's own address); once per IP per day:"
@@ -592,8 +607,8 @@ else
   M_MAILT24_SUBJ="%s temp block ban(s)"
   M_MAILT24P_BODY="The following blocks (/24) had been temp-banned before and came back, so they are now permanently banned (do not delete):"
   M_MAILT24P_SUBJ="%s block(s) made permanent"
-  M_PROV16="%s.0.0/16: every offending IP is already blocked by the provider ban (%s), warning skipped"
-  M_TSKIP16="SKIPPED suspicious network: %s.0.0/16 already permanently banned"
+  M_PROV16="%s: every offending IP is already blocked by the provider ban (%s), warning skipped"
+  M_TSKIP16="SKIPPED suspicious %s: %s already permanently banned"
   M_WL_LOADED="Whitelist loaded: %s ranges, %s rignore domains"
   M_WL_SELF="server IP"; M_FOREVER="indefinitely"
   M_A_SELF="%s contains this server's own IP (%s); it can't be banned"
@@ -633,7 +648,7 @@ else
   M_PANEL_GEN="Panel: %s → Plugins → CSF Auto-Group"
   M_DRY_ON="DRY RUN — nothing will be changed, no email will be sent"
   M_DRY_MAIL="[email not sent] To: %s — Subject: %s"
-  M_IGN16="SKIPPED suspicious network: %s.0.0/16 is muted (until %s)"
+  M_IGN16="SKIPPED suspicious %s: %s is muted (until %s)"
   M_BUSY="Another run is in progress, try again in a moment"
   M_BAD_TARGET="Invalid target: %s"
   M_BAD_IP="Invalid IPv4 address: %s"
@@ -721,8 +736,8 @@ else
   M_PART_AFTER="   Only bans added after the partial ban (%s) were counted."
   M_PART_LEAK="   Warning: the blocked services (%s) were hit again after the ban; check that the rule is loaded: iptables -S DENYIN | grep %s"
   M_PART_MORE="   Violations after the partial ban also hit other services: %s. A full ban may fit better."
-  M_PSKIP16="SKIPPED suspicious network: %s.0.0/16 is partially banned; %s new singles since the ban, below the threshold"
-  M_SAME16="SKIPPED suspicious network: %s.0.0/16 no new IPs since the last warning"
+  M_PSKIP16="SKIPPED suspicious %s: %s is partially banned; %s new singles since the ban, below the threshold"
+  M_SAME16="SKIPPED suspicious %s: %s no new IPs since the last warning"
   M_FIX_UDP="%s: added the missing UDP 443 line to the partial ban/exception (HTTP/3)"
   M_A_UNBANFAIL="%s could not be removed: %s"
   M_A_NOTFOUND="%s is not in csf.deny or the temp list (exact match)"
@@ -758,7 +773,7 @@ else
   M_TM_FAIL="the mail command failed: %s"
   M_DG_SUBJ="CSF Auto-Group weekly summary (%s)"
   M_DG_HEAD="Last 7 days: %s – %s"
-  M_DG_COUNTS="%s block bans · %s temp block bans · %s made permanent · %s suspicious networks · %s skipped (whitelist) · %s manual actions · %s settings changes"
+  M_DG_COUNTS="%s block bans · %s temp block bans · %s made permanent · %s suspicious ranges / networks · %s skipped (whitelist) · %s manual actions · %s settings changes"
   M_DG_USAGE="Permanent list: %s / %s lines (%s%%) · 7 days ago: %s"
   M_DG_TUSAGE="Temp list: %s / %s lines"
   M_DG_NEW="New block bans:"
@@ -851,11 +866,11 @@ mail() {
 
 # ── Settings: validation (panel + --config set + --dry-run --set) ──────────
 # Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
-CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST IC_REVIEW IE_REVIEW THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_KEEP_DAYS EVENTS_DAYS RUN_DAYS PERM_WINDOW_DAYS BANLOG_DAYS LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_MODES CLOUD_URLS CLOUD_EXTRA SRC_LABELS ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS REFRESH_HOUR OWNER_TTL_DAYS IMUNIFY_REFRESH_MIN BLOCK_ACTIVE_DAYS"
+CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST IC_REVIEW IE_REVIEW THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_PFX THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_KEEP_DAYS EVENTS_DAYS RUN_DAYS PERM_WINDOW_DAYS BANLOG_DAYS LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_MODES CLOUD_URLS CLOUD_EXTRA SRC_LABELS ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS REFRESH_HOUR OWNER_TTL_DAYS IMUNIFY_REFRESH_MIN BLOCK_ACTIVE_DAYS"
 PROV_KEYS="SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_MODES CLOUD_URLS CLOUD_EXTRA ENABLED"
 SVC_CATALOG="google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake microsoft365 quiccloud"
 CLOUD_CATALOG="gcp aws azure oracle digitalocean linode vultr"
-CFG_TRY_KEYS="THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 PERM_WINDOW_DAYS LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS"
+CFG_TRY_KEYS="THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_PFX THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 PERM_WINDOW_DAYS LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS"
 logrotate_write() { # [MB] [ARŞİV] → /etc/logrotate.d/csf_autogroup (geçici dosya + mv)
     local mb="${1:-$LOG_ROTATE_MB}" keep="${2:-$LOG_ROTATE_KEEP}" tmp
     [ -d "$(dirname "$LOGROTATE_CONF")" ] && command -v logrotate >/dev/null 2>&1 || return 1
@@ -883,7 +898,7 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
             CFG_ERR=$(m "$M_CFG_BAD" "$k" "$v" "$M_CFG_EMAIL"); return 1 ;;
         THRESHOLD_24|THRESHOLD_TEMP_24) lo=2; hi=50 ;;
         THRESHOLD_24_PERMANENT) lo=2; hi=100 ;;
-        THRESHOLD_16|THRESHOLD_TEMP_16) lo=2; hi=500 ;;
+        THRESHOLD_16|THRESHOLD_TEMP_16|THRESHOLD_PFX) lo=2; hi=500 ;;
         LOOKUP_TIMEOUT) lo=1; hi=10 ;;
         SAYAC_RETENTION_DAYS) lo=7; hi=730 ;;
         REVIEW_DAYS) lo=1; hi=90 ;;
@@ -2776,7 +2791,13 @@ net_count() {    # → NC_N[A.B] tekil sayısı, NC_P / NC_T kalıcı / geçici,
     [ -n "$NC_DONE" ] && return 0; NC_DONE=1
     sgl_elig
     declare -gA NC_N=() NC_P=() NC_T=() NC_IPS=() NC_SUB=(); NC_N=(); NC_P=(); NC_T=(); NC_IPS=(); NC_SUB=()
-    local ip p24 p16; local -A sb=()
+    # basamaklar (şüpheli aralık hiyerarşisi): duyurulan aralık (/17–/23, sahip önbelleğinden OWN_P) ve /16'da sahip başına.
+    # NP_*[aralık]: N tekil, P/T kalıcı/geçici, IPS, SUB farklı /24 (banlı bloklar dahil). NO_*["A.B|ASN"]: aynı /16'da aynı sahibin
+    # tekilleri, U farklı alt birim (duyurulan aralık; aralık bilinmiyorsa ya da /24, /16 veya daha genişse blok) — farklı sahiplerin
+    # banları birbirine eklenmez. NO_KEYS[A.B] = o /16'nın sahip anahtarları
+    declare -gA NP_N=() NP_P=() NP_T=() NP_IPS=() NP_SUB=() NO_N=() NO_P=() NO_T=() NO_IPS=() NO_U=() NO_SUB=() NO_KEYS=()
+    NP_N=(); NP_P=(); NP_T=(); NP_IPS=(); NP_SUB=(); NO_N=(); NO_P=(); NO_T=(); NO_IPS=(); NO_U=(); NO_SUB=(); NO_KEYS=()
+    local ip p24 p16 k u pf pr; local -A sb=() pb=() ou=() os=()
     for ip in "${SGL_ORD[@]}"; do
         p24="${ip%.*}"; p16="${p24%.*}"
         # blokla ele alınan tekiller sayılmaz: bu turda banlanan blok ya da IP'yi zaten kapatan aralık banı. Önce blok eşiğini aşmış her
@@ -2785,9 +2806,52 @@ net_count() {    # → NC_N[A.B] tekil sayısı, NC_P / NC_T kalıcı / geçici,
         [ -n "${TURN_B24[$p24]+x}" ] && continue
         ip2int "$ip"; perm_covers "$REPLY" "$REPLY" && continue
         NC_N[$p16]=$(( ${NC_N[$p16]:-0} + 1 )); NC_IPS[$p16]+=" $ip"
-        if [ -n "${SINGLE_NOTE[$ip]+x}" ]; then NC_P[$p16]=$(( ${NC_P[$p16]:-0} + 1 )); else NC_T[$p16]=$(( ${NC_T[$p16]:-0} + 1 )); fi
+        if [ -n "${SINGLE_NOTE[$ip]+x}" ]; then pr=P; NC_P[$p16]=$(( ${NC_P[$p16]:-0} + 1 )); else pr=T; NC_T[$p16]=$(( ${NC_T[$p16]:-0} + 1 )); fi
         [ -n "${sb[$p24]}" ] || { sb[$p24]=1; NC_SUB[$p16]=$(( ${NC_SUB[$p16]:-0} + 1 )); }
+        net_unit "$p24"; u="$REPLY"; pf="$NU_PF"
+        k="$p16|${OWN_A[$p24]}"
+        [ -n "${NO_N[$k]+x}" ] || NO_KEYS[$p16]+=" $k"
+        NO_N[$k]=$(( ${NO_N[$k]:-0} + 1 )); NO_IPS[$k]+=" $ip"
+        if [ "$pr" = P ]; then NO_P[$k]=$(( ${NO_P[$k]:-0} + 1 )); else NO_T[$k]=$(( ${NO_T[$k]:-0} + 1 )); fi
+        [ -n "${ou[$k $u]}" ] || { ou[$k $u]=1; NO_U[$k]=$(( ${NO_U[$k]:-0} + 1 )); }
+        [ -n "${os[$k $p24]}" ] || { os[$k $p24]=1; NO_SUB[$k]=$(( ${NO_SUB[$k]:-0} + 1 )); }
+        if [ -n "$pf" ]; then
+            NP_N[$pf]=$(( ${NP_N[$pf]:-0} + 1 )); NP_IPS[$pf]+=" $ip"
+            if [ "$pr" = P ]; then NP_P[$pf]=$(( ${NP_P[$pf]:-0} + 1 )); else NP_T[$pf]=$(( ${NP_T[$pf]:-0} + 1 )); fi
+            [ -n "${pb[$pf $p24]}" ] || { pb[$pf $p24]=1; NP_SUB[$pf]=$(( ${NP_SUB[$pf]:-0} + 1 )); }
+        fi
     done
+    # banlı bloklar (kalıcı /24, geçici /24, bu turda banlananlar) alt birim sayılır, tekilleri sayılmaz: dağılımı gösterirler
+    local b i
+    for b in $( { for i in "${!DC_TXT[@]}"; do [[ "${DC_TXT[i]}" == */24 ]] && echo "${DC_TXT[i]%.0/24}"; done
+                  tb_load; for i in "${TB_RI[@]}"; do [[ "${TB_A[i]}" == */24 ]] && echo "${TB_A[i]%.0/24}"; done
+                  for i in "${!TURN_B24[@]}"; do echo "$i"; done; } | awk '!s[$0]++'); do
+        p16="${b%.*}"; k="$p16|${OWN_A[$b]}"
+        [ -n "${NO_N[$k]+x}" ] || continue                 # o sahibin bu /16'da tekili yok: basamak yok
+        net_unit "$b"; u="$REPLY"; pf="$NU_PF"
+        [ -n "${ou[$k $u]}" ] || { ou[$k $u]=1; NO_U[$k]=$(( ${NO_U[$k]:-0} + 1 )); }
+        [ -n "${os[$k $b]}" ] || { os[$k $b]=1; NO_SUB[$k]=$(( ${NO_SUB[$k]:-0} + 1 )); }
+        [ -n "$pf" ] && [ -n "${NP_N[$pf]+x}" ] && { [ -n "${pb[$pf $b]}" ] || { pb[$pf $b]=1; NP_SUB[$pf]=$(( ${NP_SUB[$pf]:-0} + 1 )); }; }
+    done
+}
+net_unit() {     # A.B.C → REPLY = alt birim (duyurulan aralık /17–/23 ya da blok A.B.C.0/24), NU_PF = duyurulan aralık ya da ""
+    local pf="${OWN_P[$1]}"
+    if [[ "$pf" =~ ^([0-9]+\.[0-9]+)\.[0-9]+\.[0-9]+/(1[7-9]|2[0-3])$ ]] && [ "${BASH_REMATCH[1]}" = "${1%.*}" ]; then NU_PF="$pf"; REPLY="$pf"
+    else NU_PF=""; REPLY="$1.0/24"; fi
+}
+pfx_hit() {      # DUYURULAN_ARALIK → 0 = şüpheli aralık: eşik kadar tekil (THRESHOLD_PFX), en az 2 farklı blok (net_count'tan sonra)
+    [ "${NP_N[$1]:-0}" -ge "$THRESHOLD_PFX" ] && [ "${NP_SUB[$1]:-0}" -ge 2 ]
+}
+net_hit16() {    # A.B → 0 = şüpheli ağ: aynı sahibin eşik kadar tekili (THRESHOLD_16), en az 2 farklı alt birimden. NH_K = tutan sahip
+    # anahtarı (en çok tekili olan); tutmuyorsa NH_K en çok tekili olan sahip (IP kartı sayacı için)
+    local k best="" bn=-1 hit=""
+    for k in ${NO_KEYS[$1]}; do
+        if [ "${NO_N[$k]}" -ge "$THRESHOLD_16" ] && [ "${NO_U[$k]:-0}" -ge 2 ]; then
+            { [ -z "$hit" ] || [ "${NO_N[$k]}" -gt "${NO_N[$hit]}" ]; } && hit="$k"
+        fi
+        [ "${NO_N[$k]}" -gt "$bn" ] && { bn="${NO_N[$k]}"; best="$k"; }
+    done
+    NH_K="${hit:-$best}"; [ -n "$hit" ]
 }
 net_reset() { NC_DONE=""; }
 
@@ -3105,21 +3169,22 @@ do_status() {
     # Kontrol edilecekler: son REVIEW_DAYS gündeki /16 uyarıları ve beyaz liste atlamaları,
     # blok başına en yenisi; yoksayılanlar ve o arada banlanmış olanlar düşülür.
     local review=() rtext=() t ty pbe
-    local -A seen=() W16D=()
+    local -A seen=() W16D=() RVPX=(); local x lx
     owners_load; prof owners_load
     asn_banned                                     # sağlayıcı banının kapattıkları listede tutulmaz
     prof asn_banned
     # tekrar eden şüpheli ağ: kontrol süresi içinde kaç ayrı günde işaretlendi (sayaçtaki günlük kayıtlar)
     if [ -r "$SAYAC_FILE" ]; then
         while read -r k u; do [ -n "$k" ] && W16D[$k]="$u"; done < <(awk -v s="$(date -d "$REVIEW_DAYS days ago" +%Y-%m-%d)" '
-            $1 ~ /^(WARN16_|WARN_TEMP16_)/ && $2 >= s { p = $1; sub(/^WARN(_TEMP)?16_/, "", p); if (!((p, $2) in d)) { d[p, $2] = 1; c[p]++ } }
-            END { for (p in c) print p ".0.0/16", c[p] }' "$SAYAC_FILE")
+            $1 ~ /^(WARN16_|WARN_TEMP16_)/ && $2 >= s { p = $1; sub(/^WARN(_TEMP)?16_/, "", p); p = p ".0.0/16"; if (!((p, $2) in d)) { d[p, $2] = 1; c[p]++ } }
+            $1 ~ /^WARNPFX_/ && $2 >= s { p = substr($1, 9); if (!((p, $2) in d)) { d[p, $2] = 1; c[p]++ } }
+            END { for (p in c) print p, c[p] }' "$SAYAC_FILE")
     fi
     if [ -r "$EVENTS_FILE" ]; then
         while IFS= read -r line; do
             [[ "$line" =~ ^\{\"t\":([0-9]+),.*\}$ ]] || continue; t="${BASH_REMATCH[1]}"   # yarım satırlar atlanır
             [ "$t" -lt $(( now - REVIEW_DAYS * 86400 )) ] && break
-            [[ "$line" =~ \"type\":\"(warn16|warn16t|skip_wl)\" ]] || continue; ty="${BASH_REMATCH[1]}"
+            [[ "$line" =~ \"type\":\"(warnpfx|warn16|warn16t|skip_wl)\" ]] || continue; ty="${BASH_REMATCH[1]}"
             [[ "$line" =~ \"cidr\":\"([0-9./]+)\" ]] || continue; c="${BASH_REMATCH[1]}"
             pc "rv_ev satır"; pa "rv_ev okuma"
             [ -n "${seen[$c]}" ] && continue; seen[$c]=1
@@ -3137,39 +3202,42 @@ do_status() {
             if [ -n "${PB_D[$c]}" ]; then
                 pbe=$(LC_ALL=C date -d "${PB_D[$c]}" +%s 2>/dev/null || echo 0)
                 [ "$t" -le "$pbe" ] && continue
-                [[ "$ty" == warn16* && "$line" != *'"after":'* ]] && continue   # eski tekillerle tekrarlanmış uyarı
+                [[ "$ty" == warn* && "$line" != *'"after":'* ]] && continue   # eski tekillerle tekrarlanmış uyarı
             fi
             [ -n "${W16D[$c]}" ] && line="${line%\}},\"rep\":${W16D[$c]}}"
             # şüpheli ağda kısmi ban varsa (yalnız seçilen servisler kapalı) satırda belirtilir
-            if [[ "$ty" == warn16* ]] && cidr_range "$c" && part_note "$R_LO" "$R_HI"; then
+            if [[ "$ty" == warn* ]] && cidr_range "$c" && part_note "$R_LO" "$R_HI"; then
                 line="${line%\}},\"partial\":\"${REPLY%%|*}\",\"partial_svc\":\"${REPLY#*|}\"}"
             fi
             pa "rv_ev pb+part"
+            # aynı tekiller bir kez, en dar basamakta: tekillerinin hepsi daha yeni bir şüpheli aralık satırında olan ağ satırı gösterilmez
+            # (1.15.75 öncesi /16 uyarıları; artık tek aralıktaki tekiller /16 bildirmez)
+            if [ "$ty" = warnpfx ]; then
+                for x in $(grep -oE '"ip":"[0-9.]+"' <<< "$line" | cut -d'"' -f4); do RVPX[$x]=1; done
+            elif [[ "$ty" == warn16* ]] && [ "${#RVPX[@]}" -gt 0 ]; then
+                lx=0; [[ "$line" == *'"ip":"'* ]] || lx=1
+                for x in $(grep -oE '"ip":"[0-9.]+"' <<< "$line" | cut -d'"' -f4); do [ -n "${RVPX[$x]}" ] || { lx=1; break; }; done
+                [ "$lx" = 0 ] && continue
+            fi
             review+=("$line")
             rtext+=("$(printf '%-18s %s · %s' "$c" "$ty" "$(date -d "@$t" '+%d.%m %H:%M')")")
             pa "rv_ev rtext"
-        done < <(LC_ALL=C grep -E '"type":"(warn16|warn16t|skip_wl)"' "$EVENTS_FILE" | tac)   # yalnız bu türler, önce süzülür sonra ters çevrilir
+        done < <(LC_ALL=C grep -E '"type":"(warnpfx|warn16|warn16t|skip_wl)"' "$EVENTS_FILE" | tac)   # yalnız bu türler, önce süzülür sonra ters çevrilir
     fi
     prof review_events
     # Olay kaydı başlamadan önceki uyarılar ve atlamalar sayaçta tarihiyle duruyor (IP ayrıntısı yok)
     if [ -r "$SAYAC_FILE" ]; then
-        local rsince k u hx hl hn hp ht hj hw hq hs hk hc
-        local -A H16=()
+        local rsince k u hx hl hn hp ht hj hw hq hs hk hc hips
         rsince=$(date -d "$REVIEW_DAYS days ago" +%Y-%m-%d)
-        # eski uyarının IP ayrıntısı olayda yok: bugünkü ağ sayımı (net_count, turun ölçütü) ağ başına "ip|not|k" satırlarına
-        # (k = p kalıcı, t geçici)
+        # eski uyarının IP ayrıntısı olayda yok: bugünkü sayım (net_count, turun ölçütü ve basamakları)
         net_count
-        for hq in "${!NC_IPS[@]}"; do
-            for hx in ${NC_IPS[$hq]}; do
-                if [ -n "${SINGLE_NOTE[$hx]+x}" ]; then H16[$hq]+="$hx|${SINGLE_NOTE[$hx]//|/ }|p"$'\n'; else H16[$hq]+="$hx|${TEL_NOTE[$hx]//|/ }|t"$'\n'; fi
-            done
-        done
         while read -r k u; do
             [[ "$u" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || continue
             [[ "$u" < "$rsince" ]] && continue
             day_epoch "$u"; [ "$REPLY" -lt $(( now - REVIEW_DAYS * 86400 )) ] && continue   # düşme anı panelle aynı: satır zamanı + REVIEW_DAYS
             case "$k" in
                 WARN16_*)      ty=warn16;  c="${k#WARN16_}.0.0/16" ;;
+                WARNPFX_*)     ty=warnpfx; c="${k#WARNPFX_}" ;;
                 WARN_TEMP16_*) ty=warn16t; c="${k#WARN_TEMP16_}.0.0/16" ;;
                 WLSKIP_*)      ty=skip_wl; c="${k#WLSKIP_}.0/24" ;;
                 *) continue ;;
@@ -3180,10 +3248,15 @@ do_status() {
             cidr_range "$c" && perm_covers "$R_LO" "$R_HI" && continue
             [ -n "${PB_P[$c]+x}" ] && continue        # olay kaydından önceki uyarı; aralığa sonradan kısmi ban konmuş
             hj=""
-            if [[ "$ty" == warn16* ]]; then
-                hl="${H16[${c%.0.0/16}]}"
-                # bugünkü ölçüt: eşik kadar tekil (kalıcı + geçici, her IP bir kez) ve en az 2 farklı blok; tutmuyorsa (tekiller
-                # blok banıyla temizlenmiş, süresi dolmuş, kaldırılmış) bakılacak bir şey yok
+            if [[ "$ty" == warn* ]]; then
+                # bugünkü ölçüt turunkiyle aynı: aralıkta pfx_hit, ağda net_hit16 (aynı sahip, en az 2 alt birim); tutmuyorsa (tekiller blok
+                # banıyla temizlenmiş, süresi dolmuş, kaldırılmış) bakılacak bir şey yok. Satırlar "ip|not|k" (k = p kalıcı, t geçici)
+                if [ "$ty" = warnpfx ]; then pfx_hit "$c" || continue; hips="${NP_IPS[$c]}"
+                else net_hit16 "${c%.0.0/16}" || continue; hips="${NO_IPS[$NH_K]}"; fi
+                hl=""
+                for hx in $hips; do
+                    if [ -n "${SINGLE_NOTE[$hx]+x}" ]; then hl+="$hx|${SINGLE_NOTE[$hx]//|/ }|p"$'\n'; else hl+="$hx|${TEL_NOTE[$hx]//|/ }|t"$'\n'; fi
+                done
                 hn=0; hp=0; ht=0; hs=""; local -a hpb=()
                 while IFS='|' read -r hx hk hq; do
                     [ -n "$hx" ] || continue
@@ -3192,7 +3265,6 @@ do_status() {
                     [[ "$hk" == *PERMBLOCK* ]] && hpb+=("$hx")
                 done <<< "$hl"
                 hc=($hs)
-                [ "$hn" -ge "$THRESHOLD_16" ] && [ "${#hc[@]}" -ge 2 ] || continue
                 [ "${#hpb[@]}" -gt 0 ] && perm_cls_load "${hpb[@]}"       # PERMBLOCK servisleri tek taramada
                 # geniş bir katman (sağlayıcı / kiralık liste / ülke) bu tekillerin saldırdığı servisleri artık kapatıyorsa bakılacak bir şey yok
                 if cover_any; then
@@ -3203,7 +3275,7 @@ do_status() {
                     if prov_near < <(printf '%s' "$hk"); then jstr "$PN_SRC"; hj+=",\"pnear\":$REPLY,\"pnsvc\":\"$PN_SVC\""; fi
                 fi
                 hw=""; local hi=0 hv
-                cls_map < <(printf '%s' "${H16[${c%.0.0/16}]}" | cut -d'|' -f1,2)
+                cls_map < <(printf '%s' "$hl" | cut -d'|' -f1,2)
                 while IFS='|' read -r hx hl hq; do
                     [ -n "$hx" ] || continue
                     hi=$((hi + 1)); [ "$hi" -le 40 ] || break
@@ -3212,7 +3284,7 @@ do_status() {
                     short_reason "$hl" "$hx"; jstr "$REPLY"; hk="$REPLY"; hq="${hx%.*}"
                     jstr "${OWN_L[$hq]}"
                     hw+="${hw:+,}{\"ip\":\"$hx\",\"host\":\"\",\"why\":$hk,\"svc\":\"$hv\",\"owner\":$REPLY,\"asn\":\"${OWN_A[$hq]}\",\"cc\":\"${OWN_C[$hq]}\",\"pfx\":\"${OWN_P[$hq]}\"}"
-                done < <(printf '%s' "${H16[${c%.0.0/16}]}" | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n)
+                done < <(printf '%s' "$hl" | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n)
                 hj+=",\"n\":$hn,\"perm\":$hp,\"temp\":$ht,\"subnets\":${#hc[@]},\"total\":$hn,\"ips\":[$hw]"
             fi
             day_epoch "$u"
@@ -3342,10 +3414,11 @@ do_status() {
         printf -v rs1 '%(%Y-%m-%d)T' "$rw1"; printf -v rs2 '%(%Y-%m-%d)T' "$rw2"
         { [ -r "$EVENTS_FILE" ] && awk -v a="$rw1" -v b="$rw2" '
                    match($0, /"t":[0-9]+/) { t = substr($0, RSTART + 4, RLENGTH - 4) + 0 }
-                   t >= a && t < b && /"type":"(warn16|warn16t|skip_wl)"/ && match($0, /"cidr":"[0-9.\/]+"/) { print substr($0, RSTART + 8, RLENGTH - 9) }' "$EVENTS_FILE"
+                   t >= a && t < b && /"type":"(warnpfx|warn16|warn16t|skip_wl)"/ && match($0, /"cidr":"[0-9.\/]+"/) { print substr($0, RSTART + 8, RLENGTH - 9) }' "$EVENTS_FILE"
                [ -r "$SAYAC_FILE" ] && awk -v a="$rs1" -v b="$rs2" '$2 >= a && $2 < b {
                    k = $1
                    if (k ~ /^WARN16_/)           { sub(/^WARN16_/, "", k);      print k ".0.0/16" }
+                   else if (k ~ /^WARNPFX_/)     { print substr(k, 9) }
                    else if (k ~ /^WARN_TEMP16_/) { sub(/^WARN_TEMP16_/, "", k); print k ".0.0/16" }
                    else if (k ~ /^WLSKIP_/)      { sub(/^WLSKIP_/, "", k);      print k ".0/24" } }' "$SAYAC_FILE"; } | sort -u | grep -c .
     }
@@ -3445,7 +3518,7 @@ do_status() {
             if (!match($0, /"type":"[a-z0-9_]+"/)) next; ty = substr($0, RSTART + 8, RLENGTH - 9)
             c = ""; if (match($0, /"cidr":"[0-9.\/]+"/)) c = substr($0, RSTART + 8, RLENGTH - 9)
             L = (ty == "add24" || ty == "manual_ban") ? "A" : ty == "promote" ? "P" : ty == "temp24" ? "T" : \
-                ty == "warn16" ? "W1" : ty == "warn16t" ? "W2" : ty == "skip_wl" ? "S" : ""
+                ty == "warn16" || ty == "warnpfx" ? "W1" : ty == "warn16t" ? "W2" : ty == "skip_wl" ? "S" : ""
             if (L != "") put(L, c, int((t - s) / 86400))
             next
         }
@@ -3453,6 +3526,7 @@ do_status() {
             if (!($2 in DI)) next; d = DI[$2]
             if ($1 ~ /^[0-9]+\.[0-9]+\.[0-9]+$/) put("T", $1 ".0/24", d)
             else if ($1 ~ /^WARN16_/)      put("W1", substr($1, 8) ".0.0/16", d)
+            else if ($1 ~ /^WARNPFX_/)     put("W1", substr($1, 9), d)
             else if ($1 ~ /^WARN_TEMP16_/) put("W2", substr($1, 13) ".0.0/16", d)
             else if ($1 ~ /^WLSKIP_/)      put("S", substr($1, 8) ".0/24", d)
             next
@@ -3505,8 +3579,8 @@ do_status() {
         printf '"review_prev":%s,"review_win":{%s},' "$(num "$rprev")" "$rwin"
         printf '"enabled":%s,' "$([ "$ENABLED" = 0 ] && echo false || echo true)"
         printf '"health":{"csf":"%s","lfd":"%s","lfd_age":%s},"expire":{"days":%s,"auto":%s},"repeat_min":%s,' "$H_CSF" "$H_LFD" "${H_LFDAGE:--1}" "$(num "$BLOCK_EXPIRE_DAYS")" "$([ "$BLOCK_EXPIRE_AUTO" = 1 ] && echo true || echo false)" "$(num "$REPEAT16_MIN")"
-        printf '"config":{"t24":%s,"t24p":%s,"t16":%s,"tt24":%s,"tt16":%s,"retention":%s,"review_days":%s,"lookup":%s,"svc_fail":%s,"cloud_fail":%s,"active_days":%s},' \
-            "$(num "$THRESHOLD_24")" "$(num "$THRESHOLD_24_PERMANENT")" "$(num "$THRESHOLD_16")" "$(num "$THRESHOLD_TEMP_24")" \
+        printf '"config":{"t24":%s,"t24p":%s,"t16":%s,"tpfx":%s,"tt24":%s,"tt16":%s,"retention":%s,"review_days":%s,"lookup":%s,"svc_fail":%s,"cloud_fail":%s,"active_days":%s},' \
+            "$(num "$THRESHOLD_24")" "$(num "$THRESHOLD_24_PERMANENT")" "$(num "$THRESHOLD_16")" "$(num "$THRESHOLD_PFX")" "$(num "$THRESHOLD_TEMP_24")" \
             "$(num "$THRESHOLD_TEMP_16")" "$(num "$SAYAC_RETENTION_DAYS")" "$(num "$REVIEW_DAYS")" "$([ "$LOOK_INIT" = 1 ] && echo true || echo false)" \
             "$(num "$SVC_FAIL_DAYS")" "$(num "$CLOUD_FAIL_DAYS")" "$(num "$BLOCK_ACTIVE_DAYS")"
         printf '"usage":{"perm":[%s,%s],"temp":[%s,%s]},' "$(num "$pc")" "$limit" "$(num "$tc")" "$tlimit"
@@ -4158,8 +4232,15 @@ do_lookup() {
         local bold=(${ipsold24[$bp]:-})     # kalıcı tekil penceresinden eski (eşiğe sayılmayan) tekiller
         o+=",\"blk\":{\"s\":${count24[$bp]:-0},\"o\":${#bold[@]},\"t\":$btc,\"ts\":$THRESHOLD_24,\"tt\":$THRESHOLD_TEMP_24,\"pw\":$PERM_WINDOW_DAYS}"
         # ağ (/16): turun şüpheli ağ sayımının kendisi (net_count). Eşik THRESHOLD_16 ve en az 2 farklı blok
-        local p16="${bp%.*}"; net_count
-        o+=",\"net\":{\"n\":${NC_N[$p16]:-0},\"b\":${NC_SUB[$p16]:-0},\"t\":$THRESHOLD_16}"
+        # basamaklar turunkiyle aynı (net_count): ağda bu IP'nin sahibinin tekilleri ve alt birimleri (u: duyurulan aralık ya da blok),
+        # duyurulan aralıkta (/17–/23) aralığın tekilleri ve blokları; h = bugün basamağı tutuyor mu
+        local p16="${bp%.*}" nk
+        [[ "$asn" =~ ^[0-9]+$ ]] || owners_load        # sorgu yoksa da turun kullandığı sahip önbelleği (yukarıda yalnız sorgu tutunca yüklenir)
+        net_count
+        nk="$p16|${OWN_A[$bp]}"
+        o+=",\"net\":{\"n\":${NO_N[$nk]:-0},\"b\":${NO_SUB[$nk]:-0},\"u\":${NO_U[$nk]:-0},\"t\":$THRESHOLD_16,\"h\":$(net_hit16 "$p16" && [ "$NH_K" = "$nk" ] && echo true || echo false)}"
+        net_unit "$bp"
+        [ -n "$NU_PF" ] && o+=",\"pnet\":{\"p\":\"$NU_PF\",\"n\":${NP_N[$NU_PF]:-0},\"b\":${NP_SUB[$NU_PF]:-0},\"t\":$THRESHOLD_PFX,\"h\":$(pfx_hit "$NU_PF" && echo true || echo false)}"
         o+=",\"covers\":[$cvj],\"asn\":\"$asn\",\"fwd\":$fwd,\"lookup\":$([ "$LOOK_INIT" = 1 ] && echo true || echo false)}"
         echo "$o"; return 0
     fi
@@ -6831,7 +6912,7 @@ digest_build() { # → DG_SUBJ, DG_BODY
         while IFS='|' read -r k a; do C[$k]="$a"; done < <(awk -v s="$since" '
             match($0, /"t":[0-9]+/) { t = substr($0, RSTART + 4, RLENGTH - 4) + 0 } t < s { next }
             match($0, /"type":"[a-z0-9_]+"/) { ty = substr($0, RSTART + 8, RLENGTH - 9)
-                if (ty == "warn16t") ty = "warn16"
+                if (ty == "warn16t" || ty == "warnpfx") ty = "warn16"
                 if (ty ~ /^manual_/) ty = "manual"     # panelden yapılan işlemler; ayar değişikliği (config) ayrı sayılır
                 c[ty]++
                 if (ty == "run" && p0 == "" && match($0, /"perm_used":[0-9]+/)) p0 = substr($0, RSTART + 12, RLENGTH - 12) }
@@ -7074,7 +7155,7 @@ do_config() {
                 o="{\"ok\":true,\"values\":{"
                 i=0
                 for k in $CFG_KEYS; do jstr "$(cfg_value "$k")"; o+="$([ $i -gt 0 ] && echo ,)\"$k\":$REPLY"; i=1; done
-                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"whm\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"NOTIFY\":\"all\",\"IC_FIREWALL\":\"1\",\"IC_LISTFULL\":\"1\",\"IC_RUN\":\"1\",\"IC_DIGEST\":\"1\",\"IE_FIREWALL\":\"1\",\"IE_LISTFULL\":\"1\",\"IE_RUN\":\"1\",\"IE_DIGEST\":\"1\",\"IC_REVIEW\":\"1\",\"IE_REVIEW\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_KEEP_DAYS\":\"30\",\"EVENTS_DAYS\":\"180\",\"RUN_DAYS\":\"31\",\"PERM_WINDOW_DAYS\":\"90\",\"BANLOG_DAYS\":\"90\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"BLOCK_EXPIRE_DAYS\":\"365\",\"BLOCK_ACTIVE_DAYS\":\"30\",\"OWNER_TTL_DAYS\":\"30\",\"IMUNIFY_REFRESH_MIN\":\"60\",\"CLOUD_REFRESH_DAYS\":\"1\",\"CLOUD_FAIL_DAYS\":\"3\",\"SVC_REFRESH_DAYS\":\"1\",\"SVC_FAIL_DAYS\":\"3\",\"GEO_REFRESH_DAYS\":\"25\",\"REFRESH_HOUR\":\"4\",\"BLOCK_EXPIRE_AUTO\":\"0\",\"CRON_MIN\":\"*/10\"}"
+                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"whm\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"NOTIFY\":\"all\",\"IC_FIREWALL\":\"1\",\"IC_LISTFULL\":\"1\",\"IC_RUN\":\"1\",\"IC_DIGEST\":\"1\",\"IE_FIREWALL\":\"1\",\"IE_LISTFULL\":\"1\",\"IE_RUN\":\"1\",\"IE_DIGEST\":\"1\",\"IC_REVIEW\":\"1\",\"IE_REVIEW\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_PFX\":\"4\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_KEEP_DAYS\":\"30\",\"EVENTS_DAYS\":\"180\",\"RUN_DAYS\":\"31\",\"PERM_WINDOW_DAYS\":\"90\",\"BANLOG_DAYS\":\"90\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"BLOCK_EXPIRE_DAYS\":\"365\",\"BLOCK_ACTIVE_DAYS\":\"30\",\"OWNER_TTL_DAYS\":\"30\",\"IMUNIFY_REFRESH_MIN\":\"60\",\"CLOUD_REFRESH_DAYS\":\"1\",\"CLOUD_FAIL_DAYS\":\"3\",\"SVC_REFRESH_DAYS\":\"1\",\"SVC_FAIL_DAYS\":\"3\",\"GEO_REFRESH_DAYS\":\"25\",\"REFRESH_HOUR\":\"4\",\"BLOCK_EXPIRE_AUTO\":\"0\",\"CRON_MIN\":\"*/10\"}"
                 ALERT_MAIL=whm mail_to; jstr "$REPLY"; o+=",\"whm_contact\":$REPLY"
                 slack_url; o+=",\"slack\":$([ -n "$REPLY" ] && echo true || echo false)"
                 # lfd'nin geçici ban süreleri (saniye; en kısa ve en uzun): LF_TRIGGER açıksa LF_TRIGGER_PERM, değilse açık
@@ -7463,99 +7544,129 @@ prof "turn /24 geçici gruplama"
 # Aynı ağdan gelen saldırı, LFD'nin onu hangi listeye koyduğuna bakılmadan görülsün: bir IP bir kez sayılır
 # (iki listede birden varsa kalıcı sayılır). Bu turda banlanan bloklar (kalıcı ya da geçici) sayılmaz. Sayım net_count'ta
 # (Kontrol edilecekler ve IP kartıyla ortak).
-declare -A count16 seen_subnets ips16 perm16 tmp16
 net_count
-for prefix16 in "${!NC_N[@]}"; do
-    count16[$prefix16]=${NC_N[$prefix16]}; ips16[$prefix16]="${NC_IPS[$prefix16]}"
-    perm16[$prefix16]=${NC_P[$prefix16]:-0}; tmp16[$prefix16]=${NC_T[$prefix16]:-0}
-    for ip in ${NC_IPS[$prefix16]}; do seen_subnets[$prefix16]+=" ${ip%.*}"; done
-done
+# basamağa yaklaşan ağlarda sahibi / duyurulan aralığı bilinmeyen bloklar şimdi sorulur (sayım sahip ve aralık başına); yoksa yeni
+# blokların sahibi tur sonundaki zenginleştirmeye kalıyor, ilk tur aralığı bilinmeden sayılıyordu
+if [ "$LOOK_OK" = 1 ]; then
+    nmin=$THRESHOLD_16; [ "$THRESHOLD_PFX" -lt "$nmin" ] && nmin=$THRESHOLD_PFX; nask=0
+    for prefix in "${!NC_N[@]}"; do
+        [ "${NC_N[$prefix]}" -ge "$nmin" ] || continue
+        for ip in ${NC_IPS[$prefix]}; do [ -n "${OWN_L[${ip%.*}]+x}" ] || { owner_lookup "$ip"; nask=1; }; done
+    done
+    [ "$nask" = 1 ] && { net_reset; net_count; }
+fi
 pa "t16 · /16 sayımı"
-warn16=0; warn_body=""; temp_warn16=0
+warn16=0; warnpfx=0; warn_body=""; warnp_body=""; temp_warn16=0
 asn_banned
 pa "t16 · asn_banned"
-declare -A SN16=()
-for prefix in $(printf '%s\n' "${!count16[@]}" | sort -V); do
-    pc "t16 /16 öneki"
-    # farklı /24 sayısı yalnız eşiği aşan ağda ve alt süreçsiz (önce her önek için echo | tr | sort | grep: sunucuda 109 önekte
-    # ~0,9 sn ölçüldü, yalnız biri eşiği aşıyordu)
-    subnet_count=0
-    if [ "${count16[$prefix]}" -ge "$THRESHOLD_16" ]; then
-        SN16=(); for sx in ${seen_subnets[$prefix]}; do SN16[$sx]=1; done; subnet_count=${#SN16[@]}
+# Bir basamağın (duyurulan aralık ya da /16) bildirim kararı: susturma, kalıcı ban, kısmi ban (yalnız bandan sonrakiler), sağlayıcı
+# kapsaması, son uyarıdan beri yeni IP, günde bir. Bildirilecekse LW_BODY'ye mail parçası, olay ve sayaç işareti yazılır.
+# level_warn TÜR(warnpfx|warn16) CIDR "IP'ler" → 0 = bildirildi
+level_warn() {
+    local ty="$1" c="$2" ips="$3" lw=0 lo hi n=0 np=0 nt=0 ns pe=0 pl pnote="" psv pin pout x ip lwl lips lcnt ltot ln fresh lt key word
+    local -A sx=()
+    if [ "$ty" = warnpfx ]; then key="WARNPFX_$c"; word="$M_LV_PFX"; else key="WARN16_${c%.0.0/16}"; word="$M_LV_NET"; fi
+    cidr_range "$c" || return 1; lo=$R_LO; hi=$R_HI
+    if perm_covers "$lo" "$hi"; then logr "$(m "$M_TSKIP16" "$word" "$c")"; return 1; fi
+    if ign_covers "$c" && ign_until "$IGN_HIT"; then logr "$(m "$M_IGN16" "$word" "$c" "$IGN_UNTIL_TXT")"; return 1; fi
+    # aralığa eklentinin kısmi banı konmuşsa ondan önceki tekiller o kararla ele alınmıştır: yalnız sonrakiler sayılır
+    pl=$(grep -F "|s=$c # csf_autogroup:" "$DENY_FILE" | head -n 1)
+    [ -n "$pl" ] && [[ "$pl" =~ $RE_DATE ]] && pe=$(LC_ALL=C date -d "${BASH_REMATCH[1]}" +%s 2>/dev/null || echo 0)
+    if [ "${pe:-0}" -gt 0 ]; then
+        ips_after "$pe" $ips; ips="$REPLY"
     fi
-    pa "t16 · alt ağ sayımı (önek başına)"
-    if [ "${count16[$prefix]}" -ge "$THRESHOLD_16" ] && [ "$subnet_count" -ge 2 ]; then
-        pc "t16 eşiği aşan /16"
-        ip2int "$prefix.0.0"; lo=$REPLY
-        if perm_covers "$lo" $((lo + 65535)); then logr "$(m "$M_TSKIP16" "$prefix")"; continue; fi
-        if ign_covers "$prefix.0.0/16" && ign_until "$IGN_HIT"; then logr "$(m "$M_IGN16" "$prefix" "$IGN_UNTIL_TXT")"; continue; fi
-        np="${perm16[$prefix]:-0}"; nt="${tmp16[$prefix]:-0}"
-        # ağa eklentinin kısmi banı konmuşsa ondan önceki tekiller o kararla ele alınmıştır: yalnız sonrakiler sayılır
-        pe=0; pnote=""; pl=$(grep -F "|s=$prefix.0.0/16 # csf_autogroup:" "$DENY_FILE" | head -n 1)
-        [ -n "$pl" ] && [[ "$pl" =~ $RE_DATE ]] && pe=$(LC_ALL=C date -d "${BASH_REMATCH[1]}" +%s 2>/dev/null || echo 0)
-        if [ "${pe:-0}" -gt 0 ]; then
-            ips_after "$pe" ${ips16[$prefix]}
-            ips16[$prefix]="$REPLY"; count16[$prefix]=0; np=0; nt=0
-            for ip in $REPLY; do
-                count16[$prefix]=$((count16[$prefix] + 1))
-                if [ -n "${SINGLE_NOTE[$ip]+x}" ]; then np=$((np + 1)); else nt=$((nt + 1)); fi
-            done
-            SN16=(); for ip in $REPLY; do SN16[${ip%.*}]=1; done; subnet_count=${#SN16[@]}   # alt süreçsiz
-            if [ "${count16[$prefix]}" -lt "$THRESHOLD_16" ] || [ "$subnet_count" -lt 2 ]; then
-                logr "$(m "$M_PSKIP16" "$prefix" "${count16[$prefix]}")"; continue
-            fi
-            [[ "$pl" =~ $RE_SV ]] && psv="${BASH_REMATCH[1]}" || psv=""
-            pnote="$(m "$M_PART_AFTER" "$(date -d "@$pe" '+%d.%m %H:%M')")$NL"
-            pin=""; pout=""
-            for x in ${IPA_CLS//,/ }; do
-                [[ "$x" =~ ^[a-z]+$ ]] || continue
-                case "$x" in other|repeat|scan) ;; *) if [[ ",$psv," == *",$x,"* ]]; then pin+="${pin:+, }$x"; else pout+="${pout:+, }$x"; fi ;; esac
-            done
-            [ -n "$pin" ] && pnote+="$(m "$M_PART_LEAK" "$pin" "$prefix.0.0/16")$NL"
-            [ -n "$pout" ] && pnote+="$(m "$M_PART_MORE" "$pout")$NL"
-        fi
-        # geniş bir katman (sağlayıcı / kiralık liste / ülke) saldırılan servisleri kapatıyorsa uyarı yok — kısmi ban varsa yalnız
-        # bandan sonraki IP'lerle (uyarıya yazılan ve Kontrol edilecekler'in yeniden karar verdiği küme)
-        pa "t16 · eşik sonrası denetimler"
-        if cover_any; then
-            pcl=""; for ip in ${ips16[$prefix]}; do pcl+="$ip|${SINGLE_NOTE[$ip]:-${TNOTE[$ip]}}|"$'\n'; done
-            prov_cover <<< "$pcl" && { logr "$(m "$M_PROV16" "$prefix" "$PC_ASN")"; continue; }
-        fi
-        # aynı ağ için son uyarıdan bu yana yeni IP gelmediyse tekrar bildirilmez (Kontrol edilecekler'de zaten duruyor)
-        lw=$(grep -F "\"type\":\"warn16\",\"cidr\":\"$prefix.0.0/16\"" "$EVENTS_FILE" 2>/dev/null | tail -n 1)
-        # kısmi banlı ağda yalnız bandan sonrakilerle atılmış uyarıyla karşılaştırılır (öncekiler başka listeydi)
-        [ "${pe:-0}" -gt 0 ] && [[ "$lw" != *"\"after\":$pe"* ]] && lw=""
-        if [ -n "$lw" ]; then
-            lips=" $(grep -oE '"ip":"[0-9.]+"' <<< "$lw" | cut -d'"' -f4 | tr '\n' ' ')"
-            lcnt=$(grep -oE '"ip":"' <<< "$lw" | grep -c .); ltot=$(grep -oE '"total":[0-9]+' <<< "$lw" | head -n 1 | cut -d: -f2)
-            ln16=$(grep -oE '"n":[0-9]+' <<< "$lw" | head -n 1 | cut -d: -f2)
-            fresh=0
-            for ip in ${ips16[$prefix]}; do [[ "$lips" == *" $ip "* ]] || { fresh=1; break; }; done
-            [ "$fresh" = 1 ] && [ "$lcnt" -gt 0 ] && [ "${ltot:-0}" -gt "$lcnt" ] && [ "${count16[$prefix]}" -le "${ln16:-0}" ] && fresh=0   # liste kısaltılmışsa sayıya bak
-            [ "$fresh" = 0 ] && { logr "$(m "$M_SAME16" "$prefix")"; continue; }
-        fi
-        # günde en çok bir uyarı; ama kısmi banlı ağda bugünkü uyarı bandan ÖNCE atıldıysa sayılmaz: bandan sonraki
-        # yeni saldırılar (ör. açık kalan servislere) ertesi güne kalmadan bildirilir
-        if grep -qF "WARN16_${prefix} $TODAY" "$SAYAC_FILE"; then
-            lt=0; [[ "$lw" =~ ^\{\"t\":([0-9]+) ]] && lt="${BASH_REMATCH[1]}"
-            if [ "${pe:-0}" -eq 0 ] || [ "$lt" -ge "$(date -d 'today 00:00' +%s)" ]; then logr "$(m "$M_SKIP16" "$prefix")"; continue; fi
-        fi
-        log "$(m "$M_WARN16" "$prefix" "${count16[$prefix]}" "$np" "$nt" "$subnet_count")"
-        warn_body+="$(m "$M_WARN16_B" "$prefix" "${count16[$prefix]}" "$np" "$nt" "$subnet_count")$NL"
-        WL_HIT=""; wl_overlap "$lo" $((lo + 65535)) && warn_body+="$(m "$M_WL_NOTE" "$WL_HIT")$NL"
-        part_note "$lo" $((lo + 65535)) && warn_body+="$(m "$M_PART_NOTE" "${REPLY%%|*}" "${REPLY#*|}")$NL"
-        warn_body+="$pnote"
-        ip_lines "${ips16[$prefix]}" mix 1; warn_body+="$REPLY"
-        warn16=$((warn16 + 1)); cnt_add "WARN16_${prefix} $TODAY"
-        jstr "$WL_HIT"
-        ev warn16 "$prefix.0.0/16" "n=${count16[$prefix]}" "perm=$np" "temp=$nt" "subnets=$subnet_count" "wl=$REPLY" "total=$IPS_TOTAL" "ips=$IPS_J" \
-           $([ "${pe:-0}" -gt 0 ] && echo "after=$pe")
+    for ip in $ips; do
+        n=$((n + 1)); sx[${ip%.*}]=1
+        if [ -n "${SINGLE_NOTE[$ip]+x}" ]; then np=$((np + 1)); else nt=$((nt + 1)); fi
+    done
+    ns=${#sx[@]}
+    if [ "${pe:-0}" -gt 0 ]; then
+        # bandan sonrakiler basamağın ölçütünü yine tutmalı: aralıkta eşik + 2 blok, ağda eşik + 2 alt birim (alt birim = bandan sonraki
+        # tekillerin aralıkları / blokları)
+        local -A su=(); for ip in $ips; do net_unit "${ip%.*}"; su[$REPLY]=1; done
+        if [ "$ty" = warnpfx ]; then { [ "$n" -ge "$THRESHOLD_PFX" ] && [ "$ns" -ge 2 ]; } || { logr "$(m "$M_PSKIP16" "$word" "$c" "$n")"; return 1; }
+        else { [ "$n" -ge "$THRESHOLD_16" ] && [ "${#su[@]}" -ge 2 ]; } || { logr "$(m "$M_PSKIP16" "$word" "$c" "$n")"; return 1; }; fi
+        [[ "$pl" =~ $RE_SV ]] && psv="${BASH_REMATCH[1]}" || psv=""
+        pnote="$(m "$M_PART_AFTER" "$(date -d "@$pe" '+%d.%m %H:%M')")$NL"
+        pin=""; pout=""
+        for x in ${IPA_CLS//,/ }; do
+            [[ "$x" =~ ^[a-z]+$ ]] || continue
+            case "$x" in other|repeat|scan) ;; *) if [[ ",$psv," == *",$x,"* ]]; then pin+="${pin:+, }$x"; else pout+="${pout:+, }$x"; fi ;; esac
+        done
+        [ -n "$pin" ] && pnote+="$(m "$M_PART_LEAK" "$pin" "$c")$NL"
+        [ -n "$pout" ] && pnote+="$(m "$M_PART_MORE" "$pout")$NL"
     fi
+    # geniş bir katman (sağlayıcı / kiralık liste / ülke) saldırılan servisleri kapatıyorsa uyarı yok
+    if cover_any; then
+        local pcl=""; for ip in $ips; do pcl+="$ip|${SINGLE_NOTE[$ip]:-${TNOTE[$ip]}}|"$'\n'; done
+        prov_cover <<< "$pcl" && { logr "$(m "$M_PROV16" "$c" "$PC_ASN")"; return 1; }
+    fi
+    # aynı aralık için son uyarıdan bu yana yeni IP gelmediyse tekrar bildirilmez (Kontrol edilecekler'de zaten duruyor)
+    lwl=$(grep -F "\"type\":\"$ty\",\"cidr\":\"$c\"" "$EVENTS_FILE" 2>/dev/null | tail -n 1)
+    [ "${pe:-0}" -gt 0 ] && [[ "$lwl" != *"\"after\":$pe"* ]] && lwl=""
+    if [ -n "$lwl" ]; then
+        lips=" $(grep -oE '"ip":"[0-9.]+"' <<< "$lwl" | cut -d'"' -f4 | tr '\n' ' ')"
+        lcnt=$(grep -oE '"ip":"' <<< "$lwl" | grep -c .); ltot=$(grep -oE '"total":[0-9]+' <<< "$lwl" | head -n 1 | cut -d: -f2)
+        ln=$(grep -oE '"n":[0-9]+' <<< "$lwl" | head -n 1 | cut -d: -f2)
+        fresh=0
+        for ip in $ips; do [[ "$lips" == *" $ip "* ]] || { fresh=1; break; }; done
+        [ "$fresh" = 1 ] && [ "$lcnt" -gt 0 ] && [ "${ltot:-0}" -gt "$lcnt" ] && [ "$n" -le "${ln:-0}" ] && fresh=0   # liste kısaltılmışsa sayıya bak
+        [ "$fresh" = 0 ] && { logr "$(m "$M_SAME16" "$word" "$c")"; return 1; }
+    fi
+    # günde en çok bir uyarı; kısmi banlı aralıkta bugünkü uyarı bandan ÖNCE atıldıysa sayılmaz
+    if grep -qF "$key $TODAY" "$SAYAC_FILE"; then
+        lt=0; [[ "$lwl" =~ ^\{\"t\":([0-9]+) ]] && lt="${BASH_REMATCH[1]}"
+        if [ "${pe:-0}" -eq 0 ] || [ "$lt" -ge "$(date -d 'today 00:00' +%s)" ]; then logr "$(m "$M_SKIP16" "$word" "$c")"; return 1; fi
+    fi
+    local ex=() b=""
+    if [ "$ty" = warnpfx ]; then
+        log "$(m "$M_WARNPFX" "$c" "$n" "$np" "$nt" "$ns")"
+        b+="$(m "$M_WARNPFX_B" "$c" "$n" "$np" "$nt" "$ns")$NL"
+    else
+        log "$(m "$M_WARN16" "${c%.0.0/16}" "$n" "$np" "$nt" "$ns")"
+        b+="$(m "$M_WARN16_B" "${c%.0.0/16}" "$n" "$np" "$nt" "$ns")$NL"
+        [ -n "$LW_APX" ] && { b+="$(m "$M_WARN16_APX" "$LW_APX")$NL"; ex+=("apx=\"$LW_APX\""); }
+    fi
+    WL_HIT=""; wl_overlap "$lo" "$hi" && b+="$(m "$M_WL_NOTE" "$WL_HIT")$NL"
+    part_note "$lo" "$hi" && b+="$(m "$M_PART_NOTE" "${REPLY%%|*}" "${REPLY#*|}")$NL"
+    b+="$pnote"
+    ip_lines "$ips" mix 1; b+="$REPLY"
+    LW_BODY="$b"; cnt_add "$key $TODAY"
+    jstr "$WL_HIT"
+    [ "${pe:-0}" -gt 0 ] && ex+=("after=$pe")
+    ev "$ty" "$c" "n=$n" "perm=$np" "temp=$nt" "subnets=$ns" "wl=$REPLY" "total=$IPS_TOTAL" "ips=$IPS_J" "${ex[@]}"
+    return 0
+}
+# 1) duyurulan aralık (/17–/23): eşik kadar tekil, en az 2 bloktan → "aralığı banla" önerisi
+declare -A PFX_WARNED=()
+for c in $(printf '%s\n' "${!NP_N[@]}" | sort -V); do
+    pfx_hit "$c" || continue
+    pc "t16 eşiği aşan aralık"
+    LW_APX=""
+    if level_warn warnpfx "$c" "${NP_IPS[$c]}"; then warnpfx=$((warnpfx + 1)); warnp_body+="$LW_BODY"; PFX_WARNED[$c]=1; fi
 done
+pa "t16 · duyurulan aralık"
+# 2) /16: aynı sahibin eşik kadar tekili, en az 2 farklı alt birimden (duyurulan aralık ya da blok). Tekiller tek bir duyurulan
+# aralıktaysa /16 bildirilmez — öneri o aralık (1. basamak)
+for prefix in $(printf '%s\n' "${!NO_KEYS[@]}" | sort -V); do
+    pc "t16 /16 öneki"
+    net_hit16 "$prefix" || continue
+    pc "t16 eşiği aşan /16"
+    # tekillerin çoğu eşiği aşmış tek bir duyurulan aralıktaysa uyarıda o aralık önerilir (panel satırı ve mail aynı alanı okur)
+    LW_APX=""; declare -A ap=(); for ip in ${NO_IPS[$NH_K]}; do net_unit "${ip%.*}"; [ -n "$NU_PF" ] && ap[$NU_PF]=$(( ${ap[$NU_PF]:-0} + 1 )); done
+    for c in "${!ap[@]}"; do pfx_hit "$c" && { [ -z "$LW_APX" ] || [ "${ap[$c]}" -gt "${ap[$LW_APX]}" ]; } && LW_APX="$c"; done
+    unset ap
+    if level_warn warn16 "$prefix.0.0/16" "${NO_IPS[$NH_K]}"; then warn16=$((warn16 + 1)); warn_body+="$LW_BODY"; fi
+done
+LW_APX=""
+pa "t16 · /16"
+if [ "$warnpfx" -gt 0 ]; then
+    mail_add "$(m "$M_MAILPFX_SUBJ" "$warnpfx")" "$(printf '%b' "$(m "$M_MAILPFX_BODY")")$NL$NL$warnp_body"
+fi
 if [ "$warn16" -gt 0 ]; then
     mail_add "$(m "$M_MAIL16_SUBJ" "$warn16")" "$(printf '%b' "$(m "$M_MAIL16_BODY")")$NL$NL$warn_body"
 fi
-logr "$(m "$M_16_DONE" "$warn16")"
+logr "$(m "$M_16_DONE" "$warnpfx" "$warn16")"
 
 prof "turn /16 şüpheli ağ"
 # ── Kontrol edilecekler'in kalıcı kaydı: izinli IP'den ihlal (IP başına günde bir), açık servis (aralık başına günde bir) ──
@@ -7671,7 +7782,7 @@ st=$(date +%s); backfill_imunify
 prof "turn sahip/Imunify zenginleştirme"
 owners_save
 fi
-ev run "" "v=\"$VERSION\"" "dur=$(( $(date +%s) - RUN_T0 ))" "added=$added24" "warn16=$warn16" \
+ev run "" "v=\"$VERSION\"" "dur=$(( $(date +%s) - RUN_T0 ))" "added=$added24" "warn16=$warn16" "warnpfx=$warnpfx" \
     "temp_added=$temp_added24" "promoted=$temp_perm_added24" "temp_warn16=$temp_warn16" "wl_skipped=$wl_skipped" \
     "perm_used=$(num "$current_count")" "perm_limit=$(num "$limit")" "temp_used=$(num "$temp_current")" "temp_limit=$(num "$temp_limit")" \
     "jobs=\"$RF_JOBS\"" "steps=\"$RF_STEPS\"" "csfr=$(num "${CSF_TN[-r]:-0}")" "csfr_ms=$(num "${CSF_TMS[-r]:-0}")" "lfdr=$(num "$LFD_RN")" \
