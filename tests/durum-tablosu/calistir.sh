@@ -451,7 +451,9 @@ mcheck "hiyerarşi: tekiller tek duyurulan aralıkta (/20, 3 blok, 5 tekil) → 
 mcheck "hiyerarşi: tek aralıktaki tekiller /16 uyarısı vermez (öneri o aralık)" "! grep -q '\"type\":\"warn16\"' \"\$(EVF)\""
 mcheck "hiyerarşi: Kontrol edilecekler'de şüpheli aralık satırı, /16 satırı yok" "rvrow 151.80.0.0/20 | grep -q '\"type\":\"warnpfx\"' && [ -z \"\$(rvrow 151.80.0.0/16)\" ]"
 mcheck "hiyerarşi: IP kartı aralık basamağı turla aynı (5 tekil, 3 blok, tutuyor), ağ basamağı tutmuyor (1 alt birim)" "run --lookup 151.80.7.1 --json 2>/dev/null | grep -q '\"net\":{\"n\":5,\"b\":3,\"u\":1,\"t\":5,\"h\":false},\"pnet\":{\"p\":\"151.80.0.0/20\",\"n\":5,\"b\":3,\"t\":4,\"h\":true}'"
-mk hpfx2; for p in 7 8; do own 151.80.$p 16276 OVH 151.80.0.0/20; done; for p in 200 201; do own 151.80.$p 16276 OVH 151.80.192.0/20; done
+printf '{"t":%s,"type":"warn16","cidr":"151.80.0.0/16","n":5,"perm":5,"temp":0,"subnets":3,"total":5,"ips":[{"ip":"151.80.7.1","why":"x"},{"ip":"151.80.8.1","why":"x"}]}\n' "$NOW" >> "$(EVF)"
+mcheck "hiyerarşi: eski sürümün /16 olay satırı bugünkü ölçütle yeniden sınanır (tekiller tek aralıkta → satır yok, aralık satırı var)" "[ -z \"\$(rvrow 151.80.0.0/16)\" ] && rvrow 151.80.0.0/20 | grep -q warnpfx"
+mk hpfx2;for p in 7 8; do own 151.80.$p 16276 OVH 151.80.0.0/20; done; for p in 200 201; do own 151.80.$p 16276 OVH 151.80.192.0/20; done
 for x in 7.1 7.2 8.1 200.1 201.1; do single 151.80.$x sshd; done; quiet
 mcheck "hiyerarşi: aynı sahibin tekilleri 2 duyurulan aralıkta (3 + 2, eşik 5) → şüpheli ağ; aralıklar eşiğin altında" "grep -q '\"type\":\"warn16\",\"cidr\":\"151.80.0.0/16\",\"n\":5,' \"\$(EVF)\" && ! grep -q '\"type\":\"warnpfx\"' \"\$(EVF)\""
 mk hown; for p in 7 8; do own 151.80.$p 16276 OVH 151.80.0.0/16; done; for p in 9 10; do own 151.80.$p 64500 BASKA 151.80.$p.0/24; done

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.15.76 — 2026-11-11
+
+- Suspicious range and suspicious network rows in Needs review are re-checked
+  against today's bans with the same rule as the run, also when they come from
+  the event log. Rows written before 1.15.75 whose singles all sit in one
+  announced range no longer show up as a `/16` with *Ban network*.
+
 ## 1.15.75 — 2026-11-11
 
 - **Suspicious ranges before suspicious networks.** Bans that pile up in the

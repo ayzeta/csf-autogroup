@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.75"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.76"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -3188,6 +3188,13 @@ do_status() {
             [[ "$line" =~ \"cidr\":\"([0-9./]+)\" ]] || continue; c="${BASH_REMATCH[1]}"
             pc "rv_ev satır"; pa "rv_ev okuma"
             [ -n "${seen[$c]}" ] && continue; seen[$c]=1
+            # şüpheli aralık / ağ satırı bugünkü veriyle turun ölçütünden yeniden geçer (sayaçtan gelen eski satırlar gibi): tutmuyorsa
+            # (tekiller düşmüş, ya da 1.15.75 öncesi /16 uyarısı ama tekiller tek bir duyurulan aralıkta) satır düşer. Kısmi bandan
+            # sonraki uyarı ("after") bandan sonraki tekillerle verildi; o ayrı kalır
+            if [[ "$ty" =~ ^warn(16|16t|pfx)$ ]] && [[ "$line" != *'"after":'* ]]; then
+                net_count
+                if [ "$ty" = warnpfx ]; then pfx_hit "$c" || continue; else net_hit16 "${c%.0.0/16}" || continue; fi
+            fi
             pc "rv_ev benzersiz"
             ign_covers "$c" && continue
             cidr_range "$c" && perm_covers "$R_LO" "$R_HI" && { pa "rv_ev ign+perm_covers"; continue; }
