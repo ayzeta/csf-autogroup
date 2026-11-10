@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.15.73 — 2026-11-10
+
+Behaviour fixes: decisions the plugin took differently from what the firewall
+actually does.
+
+- **A country or provider ban only counts when CSF has its data.** CSF fills
+  a country or ASN set from its zone file; without the file the set is empty
+  and nothing is dropped (measured in CSF's code). The plugin then fell back
+  to Team Cymru's country / ASN and treated the address as already blocked:
+  the block was not banned and the suspicious-network warning was
+  suppressed. The run, the IP card, the range card and the suggestion that
+  the provider's port list is missing a service now use CSF's own data only.
+- **Rules that run before CSF let CC_ALLOW through.** CSF accepts `CC_ALLOW`
+  countries and providers at the very top of its input chain. The
+  rented-server list rule and the ban guard run earlier (mangle) and did not
+  know them, so traffic CSF allows could be dropped there.
+- **Ban guard: a failed rule no longer leaves a half-built chain.** If an
+  allow rule cannot be added (for example while iptables is locked), the
+  chain is emptied instead of keeping the bans without their exceptions, and
+  it is rebuilt on the next run. A missing ban rule is also rebuilt on the
+  next run (before, the chain was marked as up to date).
+- **Blocks that CSF removes because of its list limit are noticed in the same
+  run.** When the run's own new ban made CSF drop older blocks
+  (`DENY_IP_LIMIT`), the loss was not noticed at all; it is now watched and
+  reported like any other. The list of blocks to watch is also saved on every
+  run (it was skipped when another run was still looking up owners).
+- **That report now reaches Slack too.** It was held back as if it had been
+  sent separately.
+- **An email that cannot be sent is retried.** It is queued and the next runs
+  retry it for up to 24 hours; before, it was lost and the day's warning was
+  not sent again.
+- **A block that was over its threshold but not banned is counted in its
+  network.** Its singles (skipped because of the allow list, or because the
+  attacked service is already closed) used to be left out of both the block
+  ban and the suspicious-network count.
+- **A list that could not be downloaded is retried every hour** until it
+  comes down, instead of waiting for the next refresh day.
+
 ## 1.15.72 — 2026-11-10
 
 Consistency pass: questions that were answered in several places with

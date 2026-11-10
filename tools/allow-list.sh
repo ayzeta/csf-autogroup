@@ -74,7 +74,17 @@ ag_jump_place() {       # ZİNCİR SIRA → mangle PREROUTING'te atlama önce SI
     done
     return 0
 }
+ag_allow_cc() {         # → CC_ALLOW kodları (büyük harf, boşlukla): csf.conf'tan
+    sed -n 's/^CC_ALLOW *= *"\([^"]*\)".*/\1/p' "$CSF_DIR/csf.conf" 2>/dev/null | head -n 1 | tr ',' ' ' | tr '[:lower:]' '[:upper:]'
+}
+ag_allow_sets() {       # → CSF'in CC_ALLOW için kurduğu kümeler (cc_<kod>; yüklü olanlar). CSF bunları LOCALINPUT'un en başında kabul
+    # eder (csf.pl: -I LOCALINPUT -j CC_ALLOW, "-m set --match-set cc_$cc src -j ACCEPT"; ölçüldü 2026-11-10): mangle'daki kural
+    # (kiralık liste, ban koruması) CSF'ten önce çalıştığı için bu adresleri de geçirmeli. Önce bilinmiyordu: CSF'in izin verdiği
+    # ülkeden / sağlayıcıdan gelen trafik kiralık listede ya da port banında düşüyordu
+    local c
+    for c in $(ag_allow_cc); do ipset list -n "cc_${c,,}" >/dev/null 2>&1 && echo "cc_${c,,}"; done
+}
 ag_allow_sum() {        # izin kaynaklarının imzası (değişince kurallar yeniden kurulur)
     local f
-    while IFS= read -r f; do [ -r "$f" ] && cat "$f"; done < <(ag_allow_files) | cksum | cut -d' ' -f1
+    { while IFS= read -r f; do [ -r "$f" ] && cat "$f"; done < <(ag_allow_files); echo "CC_ALLOW $(ag_allow_cc)"; } | cksum | cut -d' ' -f1
 }

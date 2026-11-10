@@ -18,11 +18,19 @@ mk() {   # temiz kök
     D="$R/etc/csf/csf.deny"; T="$R/var/lib/csf/csf.tempban"; A="$R/etc/csf/csf.allow"; C="$R/var/lib/csf_autogroup/counter"; CF="$R/etc/csf/csf.conf"
     : > "$D"; : > "$T"; : > "$C"; printf '127.0.0.1\n' > "$A"; : > "$R/etc/csf/csf.ignore"; : > "$R/etc/csf/csf.rignore"; : > "$R/lfd.log"
     printf '%s\n' 'DENY_IP_LIMIT = "500"' 'DENY_TEMP_IP_LIMIT = "100"' 'CC_DENY = ""' 'CC_DENY_PORTS = ""' 'CC_DENY_PORTS_TCP = ""' 'CC_DENY_PORTS_UDP = ""' > "$CF"
+    # CSF'in bölge dosyaları (lfd indirir): ülke / ASN banı yalnız bunlar varken işler (csf.pl kümeyi buradan doldurur); test ağı
+    # 151.80.0.0/16 = AS16276 FR (taklit DNS'le aynı)
+    mkdir -p "$R/var/lib/csf/zone"; for z in fr as16276; do echo 151.80.0.0/16 > "$R/var/lib/csf/zone/$z.zone"; done
     cp "$REPO/csf_autogroup.sh" "$R/app/csf_autogroup.sh"
     printf '%s\n' "MSG_LANG=tr" "ALERT_MAIL=" "DENY_FILE=$D" "CSF_CONF=$CF" "CSF_BIN=$W/bin/csf" "CSF_VAR=$R/var/lib/csf" \
         "LOG_FILE=$R/autogroup.log" "SAYAC_FILE=$C" "IMUNIFY_BIN=$W/bin/imunify360-agent" "LFD_LOG=$R/lfd.log" > "$R/app/config.env"
 }
 run() { env SIM_ROOT="$R" PATH="${XB:+$XB:}$W/bin:/usr/bin:/bin" AG_BY=root bash "$R/app/csf_autogroup.sh" "$@"; }
+# $1 zinciri mangle PREROUTING'te; önünde yalnız eklentinin kendi zincirleri olabilir (3h ve 3i kullanır; ortak başta: bölüm tek başına
+# koşunca da tanımlı olsun — önce 3h'nin içindeydi, 3i tek başına "mtop: command not found" ile düşüyordu)
+mtop() {
+    local s n; s=$(iptables -t mangle -S PREROUTING | grep -- '^-A'); n=$(printf '%s\n' "$s" | grep -n -- "-j $1\$" | cut -d: -f1)
+    [ -n "$n" ] && ! printf '%s\n' "$s" | head -n $(( n - 1 )) | grep -vqE -- '-j (AG_GUARD|AG_CLOUD)$|--match-set ag_hits src$' && echo G || echo "-:$(printf '%s\n' "$s" | head -n 2 | tr '\n' ' ')"; }
 # XB: ek taklit dizini (ör. ipset'in "küme yok" dediği durum)
 mkdir -p "$W/noset"; printf '%s\n' '#!/bin/bash' '# ipset taklidi: hiçbir küme yüklü değil' 'exit 1' > "$W/noset/ipset"; chmod +x "$W/noset/ipset"
 why() {  # saldırı türü → lfd notu
@@ -293,9 +301,6 @@ fi
 # yeniden koyuyor; kural INPUT'tayken ikinci sıraya düşüyordu (sunucuda ölçüldü 2026-10-11). mangle PREROUTING'te bu yarış yok.
 if [ "${GERCEK:-0}" = 1 ]; then
     mk; layer liste-web; run >/dev/null 2>&1
-    mtop() {  # $1 zinciri mangle PREROUTING'te; önünde yalnız eklentinin kendi zincirleri olabilir
-        local s n; s=$(iptables -t mangle -S PREROUTING | grep -- '^-A'); n=$(printf '%s\n' "$s" | grep -n -- "-j $1\$" | cut -d: -f1)
-        [ -n "$n" ] && ! printf '%s\n' "$s" | head -n $(( n - 1 )) | grep -vqE -- '-j (AG_GUARD|AG_CLOUD)$|--match-set ag_hits src$' && echo G || echo "-:$(printf '%s\n' "$s" | head -n 2 | tr '\n' ' ')"; }
     check "kiralık liste · kural mangle PREROUTING'te (nat'tan önce)" G "$(mtop AG_CLOUD)"
     check "kiralık liste · filter INPUT ve LOCALINPUT'ta kural yok" - "$({ iptables -C INPUT ! -i lo -j AG_CLOUD || iptables -C LOCALINPUT ! -i lo -j AG_CLOUD; } 2>/dev/null && echo G || echo -)"
     # DROP kuralları (önlerinde cPanel'in kendi tek portluk izinleri — ör. Sectigo 80/443 — için RETURN kuralları olabilir)

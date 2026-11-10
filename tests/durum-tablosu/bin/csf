@@ -8,6 +8,13 @@ case "$cmd" in
   -d) ip="$1"; shift; comment="$*"
       while read -r a _; do a=${a%%#*}; [ "$a" = "$ip" ] && { echo "deny failed: $ip is in the allow file /etc/csf/csf.allow"; exit 0; }; done < "$R/etc/csf/csf.allow"
       if awk -v ip="$ip" '$1==ip{f=1} END{exit !f}' "$DENY"; then echo "deny failed: $ip is in already in the deny file /etc/csf/csf.deny 1 times"; exit 0; fi
+      # DENY_IP_LIMIT (csf.pl dodeny 1757-1778): boş / yorum / Include / "do not delete" olmayan satırlar sayılır; sayı sınıra
+      # ulaştıysa yeni satırdan ÖNCE en eski (sayı − sınır + 1) tanesi silinir
+      lim=$(sed -n 's/^DENY_IP_LIMIT *= *"\([0-9]*\)".*/\1/p' "$R/etc/csf/csf.conf" 2>/dev/null | head -n 1)
+      if [ -n "$lim" ] && [ "$lim" -gt 0 ]; then
+        awk -v lim="$lim" 'function c(l) { return l != "" && l !~ /^[ \t]*#|Include/ && tolower(l) !~ /do not delete/ }
+          { L[NR] = $0; if (c($0)) n++ } END { k = n - lim + 1; for (i = 1; i <= NR; i++) { if (k > 0 && n >= lim + 0 && c(L[i])) { k--; continue } print L[i] } }' "$DENY" > "$DENY.new" && mv "$DENY.new" "$DENY"
+      fi
       echo "$ip # $comment - Sat Sep 26 12:00:00 2026" >> "$DENY"; echo "Adding $ip to csf.deny and iptables DROP..." ;;
   -dr) ip="$1"; hit=0; : > "$DENY.new"
       while IFS= read -r line; do t=${line%%[[:space:]]*}

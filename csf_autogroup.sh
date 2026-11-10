@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.72"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.73"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -266,6 +266,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_NOLIMIT="ATLANDI: %s limiti bulunamadı/sıfır, doluluk kontrolü atlandı"
   M_C24_DND="Auto-grouped /24: %s kalıcı tekil nedeniyle kalıcı ban - do not delete"
   M_TMIN_LEFT="%s dk kaldı"; M_TMIN_GONE="süresi doldu, lfd kaldırıyor"
+  M_MAILQ_FAIL="Mail gönderilemedi (%s); kuyruğa alındı, sonraki turlar 24 saate kadar yeniden dener"; M_MAILQ_SENT="Bekleyen mail gönderildi: %s"; M_MAILQ_DROP="Mail 24 saattir gönderilemedi, bırakıldı: %s"
   M_C24_PERM="Auto-grouped /24: %s kalıcı tekil nedeniyle kalıcı banlandı"
   M_OK24_DND="BLOK BANI: %s.0/24 (%s kalıcı tekil) [do not delete]"
   M_OK24="BLOK BANI: %s.0/24 (%s kalıcı tekil)"
@@ -542,6 +543,7 @@ else
   M_NOLIMIT="SKIPPED: %s limit missing/zero, usage check skipped"
   M_C24_DND="Auto-grouped /24: %s permanent singles -> permanent ban - do not delete"
   M_TMIN_LEFT="%s min left"; M_TMIN_GONE="expired, lfd is removing it"
+  M_MAILQ_FAIL="Email could not be sent (%s); queued, the next runs retry for up to 24 hours"; M_MAILQ_SENT="Queued email sent: %s"; M_MAILQ_DROP="Email could not be sent for 24 hours, dropped: %s"
   M_C24_PERM="Auto-grouped /24: %s permanent singles -> permanent ban"
   M_OK24_DND="BLOCK BAN: %s.0/24 (%s permanent singles) [do not delete]"
   M_OK24="BLOCK BAN: %s.0/24 (%s permanent singles)"
@@ -1463,11 +1465,37 @@ send_mail() {    # KONU DÜZ_METİN [HTML] → çıkış kodu; SM_OUT = komutun 
     fi
     return $rc
 }
+# Gönderilemeyen mail kuyruğu: send_mail başarısız olursa mail (konu, düz metin, HTML) kuyruğa yazılır, sonraki turlar 24 saate kadar
+# yeniden dener. Önce çıkış koduna bakılmıyordu: bildirimin günlük işareti (şüpheli ağ, liste doluluğu, sağlık…) yazılmış olduğundan
+# o gün bir daha denenmiyor, bildirim iz bırakmadan kayboluyordu. İşaretler bilerek kalır (her turda aynı olayı yeniden yazmasın).
+MAILQ_DIR="$(dirname "$SAYAC_FILE")/mailq"
+mail_send_q() {  # KONU DÜZ_METİN [HTML] → gönder; olmazsa kuyruğa
+    send_mail "$@" && return 0
+    local q; q="$MAILQ_DIR/$(date +%s)-$$-$RANDOM"
+    { mkdir -p "$MAILQ_DIR" && printf '%s' "$1" > "$q.s" && printf '%s' "$2" > "$q.t" && printf '%s' "${3:-}" > "$q.h"; } 2>/dev/null
+    log "$(m "$M_MAILQ_FAIL" "${SM_OUT%%$NL*}")"
+    return 1
+}
+mail_q_retry() { # kuyruktaki mailler: gönderilen silinir, 24 saatten eskisi bırakılır (günlüğe yazılır)
+    [ "$DRY" = 1 ] && return 0
+    [ -d "$MAILQ_DIR" ] || return 0
+    local f q s ts now; now=$(date +%s)
+    for f in "$MAILQ_DIR"/*.s; do
+        [ -e "$f" ] || continue
+        q="${f%.s}"; s=$(cat "$f"); ts="${q##*/}"; ts="${ts%%-*}"
+        if ! [[ "$ts" =~ ^[0-9]+$ ]] || [ $(( now - ts )) -gt 86400 ]; then
+            log "$(m "$M_MAILQ_DROP" "$s")"; rm -f "$q".[sth]; continue
+        fi
+        send_mail "$s" "$(cat "$q.t")" "$(cat "$q.h")" && { logr "$(m "$M_MAILQ_SENT" "$s")"; rm -f "$q".[sth]; }
+    done
+}
 # Tek mail: tur içindeki tüm bildirimler (blok banları, şüpheli ağlar, atlamalar, limit, sağlık) tek
 # mailde bölüm bölüm gider; konu satırı bölümlerin özetidir.
-MAIL_PARTS=(); MAIL_BODY=""; MAIL_URGENT=0; MAIL_TEXTS=(); MAIL_TONES=(); MAIL_CATS=()
-mail_add() {     # KONU-PARÇASI GÖVDE [bad] [SINIF] (bad: HTML'de kırmızı kart; SINIF: IE_RUN varsayılan, IE_FIREWALL, IE_LISTFULL)
-    MAIL_PARTS+=("$1"); MAIL_TEXTS+=("$2"); MAIL_TONES+=("${3:-}"); MAIL_CATS+=("${4:-IE_RUN}")
+MAIL_PARTS=(); MAIL_BODY=""; MAIL_URGENT=0; MAIL_TEXTS=(); MAIL_TONES=(); MAIL_CATS=(); MAIL_IC=()
+mail_add() {     # KONU-PARÇASI GÖVDE [bad] [SINIF] [ic] (bad: HTML'de kırmızı kart; SINIF: IE_RUN varsayılan, IE_FIREWALL, IE_LISTFULL;
+    # ic: Slack'e ic_track ile ayrıca gidiyor, tur özetine girmez). Önce Slack'te "bad" olan her parça atlanıyordu; ic_track'i olmayan
+    # (liste sınırının sildiği bloklar) Slack'e hiç gitmiyordu
+    MAIL_PARTS+=("$1"); MAIL_TEXTS+=("$2"); MAIL_TONES+=("${3:-}"); MAIL_CATS+=("${4:-IE_RUN}"); MAIL_IC+=("${5:-}")
     MAIL_BODY+="${MAIL_BODY:+$NL────────────────────────────────────────$NL$NL}$2$NL"
 }
 mail_flush() {
@@ -1491,17 +1519,17 @@ mail_flush() {
     h_usage "${current_count:-0}" "${limit:-0}" "${temp_current:-0}" "${temp_limit:-0}"; html+="$REPLY"
     printf -v hs '%s · %(%d.%m.%Y %H:%M)T' "$(hostname 2>/dev/null || echo "$HOSTNAME")" -1
     h_doc "CSF Auto-Group" "$hs" "$html"
-    [ ${#MI[@]} -gt 0 ] && send_mail "$([ "$urg" = 1 ] && printf '!!! ')$M_SUBJ_PREFIX$subj" "$txt" "$REPLY"
+    [ ${#MI[@]} -gt 0 ] && mail_send_q "$([ "$urg" = 1 ] && printf '!!! ')$M_SUBJ_PREFIX$subj" "$txt" "$REPLY"
     if slack_on; then     # tur bildirimleri (kırmızı kartlar ic_track ile ayrı gider): parçanın sınıfı Slack'e seçiliyse (IC_*)
         local rs="" rt="" icv
         for i in "${!MAIL_PARTS[@]}"; do
-            [ "${MAIL_TONES[i]}" = bad ] && continue
+            [ "${MAIL_IC[i]}" = ic ] && continue       # ic_track ile ayrıca gidiyor
             icv="IC_${MAIL_CATS[i]#IE_}"; [ "${!icv:-1}" = 1 ] || continue
             rs+="${rs:+ · }${MAIL_PARTS[i]}"; rt+="${rt:+$NL$NL}${MAIL_TEXTS[i]}"
         done
         [ -n "$rs" ] && slack_queue_add "$rs" "$rt"
     fi
-    MAIL_PARTS=(); MAIL_BODY=""; MAIL_URGENT=0; MAIL_TEXTS=(); MAIL_TONES=(); MAIL_CATS=()
+    MAIL_PARTS=(); MAIL_BODY=""; MAIL_URGENT=0; MAIL_TEXTS=(); MAIL_TONES=(); MAIL_CATS=(); MAIL_IC=()
 }
 perm_remove() {  # CIDR → csf.deny'den kaldır ("do not delete" ise önce işaret silinir); 0 = kaldırıldı
     local line; line=$(deny_line "$1"); [ -n "$line" ] || return 1
@@ -2743,6 +2771,7 @@ sgl_elig() {     # → SGL_E[ip] = sebep, SGL_ORD (sıra: kalıcılar, sonra ge�
     done
 }
 NC_DONE=""
+declare -A TURN_B24=()   # bu turda banlanan bloklar (add24, promote, temp24): ağ sayımı onların tekillerini saymaz
 net_count() {    # → NC_N[A.B] tekil sayısı, NC_P / NC_T kalıcı / geçici, NC_IPS[A.B] (" ip ip …", sayım sırasıyla), NC_SUB[A.B] farklı /24
     [ -n "$NC_DONE" ] && return 0; NC_DONE=1
     sgl_elig
@@ -2750,8 +2779,11 @@ net_count() {    # → NC_N[A.B] tekil sayısı, NC_P / NC_T kalıcı / geçici,
     local ip p24 p16; local -A sb=()
     for ip in "${SGL_ORD[@]}"; do
         p24="${ip%.*}"; p16="${p24%.*}"
-        [ "${count24[$p24]:-0}" -ge "$THRESHOLD_24" ] && continue
-        [ "${TPK_N[$p24]:-0}" -ge "$THRESHOLD_TEMP_24" ] && continue
+        # blokla ele alınan tekiller sayılmaz: bu turda banlanan blok ya da IP'yi zaten kapatan aralık banı. Önce blok eşiğini aşmış her
+        # bloğun tekilleri düşülüyordu — ban konmasa da (beyaz liste atlaması, servisi kapalı tekiller, csf -d başarısız): o IP'ler ne
+        # blok banına ne ağ uyarısına giriyordu
+        [ -n "${TURN_B24[$p24]+x}" ] && continue
+        ip2int "$ip"; perm_covers "$REPLY" "$REPLY" && continue
         NC_N[$p16]=$(( ${NC_N[$p16]:-0} + 1 )); NC_IPS[$p16]+=" $ip"
         if [ -n "${SINGLE_NOTE[$ip]+x}" ]; then NC_P[$p16]=$(( ${NC_P[$p16]:-0} + 1 )); else NC_T[$p16]=$(( ${NC_T[$p16]:-0} + 1 )); fi
         [ -n "${sb[$p24]}" ] || { sb[$p24]=1; NC_SUB[$p16]=$(( ${NC_SUB[$p16]:-0} + 1 )); }
@@ -3836,15 +3868,10 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
                 asn="${asn%% *}"; [ -n "$ap" ] && [ "${ap#*/}" -le "$cbits" ] 2>/dev/null || { ccn=""; asn=""; }   # duyurulan önek bütün aralığı içermeli
             fi
         fi
-        # CSF'in kendi verisi (IP kartıyla aynı: csf_geo_cover); o kodun verisi yoksa Cymru'nun ülke / ASN'i. Önce yalnız Cymru soruluyordu:
-        # sorgu kapalıyken sağlayıcı banı aralık kartında görünmüyordu
+        # yalnız CSF'in kendi verisi (csf_geo_cover; IP kartı ve tur kararıyla aynı). CSF ülke / ASN kümesini bölge dosyasından doldurur
+        # (csf.pl: "-e zone/$cc.zone" yoksa küme boş, kural hiçbir şeyi düşürmez; ölçüldü 2026-11-10): verisi olmayan kod kapatmaz.
+        # Önce o durumda Cymru'nun ülke / ASN'i kullanılıyordu (kapanmayan aralık "kapalı" görünüyordu)
         local gc w; csf_geo_cover "$clo" "$chi" $ccd $ccpd; gc=" $REPLY "
-        for w in ${ccn:+$ccn} ${asn:+AS$asn}; do
-            [[ "$gc" == *" $w "* ]] && continue
-            [ -r "$CSF_VAR/zone/${w,,}.zone" ] && continue
-            [[ "$w" == AS* ]] && [ -r "$CSF_VAR/Geo/ip2asn-combined.tsv" ] && continue
-            gc+="$w "
-        done
         for w in $gc; do [[ "$ccd" == *" $w "* ]] && { IN_COVER="CC_DENY $w"; break; }; done
         if [ -z "$IN_COVER" ]; then for w in $gc; do [[ "$ccpd" == *" $w "* ]] && { IN_CCP="$w"; break; }; done; fi
     fi
@@ -4019,16 +4046,10 @@ do_lookup() {
     done < <(grep -F '|' "$DENY_FILE" 2>/dev/null | grep -v '^[[:space:]]*#')
     ccd=" $(conf_val CC_DENY | LC_ALL=C tr '[:lower:],' '[:upper:] ') "
     ccp=" $(conf_val CC_DENY_PORTS | LC_ALL=C tr '[:lower:],' '[:upper:] ') "
-    # ülke / ASN banı: CSF'in kendi verisi (bölge dosyası, ip2asn); o kodun verisi yoksa Team Cymru'nun ülke / ASN'i. Önce yalnız Cymru
-    # bakılıyordu: sorgu kapalıyken ya da Cymru başka ASN dediğinde CSF'in uyguladığı sağlayıcı banı kartta görünmüyordu
+    # ülke / ASN banı: yalnız CSF'in kendi verisi (bölge dosyası, ip2asn). Verisi olmayan kod kapatmaz (csf.pl kümeyi bölge dosyasından
+    # doldurur; ölçüldü 2026-11-10) — önce o durumda Team Cymru'nun ülke / ASN'i kullanılıyordu
     local cpt cpu w gc
     csf_geo_cover "$n" "$n" $ccd $ccp; gc=" $REPLY "
-    for w in ${cc:+$cc} ${asn:+AS$asn}; do
-        [[ "$gc" == *" $w "* ]] && continue
-        [ -r "$CSF_VAR/zone/${w,,}.zone" ] && continue
-        [[ "$w" == AS* ]] && [ -r "$CSF_VAR/Geo/ip2asn-combined.tsv" ] && continue
-        gc+="$w "
-    done
     cpt=$(conf_val CC_DENY_PORTS_TCP); cpu=$(conf_val CC_DENY_PORTS_UDP)
     [[ "$cpt" =~ ^[0-9,:_-]*$ ]] || cpt=""; [[ "$cpu" =~ ^[0-9,:_-]*$ ]] || cpu=""
     for w in $gc; do
@@ -4555,9 +4576,12 @@ orphans_clean() { # banı CSF ekranından (eklenti dışından) kaldırılmış 
 OWN_SNAP="$(dirname "$SAYAC_FILE")/own_blocks"
 own_blocks_now() { awk '$1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.0\/24$/ && index($0, "# Auto-grouped /24:") && tolower($0) !~ /do not delete/ { print $1 }' "$DENY_FILE" 2>/dev/null | sort -u; }
 own_blocks_save() { [ "$DRY" = 1 ] || { own_blocks_now > "$OWN_SNAP.tmp" && mv -f "$OWN_SNAP.tmp" "$OWN_SNAP"; }; }
-limit_watch() {
+limit_watch() {  # [BU TURDA KONAN BLOKLAR…] — önceki görüntüde (ve bu turda konup) artık csf.deny'de olmayan işaretsiz blok banları
+    # Turun başında ve sonunda (görüntü kaydedilmeden hemen önce, ana kilit altında) çağrılır: turun kendi csf -d'leri DENY_IP_LIMIT
+    # doluyken CSF'e eski blokları sildirir; önce görüntü turun sonunda bu silmeden SONRA yazılıyordu ve silinen blok hiç fark
+    # edilmiyordu (bu turda konup silinen de). Görüntü yalnız zenginleştirme bölümünde yazılıyordu (o atlanınca hiç yazılmıyordu).
     [ "$DRY" = 1 ] && return 0
-    [ -r "$OWN_SNAP" ] || return 0
+    [ -r "$OWN_SNAP" ] || [ $# -gt 0 ] || return 0
     local since now_l c p lim body="" gone=()
     since=$(stat -c %Y "$OWN_SNAP" 2>/dev/null || echo 0)
     now_l=$(own_blocks_now)
@@ -4565,11 +4589,15 @@ limit_watch() {
         [ -n "$c" ] || continue
         grep -qxF "$c" <<< "$now_l" && continue
         deny_has "$c" && continue                         # satır duruyor (ör. silinmez işaretiyle yeniden yazılmış)
-        cidr_range "$c" && perm_covers "$R_LO" "$R_HI" && continue   # daha geniş bir ban kapsıyor (ör. elle /16 banı içini temizledi)
-        # eklentinin kendi işlemi (kaldırma, eski blok temizliği, kip değişikliği) olay kaydındadır: o sayılmaz
-        awk -v s="$since" -v k="\"cidr\":\"$c\"" 'index($0, k) && match($0, /"t":[0-9]+/) && substr($0, RSTART + 4, RLENGTH - 4) + 0 >= s - 5 { f = 1 } END { exit !f }' "$EVENTS_FILE" 2>/dev/null && continue
+        # daha geniş bir ban kapsıyor (ör. elle /16 banı içini temizledi) — csf.deny'nin ŞİMDİKİ hâlinden (turun başında okunan aralık
+        # listesi silinen bloğun kendisini hâlâ içerir; tur sonundaki denetimde blok kendini "kapsanıyor" sayıyordu)
+        cidr_range "$c" && awk -v lo="$R_LO" -v hi="$R_HI" '$1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\/[0-9]+$/ { split($1, s, "/"); split(s[1], p, ".")
+            a = ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4]; b = a + 2 ^ (32 - s[2]) - 1; if (a <= lo && b >= hi) { f = 1; exit } } END { exit !f }' "$DENY_FILE" 2>/dev/null && continue
+        # eklentinin kendi kaldırma işlemi (elle kaldırma, eski blok temizliği, kip değişikliği) ya da zaten bildirilmiş silme olay
+        # kaydındadır: o sayılmaz (yalnız kaldırma türleri; bu turdaki ban kaydı silmeyi gizlemesin)
+        awk -v s="$since" -v k="\"cidr\":\"$c\"" 'index($0, k) && $0 ~ /"type":"(expire|manual_unban|manual_change|limit_gone)"/ && match($0, /"t":[0-9]+/) && substr($0, RSTART + 4, RLENGTH - 4) + 0 >= s - 5 { f = 1 } END { exit !f }' "$EVENTS_FILE" 2>/dev/null && continue
         gone+=("$c")
-    done < "$OWN_SNAP"
+    done < <({ [ -r "$OWN_SNAP" ] && cat "$OWN_SNAP"; [ $# -gt 0 ] && printf '%s\n' "$@"; } | awk '!s[$0]++')
     [ ${#gone[@]} -gt 0 ] || return 0
     lim=$(conf_val DENY_IP_LIMIT)
     for c in "${gone[@]}"; do
@@ -4957,7 +4985,7 @@ cloud_health() { # uyarı süresinden uzun süredir indirilemeyen bulut listeler
         [ $(( now - f )) -gt $(( CLOUD_FAIL_DAYS * 86400 )) ] && bad+="${bad:+, }$n"
     done < "$st"
     if [ -n "$bad" ] && ! grep -qF "CLOUD_FAIL $TODAY" "$SAYAC_FILE" 2>/dev/null; then
-        mail_add "$(m "$M_CLOUD_FAIL_SUBJ" "$bad")" "$(m "$M_CLOUD_FAIL_BODY" "$bad")" bad; cnt_add "CLOUD_FAIL $TODAY"
+        mail_add "$(m "$M_CLOUD_FAIL_SUBJ" "$bad")" "$(m "$M_CLOUD_FAIL_BODY" "$bad")" bad IE_RUN ic; cnt_add "CLOUD_FAIL $TODAY"
         jstr "$bad"; ev cloud_fail "" "names=$REPLY"; log "$(m "$M_CLOUD_FAIL_BODY" "$bad")"
     fi
     ic_track IC_RUN CloudFail "$([ -n "$bad" ] && echo 1 || echo 0)" "$(m "$M_CLOUD_FAIL_SUBJ" "$bad")" "$(m "$M_CLOUD_FAIL_BODY" "$bad")" "$M_CLOUD_FAIL_OK"
@@ -5542,7 +5570,7 @@ svc_health() {   # izinli servis kaynaklarından uyarı süresinden uzun süredi
         [ $(( now - f )) -gt $(( SVC_FAIL_DAYS * 86400 )) ] && bad+="${bad:+, }$n"     # ayar: indirilemezse uyar (gün)
     done < "$st"
     if [ -n "$bad" ] && ! grep -qF "SVC_FAIL $TODAY" "$SAYAC_FILE" 2>/dev/null; then
-        mail_add "$(m "$M_SVC_FAIL_SUBJ" "$bad")" "$(m "$M_SVC_FAIL_BODY" "$bad")" bad; cnt_add "SVC_FAIL $TODAY"
+        mail_add "$(m "$M_SVC_FAIL_SUBJ" "$bad")" "$(m "$M_SVC_FAIL_BODY" "$bad")" bad IE_RUN ic; cnt_add "SVC_FAIL $TODAY"
         jstr "$bad"; ev svc_fail "" "names=$REPLY"; log "$(m "$M_SVC_FAIL_BODY" "$bad")"
     fi
     ic_track IC_RUN SvcFail "$([ -n "$bad" ] && echo 1 || echo 0)" "$(m "$M_SVC_FAIL_SUBJ" "$bad")" "$(m "$M_SVC_FAIL_BODY" "$bad")" "$M_SVC_FAIL_OK"
@@ -5591,8 +5619,15 @@ refresh_tasks() { # her tur, her iş kendi zaman damgasıyla (ayrı cron satır�
     # tur yeniden dener. CSF'in ASN verisi geo_refresh'te. REFRESH_HOUR (varsayılan 4): üçü de o saatten sonraki ilk turda (due_at);
     # yapılan işler RF_JOBS'a (run olayı "jobs": panelin Tur süresi grafiği uzun turun sebebini yazar)
     local cref="$CLOUD_DIR/.refreshed" sref="$(dirname "$SAYAC_FILE")/services/.refreshed" c0 c1
-    if [ "$SVC_ALLOW" = 1 ] && refresh_due "$sref" "$SVC_REFRESH_DAYS"; then svc_enforce 1; mkdir -p "$(dirname "$sref")"; date +%s > "$sref"; rf_mark svc "$(dirname "$sref")/status"; fi
-    if [ "$CLOUD_BAN" = 1 ] && refresh_due "$cref" "$CLOUD_REFRESH_DAYS"; then cloud_enforce 1 && { cloud_probe; rf_mark cloud "$CLOUD_DIR/status"; date +%s > "$cref"; }; fi
+    # bir liste inemediyse (araç önceki listeyi korur, durum satırında hata) saatte bir yeniden denenir (.retry); hepsi inince kalkar.
+    # Önce .refreshed her durumda yazılıyordu: inemeyen liste bir sonraki yenileme gününe (ya da *_FAIL_DAYS bildirimine) kadar eski kalıyordu
+    rf_retry_due() { local r; r=$(cat "$1.retry" 2>/dev/null); [[ "$r" =~ ^[0-9]+$ ]] && [ $(( $(date +%s) - r )) -ge 3600 ]; }
+    rf_retry_set() { if awk -F'|' -v t0="$RUN_T0" 'NF >= 4 && ($4 != "" || $3 + 0 < t0) { f = 1 } END { exit !f }' "$2" 2>/dev/null
+                     then date +%s > "$1.retry"; else rm -f "$1.retry"; fi; }
+    if [ "$SVC_ALLOW" = 1 ] && { refresh_due "$sref" "$SVC_REFRESH_DAYS" || rf_retry_due "$sref"; }; then
+        svc_enforce 1; mkdir -p "$(dirname "$sref")"; date +%s > "$sref"; rf_mark svc "$(dirname "$sref")/status"; rf_retry_set "$sref" "$(dirname "$sref")/status"; fi
+    if [ "$CLOUD_BAN" = 1 ] && { refresh_due "$cref" "$CLOUD_REFRESH_DAYS" || rf_retry_due "$cref"; }; then
+        cloud_enforce 1 && { cloud_probe; rf_mark cloud "$CLOUD_DIR/status"; date +%s > "$cref"; rf_retry_set "$cref" "$CLOUD_DIR/status"; }; fi
     # CDN arkasındaki siteler: istekleri güvenlik duvarına CDN'den gelir, ziyaretçinin IP'si görünmez (Etkisini ölç ve ban-leak ayırır).
     # Dosyanın ilk satırı "#t|EPOCH" (son tarama); saat ayarlıysa zamanı due_at verir, araç her çağrıda tarar
     if [ -r "$SELF_DIR/tools/cdn-sites.sh" ]; then
@@ -6417,11 +6452,10 @@ prov_cover() {   # stdin "ip|sebep|asn" → 0: her IP CSF'te banlı bir sağlay�
         # sayılıyor, web'i kapalı ağ (kiralık sunucu listesinde, web saldırıları + bir PERMBLOCK) Kontrol edilecekler'de kalıyordu.
         if [ "$k" = repeat ]; then perm_cls "$ip"; [ -n "$REPLY" ] || continue; k="$REPLY"; fi
         pa "pcov · perm_cls"
-        # ülke ya da sağlayıcı banı: CSF'in kendi verisi (IP kartı ve aralık kartıyla aynı); verisi olmayan kodda Cymru'nun ülke / ASN'i.
-        # Önce yalnız Cymru'ya bakılıyordu: sorgu kapalıyken ya da Cymru başka ASN dediğinde banlı sağlayıcının ağı uyarıda kalıyordu
-        cc="${OWN_C[${ip%.*}]}"; gs="${GEOI[$ip]} "
-        [[ "$cc" =~ ^[A-Z]{2}$ ]] && [[ "$GEO_HAS" != *" $cc "* ]] && gs+=" $cc "
-        [ -n "$a" ] && [[ "$GEO_HAS" != *" AS$a "* ]] && gs+=" AS$a "
+        # ülke ya da sağlayıcı banı: yalnız CSF'in kendi verisi (IP kartı ve aralık kartıyla aynı). Verisi olmayan kod kapatmaz (csf.pl
+        # kümeyi bölge dosyasından doldurur); önce o durumda Cymru'nun ülke / ASN'i kullanılıyor, kapanmayan ağ "kapsanıyor" sayılıp blok banı
+        # konmuyor, uyarı bastırılıyordu. Sahip bilgisine de gerek kalmadı (ilk turda sahipsiz blok için karar yoktu)
+        gs="${GEOI[$ip]} "
         hit=""
         for w in $gs; do
             if [[ "$ccd" == *",$w,"* ]] || { [[ "$ccp" == *",$w,"* ]] && pc_ports "$k" "$tcp" "$udp"; }; then hit="$w"; break; fi
@@ -6497,11 +6531,15 @@ prov_near() {    # stdin "ip|sebep|asn" → 0: her IP banlı bir sağlayıcıda 
     PN_SRC=""; PN_SVC=""
     pa "pnear · başı"
     local -a pnl=(); mapfile -t pnl; cloud_prefill $(printf '%s\n' "${pnl[@]}" | cut -d'|' -f1)
+    geo_ips_load $(printf '%s\n' "${pnl[@]}" | cut -d'|' -f1)                   # sağlayıcı banı CSF'in kendi verisinden (prov_cover gibi)
     pa "pnear · cloud_prefill"
+    local w
     for ip in "${pnl[@]}"; do
         IFS='|' read -r ip r a <<< "$ip"
         [ -n "$ip" ] || continue
-        [ -n "$a" ] || a="${OWN_A[${ip%.*}]}"
+        # IP'yi kapsayan banlı sağlayıcı: CSF'in verisinde bu IP'yi içeren ASN (önce Team Cymru'nun ASN'i alınıyordu; CSF'in o ASN için
+        # verisi yoksa ya da Cymru başka ASN diyorsa karar gerçekle uyuşmuyordu)
+        a=""; for w in ${GEOI[$ip]}; do [[ "$w" =~ ^AS([0-9]+)$ ]] && [ -n "${ASB[${BASH_REMATCH[1]}]}" ] && { a="${BASH_REMATCH[1]}"; break; }; done
         cls_of "$r"; k="$REPLY"
         pa "pnear · cls_of"
         if [ "$k" = repeat ]; then perm_cls "$ip"; [ -n "$REPLY" ] && k="$REPLY"; fi     # PERMBLOCK: önceki geçici banın servisi
@@ -6960,7 +6998,7 @@ digest_maybe() { # çalışma sonunda: seçilen gün, 09:00'dan sonra, haftada b
     wk="DIGEST_$(date +%G-W%V)"
     grep -q "^$wk " "$SAYAC_FILE" && return 0
     digest_build
-    mail_cat IE_DIGEST && send_mail "$DG_SUBJ" "$DG_BODY" "$DG_HTML"
+    mail_cat IE_DIGEST && mail_send_q "$DG_SUBJ" "$DG_BODY" "$DG_HTML"
     slack_on && [ "$IC_DIGEST" = 1 ] && ic_send Digest "$DG_SUBJ" "$DG_BODY"
     cnt_add "$wk $TODAY"
     log "$(m "$M_DG_SENT" "$ALERT_MAIL")"
@@ -7173,7 +7211,7 @@ esac
 take_lock || { log "$M_LOCKED"; exit 0; }
 [ "$DRY" = 1 ] && log "$M_DRY_ON"
 [ ${#SETS[@]} -gt 0 ] && log "$(m "$M_DRY_OVR" "${SETS[*]}")"
-RUN_T0=$(date +%s); RUN_LB=$(stat -c %s "$LOG_FILE" 2>/dev/null || echo 0)   # günlüğün tur başındaki boyu: araçların bu turdaki satırları
+declare -A TURN_B24=(); TURN_ADDED=(); RUN_T0=$(date +%s); RUN_LB=$(stat -c %s "$LOG_FILE" 2>/dev/null || echo 0)   # günlüğün tur başındaki boyu: araçların bu turdaki satırları
 prof start
 panel_init
 owners_load
@@ -7197,7 +7235,7 @@ if [ -n "$limit" ] && [ "$limit" -gt 0 ] 2>/dev/null; then
         log "$(m "$M_PERM_WARN")"
         doluluk_satiri=$(m "$M_PERM_FULL" "$current_count" "$limit" "$percent")
         if ! grep -qF "LIMIT_PERM $TODAY" "$SAYAC_FILE"; then      # günde bir kez (her turda değil)
-            MAIL_URGENT=1; mail_add "$(m "$M_MAIL_PERMFULL_SUBJ" "$percent")" "$(m "$M_MAIL_PERMFULL_BODY")" bad IE_LISTFULL; cnt_add "LIMIT_PERM $TODAY"
+            MAIL_URGENT=1; mail_add "$(m "$M_MAIL_PERMFULL_SUBJ" "$percent")" "$(m "$M_MAIL_PERMFULL_BODY")" bad IE_LISTFULL ic; cnt_add "LIMIT_PERM $TODAY"
         fi
     else
         doluluk_satiri=$(m "$M_PERM_USAGE" "$current_count" "$limit" "$percent")
@@ -7223,7 +7261,7 @@ if [ -n "$temp_limit" ] && [ "$temp_limit" -gt 0 ] 2>/dev/null; then
         log "$(m "$M_TEMP_WARN")"
         temp_doluluk_satiri=$(m "$M_TEMP_FULL" "$temp_current" "$temp_limit" "$temp_percent")
         if ! grep -qF "LIMIT_TEMP $TODAY" "$SAYAC_FILE"; then
-            MAIL_URGENT=1; mail_add "$(m "$M_MAIL_TEMPFULL_SUBJ" "$temp_percent")" "$(m "$M_MAIL_TEMPFULL_BODY")" bad IE_LISTFULL; cnt_add "LIMIT_TEMP $TODAY"
+            MAIL_URGENT=1; mail_add "$(m "$M_MAIL_TEMPFULL_SUBJ" "$temp_percent")" "$(m "$M_MAIL_TEMPFULL_BODY")" bad IE_LISTFULL ic; cnt_add "LIMIT_TEMP $TODAY"
         fi
     else
         temp_doluluk_satiri=$(m "$M_TEMP_USAGE" "$temp_current" "$temp_limit" "$temp_percent")
@@ -7309,7 +7347,8 @@ for prefix in $(printf '%s\n' "${!count24[@]}" | sort -V); do
         ip_line "$ip" "${SINGLE_NOTE[$ip]}" 0; added24_body+="$REPLY$tag$NL"
         addj+="${addj:+,}${IPJ%\}},\"res\":\"$res\"}"
     done
-    ev add24 "${prefix}.0/24" "n=$n" "dnd=$([ "$dnd24" = 1 ] && echo true || echo false)" "${OKV[@]}" "ips=[$addj]"
+    TURN_B24[$prefix]=1; ev add24 "${prefix}.0/24" "n=$n" "dnd=$([ "$dnd24" = 1 ] && echo true || echo false)" "${OKV[@]}" "ips=[$addj]"
+    [ "$dnd24" = 1 ] || TURN_ADDED+=("${prefix}.0/24")   # turun sonundaki liste sınırı denetimi için (CSF bu turda silerse)
     [ "$dnd24" = 1 ] && cnt_del_prefix "$prefix"     # silinmez kalıcı ban kondu: izleme bitti
 done
 if [ "$added24" -gt 0 ]; then
@@ -7372,7 +7411,7 @@ for prefix in $(printf '%s\n' "${!temp_count24[@]}" | sort -V); do
                 owner_line "${temp_ips24[$prefix]# }"; temp_perm_added24_body+="$REPLY"; owner_kv
                 ip_lines "${temp_ips24[$prefix]}" temp 0; temp_perm_added24_body+="$REPLY"
                 cnt_del_prefix "$prefix"
-                ev promote "${prefix}.0/24" "n=$n" "dnd=true" "${OKV[@]}" "ips=$IPS_J"
+                TURN_B24[$prefix]=1; ev promote "${prefix}.0/24" "n=$n" "dnd=true" "${OKV[@]}" "ips=$IPS_J"
             else
                 log "$(m "$M_TADD24_FAIL" "$prefix")"
             fi
@@ -7386,7 +7425,7 @@ for prefix in $(printf '%s\n' "${!temp_count24[@]}" | sort -V); do
                 owner_line "${temp_ips24[$prefix]# }"; temp_added24_body+="$REPLY"; owner_kv
                 ip_lines "${temp_ips24[$prefix]}" temp 0; temp_added24_body+="$REPLY"
                 cnt_add "$prefix $(date '+%Y-%m-%d')"
-                ev temp24 "${prefix}.0/24" "n=$n" "ttl=43200" "${OKV[@]}" "ips=$IPS_J"
+                TURN_B24[$prefix]=1; ev temp24 "${prefix}.0/24" "n=$n" "ttl=43200" "${OKV[@]}" "ips=$IPS_J"
             else
                 log "$(m "$M_TADD24T_FAIL" "$prefix")"
             fi
@@ -7534,7 +7573,7 @@ if [ ${#h_msgs[@]} -gt 0 ]; then
         MAIL_URGENT=1
         h_body="$M_H_BODY$NL"; for hm in "${h_msgs[@]}"; do h_body+="  - $hm$NL"; done
         h_subj=""; for hm in "${h_msgs[@]}"; do h_subj+="${h_subj:+, }$hm"; done
-        mail_add "$h_subj" "$h_body" bad IE_FIREWALL; cnt_add "HEALTH $TODAY"
+        mail_add "$h_subj" "$h_body" bad IE_FIREWALL ic; cnt_add "HEALTH $TODAY"
     fi
 fi
 
@@ -7542,7 +7581,11 @@ h_all=""; for hm in "${h_msgs[@]}"; do h_all+="${h_all:+, }$hm"; done
 ic_track IC_FIREWALL Firewall "$([ ${#h_msgs[@]} -gt 0 ] && echo 1 || echo 0)" "$(m "$M_IC_FW" "$h_all")" "$M_H_BODY $h_all" "$M_IC_FW_OK"
 
 prof "turn sağlık"
+# CSF'in liste sınırı bu turun kendi banları yüzünden blok sildiyse (turun başındaki denetim bunu göremez): bildirim bu turun mailine
+# girsin; sonra eklentinin işaretsiz blok banlarının görüntüsü (sonraki tur karşılaştırır) — ana kilit altında, her turda
+[ "$DRY" = 1 ] || { limit_watch "${TURN_ADDED[@]}"; own_blocks_save; }
 # ── Bu turun bildirimleri: tek mail ─────────────────────────────────────────
+mail_q_retry                          # önceki turlarda gönderilemeyen mailler (24 saate kadar)
 mail_flush
 # kuyrukta yalnız Slack'e seçili sınıfların parçaları var (mail_flush IC_* denetler): hangi sınıftan olursa olsun boşaltılır
 slack_on && slack_queue_flush
@@ -7609,7 +7652,6 @@ st=$(date +%s); backfill_imunify
 [ "$BF_N" -gt 0 ] && logr "$(m "$M_STEP_IMOWN" "$BF_N" "$(( $(date +%s) - st ))")"
 prof "turn sahip/Imunify zenginleştirme"
 owners_save
-own_blocks_save                       # eklentinin işaretsiz otomatik blok banları: sonraki tur CSF sınırının sildiklerini bulur
 fi
 ev run "" "v=\"$VERSION\"" "dur=$(( $(date +%s) - RUN_T0 ))" "added=$added24" "warn16=$warn16" \
     "temp_added=$temp_added24" "promoted=$temp_perm_added24" "temp_warn16=$temp_warn16" "wl_skipped=$wl_skipped" \

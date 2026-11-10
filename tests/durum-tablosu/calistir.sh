@@ -19,6 +19,8 @@ mk() {   # ad → temiz kök: boş listeler, sınırlar, taklit araçlar
     D="$R/etc/csf/csf.deny"; T="$R/var/lib/csf/csf.tempban"; A="$R/etc/csf/csf.allow"; C="$R/var/lib/csf_autogroup/counter"
     : > "$D"; : > "$T"; : > "$C"; printf '127.0.0.1\n' > "$A"; : > "$R/etc/csf/csf.ignore"; : > "$R/etc/csf/csf.rignore"
     printf '%s\n' 'DENY_IP_LIMIT = "200"' 'DENY_TEMP_IP_LIMIT = "100"' > "$R/etc/csf/csf.conf"
+    # CSF'in bölge dosyaları: ülke / ASN banı yalnız bunlar varken işler (csf.pl); test ağı 151.80.0.0/16 = AS16276 FR (taklit DNS)
+    mkdir -p "$R/var/lib/csf/zone"; for z in fr as16276; do echo 151.80.0.0/16 > "$R/var/lib/csf/zone/$z.zone"; done
     cp "${AG_ENGINE:-$REPO/csf_autogroup.sh}" "$R/app/csf_autogroup.sh"   # AG_ENGINE: yeni kuralı eski motorla sınamak için
     printf '%s\n' "MSG_LANG=tr" "ALERT_MAIL=" "DENY_FILE=$D" "CSF_CONF=$R/etc/csf/csf.conf" "CSF_BIN=$W/bin/csf" \
         "CSF_VAR=$R/var/lib/csf" "LOG_FILE=$R/autogroup.log" "SAYAC_FILE=$C" "IMUNIFY_BIN=$W/bin/imunify360-agent" > "$R/app/config.env"
@@ -156,6 +158,13 @@ mkm mailcat0 0; for x in 1 2 3; do single 151.80.7.$x sshd; done; quiet
 mcheck "IE_RUN=0: aynı tur e-posta göndermez" "[ ! -e '$R/mail_calls.log' ]"
 mkm mailcatl 0; printf '%s\n' 'DENY_IP_LIMIT = "4"' 'DENY_TEMP_IP_LIMIT = "100"' > "$R/etc/csf/csf.conf"; for x in 1 2 3 4; do single 151.80.7.$x sshd; done; quiet
 mcheck "IE_RUN=0, IE_LISTFULL=1: liste doluyor uyarısı tek mailde gider, blok banı bölümü girmez" "[ \$(grep -c sendmail '$R/mail_calls.log') = 1 ] && mtext | grep -q 'csf.deny' && ! mtext | grep -q '151.80.7.0/24'"
+# gönderilemeyen mail kaybolmaz: kuyruğa alınır, sonraki tur gönderir (önce çıkış koduna bakılmıyordu; günlük işaret yazıldığı için
+# o gün bir daha denenmiyordu)
+mkm mailq 1; printf '%s\n' '#!/bin/bash' 'cat >/dev/null; echo "sendmail: bağlantı reddedildi" >&2; exit 75' > "$R/sm-fail"; chmod +x "$R/sm-fail"
+echo "SENDMAIL_BIN=$R/sm-fail" >> "$R/app/config.env"; for x in 1 2 3; do single 151.80.7.$x sshd; done; quiet
+mcheck "mail kuyruğu: gönderilemeyen mail kuyrukta, günlükte sebebiyle" "ls '$R/var/lib/csf_autogroup/mailq/'*.s >/dev/null 2>&1 && grep -q 'Mail gönderilemedi (sendmail: bağlantı reddedildi)' '$R/autogroup.log'"
+echo "SENDMAIL_BIN=$W/bin/sendmail" >> "$R/app/config.env"; quiet
+mcheck "mail kuyruğu: sonraki tur bekleyen maili gönderir, kuyruk boşalır" "! ls '$R/var/lib/csf_autogroup/mailq/'*.s >/dev/null 2>&1 && mtext | grep -q '151.80.7.0/24'"
 # izinli IP'den ihlal: kendi sınıfı (IE_REVIEW), maildeki izin kaydı panelle aynı (satır yorumuyla); yoksayılan IP bildirilmez
 mkav() { mkm "$1" 1; echo "LFD_LOG=$R/lfd.log" >> "$R/app/config.env"; : > "$R/lfd.log"; printf '151.80.7.9 # Ofis yedek - Tue Oct 31 2023\n' >> "$A"; lfdb 3600 151.80.7.9; }
 mkav avmail; quiet
@@ -395,11 +404,24 @@ mcheck "susturma: IP'yi içine alan /24 susturulunca izinli IP satırı Kontrol 
 mk wfull; printf '%s\n' '151.80.7.9 # ofis' 'tcp|in|d=22|s=151.80.7.10' 'tcp|in|d=1:65535|s=151.80.7.11' 'tcp|out|d=1:65535|d=151.80.7.11' >> "$A"
 wfc() { run --lookup "$1" --json 2>/dev/null | grep -q "\"wfull\":$2"; }
 mcheck "tam izin: düz IP 1, tek port 0, 1:65535 giriş+çıkış çifti 1 (motorun ölçütü)" "wfc 151.80.7.9 1 && wfc 151.80.7.10 0 && wfc 151.80.7.11 1"
+# ülke / sağlayıcı banı yalnız CSF'in verisiyle kapsar: bölge dosyası yoksa CSF'in kümesi boş, hiçbir şey düşmez (csf.pl). Önce Team
+# Cymru'nun ülkesi kullanılıyordu: kapanmayan blok "kapsanıyor" sayılıp banlanmıyordu
+geoz() { mk "$1"; printf '%s\n' 'CC_DENY = "FR"' >> "$R/etc/csf/csf.conf"; [ "$2" = yok ] && rm -f "$R/var/lib/csf/zone/fr.zone"
+    for x in 1 2 3; do single 151.80.7.$x sshd; done; quiet; }
+geoz geoz1 var
+mcheck "ülke banı: CSF'in bölge dosyası varken FR bloğu kapsanıyor sayılır (banlanmaz)" "! grep -q '^151.80.7.0/24' '$D'"
+geoz geoz0 yok
+mcheck "ülke banı: bölge dosyası yokken CSF FR'yi kapatmaz → blok banlanır (Cymru'nun ülkesine bakılmaz)" "grep -q '^151.80.7.0/24' '$D'"
+mcheck "ülke banı: bölge dosyası yokken IP kartı ülke banı göstermez" "! run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"kind\":\"cc\"'"
+# ağ sayımı yalnız gerçekten banlanan bloğun tekillerini düşer: beyaz liste yüzünden banlanmayan (Atlandı) bloğun tekilleri ağa sayılır
+# (önce eşiği aşan her bloğun tekilleri düşülüyordu: ne blok banına ne ağ uyarısına giriyorlardı)
+mk ncskip; printf '151.80.7.50 # müşteri\n' >> "$A"; for x in 7.1 7.2 7.3 8.1 8.2; do single 151.80.$x sshd; done; quiet
+mcheck "ağ sayımı: beyaz liste yüzünden banlanmayan bloğun tekilleri ağ uyarısına girer (3 + 2, eşik 5)" "! grep -q '^151.80.7.0/24' '$D' && grep -q '\"type\":\"warn16\",\"cidr\":\"151.80.0.0/16\",\"n\":5' '$R/var/lib/csf_autogroup/events.jsonl'"
+mk ncban; for x in 7.1 7.2 7.3 8.1 8.2; do single 151.80.$x sshd; done; quiet
+mcheck "ağ sayımı: bu turda banlanan bloğun tekilleri ağa sayılmaz (3 banlandı + 2 → uyarı yok)" "grep -q '^151.80.7.0/24' '$D' && ! grep -q '\"type\":\"warn16\"' '$R/var/lib/csf_autogroup/events.jsonl'"
 # "web kapalı mı" tek tanım (svc_uports): web TCP 80/443 + UDP 443 (HTTP/3). Ülke port banı UDP 443'ü kapatmıyorsa web ihlalleri
 # kapsanmış sayılmaz → şüpheli ağ uyarısı verilir (önce yalnız TCP'ye bakılıyordu, uyarı düşüyordu); UDP 443 de kapalıysa uyarı yok
 udpw() { mk "$1"; printf '%s\n' 'CC_DENY_PORTS = "FR"' 'CC_DENY_PORTS_TCP = "80,443"' "CC_DENY_PORTS_UDP = \"$2\"" >> "$R/etc/csf/csf.conf"
-    # ülke kararı sahip önbelleğinden (bölge dosyası yok): tur ilk kez sorgulamadan önce ağın ülkesi bilinsin
-    for b in 7 8 9 10; do printf '151.80.%s|16276|FR|OVH, FR|%s|151.80.0.0/16\n' "$b" "$NOW"; done > "$R/var/lib/csf_autogroup/owners"
     for x in 7.1 7.2 8.1 8.2 9.1 10.1; do single 151.80.$x mod_security; done; quiet; }
 udpw udpw0 ""
 mcheck "web kapalı mı: ülke port banı UDP 443'ü kapatmıyorsa web ihlalli ağ uyarılır" "grep -q '\"type\":\"warn16\",\"cidr\":\"151.80.0.0/16\"' '$R/var/lib/csf_autogroup/events.jsonl'"
@@ -441,6 +463,11 @@ mk lgone; a24 151.80.7.0/24; a24 151.80.8.0/24; quiet; sed -i '/^151\.80\.7\.0\/
 mcheck "CSF'in sildiği otomatik /24 izlemeye alınır ve olay yazılır" "grep -q '^151.80.7 ' '$C' && grep -q '\"type\":\"limit_gone\",\"cidr\":\"151.80.7.0/24\"' '$R/var/lib/csf_autogroup/events.jsonl' && ! grep -q '\"cidr\":\"151.80.8.0/24\".*limit_gone\|limit_gone.*\"cidr\":\"151.80.8.0/24\"' '$R/var/lib/csf_autogroup/events.jsonl'"
 quiet
 mcheck "aynı kayıp bir sonraki turda yeniden bildirilmez" "[ \$(grep -c '\"type\":\"limit_gone\"' '$R/var/lib/csf_autogroup/events.jsonl') = 1 ]"
+# turun kendi blok banı CSF'in sınırını doldurup eski bloğu sildirirse aynı turda fark edilir (önce görüntü bu silmeden sonra
+# yazılıyor, kayıp hiç bildirilmiyordu); taklit csf -d csf.pl'nin DENY_IP_LIMIT silmesini yapar
+mk lgturn; sed -i 's/^DENY_IP_LIMIT = .*/DENY_IP_LIMIT = "4"/' "$R/etc/csf/csf.conf"; a24 151.80.7.0/24; quiet; sleep 1
+for x in 1 2 3; do single 151.80.9.$x sshd; done; quiet
+mcheck "liste sınırı: turun kendi banının sildirdiği eski blok aynı turda izlemeye alınır ve bildirilir" "grep -q '^151.80.9.0/24' '$D' && ! grep -q '^151.80.7.0/24' '$D' && grep -q '\"type\":\"limit_gone\",\"cidr\":\"151.80.7.0/24\"' '$R/var/lib/csf_autogroup/events.jsonl' && grep -q '^151.80.7 ' '$C'"
 mk lgself; a24 151.80.7.0/24; quiet; sleep 1; quiet --action unban 151.80.7.0/24; quiet
 mcheck "eklentinin kendi kaldırması 'CSF sildi' sayılmaz" "! grep -q '\"type\":\"limit_gone\"' '$R/var/lib/csf_autogroup/events.jsonl'"
 mk lgback; printf '151.80.7 %s\n' "$(date -d '-3 days' +%F)" >> "$C"; for x in 1 2 3; do single 151.80.7.$x sshd; done; quiet

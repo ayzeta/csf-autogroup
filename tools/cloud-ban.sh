@@ -224,6 +224,7 @@ apply() {        # son listelerle ipset'i doldur, zinciri kur (değişmiş olsa 
         if [ "$wide" = 0 ]; then case "$pr" in tcp) ag_port_hit "$pp" "$ctu" || continue ;; udp) ag_port_hit "$pp" "$cuu" || continue ;; esac; fi
         M -A "$CHAIN" -p "$pr" -s "$pa" --dport "$pp" -j RETURN || return 1
     done < <(printf '%s\n' "$ents" | grep '^P ')
+    for s in $(ag_allow_sets); do M -A "$CHAIN" -m set --match-set "$s" src -j RETURN || return 1; done   # CSF'in CC_ALLOW kümeleri
     # küme başına kural. svc: her port (ya da a:b aralığı) için ayrı DROP; mangle PREROUTING'te hedef port henüz asıl port (nat sonra
     # gelir). all: kümeden her yeni bağlantı. exc: alt zincir — açık portlar RETURN (ana zincirde öteki kümelere bakılmaya devam
     # edilir), gerisi DROP. Yalnız ctstate NEW: sunucunun bu adreslere açtığı bağlantıların cevapları hiçbir kipte düşmez.

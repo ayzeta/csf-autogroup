@@ -87,31 +87,39 @@ apply() {
     printf '%s\n' "$ents" | awk -v s="${ASET}_t" '$1 == "F" { print "add " s " " $2 " -exist" }' | ipset restore -exist || { log "izin kümesi doldurulamadı"; return 1; }
     ipset swap "${ASET}_t" "$ASET" && ipset destroy "${ASET}_t"
     M -N "$CHAIN" 2>/dev/null; M -F "$CHAIN" || return 1
-    M -A "$CHAIN" -m conntrack ! --ctstate NEW -j RETURN
-    M -A "$CHAIN" -m set --match-set "$ASET" src -j RETURN
+    # izin (RETURN) kuralları DROP'lardan önce ve hepsi kurulmalı: biri eklenemezse (ör. xtables kilidi) zincir boşaltılır — izinli
+    # adres hiçbir durumda kısmi ban / port banında düşmesin. Önce çıkış kodlarına bakılmıyordu: eksik RETURN'le DROP'lar kuruluyor,
+    # durum dosyası yazıldığı için --check de düzeltmiyordu (kiralık liste aracı aynı yerde zaten || return 1 kullanıyor)
+    rfail() { M -F "$CHAIN" 2>/dev/null; rm -f "$STATE"; log "izin kuralı eklenemedi; koruma zinciri boşaltıldı (sonraki turda yeniden kurulur)"; }
+    M -A "$CHAIN" -m conntrack ! --ctstate NEW -j RETURN || { rfail; return 1; }
+    M -A "$CHAIN" -m set --match-set "$ASET" src -j RETURN || { rfail; return 1; }
     local pr pa pp
     while read -r _ pr pa pp; do
         [ -n "$pa" ] || continue
-        if [ "$pp" = all ]; then M -A "$CHAIN" -p "$pr" -s "$pa" -j RETURN; else M -A "$CHAIN" -p "$pr" -s "$pa" --dport "$pp" -j RETURN; fi
+        if [ "$pp" = all ]; then M -A "$CHAIN" -p "$pr" -s "$pa" -j RETURN || { rfail; return 1; }
+        else M -A "$CHAIN" -p "$pr" -s "$pa" --dport "$pp" -j RETURN || { rfail; return 1; }; fi
     done < <(printf '%s\n' "$ents" | grep '^P ')
+    local cs; for cs in $(ag_allow_sets); do M -A "$CHAIN" -m set --match-set "$cs" src -j RETURN || { rfail; return 1; }; done   # CSF'in CC_ALLOW kümeleri
     # kısmi banlar (csf.deny: tcp|in|d=PORTLAR|s=ARALIK); /8'den geniş kaynak port kuralıdır, alınmaz
-    local l s d p n=0 c cc ports
+    local l s d p n=0 c cc ports bad=0
     while IFS= read -r l; do
         l="${l%%#*}"; l="${l//[[:space:]]/}"
         [[ "$l" =~ \|s=([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(/([0-9]+))?) ]] || continue; s="${BASH_REMATCH[1]}"
         [ -n "${BASH_REMATCH[3]}" ] && [ "${BASH_REMATCH[3]}" -lt 8 ] && continue
         [[ "$l" =~ \|d=([0-9,_:]+) ]] || continue; d="${BASH_REMATCH[1]//_/:}"
-        for p in ${d//,/ }; do M -A "$CHAIN" -p tcp -s "$s" --dport "$p" -j DROP && n=$((n + 1)); done
+        for p in ${d//,/ }; do if M -A "$CHAIN" -p tcp -s "$s" --dport "$p" -j DROP; then n=$((n + 1)); else bad=1; fi; done
     done < <(grep -E '^tcp\|in\|' "$CSF_DIR/csf.deny" 2>/dev/null)
     # port listesiyle banlı sağlayıcı / ülke kümeleri (CC_DENY_PORTS × CC_DENY_PORTS_TCP)
     ports=$(conf CC_DENY_PORTS_TCP)
     if [ -n "$ports" ]; then
         for c in $(conf CC_DENY_PORTS | tr ',' ' '); do
             cc="cc_${c,,}"; ipset list -n "$cc" >/dev/null 2>&1 || continue
-            for p in ${ports//,/ }; do M -A "$CHAIN" -p tcp -m set --match-set "$cc" src --dport "${p//_/:}" -j DROP && n=$((n + 1)); done
+            for p in ${ports//,/ }; do if M -A "$CHAIN" -p tcp -m set --match-set "$cc" src --dport "${p//_/:}" -j DROP; then n=$((n + 1)); else bad=1; fi; done
         done
     fi
     order_fix || return 1
+    # eksik ban kuralı varsa durum dosyası yazılmaz: --check "kaynaklar değişti" der, sonraki tur yeniden kurar
+    if [ "$bad" = 1 ]; then rm -f "$STATE"; log "bazı ban kuralları eklenemedi; sonraki turda yeniden kurulacak"; return 1; fi
     src_sum > "$STATE" 2>/dev/null
     return 0
 }
