@@ -221,9 +221,12 @@ settings, with no prompts. `config.env` is left untouched.
 - **Inside a wider ban** — a block inside a banned `/16` (or any wider range) is
   tagged *inside /16* in Active range bans and Watched, and listed under
   *Bans no longer needed* in the Providers tab.
-- **Ban announced range** — when the range the IP's owner announces is between
-  /17 and /23, the IP card offers to ban just that range instead of the /16,
-  and shows how far that range is from the suspicious-range threshold.
+- **Ban announced range** — the IP card offers to ban the range the IP's owner
+  announces, from /8 to /23 (a /16 is the network ban). Between /17 and /23 it
+  is narrower than the /16 and the card shows how far it is from the
+  suspicious-range threshold; wider than /16 it covers several networks of
+  the same owner and is still narrower than a provider ban. Suspicious-range
+  warnings stay at /17–/23.
 - **Most blocked providers** (by ASN) — three tabs:
   - *Violations* — ranked by block bans and single bans, with each provider's most
     common ban reason, the services hit (web, mail, SSH…) with their

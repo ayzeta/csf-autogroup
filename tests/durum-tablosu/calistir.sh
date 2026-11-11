@@ -869,6 +869,13 @@ printf 'Include %s\n' "$R/etc/csf/csf_autogroup.services.allow" >> "$A"
 lfdb 3600 151.80.7.9; for x in 1 2 3 4; do single 151.80.8.$x sshd; done; quiet; quiet
 mcheck "izinli servisten ihlal: tek IP 'izinli' satırı servis adıyla (services.allow (googlebot))" "rvrow 151.80.7.9 | grep -q '\"type\":\"allow_ban\".*services.allow (googlebot): 151.80.7.0/24'"
 mcheck "izinli servisten ihlal: aynı kayıttan 4 IP grup satırı, blok banlanmaz" "rvrow 151.80.8.0/24 | grep -q '\"type\":\"allow_grp\".*\"n\":4' && ! grep -q '^151.80.8.0/24' '$D'"
+# /16'dan geniş duyurulan aralık banı (1.15.88, /8–/23): izin denetimi aralığın bütün bloklarını sorar — /11'in ilk /16'sı 151.64, CC_IGNORE
+# kapsamındaki blok 151.80.7 (FR). Önce yalnız ilk /16'nın blokları soruluyordu (izinli blok sorulmadan banlanırdı)
+mk wpfx; printf 'CC_IGNORE = "FR"\n' >> "$R/etc/csf/csf.conf"; single 151.80.7.9 sshd
+mcheck "geniş duyurulan aralık (/11): ilk /16 dışındaki bloğun CC_IGNORE kaydı da sorulur, ban durur" "run --action banpfx 151.64.0.0/11 2>&1 | grep -q 'CC_IGNORE' && ! grep -q '^151.64.0.0/11' '$D'"
+mk wpfx2
+mcheck "geniş duyurulan aralık (/12) banlanır: csf.deny'de tek satır, eklentinin yorumuyla" "quiet --action banpfx 151.80.0.0/12; grep -q '^151.80.0.0/12 # csf_autogroup:' '$D'"
+mcheck "duyurulan aralık eylemi /16 almaz (ağ banı ban16)" "! run --action banpfx 151.80.0.0/16 >/dev/null 2>&1 && ! grep -q '^151.80.0.0/16' '$D'"
 node "$(wp "$H/render.js")" "$(wp "$REPO/whm/assets/ag.js")" "$(wp "$W/out")" "$@"; RC=$?
 # K7 bütün köklerde: liste satırı menüsü = Geçmiş menüsü (menu-esit.js). Yalnız listede satır doğurabilecek kökler (~4 dk)
 mkdir -p "$W/k7"

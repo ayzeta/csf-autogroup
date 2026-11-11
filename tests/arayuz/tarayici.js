@@ -291,7 +291,8 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     if (/^a=lookup/.test(pd) && j && j.ok && !j.asn) { j.asn = '64500'; j.asname = 'TEST-AS - Example Network, US'; j.cc = j.cc || 'US'; }
     // duyurulan aralık da (canlıda sahip sorgusu açıkken her kartta): "Duyurulan aralığı banla (/17)" düğmesi çizilsin — testte
     // yoktu, telefonda o düğmenin kartı 61 px yatay kaydırdığını göremedi
-    if (/^a=lookup/.test(pd) && j && j.ok && !j.pfx && /^\d+\.\d+\.\d+\.\d+$/.test(j.ip || '')) { const o = j.ip.split('.'); j.pfx = o[0] + '.' + o[1] + '.' + (o[2] & 128) + '.0/17'; }
+    // IP sorgula testinin IP'si (198.51.100.77) /16'dan geniş aralıkta: 1.15.88'den beri o satırda da ban düğmesi var
+    if (/^a=lookup/.test(pd) && j && j.ok && !j.pfx && /^\d+\.\d+\.\d+\.\d+$/.test(j.ip || '')) { const o = j.ip.split('.'); j.pfx = j.ip === '198.51.100.77' ? '198.48.0.0/12' : o[0] + '.' + o[1] + '.' + (o[2] & 128) + '.0/17'; }
     if (/^a=status/.test(pd) && j && j.ok) {
       // boş harita PHP'den [] gelir (json_encode boş diziyi nesne yapmaz); diziye eklenen anahtar JSON'a yazılmaz
       if (!j.owners || Array.isArray(j.owners)) j.owners = {};
@@ -527,6 +528,9 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     check('IP kartı düzeni: Bu IP · Üst seviyeler · Kim; tabloda Blok ve Ağ satırı, aralık tıklanır, Bloğu / Ağı banla kendi satırında; eski bölümler yok',
       !!kd && kd.sec[0] === 'Bu IP' && kd.sec.indexOf('Üst seviyeler') > 0 && kd.sec.indexOf('Kim') > kd.sec.indexOf('Üst seviyeler') && kd.th === 3 &&
       !!r24 && r24.c && r24.b === 'ban24' && !!r16 && r16.c && r16.b === 'ban16' && !kd.eski, JSON.stringify(kd));
+    // /16'dan geniş duyurulan aralık (/12) da banlanabilir: satırı ağın altında, kendi düğmesiyle (önce düğme yoktu; kullanıcı sordu)
+    const rpw = kd && kd.rows.filter(r => r.l === 'Duyurulan aralık')[0];
+    check('IP kartı: /16\'dan geniş duyurulan aralık satırında ban düğmesi (banpfx)', !!rpw && rpw.c && rpw.b === 'banpfx', JSON.stringify(rpw));
     // telefonlar 320–390 arası (büyük yazı boyutu da dar genişlik gibi davranır): kart her birinde yatay kaymamalı
     for (const w of [1280, 390, 360, 320]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(250); await layoutChecks(page, 'ip-karti', w); }
     await page.setViewportSize({ width: 1280, height: 900 });

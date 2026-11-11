@@ -26,7 +26,7 @@
 #   csf_autogroup.sh --events latest|after|before [T] [N]   event log page as JSON (History tab)
 #   csf_autogroup.sh --inside A.B.0.0/16|A.B.C.0/24 [--json]  what a manual ban would cover
 #   csf_autogroup.sh --action ban16|ban24 TARGET [--keep]    manual ban; covered entries are removed unless --keep
-#   csf_autogroup.sh --action banpfx A.B.C.D/N …             same for an announced prefix, /17–/23 (all ban16 options)
+#   csf_autogroup.sh --action banpfx A.B.C.D/N …             same for an announced prefix, /8–/23 except /16 (all ban16 options)
 #   csf_autogroup.sh --action unban CIDR [--restore]         lift a ban; --restore brings back what a manual ban removed
 #     ban16|ban24 … --mode svc --svc web,ssh,ftp,cp,smtp,mread,dns [--ports 8080,…]       block only these (inbound)
 #     ban16|ban24 … --mode exc --svc web,ssh,ftp,cp,smtp,mread,dns,mout,wout [--ports …]  full ban, these stay open
@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.87"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.88"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -2252,9 +2252,12 @@ wl_range16() {   # A.B LO HI → /16 için /24 ile aynı beyaz liste kontrolleri
     local p n=0 q=30 ips
     WL_HIT=""; WL_RETRY=0
     wl_overlap "$2" "$3" && return 0
-    for p in $(printf '%s\n' "${!ips24[@]}" | grep -F "$1." | sort -V); do
-        [[ "$p" == "$1".* ]] || continue
-        ip2int "$p.0"; (( REPLY >= $2 && REPLY <= $3 )) || continue     # duyurulan aralıkta (/17–/23) yalnız içindekiler
+    # bloklar aralığın sayısal sınırlarıyla seçilir (önek metniyle değil): /16'dan geniş duyurulan aralıkta (1.15.88, /8'e kadar) öteki
+    # ağlardaki bloklar da sorulur — önce yalnız ilk /16'nın ("A.B.") blokları sorulurdu, /12 banı öteki 15 ağdaki CC_IGNORE / rignore
+    # kayıtlarını görmezdi
+    for p in $(printf '%s\n' "${!ips24[@]}" | sort -V); do
+        [[ "$p" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || continue
+        ip2int "$p.0"; (( REPLY >= $2 && REPLY <= $3 )) || continue     # yalnız aralığın içindeki bloklar
         n=$((n + 1)); [ "$n" -le 30 ] || break
         ips=$(printf '%s\n' ${ips24[$p]} | head -n "$(( q > 3 ? 3 : (q > 0 ? q : 1) ))" | paste -sd' ' -)
         q=$(( q - $(wc -w <<< "$ips") ))
@@ -5932,8 +5935,11 @@ do_action() {    # NAME TARGET [DAYS]
             act_out 0 "$cm" ;;
         ban16|ban24|banpfx)
             bits="${name#ban}"
-            if [ "$name" = banpfx ]; then       # duyurulan aralık: /17–/23, ağ adresiyle verilmeli (176.88.120.0/21)
-                if [[ "$t" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}/(1[7-9]|2[0-3])$ ]] && cidr_range "$t" && ip2int "${t%/*}" && [ "$REPLY" = "$R_LO" ]; then
+            # duyurulan aralık: /8–/23 (/16 = ban16), ağ adresiyle verilmeli (176.88.120.0/21). /16'dan genişi 1.15.88'de açıldı: CSF 16.33
+            # /12 ve /7 satırını kabul ediyor, chain_DENY ipset'ine giriyor, DENY_IP_LIMIT'te tek satır (ölçüldü); izin denetimi wl_range16
+            # aralığın bütün bloklarını sorar
+            if [ "$name" = banpfx ]; then
+                if [[ "$t" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}/([89]|1[0-5]|1[7-9]|2[0-3])$ ]] && cidr_range "$t" && ip2int "${t%/*}" && [ "$REPLY" = "$R_LO" ]; then
                     cidr="$t"; bits="${t#*/}"
                 fi
             elif [ "$bits" = 16 ]; then [[ "$t" =~ ^[0-9]{1,3}\.[0-9]{1,3}$ ]] && cidr="$t.0.0/16"

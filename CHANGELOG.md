@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.15.88 — 2026-11-11
+
+- An announced range wider than /16 (down to /8) can be banned from the IP
+  card, like the /17–/23 ranges. Before, only /17–/23 could be banned, while a
+  whole provider could; CSF accepts such a line and loads it into its ipset as
+  one entry.
+- The allow-list check before a range ban looks at every block in the range.
+  It only looked at the blocks of the range's first /16, which made no
+  difference for /16 and narrower bans.
+
 ## 1.15.87 — 2026-11-11
 
 - Times in the panel use the server's clock, like the mails, the plugin log,

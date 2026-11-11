@@ -77,7 +77,7 @@ switch ($a) {
     case 'inside':                                  // elle /16 ya da /24 banının onay penceresi: içindekiler
         $bits = (string) ($_POST['bits'] ?? '');
         $target = trim((string) ($_POST['target'] ?? ''));
-        // duyurulan aralık (/17–/23) ve aralık kartının gösterdiği öteki önekler (/8–/32): hedef tam CIDR'dir
+        // duyurulan aralık (/8–/23, /16 hariç) ve aralık kartının gösterdiği öteki önekler (/8–/32): hedef tam CIDR'dir
         $pfx = preg_match('/^([89]|1[0-57-9]|2[0-35-9]|3[0-2])$/', $bits) && preg_match('/^([0-9]{1,3}\.){3}[0-9]{1,3}\/' . $bits . '$/', $target);
         if (!$pfx && !($bits === '16' && ag_valid(AG_RE_16, $target)) && !($bits === '24' && ag_valid(AG_RE_24, $target))) {
             ag_json(['ok' => false, 'error' => 'bad_input']);
@@ -88,7 +88,7 @@ switch ($a) {
         $name   = (string) ($_POST['name'] ?? '');
         $target = trim((string) ($_POST['target'] ?? ''));
         $re = [
-            'ban1' => AG_RE_IP, 'allow1' => AG_RE_IP, 'unallow1' => AG_RE_IP, 'ban16' => AG_RE_16, 'ban24' => AG_RE_24, 'banpfx' => '/^([0-9]{1,3}\.){3}[0-9]{1,3}\/(1[7-9]|2[0-3])$/', 'forget' => AG_RE_24,
+            'ban1' => AG_RE_IP, 'allow1' => AG_RE_IP, 'unallow1' => AG_RE_IP, 'ban16' => AG_RE_16, 'ban24' => AG_RE_24, 'banpfx' => '/^([0-9]{1,3}\.){3}[0-9]{1,3}\/([89]|1[0-5]|1[7-9]|2[0-3])$/', 'forget' => AG_RE_24,
             'rewatch' => AG_RE_24,
             'unban' => AG_RE_CIDR, 'ignore' => AG_RE_CIDR, 'unignore' => AG_RE_CIDR,
             'expire' => '/^[0-9]{2,4}$/',          // hedef: arayüzün gördüğü "eski" gün sayısı
