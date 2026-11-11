@@ -531,6 +531,14 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     // /16'dan geniş duyurulan aralık (/12) da banlanabilir: satırı ağın altında, kendi düğmesiyle (önce düğme yoktu; kullanıcı sordu)
     const rpw = kd && kd.rows.filter(r => r.l === 'Duyurulan aralık')[0];
     check('IP kartı: /16\'dan geniş duyurulan aralık satırında ban düğmesi (banpfx)', !!rpw && rpw.c && rpw.b === 'banpfx', JSON.stringify(rpw));
+    // düğmenin açtığı pencere aynı aralığı söyler (1.15.88 ilk hâlinde "198.48.0.0/12.0/24 … bloktaki 256 adres" diyordu; canlıda görüldü).
+    // Onaylanmaz, Vazgeç
+    if (rpw) {
+      await page.click('.ag-drawer [data-dr="banpfx"]'); await page.waitForSelector('.ag-modal', { timeout: 15000 }).catch(() => {});
+      const mt = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); return m ? m.innerText : ''; });
+      check('IP kartı: /12 ban penceresi aralığın kendisini söyler (/24 değil, birkaç ağın tamamı)', /198\.48\.0\.0\/12 /.test(mt) && !/\/12\.0\/24|256/.test(mt) && /16 ağ|16 whole/.test(mt), mt.slice(0, 160));
+      await tik(page, '.ag-modal [data-m="no"]'); await page.waitForTimeout(400);
+    }
     // telefonlar 320–390 arası (büyük yazı boyutu da dar genişlik gibi davranır): kart her birinde yatay kaymamalı
     for (const w of [1280, 390, 360, 320]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(250); await layoutChecks(page, 'ip-karti', w); }
     await page.setViewportSize({ width: 1280, height: 900 });

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.15.89 — 2026-11-11
+
+- The ban window for an announced range wider than /16 names the range and
+  how many whole networks it covers. In 1.15.88 it treated the range as a
+  /24 ("…/12.0/24", 256 addresses). The range card offers the ban for these
+  ranges too.
+
 ## 1.15.88 — 2026-11-11
 
 - An announced range wider than /16 (down to /8) can be banned from the IP
