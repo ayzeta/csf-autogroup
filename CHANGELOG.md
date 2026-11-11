@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.15.81 — 2026-11-11
+
+- The owner of an address is shown the same way in every list and card: flag,
+  AS badge (full name on hover) and the short organisation name. The IP list
+  under a row now shows the badge too instead of plain text, and the IP card's
+  owner and provider lines use the same badge instead of bold text.
+
 ## 1.15.80 — 2026-11-11
 
 - A repeat ban (`PERMBLOCK`) in a warning's IP list now names the service of

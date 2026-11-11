@@ -369,6 +369,8 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-own-s.ag-own-f { margin-top: 0; font-size: inherit; }   /* aralık kartı Sahip satırı */
 .ag-asn { font-family: var(--ag-mono); font-size: 11px; font-weight: 600; color: var(--ag-accent); background: var(--ag-accent-soft); padding: 2px 6px; border-radius: 5px; flex: none; }
 .ag-org { overflow: hidden; text-overflow: ellipsis; color: var(--ag-text); }
+/* sahip bileşeni (ownerHtml) tablo hücresinin "anywhere" bölmesini almaz: kurum adı sözcük aralarından, rozet hiç bölünmez */
+.ag-org { overflow-wrap: normal; } .ag-asn, .ag-flag { overflow-wrap: normal; white-space: nowrap; }
 /* sağa yaslı başlıkta sıralama oku metnin solunda: sağdaki boş ok yeri metni sayıların 12 px solunda bitiriyordu (canlıda ölçüldü) */
 .ag-th.ag-th-r .ag-sort, .ag-th.ag-num-c .ag-sort { order: -1; }
 .ag-num-c { text-align: right; font-variant-numeric: tabular-nums; color: var(--ag-text-2); justify-content: flex-end; }
