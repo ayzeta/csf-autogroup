@@ -25,7 +25,10 @@ W="$(mktemp -d)"; PORT="${PORT:-8098}"
 EVF=/var/lib/csf_autogroup/events.jsonl; mkdir -p /var/lib/csf_autogroup; NOWT=$(date +%s)
 printf '{"t":%s,"type":"run","dur":3,"arayuz_testi":1}\n{"t":%s,"type":"run","dur":35,"jobs":"svc:14/14,cloud:7/8","csfr":1,"csfr_ms":4200,"lfdr":0,"csfr_t":0,"arayuz_testi":1}\n' \
     $((NOWT - 120)) $((NOWT - 60)) >> "$EVF"
-cleanup() { [ -n "${PHPPID:-}" ] && kill "$PHPPID" 2>/dev/null; rm -rf "$W"; sed -i '/"arayuz_testi":1/d' "$EVF"; }
+# susturulmuş bir IP (sahibi tarayici.js enjekte eder): Susturulanlar satırı iki satırlı (adres + sahip) her ekranda denetlensin.
+# Önce test başında susturma yoktu; masaüstünde satırın kenara yapışması (1.15.87, kullanıcı ekranı) testte hiç çizilmedi. Sonda silinir
+IGF=/var/lib/csf_autogroup/ignored; printf '192.0.2.77 9999-12-31 root %s\n' "$((NOWT - 86400))" >> "$IGF"
+cleanup() { [ -n "${PHPPID:-}" ] && kill "$PHPPID" 2>/dev/null; rm -rf "$W"; sed -i '/"arayuz_testi":1/d' "$EVF"; sed -i '/^192\.0\.2\.77 /d' "$IGF"; }
 trap cleanup EXIT
 # panelin kopyası: shebang satırları kalkar (cPanel'in PHP yolu), version.json install.sh'nin yazdığı biçimde
 mkdir -p "$W/panel" && cp -a "$REPO/whm/." "$W/panel/" && sed -i '1{/^#!/d}' "$W/panel/index.php" "$W/panel/api.php"

@@ -214,12 +214,19 @@ async function layoutChecks(page, label, width) {
   // tutarlılık: tablo başlığının sütun sayısı satırın hücre sayısına eşit (başlık, altındaki satırla örtüşmeli)
   const mism = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-thead')).map(h => {
     const row = h.parentElement && h.parentElement.querySelector('.ag-tr'); if (!row) return null;
-    return h.children.length === row.children.length ? null : h.textContent.trim().slice(0, 30) + ': başlık ' + h.children.length + ' / satır ' + row.children.length; }).filter(Boolean));
+    // bütün genişliği kaplayan alt satır (Susturulanlar'ın sahip satırı, grid-column 1 / -1) sütun değil
+    const cols = Array.from(row.children).filter(c => { const s = getComputedStyle(c); return !(s.gridColumnStart === '1' && s.gridColumnEnd === '-1'); }).length;
+    return h.children.length === cols ? null : h.textContent.trim().slice(0, 30) + ': başlık ' + h.children.length + ' / satır ' + cols; }).filter(Boolean));
   check(`${label} · ${width} px · tablo başlığı satırla aynı sütun sayısında`, mism.length === 0, mism.join(' | '));
-  // tutarlılık: sıra numarası yalnız sıralama kartında ("En çok …")
-  const rank = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-rank')).map(e => { const c = e.closest('.ag-card'), h = c && c.querySelector('h2'); return h ? h.textContent.trim() : '?'; })
-    .filter(t => !/^(En çok|Most)/.test(t)));
-  check(`${label} · ${width} px · sıra numarası yalnız sıralama kartında`, rank.length === 0, rank.slice(0, 3).join(' | '));
+  // tutarlılık: sağlayıcı satırları (En çok engellenen, Banlı sağlayıcılar) aynı bileşen — sahip bilgisi satırın aynı yerinden başlar.
+  // Önce sıralama kartında sıra numarası vardı (sahip 48 px'ten), Banlı sağlayıcılar kendi kopyasıydı (18 px'ten); kullanıcı fark etti
+  const pal = await page.evaluate(() => {
+    const m = {}; Array.from(document.querySelectorAll('.ag-asn-r')).filter(r => r.offsetWidth > 0).forEach(r => {
+      const o = r.querySelector('.ag-asn-t'); if (!o) return; const c = r.closest('.ag-card'), h = c && c.querySelector('h2');
+      const x = Math.round(o.getBoundingClientRect().left - r.getBoundingClientRect().left); (m[x] = m[x] || new Set()).add(h ? h.textContent.trim().slice(0, 24) : '?'); });
+    return Object.keys(m).map(x => x + ' px: ' + Array.from(m[x]).join(', '));
+  });
+  check(`${label} · ${width} px · sağlayıcı satırları aynı hizada başlar (sıra numarası yok)`, pal.length <= 1 && !(await page.$('.ag-rank')), pal.join(' | '));
   // son satır kartın dibine yapışmasın: satırdaki en alttaki metin ile satırın alt kenarı arasında en az 6 px
   const tight = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-card-b')).map(b => {
     const rows = b.querySelectorAll(':scope > .ag-item, :scope > .ag-tbl > .ag-item, :scope > .ag-asn-r, :scope > .ag-ev, :scope > .ag-row'); const last = rows[rows.length - 1]; if (!last) return null;
@@ -228,6 +235,20 @@ async function layoutChecks(page, label, width) {
     if (!mx) return null; const gap = Math.round(lb - mx), c = b.closest('.ag-card'), h = c && c.querySelector('h2');
     return gap < 6 ? (h ? h.textContent.trim().slice(0, 25) : '?') + ': ' + gap + ' px' : null; }).filter(Boolean));
   check(`${label} · ${width} px · son satır kartın dibine yapışık değil`, tight.length === 0, tight.slice(0, 4).join(' | '));
+  // her liste satırında içerik satırın üst ve alt kenarından en az 6 px içeride (önce yalnız son satıra bakılıyordu; Susturulanlar'ın
+  // iki satırlı satırı masaüstünde üstte 2, altta 0 px'ti — kullanıcı ekran görüntüsünden)
+  const rpad = await page.evaluate(() => {
+    const vis = e => { const cs = getComputedStyle(e); return e.offsetWidth > 0 && e.offsetHeight > 0 && cs.visibility !== 'hidden' && !e.closest('.ag-menu'); };
+    // ölçü birimi öğe (satır + altındaki not): Kontrol edilecekler satırı notuna 4 px bırakır, öğe altta 9 px ile biter
+    return Array.from(document.querySelectorAll('.ag-tbl > .ag-item')).filter(vis).map(r => {
+      const rr = r.getBoundingClientRect(); let mn = 1e9, mx = -1e9;
+      r.querySelectorAll('*').forEach(e => { if (!vis(e) || Array.from(e.children).some(vis)) return; const q = e.getBoundingClientRect(); mn = Math.min(mn, q.top); mx = Math.max(mx, q.bottom); });
+      if (mx < 0) return null;
+      const top = Math.round(mn - rr.top), bot = Math.round(rr.bottom - mx), c = r.closest('.ag-card'), h = c && c.querySelector('h2');
+      return top < 6 || bot < 6 ? (h ? h.textContent.trim().slice(0, 22) : '?') + ' · ' + r.textContent.trim().slice(0, 18) + ': üst ' + top + ', alt ' + bot + ' px' : null;
+    }).filter(Boolean);
+  });
+  check(`${label} · ${width} px · liste satırının içeriği satır kenarına yapışık değil`, rpad.length === 0, rpad.slice(0, 3).join(' | '));
   // tablo satırında hücreler üst üste binmesin (⋯ düğmesinin metnin altında kalması gibi)
   const lap = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-tr')).map(row => {
     const cs = Array.from(row.children).map(e => e.getBoundingClientRect()).filter(r => r.width > 0 && r.height > 0);

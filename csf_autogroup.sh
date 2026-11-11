@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.86"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.87"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -3585,7 +3585,9 @@ do_status() {
 
     if [ "$JSON" = 1 ]; then
         local IFS=,
-        printf '{"ok":true,"version":"%s","lang":"%s","now":%s,"running":%s,' "$VERSION" "$MSG_LANG" "$now" "$running"
+        srv_tz
+        # tz / tzo: panel saatleri sunucu saatiyle yazar (mail, günlük, csf.deny yorumları ve cron ile aynı saat)
+        printf '{"ok":true,"version":"%s","lang":"%s","now":%s,"tz":"%s","tzo":%s,"running":%s,' "$VERSION" "$MSG_LANG" "$now" "$TZN" "$TZO" "$running"
         prof runs
         health_check
         prof health_check
@@ -6217,6 +6219,19 @@ PERM_CACHE="$(dirname "$SAYAC_FILE")/perm_cls"     # ban geçmişinden önceki s
 # diye yazar (IGNORE_ALLOW=1, csf.ignore IP/aralık, csf.rignore). Geçici ban 12 saatte düştüğü için kaynak ban kaydı değil
 # günlük: pencerede değişmiş bütün lfd.log* (döndürme biçiminden bağımsız). Döndürülmüş dosyaların gün özeti önbellekte.
 declare -A CLSM=()
+srv_tz() {       # → TZN = sunucunun saat dilimi adı (IANA, ör. Europe/Istanbul; bulunamazsa boş), TZO = şu anki farkı (saniye)
+    # Kaynak sırası: TZ ortam değişkeni, sonra /etc/localtime bağlantısı (WSL AlmaLinux 9'da ölçüldü: ".../zoneinfo/Europe/Istanbul",
+    # timedatectl ile aynı). Ad yoksa panel sabit farkı kullanır (yaz saati geçişinde bir saat kayabilir).
+    local z o
+    z="${TZ#:}"; z="${z#/usr/share/zoneinfo/}"
+    if [ -z "$z" ]; then z=$(readlink -f /etc/localtime 2>/dev/null); z="${z#*zoneinfo/}"; fi
+    z="${z#posix/}"; z="${z#right/}"
+    [[ "$z" =~ ^[A-Za-z]+(/[A-Za-z0-9_+-]+)*$ ]] || z=""
+    TZN="$z"
+    o=$(date +%z 2>/dev/null)
+    if [[ "$o" =~ ^([+-])([0-9]{2})([0-9]{2})$ ]]; then TZO=$(( 10#${BASH_REMATCH[2]} * 3600 + 10#${BASH_REMATCH[3]} * 60 )); [ "${BASH_REMATCH[1]}" = - ] && TZO=$(( -TZO ))
+    else TZO=0; fi
+}
 cls_map() {      # stdin "anahtar|sebep" → CLSM[anahtar] = servis (tek awk; IP başına süreç açılmaz)
     local k c
     while IFS='|' read -r k c; do [ -n "$k" ] && CLSM[$k]="$c"; done < <(LC_ALL=C awk -F'|' "$AWK_CLS"' { k = $1; r = substr($0, length($1) + 2); print k "|" cls(r) }')

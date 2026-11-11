@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.15.87 — 2026-11-11
+
+- Times in the panel use the server's clock, like the mails, the plugin log,
+  the csf.deny comments and cron. They used the browser's time zone, so with
+  the browser in another zone a card could show a raw line at 13:29 next to
+  the panel's 14:29, the "Next run" countdown could count to the wrong minute
+  and the chart's day labels could shift by a day.
+- Rows with two lines (Muted: address and owner) have the same top and bottom
+  spacing as other rows on wide screens; they touched the row edges.
+- The provider rows in Most blocked providers and Banned providers are the
+  same component and start at the same place; the rank number is gone (the
+  order already shows the ranking).
+- The IP card says why an announced range wider than /16 has no ban button.
+
 ## 1.15.86 — 2026-11-11
 
 - Settings → Ban rules no longer estimates "about N more blocks would be
