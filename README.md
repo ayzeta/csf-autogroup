@@ -178,8 +178,10 @@ settings, with no prompts. `config.env` is left untouched.
   and ban reasons behind any block (from the event log). The
   *Old* filter lists block bans older than the old-block limit (default 365
   days), with a button to remove them all.
-- **Watched** — `/24`s that were temp-banned once. If one comes back, it becomes
-  permanent + `do not delete`. Sorted by days left; **⋯ → IPs** shows the IPs
+- **Watched** — `/24`s that were temp-banned once. If, within the watch period,
+  as many of its IPs as the temp threshold are temp-banned at the same time (temp
+  bans that come and go one by one do not add up), or the block's permanent
+  singles reach the block threshold, it becomes permanent + `do not delete`. Sorted by days left; **⋯ → IPs** shows the IPs
   and reasons behind the temp block ban.
 - **History** (its own tab) — every ban, promotion, skip, warning and manual
   action, and once a day the findings in Needs review that are otherwise
@@ -374,7 +376,9 @@ its own:
   makes it *kept* (`do not delete`) and the temp block ban; suspicious network
   (`/16`, permanent and temp single bans counted together); the permanent
   single window (default 90 days, see below); the watch period
-  (a temp-banned block that comes back within it is banned for good); how
+  (a temp-banned block is banned for good if, within it, the temp threshold is
+  reached again at the same time or its permanent singles reach the block
+  threshold); how
   long entries stay in *Needs review*; and the old bans: old-block limit
   (default 365 days), how recent an attempt keeps a block from being old
   (default 30 days), and whether old block bans are removed automatically

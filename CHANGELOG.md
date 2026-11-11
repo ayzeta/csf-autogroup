@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.15.92 — 2026-11-11
+
+- The texts about watched blocks say what actually makes them permanent: within
+  the watch period, as many of the block's IPs as the temp threshold being
+  temp-banned at the same time (temp bans that come and go one by one do not
+  add up), or the block's permanent singles reaching the block threshold. The
+  range card said "if 3 more temp bans come", which read as a running count;
+  other texts said "if it comes back". Changed in the range card, Watched,
+  the badge hints, History, Settings, Terms, the weekly digest and the README.
+
 ## 1.15.91 — 2026-11-11
 
 - The announced range of an IP is the most specific prefix its owner

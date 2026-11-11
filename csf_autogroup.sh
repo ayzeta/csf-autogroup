@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.91"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.92"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -498,7 +498,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_DG_TOP="CSF'in en çok engellediği sağlayıcılar (ASN; blok banları ve tekil banlara göre):"
   M_DG_TOPL="   %-9s %-44s %s"
   M_DG_PG="%s blok"; M_DG_PB="+%s blok CSF Auto-Group dışından"; M_DG_PT="%s tekil"
-  M_DG_EXP="14 gün içinde izlemesi bitecek bloklar (tekrar gelirlerse kalıcı olurlar):"
+  M_DG_EXP="14 gün içinde izlemesi bitecek bloklar (o zamana kadar geçici eşik kadar IP'si aynı anda geçici banlanırsa ya da blok eşiği kadar kalıcı tekil ban birikirse kalıcı olurlar):"
   M_DG_EXPL="   %-18s %s gün"
   M_DG_RUNS="Tur sağlığı: son 7 günde %s tur çalıştı (%s çalıştığı için beklenen ~%s)"
   M_DG_RUNS0="Tur sağlığı: son 7 günde %s tur çalıştı"; M_IV_MIN="%s dakikada bir"; M_IV_HOUR="saatte bir"; M_IV_HOURS="%s saatte bir"
@@ -780,7 +780,7 @@ else
   M_DG_TOP="Providers CSF blocks most (ASN; by block bans and single bans):"
   M_DG_TOPL="   %-9s %-44s %s"
   M_DG_PG="%s blocks"; M_DG_PB="+%s blocks not from CSF Auto-Group"; M_DG_PT="%s singles"
-  M_DG_EXP="Watched blocks expiring within 14 days (become permanent if they return):"
+  M_DG_EXP="Watched blocks expiring within 14 days (become permanent if, before then, as many of their IPs as the temp threshold are temp-banned at the same time or as many permanent single bans as the block threshold pile up):"
   M_DG_EXPL="   %-18s %s days"
   M_DG_RUNS="Run health: %s runs in the last 7 days (about %s expected, running %s)"
   M_DG_RUNS0="Run health: %s runs in the last 7 days"; M_IV_MIN="every %s minutes"; M_IV_HOUR="every hour"; M_IV_HOURS="every %s hours"
