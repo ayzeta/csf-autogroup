@@ -679,7 +679,7 @@ mcheck "Etkisini ölç: yorumunda sebep olmayan blok banları 'sebebi kayıtlı 
 
 # ekran: yazısı aralık olan öğe IP kartı değil aralık kartı açar (tıklanan şey ile açılan şey aynı)
 AGJS="$REPO/whm/assets/ag.js"                 # yol tek tırnak içerebilir ("Drive'ım"): değişkenle verilir
-mcheck "aralığa tıklamak aralık kartını açar" "grep -qF 'if (RANGE_RE.test(rtx)) openRange(rtx); else openDrawer' \"\$AGJS\""
+mcheck "aralığa tıklamak aralık kartını açar (bağlantı adresi açar, openDrawer aralığı yönlendirir)" "grep -qF \"openDrawer(ipEl.getAttribute('data-ip'));\" \"\$AGJS\" && grep -qF 'if (RANGE_RE.test(ip)) { recentAdd(ip); openRange(ip); return; }' \"\$AGJS\""
 # aralık kartı /16–/24 dışındaki önekleri de tarar (CSF'teki /26 ya da /12 banına tıklanınca kart o aralığı anlatır)
 mk insany; single 151.80.7.9 sshd; single 151.80.7.100 sshd; printf '%s\n' "151.80.7.0/26 # Manually denied - $DT" >> "$D"
 mcheck "aralık kartı · /26: kendi banı kapsar, içindeki 1 tekil sayılır" "run --inside 151.80.7.0/26 --json 2>/dev/null | grep -q '\"cover\":\"151.80.7.0/26\".*\"singles\":1,'"

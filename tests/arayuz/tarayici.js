@@ -225,6 +225,10 @@ async function layoutChecks(page, label, width) {
     const b = Array.from(row.querySelectorAll('button.ag-btn')).filter(x => !x.closest('.ag-td-act, .ag-menu') && x.offsetWidth > 0)[0];
     return b ? row.textContent.trim().slice(0, 25) + ' → ' + b.textContent.trim() : null; }).filter(Boolean));
   check(`${label} · ${width} px · liste satırında eylem düğmesi yok (eylemler ⋯ menüsünde)`, rbtn.length === 0, rbtn.slice(0, 3).join(' | '));
+  // tıklanan ile açılan aynı: adres bağlantısı (.ag-cidr) yazdığı adresi açar (önce aralık yazan bağlantı ilk IP'yi taşıyordu)
+  const lnk = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-cidr[data-ip]')).filter(e => e.offsetWidth > 0)
+    .map(e => { const tx = e.textContent.trim(), d = e.getAttribute('data-ip'); return tx === d || tx === d + '/32' ? null : tx + ' → ' + d; }).filter(Boolean));
+  check(`${label} · ${width} px · adres bağlantısı yazdığı adresi açar`, lnk.length === 0, lnk.slice(0, 3).join(' | '));
 }
 const errs = [];          // sayfanın JS hataları: test yarıda düşerse de yazılır
 (async () => {

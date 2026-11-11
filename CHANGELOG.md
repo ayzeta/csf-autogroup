@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.15.82 — 2026-11-11
+
+- Clicking an address opens what it says everywhere: an IP opens its IP card,
+  a range opens its range card, also inside cards. Before, range links carried
+  the range's first IP, so inside a card some of them opened that IP's card
+  instead of the range.
+- The IP card's owner line shows the flag first, like every list.
+
 ## 1.15.81 — 2026-11-11
 
 - The owner of an address is shown the same way in every list and card: flag,

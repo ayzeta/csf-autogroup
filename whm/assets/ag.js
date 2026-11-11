@@ -935,10 +935,10 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     // ortak satır: aynı sütunlar (Ağ/blok · Durum · Neden · Sahip · İşaretlendi · düğme · menü) + not satırı + açılır IP listesi
     function rvRow(e, pill, whyH, mitems, note, ips) {
       var key = 'r:' + e.cidr, open = UI.open[key], ow = rvOwner(e, (e.ips || [])[0]);
-      var first = (e.ips || [])[0] ? e.ips[0].ip : e.cidr.replace(/\/\d+$/, '').replace(/\.0$/, '.1');
+      var first = firstIp(e.cidr, e.ips);
       if (ips) mitems = [{ act: 'toggle', label: open ? t('hide') : t('ips'), icon: 'list', attrs: 'data-key="' + esc(key) + '"' }].concat(mitems);
       return '<div class="ag-item" data-row="' + esc(e.cidr) + '"><div class="ag-tr ag-tr-r">' +
-        '<div class="ag-td ag-td-main">' + rvDot(e) + '<span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(e.cidr) + '</span></div>' +
+        '<div class="ag-td ag-td-main">' + rvDot(e) + cidrLink(e.cidr) + '</div>' +
         '<div class="ag-td ag-td-state">' + pill + '</div>' +
         '<div class="ag-td ag-td-why">' + (whyH || '<span class="ag-muted">—</span>') + '</div>' +
         '<div class="ag-td ag-td-own" title="' + esc(ow.o.label || '') + '">' + ow.h + '</div>' +
@@ -981,7 +981,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       var pill = '<span class="ag-pill ag-pill-part" title="' + esc(t('po_h')) + '">' + esc(t('po')) + '</span>';
       return rvRow(e, pill, esc(countList(e.since || {})),
         [{ act: 'chg', label: t('chg'), icon: 'ban', danger: true, attrs: 'data-c="' + esc(e.cidr) + '"' },
-         { act: 'ipcard', label: t('ipcard'), icon: 'search', attrs: 'data-ip="' + esc(e.cidr.replace(/\/\d+$/, '').replace(/\.0$/, '.1')) + '"' },
+         { act: 'ipcard', label: t('ipcard'), icon: 'search', attrs: 'data-ip="' + esc(firstIp(e.cidr)) + '"' },
          { act: 'ignore', label: t('ignore'), icon: 'mute', attrs: 'data-c="' + esc(e.cidr) + '"' }],
         esc(t('po_n', svcNames(e.svc, e.extra) || '?')), false);
     }
@@ -996,7 +996,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       var nIp = e.n == null ? '' : hasIps ? '<button class="ag-link" data-act="toggle" data-key="' + esc(key) + '" aria-expanded="' + !!open + '">' + esc(t('n_ip', num(e.n))) + '</button>' : esc(t('n_ip', num(e.n)));
       var P = rvParts(e, nIp), meta = P.meta, det = P.det, pnote = P.pnote, apx = P.apx;
       var owner = shortOwner(e.owner || ownerOfIps(e.ips) || (function (o) { return o.asn ? o.label : ''; })(ownerOf(e.cidr)));   // "sağlayıcı yok" ipucu sahip sanılmasın
-      var first = hasIps ? e.ips[0].ip : e.cidr.replace(/\/\d+$/, '').replace(/\.0$/, '.1');
+      var first = firstIp(e.cidr, hasIps ? e.ips : null);
       // en dar öneri satırda düğme; ötekiler ve diğer işler ⋯ menüsünde
       var B = [];
       if (apx) B.push({ act: 'banpfx', label: t('banpfx', '/' + bitsOf(apx.p)), icon: 'ban', danger: true, attrs: 'data-c="' + esc(apx.p) + '" title="' + esc(t('banpfx_h', num(Math.pow(2, 32 - bitsOf(apx.p))))) + '"' });
@@ -1015,7 +1015,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       if (!o.asn && i0 && i0.asn) o = { asn: i0.asn, cc: i0.cc, name: ownName(i0.owner), label: i0.owner };
       var ownH = o.asn ? ownerHtml(o) : owner ? '<span class="ag-org">' + esc(owner) + '</span>' : '';   // sahip yoksa boş
       return '<div class="ag-item" data-row="' + esc(e.cidr) + '"><div class="ag-tr ag-tr-r">' +
-        '<div class="ag-td ag-td-main">' + rvDot(e, e.hist) + '<span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(e.cidr) + '</span></div>' +
+        '<div class="ag-td ag-td-main">' + rvDot(e, e.hist) + cidrLink(e.cidr) + '</div>' +
         '<div class="ag-td ag-td-state">' + pill + '</div>' +
         '<div class="ag-td ag-td-why">' + (meta.length ? meta.join(' · ') : '<span class="ag-muted">—</span>') + '</div>' +
         '<div class="ag-td ag-td-own" title="' + esc(o.label || owner || '') + '">' + ownH + '</div>' +
@@ -1093,7 +1093,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       var gnote = (g.kind === 'temp' || g.kind === 'manual') && g.ttl > 0 ? t('left_short', dur(g.ttl)) : g.kind === 'partial' ? t('g_closed', svcNames(g.svc, g.extra) || t('svc_ports', String(g.ports || '').replace(/_/g, '–'))) : (g.open || g.open_extra) ? t('g_open', svcNames(g.open, g.open_extra)) : '';
       // rozette kısa hâli (satır tek satır kalsın): "kısmi · Web", "geçici · 5 sa", "elle · açık: SSH"; uzun açıklama rozetin ipucunda
       var gshort = (g.kind === 'temp' || g.kind === 'manual') && g.ttl > 0 ? dur(g.ttl) : g.kind === 'partial' ? (svcNames(g.svc, g.extra) || String(g.ports || '').replace(/_/g, '–')) : (g.open || g.open_extra) ? t('g_open', svcNames(g.open, g.open_extra)) : '';
-      var first = ev && ev.ips && ev.ips[0] ? ev.ips[0].ip : /\/32$/.test(g.cidr) ? g.cidr.replace(/\/32$/, '') : g.cidr.replace(/\/\d+$/, '').replace(/\.0$/, '.1');
+      var first = firstIp(g.cidr, ev && ev.ips);
       var when = g.added ? relT(g.added) : '—';
       var items = [];
       if (ev && ev.ips && ev.ips.length) items.push({ act: 'toggle', label: open ? t('hide') : t('ips'), icon: 'list', attrs: 'data-key="' + esc(key) + '"' });
@@ -1109,7 +1109,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       items.push({ act: 'unban', label: t('unban'), icon: 'x', danger: true, attrs: 'data-c="' + esc(g.cidr) + '" data-dnd="' + (g.dnd ? 1 : 0) + '" data-kind="' + esc(g.kind) + '" data-restore="' + (g.restore || 0) + '"' });
       var gtag = g.under ? '<span class="ag-ctag" title="' + esc(t('under_h', g.under)) + '">' + esc(t('under', '/' + bitsOf(g.under))) + '</span>' : g.pcov ? pcovNote(g.pcov) : ccPill(g.cidr);
       return '<div class="ag-item" data-row="' + esc(g.cidr) + '"><div class="ag-tr">' +
-        '<div class="ag-td ag-td-main">' + newDot(g.added) + '<span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(g.cidr) + '</span></div>' +
+        '<div class="ag-td ag-td-main">' + newDot(g.added) + cidrLink(g.cidr) + '</div>' +
         '<div class="ag-td ag-td-state"><span class="ag-pill ' + kindCls + '" title="' + esc(t('kind_' + g.kind + '_h') + (g.dnd ? ' ' + t('kind_dnd_h') : '') + (gnote ? ' · ' + gnote : '') + (g.hit ? ' · ' + t('g_hit', rel(g.hit)) : '')) + '">' + (g.dnd ? IC.lock : '') +
           '<span class="ag-pill-t">' + esc(t('kind_' + g.kind) + (gshort ? ' · ' + gshort : '')) + '</span></span></div>' +
         // sahip ve onu kapsayan geniş ban yan yana: "/16 içinde", "sağlayıcı banında", "bulut listesinde", "ülke banında"
@@ -1340,7 +1340,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       if (!cfg && last && GRP.indexOf(e.type) >= 0 && last[0].type === e.type && Math.floor(last[0].t / 60) === Math.floor(e.t / 60)) last.push(e);
       else comp.push([e]);
     });
-    function ipOf(e) { return e.ips && e.ips[0] && e.ips[0].ip ? e.ips[0].ip : /\//.test(e.cidr) && !/\/32$/.test(e.cidr) ? String(e.cidr).replace(/\/\d+$/, '').replace(/\.0$/, '.1') : String(e.cidr || '').replace(/\/32$/, ''); }
+    function ipOf(e) { return firstIp(e.cidr, e.ips); }
     function grpRow(g) {
       var e = g[0], key = 'eg:' + e.t + ':' + e.type, open = UI.open[key], ic = evIcon(e), cs = g.map(function (x) { return x.cidr || ''; }).filter(Boolean);
       return '<div class="ag-item"><div class="ag-ev clickable" data-act="toggle" aria-expanded="' + !!open + '" data-key="' + esc(key) + '">' +
@@ -1350,7 +1350,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
         '<div class="ag-ev-d"><span class="ag-mono">' + esc(cs.slice(0, 3).join(', ')) + '</span>' + (cs.length > 3 ? ' +' + num(cs.length - 3) : '') + ' · ' + evDetail(e, '',
         '<span class="ag-ev-tm2" title="' + esc(new Date(e.t * 1000).toLocaleString(loc())) + '">' + stamp(e.t) + '<span class="ag-chev">' + (open ? '▾' : '▸') + '</span></span>') + '</div></div>' +
         '<div class="ag-ev-m"><span class="ag-ev-m0"></span></div></div>' +
-        (open ? '<div class="ag-grp-l">' + g.map(function (x) { return x.cidr ? '<span class="ag-cidr" data-ip="' + esc(ipOf(x)) + '">' + esc(x.cidr) + '</span>' : ''; }).join('') + '</div>' : '') + '</div>';
+        (open ? '<div class="ag-grp-l">' + g.map(function (x) { return x.cidr ? cidrLink(x.cidr) : ''; }).join('') + '</div>' : '') + '</div>';
     }
     var rows = comp.map(function (g, i) { return g.length > 1 ? grpRow(g) : evRow(g[0], i); }).join('');
     function evRow(e, i) {
@@ -1370,8 +1370,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
         '<div class="ag-ev-ic ' + ic[1] + '">' + IC[ic[0]] + '</div>' +
         '<div class="ag-ev-b"><div class="ag-ev-t">' + newDot(NEW_TYPES.indexOf(e.type) >= 0 ? e.t : 0) +
         // adres de IP kartını açsın (diğer tablolar gibi): tek IP kendisi, blok/ağ için ilk kayıtlı IP ya da ağın .1'i
-        (e.cidr ? '<span class="ag-cidr" data-ip="' + esc(e.ips && e.ips[0] && e.ips[0].ip ? e.ips[0].ip
-          : /\//.test(e.cidr) && !/\/32$/.test(e.cidr) ? String(e.cidr).replace(/\/\d+$/, '').replace(/\.0$/, '.1') : String(e.cidr).replace(/\/32$/, '')) + '">' + esc(e.cidr) + '</span>' : '') + '<span class="ag-pill ' + evCls(e) + '"' + evTitle(e.type) + '>' + esc(t('ev_' + e.type)) + '</span>' + tm + '</div>' +
+        (e.cidr ? cidrLink(e.cidr) : '') + '<span class="ag-pill ' + evCls(e) + '"' + evTitle(e.type) + '>' + esc(t('ev_' + e.type)) + '</span>' + tm + '</div>' +
         '<div class="ag-ev-d">' + evDetail(e, note ? ' <span class="ag-pill ag-pill-n ag-pill-xs ag-ev-st" title="' + esc(t('st_tip')) + '">' + esc(note) + '</span>' : '', tm2) + '</div></div>' +
         '<div class="ag-ev-m">' + (mitems ? menu('hm:' + key, mitems) : '<span class="ag-ev-m0"></span>') + '</div></div>' +   // menüsüz satırda yer tutucu: zaman sütunu kaymasın
         (open ? ipTable(e.ips, e.total) : '') + '</div>';
@@ -1541,7 +1540,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       var urg = left < 7 ? ' bad' : left < 30 ? ' warn' : '';
       var first = ev && ev.ips && ev.ips[0] ? ev.ips[0].ip : p.prefix + '.1';
       return '<div class="ag-item" data-row="' + esc(cidr) + '"><div class="ag-tr ag-tr-p">' +
-        '<div class="ag-td ag-td-stack"><span class="ag-cidr" data-ip="' + esc(first) + '">' + esc(cidr) + '</span>' +
+        '<div class="ag-td ag-td-stack">' + cidrLink(cidr) +
         (p.temp_ttl > 0 ? '<span class="ag-t-warn">' + t('ttl_left', dur(p.temp_ttl)) + '</span>' : '') + (p.under ? underPill(p.under, true) : '') + '</div>' +
         '<div class="ag-td ag-td-own">' + ownerHtml(o) + '</div>' +
         '<div class="ag-td ag-when ag-td-since">' + esc(dayStr(p.since)) + '</div>' +
@@ -1573,7 +1572,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       // işlemler ⋯ menüsünde (öteki kartlarla aynı): iki düğme dar sütuna sığmıyordu
       var items = [{ act: 'ignore', label: t('ign_change'), icon: 'clock', attrs: 'data-c="' + esc(g.cidr) + '" data-chg="1" data-until="' + esc(until) + '"' },
                    { act: 'unignore', label: t('unignore'), icon: 'x', attrs: 'data-c="' + esc(g.cidr) + '"' }];
-      return '<div class="ag-item" data-row="' + esc(g.cidr) + '"><div class="ag-tr ag-tr-i"><div class="ag-td ag-td-main"><span class="ag-cidr" data-ip="' + esc(String(g.cidr).replace(/\/\d+$/, '').replace(/\.0$/, '.1')) + '">' + esc(g.cidr) + '</span>' +
+      return '<div class="ag-item" data-row="' + esc(g.cidr) + '"><div class="ag-tr ag-tr-i"><div class="ag-td ag-td-main">' + cidrLink(g.cidr) +
         '</div>' +
         '<div class="ag-td ag-td-until"><span title="' + esc(t('col_until')) + '">' + esc(until) + '</span> · <span title="' + esc(t('col_by')) + (g.since ? ' · ' + new Date(g.since * 1000).toLocaleString(loc()) : '') + '">' +
           esc(g.since ? t('ign_who', g.by, rel(g.since)) : g.by) + '</span></div>' +
@@ -1847,9 +1846,9 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       '<span class="ag-hint" style="width:100%">' + esc(t(ccl ? 'pv_cov_h2' : 'pv_cov_h')) + '</span></div><div class="ag-card-b">' +
       cov.slice(0, lim('cov', 3)).map(function (g) {
         var what = g.kind === 'partial' ? t('g_closed', svcNames(g.svc, g.extra) || t('svc_ports', String(g.ports || '').replace(/_/g, '–'))) : t('kind_' + g.kind);
-        var an = g.pcov ? provName(g.pcov) : '', first = g.cidr.replace(/\/\d+$/, '').replace(/\.0$/, '.1');
+        var an = g.pcov ? provName(g.pcov) : '', first = firstIp(g.cidr);
         // aralık IP kartını açar (tablodaki gibi); sağlayıcı bgp.he.net'te açılır
-        return '<div class="ag-cov-r"><span class="ag-cidr" data-ip="' + esc(first) + '" title="' + esc(t('ipcard')) + '">' + esc(g.cidr) + '</span>' +
+        return '<div class="ag-cov-r">' + cidrLink(g.cidr) +
           '<button class="ag-btn ag-btn-sm ag-btn-ghost" data-act="unban" data-c="' + esc(g.cidr) + '" data-dnd="' + (g.dnd ? 1 : 0) + '" data-kind="' + esc(g.kind) + '" data-restore="' + (g.restore || 0) + '">' + esc(t('unban')) + '</button>' +
           '<div class="ag-cov-m"><span>' + esc(what) + (g.dnd ? ' · ' + t('dnd_s') : '') + '</span>' +
           (!g.pcov ? '<span class="ag-cov-a"><span class="ag-org">' + esc(t('cov_under', g.under)) + '</span></span>' :
@@ -4003,7 +4002,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       if (!d.ok) { body.innerHTML = empty('alert', d.error === 'bad_ip' ? t('bad_ip') : (d.error || d.message || '?')); return; }
       var host = d.host ? '<span class="ag-mono">' + esc(d.host) + '</span> <span class="ag-pill ' + (d.fwd ? 'ag-pill-ok' : 'ag-pill-n') + '">' + (d.fwd ? t('l_fwd') : t('l_nofwd')) + '</span>'
         : '<span class="ag-muted">' + t('l_noptr') + '</span>';
-      var owner = d.asn ? ownerHtml({ asn: d.asn, name: d.asname || '', label: 'AS' + d.asn + ' ' + (d.asname || '') }) : '';   // bayraksız: ülke yanındaki rozette (iki kez yazılmaz)
+      var owner = d.asn ? ownerHtml({ asn: d.asn, cc: d.cc, name: d.asname || '', label: 'AS' + d.asn + ' ' + (d.asname || '') }) : d.cc ? flag(d.cc) : '';   // bayrak başta (öteki listeler gibi)
       var mb = coverBits(d);                                         // IP'yi kapsayan en geniş tam ban (ban düğmeleri buna göre)
       function ccDiff(w) {
         var as = /^AS/.test(w), cy = as ? (d.asn ? 'AS' + d.asn : '') : (d.cc || '');
@@ -4075,7 +4074,6 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
         }
         return null;
       }
-      function cl(cidr) { return '<span class="ag-cidr" data-ip="' + esc(cidr) + '">' + esc(cidr) + '</span>'; }
       var BT = ipCardBtns(ip, mb, d);
       (function () {                 // blok (/24): banı, yoksa iki eşik (kalıcı tekil, aynı anda geçici), izleme
         var r = lvBan(p24c, 24), b = d.blk || {}, x = [];
@@ -4092,23 +4090,23 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
           r = { s: [t('lv_none')].concat(b.s ? [t('lv_c_perm', num(b.s), num(b.ts || 0))] : [], b.t ? [t('lv_c_temp', num(b.t), num(b.tt || 0))] : []).join(' · '), k: d.pend ? 'watch' : '', x: x };
         }
         r.btn = BT.b24;
-        lv.push([t('lv_24'), cl(p24c), r]);
+        lv.push([t('lv_24'), cidrLink(p24c), r]);
       })();
       if (pb > 16 && pb < 24) {     // duyurulan aralık blok ile ağ arasındaysa kendi satırı
         // banlı değilse şüpheli aralık sayımı (turla aynı: d.pnet, motorun net_count'u)
         var pn = d.pnet && d.pnet.p === d.pfx ? d.pnet : {};
         var rp = lvBan(d.pfx, pb) || { s: pn.n ? t('lv_pnet', num(pn.n), num(pn.t || 0), num(pn.b || 0)) : t('lv_none'), k: '', x: [] };
         rp.btn = BT.pfx;
-        lv.push([t('lv_pfx'), cl(d.pfx), rp]);   // ülke kendi satırında (yalnız bu satırda rozet vardı)
+        lv.push([t('lv_pfx'), cidrLink(d.pfx), rp]);   // ülke kendi satırında (yalnız bu satırda rozet vardı)
       }
       (function () {                 // ağ (/16): banı, yoksa şüpheli ağ sayımı (turla aynı)
         var r = lvBan(p16c, 16), n = d.net || {};
         // bu IP'nin sahibinin tekilleri ve alt birimleri (duyurulan aralık ya da blok); farklı sahiplerin banları eklenmez
         if (!r) r = { s: n.n ? t('lv_net', num(n.n), num(n.t || 0), num(n.u != null ? n.u : n.b || 0)) : t('lv_none'), k: '', x: [] };   // sayılan ban yoksa yalnız "banlı değil"
         r.btn = BT.b16;
-        lv.push([t('lv_16'), cl(p16c), r]);
+        lv.push([t('lv_16'), cidrLink(p16c), r]);
       })();
-      if (pb && pb <= 16) lv.push([t('lv_pfx'), cl(d.pfx), lvBan(d.pfx, pb) || { s: t('lv_none'), k: '', x: [] }]);   // /16'dan geniş: banlanamaz, bilgi
+      if (pb && pb <= 16) lv.push([t('lv_pfx'), cidrLink(d.pfx), lvBan(d.pfx, pb) || { s: t('lv_none'), k: '', x: [] }]);   // /16'dan geniş: banlanamaz, bilgi
       var ccC = (d.covers || []).filter(function (c) { return (c.kind === 'cc' || c.kind === 'ccport') && !/^AS/.test(c.what); })[0];
       if (ccC) lv.push([t('lv_cc'), flag(ccC.what), { s: ccC.kind === 'cc' ? t('lv_cc_all') : t('lv_cc_ports', portsName(ccC.tcp, ccC.udp) || '—'), k: 'ban', x: [] }]);
       else if (d.cc) lv.push([t('lv_cc'), flag(d.cc), { s: t('lv_cc_none'), k: '', x: [] }]);   // sağlayıcı satırı gibi: ban yokken de seviye görünür
@@ -4128,7 +4126,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       });
       portCovGroups(d.covers).forEach(function (g) {
         var c = g.c, pw = portWhy(g.cm);
-        lv.push([t('lv_port'), cl(c.cidr), { s: t('l_port', '', g.name, c.dir === 'in' || c.dir === 'out' ? t('dir_' + c.dir) : c.dir), k: 'part',
+        lv.push([t('lv_port'), cidrLink(c.cidr), { s: t('l_port', '', g.name, c.dir === 'in' || c.dir === 'out' ? t('dir_' + c.dir) : c.dir), k: 'part',
           x: [[pw.why, pw.dt].filter(Boolean).join(' · ')].filter(Boolean), line: g.lines.join('\n') }]);
       });
       var lvT = '<table class="ag-im-t ag-lv-t"><thead><tr><th>' + esc(t('lv_c1')) + '</th><th>' + esc(t('lv_c2')) + '</th><th>' + esc(t('lv_c3')) + '</th></tr></thead><tbody>' +
@@ -4152,7 +4150,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
         hist +
         '<div class="ag-dr-sec">' + esc(t('s_lv')) + '</div>' + (mb <= 16 && !d.self ? '<div class="ag-muted ag-dr-note">' + esc(t('dr_covered')) + '</div>' : '') + lvT +
         '<div class="ag-dr-sec">' + esc(t('l_who')) + '</div>' + (d.lookup ? '' : '<div class="ag-fact ag-muted">' + t('l_nolookup') + '</div>') +
-        fact(t('l_owner'), owner + (d.cc ? ' ' + flag(d.cc) : '')) + (d.lookup ? fact(t('l_host'), host) : '') +
+        fact(t('l_owner'), owner) + (d.lookup ? fact(t('l_host'), host) : '') +
         fact(t('l_reg'), d.reg ? esc(d.reg) + (d.alloc ? ' · ' + esc(/^\d{4}-\d\d-\d\d$/.test(d.alloc) ? dayStr(d.alloc) : d.alloc) : '') : '');
       var sub = dr.querySelector('#ag-dr-sub'); if (sub) sub.textContent = d.asn ? ('AS' + d.asn + (d.cc ? ' · ' + d.cc : '')) : '';
       if (d.asn) dr.querySelector('#ag-dr-bgp').innerHTML = '<a class="ag-btn ag-btn-sm" target="_blank" rel="noopener noreferrer" href="https://bgp.he.net/AS' + encodeURIComponent(d.asn) + '">' + IC.ext + t('l_bgp') + '</a>';
@@ -4208,7 +4206,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     var pn = tcp.length || g.udp.length ? portsName(tcp.join(','), g.udp.join(',')) : '';
     // adı çıkmayan port kaldıysa portsName onu "port N" diye zaten yazıyor: ham liste yalnız her port bir servis adına girdiğinde
     var allNamed = pn && !portsSel(tcp.join(','), g.udp.join(',')).extra;
-    return '<span class="ag-cidr" data-ip="' + esc(g.c.replace(/\/\d+$/, '')) + '">' + esc(g.c) + '</span> · ' + esc(pn ? (allNamed && pn !== raw ? pn + ' (' + raw + ')' : pn) : raw) +
+    return cidrLink(g.c) + ' · ' + esc(pn ? (allNamed && pn !== raw ? pn + ' (' + raw + ')' : pn) : raw) +
       (why ? ' · ' + esc(why) : '') + (dt ? ' · ' + esc(dt) : '');
   }
   function portsName(tcp, udp) {
@@ -4517,6 +4515,15 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       if (oa) dr.querySelector('#ag-dr-bgp').innerHTML = '<a class="ag-btn ag-btn-sm" target="_blank" rel="noopener noreferrer" href="https://bgp.he.net/AS' + encodeURIComponent(oa[1]) + '">' + IC.ext + t('l_bgp') + '</a>';
     }).catch(function (e) { jsErr(e); var body = dr.querySelector('#ag-dr-b'); if (body) body.innerHTML = empty('alert', e.message); });
   }
+  // adres bağlantısının tek biçimi: tıklanan ne yazıyorsa o açılır (IP → IP kartı, aralık → aralık kartı; openDrawer yönlendirir).
+  // Önce aralık yazan bağlantıların data-ip'si aralığın ilk IP'siydi: ana sayfa metne bakıp aralığı açıyordu, kartların içindeki
+  // işleyiciler data-ip'yi açıyordu (aynı öğe yere göre başka kart açıyordu)
+  function cidrLink(c) { return '<span class="ag-cidr" data-ip="' + esc(c) + '">' + esc(c) + '</span>'; }
+  // aralığın "IP kartı" için temsilci IP: kayıtlı ilk ihlal eden IP, yoksa tek IP'nin kendisi, yoksa aralığın .1'i (10 kopya vardı)
+  function firstIp(c, ips) {
+    if (ips && ips[0] && ips[0].ip) return ips[0].ip;
+    c = String(c || ''); return /\//.test(c) && !/\/32$/.test(c) ? c.replace(/\/\d+$/, '').replace(/\.0$/, '.1') : c.replace(/\/32$/, '');
+  }
   function pfxOf(ip) { return ip.split('.').slice(0, 3).join('.'); }
   function svcExclude(target, svc) {   // IP ya da aralık izinli servis listelerinden hariç tutulur; banları çalışmaya başlar
     var cur = String(((S && S.prov && S.prov.svc) || {}).except || '').split(/\s+/).filter(Boolean);
@@ -4553,8 +4560,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     }
     if (ipEl && ipEl.getAttribute('data-ip')) {
       ev.preventDefault();
-      var rtx = ipEl.classList.contains('ag-cidr') ? ipEl.textContent.trim() : '';
-      if (RANGE_RE.test(rtx)) openRange(rtx); else openDrawer(ipEl.getAttribute('data-ip'));
+      openDrawer(ipEl.getAttribute('data-ip'));   // aralık ise openDrawer aralık kartını açar
       return;
     }
     var el = act;
@@ -4751,7 +4757,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   }
   function itemMenu(c, e, st) {  // öğe için şu an geçerli eylemler — Genel bakış'taki satırlarla aynı eylemler ve pencereler
     var items = [], bits = bitsOf(c), p16v = /\//.test(c) || /^\d/.test(c) ? p16(c) : '', p24 = pfxOf(String(c).split('/')[0]);
-    function first() { return e.ips && e.ips[0] && e.ips[0].ip ? e.ips[0].ip : bits < 32 ? String(c).replace(/\/\d+$/, '').replace(/\.0$/, '.1') : String(c).replace(/\/32$/, ''); }
+    function first() { return firstIp(c, e.ips); }
     if (st.r) {
       // izinli / yoksayılan / sunucu IP'si satırı: Kontrol edilecekler'deki gibi (abRow) ban yok; izinli servis istisnası sunucu IP'sinde yok
       // (önce "Yine de banla" çıkıyordu, sunucu IP'sinde pencere "banlanamaz" diyordu)
@@ -4824,7 +4830,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     if (!/^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/.test(f)) return;
     if (!focusRow(f)) {
       toast(t('focus_gone', f), 'ok');
-      openDrawer(f.replace(/\/\d+$/, '').replace(/\.0$/, '.1'));
+      openDrawer(firstIp(f));
     }
   }
 
