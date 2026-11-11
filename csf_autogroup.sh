@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.79"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.80"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1889,6 +1889,7 @@ ip_line() {      # IP NOTE WITH_OWNER(0|1) → REPLY = "   - IP  hostname  [ASN 
     # PERMBLOCK: önceki geçici banın servisi (lfd günlüğünden, biliniyorsa); posta günlüğünde bu IP'den denenen hesaplar
     if [[ "$why" == *PERMBLOCK* ]] && [ -n "${PERM_CLS[$1]+x}" ] && [ -n "${PERM_CLS[$1]}" ]; then
         svc_names "${PERM_CLS[$1]}"; why+=" · $(m "$M_PB_SVC" "$REPLY")"
+        IPJ+=",\"svc\":\"${PERM_CLS[$1]}\""      # panel aynı bilgiyi gösterir (önce yalnız mail metnindeydi)
     fi
     acct_text "$1" "$why"; [ -n "$REPLY" ] && why+="${why:+ · }$REPLY"
     [ -n "${ACCTM[$1]}" ] && IPJ+=",\"acct\":${ACCTM[$1]}"

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.15.80 — 2026-11-11
+
+- A repeat ban (`PERMBLOCK`) in a warning's IP list now names the service of
+  the earlier ban in the panel too (*repeat ban · earlier ban: Web*), as the
+  email already did. Applies to warnings recorded from this version on.
+
 ## 1.15.79 — 2026-11-11
 
 - Lists of offending IPs look and read the same everywhere: the IP list under

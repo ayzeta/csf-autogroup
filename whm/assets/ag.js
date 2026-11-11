@@ -844,7 +844,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   // satırları. Önce dört tablo dört ayrı biçimde yazıyordu (biri servisi hiç yazmıyor, biri sebebi yalnız "diğer"de gösteriyordu)
   function ipWhyCell(x, accts, extra) {
     var s0 = svcOfReason(x.why), sv = x.svc && x.svc !== 'other' ? x.svc : s0;
-    var L = [esc(s0 === 'repeat' && sv !== 'repeat' && sv !== 'other' ? svcLabel('repeat') + ' · ' + t('pb_svc', svcLabel(sv)) : svcLabel(sv || 'other'))];
+    var L = [esc(s0 === 'repeat' && sv !== 'repeat' && sv !== 'other' ? svcLabel('repeat') + ' · ' + t('pb_svc', String(sv).split(',').map(svcLabel).join(', ')) : svcLabel(sv || 'other'))];
     if (whyText(x.why)) L.push('<div class="ag-muted">' + esc(whyText(x.why)) + '</div>');
     var ac = acctParts(accts, x.why).join(' · ');
     if (ac) L.push('<div class="ag-muted">' + esc(ac) + '</div>');
