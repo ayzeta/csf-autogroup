@@ -527,7 +527,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     var c = (S.owners || {})[prefixOf(cidr)], o = OWNERS[cidr] || {};
     // Cymru kurum adı ülkeyle bitiyor ("OVH, FR"); bayrak zaten gösterildiği için tabloda atılır.
     if (c && c[0] === '-') return { none: true, label: t('own_none_h') };   // sorgulandı, sağlayıcı yok (aralık duyurulmuyor)
-    if (c) return { asn: c[0], cc: c[1], name: ownName(c[2]), label: 'AS' + c[0] + ' ' + (c[2] || '') };
+    if (c) return { asn: c[0], cc: c[1], name: ownName(c[2]), label: 'AS' + c[0] + ' ' + (c[2] || ''), pfx: c[3] || '' };
     if (o.owner) return { asn: o.asn, cc: o.cc, name: ownName(o.owner), label: o.owner };
     return {};
   }
@@ -4682,12 +4682,11 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     // tam izinli IP'ye ban düğmesi yok: CSF kalıcı banı reddeder, geçici ban işlemez (önce izin kaldırılır; Beyaz liste satırında)
     o.ip = own ? '<button class="ag-btn ag-btn-sm" data-dr="unban1">' + esc(t('ip_unban')) + '</button>'
       : mb > 32 && !fullAllow(d) ? '<button class="ag-btn ag-btn-sm ag-btn-danger" data-dr="ban1">' + esc(t('ip_ban')) + '</button>' : '';
-    // duyurulan aralık /8–/23 (/16 = ağ banı): kapsayan tam ban aralıktan darsa banlanabilir. /16'dan geniş aralık 1.15.88'de açıldı
-    // (CSF 16.33 /12 ve /7 satırını kabul ediyor, ipset'e giriyor, liste sınırında tek satır — ölçüldü); /16 banının içindeki IP için de
-    if (pb >= 8 && pb < 24 && pb !== 16 && mb > pb && /^\d+\.\d+\.\d+\.\d+\/\d+$/.test(ap)) o.pfx = '<button class="ag-btn ag-btn-sm ag-btn-danger" data-dr="banpfx" data-c="' + esc(ap) + '" title="' + esc(t('banpfx_h', num(Math.pow(2, 32 - pb)))) + '">' + esc(t('banpfx', '/' + pb)) + '</button>';
-    if (mb <= 16) return o;          // blok ve ağ düğmeleri: ağ ya da daha geniş tam ban varken yok
-    if (mb > 24) o.b24 = '<button class="ag-btn ag-btn-sm ag-btn-danger" data-dr="ban24"' + tip24(pfxOf(ip)) + '>' + esc(lbl24(pfxOf(ip))) + '</button>';
-    o.b16 = '<button class="ag-btn ag-btn-sm ag-btn-danger" data-dr="ban16">' + esc(lbl16(p16(ip))) + '</button>';
+    // üst seviyeler lvOffer'dan (liste menüleriyle aynı karar)
+    var LV = {}; lvOffer(ip, mb, ap).forEach(function (x) { LV[x.k] = x; });
+    if (LV.pfx) o.pfx = '<button class="ag-btn ag-btn-sm ag-btn-danger" data-dr="banpfx" data-c="' + esc(ap) + '" title="' + esc(t('banpfx_h', num(Math.pow(2, 32 - pb)))) + '">' + esc(t('banpfx', '/' + pb)) + '</button>';
+    if (LV.b24) o.b24 = '<button class="ag-btn ag-btn-sm ag-btn-danger" data-dr="ban24"' + tip24(pfxOf(ip)) + '>' + esc(lbl24(pfxOf(ip))) + '</button>';
+    if (LV.b16) o.b16 = '<button class="ag-btn ag-btn-sm ag-btn-danger" data-dr="ban16">' + esc(lbl16(p16(ip))) + '</button>';
     return o;
   }
   // IP kartı → Beyaz liste: kendi izni varsa (csf.allow satırı ya da geçici izin) "İzni kaldır", bütün portlara izin yoksa "İzin ver…".
@@ -4766,6 +4765,22 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     forget: function (pfx3) { return { act: 'forget', label: t('forget'), icon: 'x', attrs: 'data-t="' + esc(pfx3) + '"' }; },
     unban: function (g) { return { act: 'unban', label: t('unban'), icon: 'x', danger: true, attrs: 'data-c="' + esc(g.cidr) + '" data-dnd="' + (g.dnd ? 1 : 0) + '" data-kind="' + esc(g.kind) + '" data-restore="' + (g.restore || 0) + '"' }; }
   };
+  /* Üst seviye banları tek karar (G6 devamı, 1.15.90): IP kartının düğmeleri ve bütün liste menüleri (Aktif aralık banları, İzlenenler,
+     Geçmiş) bunu kullanır. Hedefin (c) daha geniş seviyeleri — blok /24, duyurulan aralık (/8–/23, /16 hariç), ağ /16 — kapsayan tam ban
+     (mb, bit; yoksa 32) o seviyeden darsa sunulur; sıra dar → geniş. Önce IP kartı ile menüler ayrı kurallardı: menüde duyurulan aralık
+     hiç yoktu (kullanıcı fark etti). pfx: duyurulan aralık (IP kartında sorgudan, listede motorun sahip haritasından; ikisi de Cymru) */
+  function lvOffer(c, mb, pfx) {
+    var cb = bitsOf(c), pb = pfx && /^\d+\.\d+\.\d+\.\d+\/\d+$/.test(pfx) ? bitsOf(pfx) : 0, ip = String(c).split('/')[0], L = [];
+    if (cb > 24 && mb > 24) L.push({ k: 'b24', bits: 24, t: pfxOf(ip) });
+    if (pb >= 8 && pb < 24 && pb !== 16 && pb < cb && mb > pb) L.push({ k: 'pfx', bits: pb, t: pfx });
+    if (cb > 16 && mb > 16) L.push({ k: 'b16', bits: 16, t: p16(ip) });
+    return L.sort(function (a, b) { return b.bits - a.bits; });
+  }
+  function lvItems(c, mb) {
+    // eklentinin listesinde olmayan kapsayan ban da (başka kaynaklı geniş aralık, ülke / sağlayıcı "her şey" banı): IP kartının coverBits'i gibi
+    var oc = outerCover(c); if (oc) mb = Math.min(mb, covBits(oc));
+    return lvOffer(c, mb, ownerOf(c).pfx).map(function (x) { return x.k === 'b24' ? MI.ban24(x.t) : x.k === 'b16' ? MI.ban16(x.t) : MI.banpfx(x.t); });
+  }
   var SVC_WL_RE = /services\.allow \(([^)]+)\): ([0-9.\/]+)/;     // izinli servis listesi kaydı: (servis, aralık)
   // Kontrol edilecekler: şüpheli ağ / aralık, atlandı — ban önerileri (en dar önce), izinli servis istisnası, Sustur
   function actsReview(e) {
@@ -4789,14 +4804,14 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     var A = [], b = bitsOf(g.cidr), ip = g.cidr.replace(/\/\d+$/, '');
     if (g.kind === 'temp' && b === 24 && !g.under) A.push(MI.promote(pfxOf(ip)));   // İzlenenler'deki "Kalıcı yap"
     if ((g.kind === 'manual' && !(g.ttl > 0) || g.kind === 'partial') && b >= 16 && b <= 24 || g.kind === 'partial' && b === 32) A.push(MI.chg(g.cidr));
-    if (b === 32 && bitsOf(g.under) > 24) A.push(MI.ban24(pfxOf(ip)));   // tek IP banı: bir üst seviye blok
-    if (b > 16 && bitsOf(g.under) > 16) A.push(MI.ban16(p16(g.cidr)));
+    // üst seviyeler (blok, duyurulan aralık, ağ) IP kartıyla aynı kararla: kapsayan tam ban = kendi tam banı ya da üstündeki geniş ban
+    A = A.concat(lvItems(g.cidr, Math.min(g.kind === 'partial' ? 32 : b, bitsOf(g.under))));
     A.push(MI.unban(g));
     return A;
   }
   // izlenen blok
   function actsPending(p) {
-    return (p.under ? [] : [MI.promote(p.prefix)]).concat(bitsOf(p.under) > 16 ? [MI.ban16(p16(p.prefix))] : []).concat([MI.rewatch(p.prefix), MI.forget(p.prefix)]);
+    return (p.under ? [] : [MI.promote(p.prefix)]).concat(lvItems(p.prefix + '.0/24', bitsOf(p.under))).concat([MI.rewatch(p.prefix), MI.forget(p.prefix)]);
   }
   function actsRv(e) { return e.type === 'allow_ban' || e.type === 'allow_grp' ? actsAllow(e) : e.type === 'part_open' ? actsPo(e) : actsReview(e); }
   function itemMenu(c, e, st) {  // öğe için şu an geçerli eylemler — Genel bakış'taki satırlarla aynı işlevler (acts*)
@@ -4805,11 +4820,11 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     else if (st.g) items = actsGroup(st.g);
     else if (st.p) items = actsPending(st.p);
     else if (!st.cov && !st.ig) {
-      // artık hiçbir listede değil: yeniden banlamak ya da bloğunu/ağını banlamak hâlâ mümkün
-      items = bits === 16 ? [MI.ban16(p16v)] : /^\d/.test(String(c)) ? [MI.ban24(p24), MI.ban16(p16v)] : [];
-    } else if (st.cov && bits > 16 && covBits(st.cov) > 16 && bitsOf(st.cov.under) > 16) {
-      // blok banının içinde: ağı banlamak hâlâ anlamlı; blok yalnız geçici banlıysa kalıcı banlamak da (IP kartıyla aynı)
-      items = (st.cov.kind === 'temp' && bits > 24 ? [MI.ban24(p24)] : []).concat([MI.ban16(p16v)]);
+      // artık hiçbir listede değil: kendisini yeniden banlamak (blok / ağ) ve üst seviyeleri (IP kartıyla aynı karar)
+      items = !/^\d/.test(String(c)) ? [] : (bits === 16 ? [MI.ban16(p16v)] : bits === 24 ? [MI.ban24(p24)] : []).concat(lvItems(c, 32));
+    } else if (st.cov) {
+      // bir banın içinde: kapsayandan geniş seviyeler; geçici ban kapsamaz sayılır (kalıcıya almak için blok yine sunulur; IP kartıyla aynı)
+      items = lvItems(c, st.cov.kind === 'temp' ? bitsOf(st.cov.under) : Math.min(covBits(st.cov), bitsOf(st.cov.under)));
     } else items = [];
     items = items.concat([MI.ipcard(firstIp(c, e.ips))]);
     if (st.r || st.g || st.p) items.push(MI.goto(c));

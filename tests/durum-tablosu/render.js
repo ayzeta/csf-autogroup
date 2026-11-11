@@ -122,6 +122,29 @@ for (const s of scen) {
   bans.forEach(([k, x]) => { const key = x[0] + '|' + x[1]; (lab[key] = lab[key] || new Set()).add(x[2]); });
   Object.entries(lab).forEach(([key, set]) => { if (set.size > 1 && !key.startsWith('banforce')) fail(s, `${key}: farklı etiketler ${[...set].join(' / ')}`); });
 }
+// K8: üst seviye banları (blok, duyurulan aralık, ağ) IP kartında ve liste menülerinde aynı karardan (lvOffer). Satırın menüsü, IP
+// kartının sunduğu seviyelerden satırın kendisinden geniş olanları sunar. Duyurulan aralık /20 olarak hem IP sorgusuna hem motorun sahip
+// haritasına eklenir (taklit DNS /16 veriyor; /20 olmadan kural aralığı görmezdi). Önce menüde duyurulan aralık hiç yoktu (1.15.89'a kadar)
+const PFX = '151.80.0.0/20';
+for (const s of scen) {
+  const st = JSON.parse(fs.readFileSync(path.join(OUT, s + '.status.json'), 'utf8'));
+  const lk = JSON.parse(fs.readFileSync(path.join(OUT, s + '.lookup.json'), 'utf8'));
+  lk.pfx = PFX; st.owners = st.owners && !Array.isArray(st.owners) ? st.owners : {};
+  Object.keys(st.owners).forEach(k => { if (IN(k) && Array.isArray(st.owners[k])) st.owners[k][3] = PFX; });
+  if (!st.owners['151.80.7']) st.owners['151.80.7'] = ['16276', 'FR', 'OVH, FR', PFX];
+  AG.set(st, 'tr');
+  const menus = {}; globalThis.__MENU = (k, items) => { menus[k] = items; };
+  AG.review(); AG.groupRows(); AG.pending();
+  const card = htmlActs(AG.drActs(IP, AG.coverBits(lk), lk.pfx, '', lk)).filter(a => /^ban(24|16|pfx)$/.test(a[0]))
+    .map(a => ({ k: a[0], b: a[0] === 'ban24' ? 24 : a[0] === 'ban16' ? 16 : 20 }));
+  Object.keys(menus).forEach(k => {
+    const kind = k.slice(0, 3), c = kind === 'pm:' ? k.slice(3) + '.0/24' : k.slice(3);
+    if (!/^(gm|pm):$/.test(kind) || !IN(c) || !(c === IP + '/32' || c === IP || c === BLK)) return;
+    const cb = c === BLK ? 24 : 32;
+    const want = card.filter(x => x.b < cb).map(x => x.k).sort().join(','), got = menus[k].map(i => i.act).filter(a => /^ban(24|16|pfx)$/.test(a)).sort().join(',');
+    if (want !== got) fail(s, `K8 ${c}: liste menüsü [${got || '—'}] ≠ IP kartının üst seviyeleri [${want || '—'}] (duyurulan aralık ${PFX})`);
+  });
+}
 console.log((QUIET ? lines.filter(l => l.startsWith('  ✗')) : lines).join('\n'));
 console.log('\n' + (fails ? fails + ' kural ihlali' : 'Bütün kurallar geçti'));
 process.exit(fails ? 1 : 0);

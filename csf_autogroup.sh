@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.89"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.90"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -3478,7 +3478,9 @@ do_status() {
     for p in $( { deny_prefixes; pending_prefixes; listed_prefixes; } | sort -u); do
         # sorgulanıp sağlayıcı çıkmayan blok (Team Cymru boş cevap: aralık duyurulmuyor) "-" ile: panel "henüz bilinmiyor"dan ayırır
         if [ -z "${OWN_A[$p]}" ]; then [ -n "${OWN_L[$p]+x}" ] && [ -z "${OWN_OLD[$p]+x}" ] && owners+=("\"$p\":[\"-\",\"\",\"\"]"); continue; fi
-        jstr "${OWN_N[$p]}"; owners+=("\"$p\":[\"${OWN_A[$p]}\",\"${OWN_C[$p]}\",$REPLY]")
+        # 4. alan duyurulan aralık (Cymru, OWN_P): liste menüleri de IP kartı gibi "Duyurulan aralığı banla" sunsun (1.15.90; önce yalnız
+        # IP kartı biliyordu, menüde yoktu — kullanıcı fark etti)
+        jstr "${OWN_N[$p]}"; owners+=("\"$p\":[\"${OWN_A[$p]}\",\"${OWN_C[$p]}\",$REPLY,\"${OWN_P[$p]}\"]")
     done
     prof owners
     asn_top 500                    # tam liste (panel kısa gösterir, ister genişletir)

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.15.90 — 2026-11-11
+
+- List menus (Active range bans, Watched blocks, History) offer *Ban
+  announced range* like the IP card. Both now decide the wider levels (block,
+  announced range, network) in one place; before, the menus did not know the
+  announced range at all. The status data carries each block's announced
+  range for this.
+- One look per kind of element: buttons and links had their font size taken
+  from wherever they sat (a small button was 13.5 px in the IP card and 12.5
+  px in lists, a link 12, 12.5 or 13.5 px). Table headers in cards match the
+  list headers, the "Flagged" header no longer takes the time column's size,
+  and both empty-state sizes are the same.
+
 ## 1.15.89 — 2026-11-11
 
 - The ban window for an announced range wider than /16 names the range and

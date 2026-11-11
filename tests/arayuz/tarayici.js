@@ -90,6 +90,57 @@ window.agKart = function () {
 };`;
 // sayfa yeniden çizilse de (veri geç geldi, yoklama) tıklama anında öğeyi yeniden bulur; page.$ tutamacı geçersiz kalıyordu
 // ("Element is not attached to the DOM", ara sıra)
+// Görünüm envanteri (G9; kullanıcı: "tablolar çeşit çeşit", "bu tarz tutarsızlıkları sen bul"): aynı görevdeki öğe (rol) her ekranda
+// tek görünümde. Her ekran / kart taramasında rol başına görünüm imzası (yazı boyutu, kalınlık, büyük harf, harf aralığı, renk, yazı
+// ailesi; düğmede yükseklik ve zemin) toplanır; sonda rol başına birden çok imza düşer, imzanın görüldüğü yerlerle. Boş öğe sayılmaz
+// (başlık satırının sondaki boş hücresi yanlış fark üretiyordu). ROL_IST: bilinçli istisna (seçici → gerekçe)
+// rol → seçici; renk ayrımı tür farkıdır (düğmede normal / birincil / kırmızı): düğmelerde yalnız boyut, kalınlık, yükseklik karşılaştırılır
+const ROLES = {
+  'liste / tablo başlığı': '.ag-thead .ag-th, table thead th',
+  'tablo hücresi': '.ag-im-t tbody td, .ag-evm tbody td',
+  'liste ana hücresi': '.ag-tbl > .ag-item > .ag-tr > .ag-td-main',
+  'liste ikincil hücresi': '.ag-tbl > .ag-item > .ag-tr > .ag-td-why, .ag-tbl > .ag-item > .ag-tr > .ag-td-until',
+  'liste zaman sütunu': '.ag-tbl > .ag-item > .ag-tr > .ag-when',
+  'kart başlığı': '.ag-card-h h2',
+  'kart açıklaması': '.ag-card-h .ag-hint',
+  'bölüm başlığı': '.ag-drawer h4, .ag-fact-l',
+  'bağlantı': '.ag-link',
+  'adres bağlantısı': '.ag-cidr',
+  'düğme': '.ag-btn:not(.ag-btn-sm)',
+  'küçük düğme': '.ag-btn.ag-btn-sm',
+  'kart altı metni': '.ag-limf > .ag-muted, .ag-pager > span',
+  'boş durum': '.ag-empty',
+};
+// bilinçli istisnalar (seçici: gerekçe) — o rolde sayılmaz
+const ROL_IST = {
+  '.ag-td-why .ag-link, .ag-tile .ag-link, .ag-mode-hint .ag-link, .ag-warnbox .ag-link': 'cümle içi bağlantı: çevresindeki metnin boyutunu alır',
+  '.ag-lookup .ag-btn': 'IP sorgula: yanındaki büyük arama kutusuyla aynı yükseklik (38 px)',
+};
+
+const INV = {};
+async function rolInv(page, ad) {
+  const got = await page.evaluate(([R, IST]) => {
+    const out = [], ist = Object.keys(IST).join(', ');
+    Object.keys(R).forEach(role => Array.from(document.querySelectorAll(R[role])).forEach(e => {
+      if (!(e.offsetWidth > 0 && e.offsetHeight > 0) || e.closest('.ag-menu') || !e.textContent.trim() || e.matches(ist)) return;
+      const c = getComputedStyle(e), btn = /düğme/.test(role);
+      const sig = btn ? [c.fontSize, c.fontWeight, 'h' + Math.round(e.getBoundingClientRect().height)].join(' · ')
+        : [c.fontSize, c.fontWeight, c.textTransform === 'none' ? '' : c.textTransform, c.letterSpacing === 'normal' ? '' : 'ls ' + c.letterSpacing,
+          c.color, c.fontFamily.split(',')[0].replace(/"/g, '')].filter(Boolean).join(' · ');
+      const card = e.closest('.ag-card, .ag-drawer, .ag-modal'), h = card && card.querySelector('h2, h3');
+      out.push([role, sig, (h ? h.textContent.trim().slice(0, 24) : '?') + ' ‹' + e.textContent.trim().slice(0, 18) + '›', (e.className || e.tagName).toString().slice(0, 40)]);
+    }));
+    return out;
+  }, [ROLES, ROL_IST]);
+  got.forEach(([role, sig, where, cls]) => { const r = INV[role] = INV[role] || {}; const s = r[sig] = r[sig] || { n: 0, w: new Set(), cls: new Set() }; s.n++; if (s.w.size < 4) s.w.add(ad + ' › ' + where); s.cls.add(cls); });
+}
+function rolRapor() {
+  Object.keys(ROLES).forEach(role => {
+    const r = INV[role] || {}, sigs = Object.keys(r);
+    const info = sigs.map(s => `${r[s].n}× [${s}] ${Array.from(r[s].w).join('; ')} {${Array.from(r[s].cls).slice(0, 3).join(' | ')}}`).join('\n      ');
+    check(`görünüm envanteri · ${role}: tek görünüm (${sigs.length})`, sigs.length <= 1, sigs.length > 1 ? '\n      ' + info : '');
+  });
+}
 // aynı durum aynı renk: data-st taşıyan rozet (.ag-pill) ve seviye metni (.ag-lv-st) bütün ekranlarda ve kartlarda tek renk.
 // ST_CLS (ag.js) tek kaynak; önce Etkisini ölç'te banlar arayüz kırmızısı, izinli istekler yeşildi, IP kartında geçici blok banı kalıcı rengindeydi
 const ST_SEEN = {};
@@ -119,6 +170,7 @@ async function kartKurallari(page, ad) {
   check(`kart ${ad} · IP / aralık yazan her öğe tıklanıyor`, k.ipb.length === 0, k.ipb.slice(0, 4).join(' | '));
   check(`kart ${ad} · sütun başlıkları hücrelerle aynı hizada`, k.hiz.length === 0, k.hiz.slice(0, 4).join(' | '));
   await stRenk(page, 'kart ' + ad);
+  await rolInv(page, 'kart ' + ad);
 }
 async function layoutChecks(page, label, width) {
   await page.evaluate(KURAL);
@@ -267,6 +319,7 @@ async function layoutChecks(page, label, width) {
     .map(e => { const tx = e.textContent.trim(), d = e.getAttribute('data-ip'); return tx === d || tx === d + '/32' ? null : tx + ' → ' + d; }).filter(Boolean));
   check(`${label} · ${width} px · adres bağlantısı yazdığı adresi açar`, lnk.length === 0, lnk.slice(0, 3).join(' | '));
   await stRenk(page, `${label} · ${width} px`);
+  if (width >= 1000) await rolInv(page, label);   // masaüstü genişliği (telefonda boyutlar bilinçli küçülür; ayrı denetlenir)
 }
 const errs = [];          // sayfanın JS hataları: test yarıda düşerse de yazılır
 (async () => {
@@ -859,6 +912,7 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
   }
   await page.waitForTimeout(3000); await page.keyboard.press('Escape');
   check('JS hatası yok', errs.length === 0, errs.slice(0, 3).join(' | '));
+  rolRapor();
   await browser.close();
   console.log(`Arayüz: ${N} denetim, ${F} beklenmeyen`);
   process.exit(F ? 1 : 0);
