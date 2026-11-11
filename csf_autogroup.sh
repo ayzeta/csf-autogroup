@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.84"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.85"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1886,11 +1886,16 @@ ip_line() {      # IP NOTE WITH_OWNER(0|1) → REPLY = "   - IP  hostname  [ASN 
         fi
         jstr "$OWN_LONG"; IPJ+=",\"owner\":$REPLY,\"asn\":\"$OWN_ASN\",\"cc\":\"$OWN_CC\",\"pfx\":\"${OWN_P[$q]}\""
     fi
-    # PERMBLOCK: önceki geçici banın servisi (lfd günlüğünden, biliniyorsa); posta günlüğünde bu IP'den denenen hesaplar
+    # Satır panelin IP tablosuyla aynı sırada (ipWhyCell): servis · sebep · denenen hesaplar. Servis motorun tek sınıflandırıcısından
+    # (AWK_CLS; panelin svcOfReason'ı ile aynı kurallar, tests/senaryo/siniflama.sh). Önce mailde servis adı yoktu.
+    local sv svt
+    sv=$(LC_ALL=C awk -v r="$why" "$AWK_CLS"' BEGIN { print cls(r) }'); svc_names "${sv:-other}"; svt="$REPLY"
+    # PERMBLOCK: önceki geçici banın servisi (lfd günlüğünden, biliniyorsa) servisin yanında (panel: "tekrar banlanan · önceki ban: SSH")
     if [[ "$why" == *PERMBLOCK* ]] && [ -n "${PERM_CLS[$1]+x}" ] && [ -n "${PERM_CLS[$1]}" ]; then
-        svc_names "${PERM_CLS[$1]}"; why+=" · $(m "$M_PB_SVC" "$REPLY")"
+        svc_names "${PERM_CLS[$1]}"; svt+=" · $(m "$M_PB_SVC" "$REPLY")"
         IPJ+=",\"svc\":\"${PERM_CLS[$1]}\""      # panel aynı bilgiyi gösterir (önce yalnız mail metnindeydi)
     fi
+    [ -n "$why" ] && why="$svt · $why" || why="$svt"
     acct_text "$1" "$why"; [ -n "$REPLY" ] && why+="${why:+ · }$REPLY"
     [ -n "${ACCTM[$1]}" ] && IPJ+=",\"acct\":${ACCTM[$1]}"
     IPJ+="}"

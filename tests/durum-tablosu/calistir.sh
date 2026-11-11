@@ -235,6 +235,7 @@ mk lkacct; amail 198.51.100.77
 mcheck "IP kartı: listede olmayan IP'nin de denedikleri (terminal önbelleği kurar, sonra JSON)" "run --lookup 198.51.100.77 2>/dev/null | grep -q 'Denemeler *denenen posta hesapları: info@site-a.example (2 hatalı giriş), baska@site.example (1 hatalı giriş), info@site-b.example (1 hatalı giriş)' && run --lookup 198.51.100.77 --json 2>/dev/null | grep -q '\"acct\":\[{\"s\":\"mail\",\"u\":\"info@site-a.example\",\"n\":2},{\"s\":\"mail\",\"u\":\"baska@site.example\",\"n\":1},{\"s\":\"mail\",\"u\":\"info@site-b.example\",\"n\":1}\]'"
 mkm mailacct 1; amail 151.80.7.1; for x in 1 2 3; do single 151.80.7.$x sshd; done; quiet
 mcheck "blok banı maili: tekil satırında denenen posta hesapları" "mtext | grep -q '151.80.7.1 .*denenen posta hesapları: info@site-a.example (2 hatalı giriş)'"
+mcheck "blok banı maili: IP satırı panelle aynı sırada (servis · sebep · hesaplar; 1.15.85'e kadar servis adı yoktu)" "mtext | grep -q '151.80.7.1 .*  SSH · .*sshd.* · denenen posta hesapları' && mtext | grep -q '151.80.7.2 .*  SSH · .*sshd'"
 mk acold; printf 'SMTPAUTH_LOG = "%s"\n' "$R/exim_mainlog" >> "$R/etc/csf/csf.conf"
 printf '%s dovecot_login authenticator failed for H=(x) [198.51.100.77]:1: 535 Incorrect authentication data (set_id=eski@site.example)\n' "$(date -d '-9 days' '+%F %T')" > "$R/exim_mainlog"
 mcheck "Kontrol edilecekler penceresinden (7 gün) eski deneme sayılmaz" "! run --lookup 198.51.100.77 2>/dev/null | grep -q 'eski@site.example' && [ -e '$R/var/lib/csf_autogroup/denemeler' ] && ! run --lookup 198.51.100.77 --json 2>/dev/null | grep -q 'eski@site.example'"
@@ -858,6 +859,15 @@ mk pw16; for x in 7.1 8.1 9.1; do single 151.80.$x sshd; done; for x in 10.1 11.
 mcheck "kalıcı pencere: /16 uyarısı eski tekilleri saymaz (3 yeni + 3 eski, eşik 5 → uyarı yok)" "! grep -q '\"type\":\"warn16\"' '$R/var/lib/csf_autogroup/events.jsonl' 2>/dev/null"
 mk pw16b; for x in 7.1 8.1 9.1 10.1 11.1; do single 151.80.$x sshd; done; quiet
 mcheck "kalıcı pencere: aynı /16'da 5 yeni tekil → uyarı verilir (karşılaştırma)" "grep -q '\"type\":\"warn16\"' '$R/var/lib/csf_autogroup/events.jsonl'"
+# izinli servis (services.allow, csf.allow'a Include) içinden ihlal: tek IP "izinli" satırı, aynı kayıttan birden çok IP grup satırı;
+# menülerinde "İzinli servislerden hariç tut" (K7 aşağıda liste ↔ Geçmiş karşılaştırır: 1.15.83'e kadar liste yalnız IP'yi, Geçmiş
+# kaydın bütün /24'ünü hariç tutuyordu)
+mkl svcab
+printf '%s\n' '151.80.7.0/24 # csf_autogroup: service googlebot' '151.80.8.0/24 # csf_autogroup: service googlebot' > "$R/etc/csf/csf_autogroup.services.allow"
+printf 'Include %s\n' "$R/etc/csf/csf_autogroup.services.allow" >> "$A"
+lfdb 3600 151.80.7.9; for x in 1 2 3 4; do single 151.80.8.$x sshd; done; quiet; quiet
+mcheck "izinli servisten ihlal: tek IP 'izinli' satırı servis adıyla (services.allow (googlebot))" "rvrow 151.80.7.9 | grep -q '\"type\":\"allow_ban\".*services.allow (googlebot): 151.80.7.0/24'"
+mcheck "izinli servisten ihlal: aynı kayıttan 4 IP grup satırı, blok banlanmaz" "rvrow 151.80.8.0/24 | grep -q '\"type\":\"allow_grp\".*\"n\":4' && ! grep -q '^151.80.8.0/24' '$D'"
 node "$(wp "$H/render.js")" "$(wp "$REPO/whm/assets/ag.js")" "$(wp "$W/out")" "$@"; RC=$?
 # K7 bütün köklerde: liste satırı menüsü = Geçmiş menüsü (menu-esit.js). Yalnız listede satır doğurabilecek kökler (~4 dk)
 mkdir -p "$W/k7"

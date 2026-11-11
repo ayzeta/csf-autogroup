@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.15.85 — 2026-11-11
+
+- Each IP line in a notification mail shows the service first, like the IP
+  table in the panel: service · reason · tried accounts (for example
+  "SSH · (sshd) Failed login"). For a repeat ban the earlier ban's service
+  sits next to it ("banned repeatedly · earlier ban: SSH").
+- Page counters and the counts in card headers use the thousands separator
+  everywhere. Active range bans, Watched blocks and Muted showed raw numbers
+  (1234 instead of 1,234).
+
 ## 1.15.84 — 2026-11-11
 
 - History's ⋯ menu offers the same actions as the row in Overview. For a

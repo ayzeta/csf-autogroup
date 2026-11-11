@@ -823,7 +823,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       ax += '<span style="left:' + (i * 100 / days).toFixed(2) + '%">' + esc(dd.toLocaleDateString(loc, { day: 'numeric', month: 'short' })) + '</span>';
     }
     var totals = SERIES.map(function (s) { return '<div' + (sums[s[0]] ? '' : ' class="z"') + '><i style="background:' + s[2] + '"></i>' + esc(t(s[1])) + '<b>' + num(sums[s[0]]) + '</b></div>'; }).join('');
-    return '<section class="ag-card ag-activity"><div class="ag-card-h"><h2>' + IC.chart + t('ch_title_n', days) + '</h2><span class="ag-count">' + t('ch_total', num(tot)) + '</span><div class="ag-grow"></div>' + periodBar() + '</div>' +
+    return '<section class="ag-card ag-activity"><div class="ag-card-h"><h2>' + IC.chart + t('ch_title_n', days) + '</h2>' + countBadge(t('ch_total', num(tot))) + '<div class="ag-grow"></div>' + periodBar() + '</div>' +
       (tot ? '<div class="ag-chart2"><div class="ag-plot"><div class="ag-yax" style="height:' + H + 'px">' + yax + '</div><div class="ag-bars" style="height:' + H + 'px">' + grid + bars + '</div><div class="ag-axis">' + ax + '</div></div>' +
         '<div class="ag-totals">' + totals + '</div></div>'
         : '<div class="ag-empty ag-empty-sm">' + t('ch_empty', num(UI.cd === 7 ? 7 : 30)) + '</div>') + '</section>';
@@ -887,7 +887,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
         '<td>' + own + '</td>' +
         '<td>' + alp + ipWhyCell(i, i.acct || (S.accts || {})[i.ip]) + '</td></tr>';
     }).join('');
-    var more = total && total > ips.length ? '<div class="ag-muted ag-ip-more">' + esc(t('and_more', total - ips.length)) + '</div>' : '';
+    var more = total && total > ips.length ? '<div class="ag-muted ag-ip-more">' + esc(t('and_more', num(total - ips.length))) + '</div>' : '';
     return '<div class="ag-ips"><table class="ag-im-t ag-ip-t"><thead><tr><th>' + esc(t('col_ip')) + '</th><th>' + esc(t('col_owner')) + '</th><th>' + esc(t('rg_c_svcwhy')) + '</th></tr></thead><tbody>' +
       rows + '</tbody></table>' + more + '</div>';
   }
@@ -1028,7 +1028,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       '<span class="ag-th">' + esc(t('col_why')) + '</span><span class="ag-th ag-td-own">' + esc(t('col_owner')) + '</span>' +
       '<span class="ag-th ag-when" title="' + esc(t('col_marked_h')) + '">' + esc(t('col_marked')) + '</span><span></span></div>';
     return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.alert + t('s_review') + '</h2>' +
-      '<span class="ag-count warn">' + S.review.length + '</span>' +
+      countBadge(num(S.review.length), 'warn') + '' +
       '<span class="ag-hint">' + t('s_review_h') + '</span></div>' +
       '<div class="ag-card-b ag-tbl">' + head + items + '</div>' + limFoot('rv', 20, S.review.length) + '</section>';
   }
@@ -1105,9 +1105,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
         '<div class="ag-td ag-td-act">' + menu('gm:' + g.cidr, items) + '</div></div>' +
         (open && ev ? ipTable(ev.ips, ev.total) : '') + '</div>';
     }).join('');
-    var pager = pages > 1 ? '<div class="ag-pager"><span>' + t('of_n', from + 1, from + shown.length, list.length) + '</span>' +
-      '<button class="ag-iconbtn" data-act="gpage" data-d="-1"' + (UI.gp ? '' : ' disabled') + ' aria-label="' + t('pg_prev') + '">‹</button>' +
-      '<button class="ag-iconbtn" data-act="gpage" data-d="1"' + (UI.gp < pages - 1 ? '' : ' disabled') + ' aria-label="' + t('pg_next') + '">›</button></div>' : '';
+    var pager = pages > 1 ? pagerHtml('gpage', '', from, shown.length, list.length, UI.gp > 0, UI.gp < pages - 1) : '';
     return '<div class="ag-thead">' + th('cidr', t('col_block'), 'ag-td-main') + th('kind', t('col_state')) + th('owner', t('col_owner'), 'ag-td-own') +
       th('n', t('col_singles'), 'ag-num-c ag-th-r') + th('added', t('col_added'), 'ag-when') + '<span></span></div>' + rows + pager;
   }
@@ -1130,7 +1128,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
         '<span class="ag-chip-n" title="' + esc(t('t_chipn')) + '">' + num(n) + '</span></button>';
     }).join('');
     return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.ban + t('s_groups') + '</h2>' +
-      '<span class="ag-count" id="ag-gcount">' + groupCount() + '</span><span class="ag-hint ag-hint-l">' + esc(t('s_groups_h')) + '</span><div class="ag-tools"><div class="ag-chips">' + chips + '</div>' +
+      countBadge(groupCount(), '', 'ag-gcount') + '<span class="ag-hint ag-hint-l">' + esc(t('s_groups_h')) + '</span><div class="ag-tools"><div class="ag-chips">' + chips + '</div>' +
       '<input class="ag-input ag-gq" id="ag-gq" type="search" placeholder="' + esc(t('g_search')) + '" value="' + esc(UI.gq) + '">' +
       // dar ekranda tablo başlığı (sıralama düğmeleri) gizlenir: aynı sıralamalar bu seçimde
       '<select class="ag-input ag-msort" id="ag-gsort" aria-label="' + esc(t('sort_by')) + '">' + [['added', -1], ['added', 1], ['n', -1], ['cidr', 1], ['kind', 1], ['owner', 1]].map(function (o) {
@@ -1358,9 +1356,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
         (open ? ipTable(e.ips, e.total) : '') + '</div>';
     }
     var hasNext = from + EVP < list.length || (EVL && EVMORE);
-    var more = UI[pk] > 0 || hasNext ? '<div class="ag-pager">' + (EVBUSY ? '<span>' + esc(t('ev_loading')) + '</span>' : '<span>' + t(EVL && EVMORE ? 'of_n_more' : 'of_n', num(list.length ? from + 1 : 0), num(from + shown.length), num(list.length)) + '</span>') +
-      '<button class="ag-iconbtn" data-act="evpage" data-k="' + pk + '" data-d="-1"' + (UI[pk] ? '' : ' disabled') + ' aria-label="' + t('pg_prev') + '">‹</button>' +
-      '<button class="ag-iconbtn" data-act="evpage" data-k="' + pk + '" data-d="1"' + (hasNext && !EVBUSY ? '' : ' disabled') + ' aria-label="' + t('pg_next') + '">›</button></div>' : '';
+    var more = UI[pk] > 0 || hasNext ? pagerHtml('evpage', pk, from, shown.length, list.length, UI[pk] > 0, hasNext && !EVBUSY, EVL && EVMORE, EVBUSY) : '';
     return '<section class="ag-card" id="' + (cfg ? 'ag-cfglog' : 'ag-events') + '"><div class="ag-card-h"><h2>' + (cfg ? IC.sliders + t('s_cfglog') : IC.list + t('s_events')) + '</h2>' +
       (chips ? '<div class="ag-tools">' + chips + '</div>' : '') + '</div>' +
       // olay kaydı okunamadıysa liste yalnız durum çıktısındaki son olaylardan: eksik olabileceği söylenir
@@ -1398,6 +1394,16 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   }
   // uzun listeler başta kısa: UI.lim[anahtar] kadar satır; altbilgi "5 / 23 gösteriliyor · Daha fazla · Hepsi · Daralt"
   function lim(key, def) { UI.lim = UI.lim || {}; return UI.lim[key] || def; }
+  /* Sayfa çubuğu tek bileşen (Aktif aralık banları, İzlenenler, Geçmiş, ayar geçmişi): "1–20 / 1.234" sayıları num() ile. Önce üç kopyaydı;
+     yalnız Geçmiş'inki sayıları biçimliyordu (1234 ↔ 1.234). more: toplam henüz tam yüklenmedi ("+"), busy: yükleniyor */
+  // kart başlığındaki sayı rozeti tek bileşen; sayı çağıranda num() ile biçimli metin (önce üç kartta ham sayıydı: 1234 ↔ 1.234)
+  function countBadge(text, cls, id) { return '<span class="ag-count' + (cls ? ' ' + cls : '') + '"' + (id ? ' id="' + id + '"' : '') + '>' + esc(text) + '</span>'; }
+  function pagerHtml(act, k, from, n, total, hasPrev, hasNext, more, busy) {
+    var dk = k ? ' data-k="' + esc(k) + '"' : '';
+    return '<div class="ag-pager"><span>' + esc(busy ? t('ev_loading') : t(more ? 'of_n_more' : 'of_n', num(total ? from + 1 : 0), num(from + n), num(total))) + '</span>' +
+      '<button class="ag-iconbtn" data-act="' + act + '"' + dk + ' data-d="-1"' + (hasPrev ? '' : ' disabled') + ' aria-label="' + esc(t('pg_prev')) + '">‹</button>' +
+      '<button class="ag-iconbtn" data-act="' + act + '"' + dk + ' data-d="1"' + (hasNext ? '' : ' disabled') + ' aria-label="' + esc(t('pg_next')) + '">›</button></div>';
+  }
   function limFoot(key, def, total) {
     var n = lim(key, def);
     if (total <= def) return '';
@@ -1481,7 +1487,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     body += limFoot('asn:' + UI.at, 5, nAll.length);
     var tabLink = ASN_ROW_ACT ? '' : '<button class="ag-link" data-act="tab" data-tab="prov">' + esc(t('pv_open_tab')) + '</button>';
     if (ASN_ROW_ACT) hint = esc(t('pv_top_h')) + ' ' + hint;
-    return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.globe + t('s_asn') + '</h2><span class="ag-count">' + num(nAll.length) + '</span>' + tabLink + chips +
+    return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.globe + t('s_asn') + '</h2>' + countBadge(num(nAll.length)) + tabLink + chips +
       // Sağlayıcılar'da uzun açıklama; Genel bakış'ta tek satır (sekmenin ne gösterdiği)
       '<span class="ag-hint" style="width:100%">' + (ASN_ROW_ACT ? hint : esc(t('at_' + UI.at + '_s'))) + '</span></div><div class="ag-card-b">' + body + '</div></section>';
   }
@@ -1502,7 +1508,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
         '<div class="ag-sub">' + how + ld + '</div></div></div>';
     }).join('') + limFoot('asn:ban', 5, BN.length);
     var tabLink = ASN_ROW_ACT ? '' : '<button class="ag-link" data-act="tab" data-tab="prov">' + esc(t('pv_open_tab')) + '</button>';
-    return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.globe + t('s_asn_ban') + '</h2><span class="ag-count">' + num(BN.length) + '</span>' + tabLink +
+    return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.globe + t('s_asn_ban') + '</h2>' + countBadge(num(BN.length)) + tabLink +
       '<span class="ag-hint" style="width:100%">' + esc(t('ban_h')) + '</span></div><div class="ag-card-b">' + body + '</div></section>';
   }
 
@@ -1529,13 +1535,11 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
         '<div class="ag-td ag-td-act">' + menu('pm:' + p.prefix, pitems.concat(actsPending(p), [MI.ipcard(first)])) + '</div></div>' +
         (open && ev ? ipTable(ev.ips, ev.total) : '') + '</div>';
     }).join('');
-    var pager = pages > 1 ? '<div class="ag-pager"><span>' + t('of_n', from + 1, from + shown.length, list.length) + '</span>' +
-      '<button class="ag-iconbtn" data-act="ppage" data-d="-1"' + (UI.pp ? '' : ' disabled') + ' aria-label="' + t('pg_prev') + '">‹</button>' +
-      '<button class="ag-iconbtn" data-act="ppage" data-d="1"' + (UI.pp < pages - 1 ? '' : ' disabled') + ' aria-label="' + t('pg_next') + '">›</button></div>' : '';
+    var pager = pages > 1 ? pagerHtml('ppage', '', from, shown.length, list.length, UI.pp > 0, UI.pp < pages - 1) : '';
     var body = list.length ? '<div class="ag-thead ag-tr-p"><span class="ag-th">' + t('col_block') + '</span><span class="ag-th">' + t('col_owner') + '</span>' +
       '<span class="ag-th ag-td-since">' + t('col_since') + '</span><span class="ag-th ag-th-r">' + t('col_left') + '</span><span></span></div>' + rows + pager
       : empty('check', t('no_pending'));
-    return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.hour + t('s_pending') + '</h2><span class="ag-count">' + S.pending.length + '</span>' +
+    return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.hour + t('s_pending') + '</h2>' + countBadge(num(S.pending.length)) +
       '<span class="ag-hint" style="width:100%">' + t('s_pending_h', num(S.config.tt24 || S.config.t24 || 3)) + '</span></div>' +
       '<div class="ag-card-b ag-tbl">' + body + '</div></section>';
   }
@@ -1560,7 +1564,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
         '</div></div>';
     }).join('');
     var head = '<div class="ag-thead ag-tr-i"><span class="ag-th">' + esc(t('col_net')) + '</span><span class="ag-th">' + esc(t('col_until')) + '</span><span></span></div>';
-    return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.mute + t('s_ignored') + '</h2><span class="ag-count">' + S.ignored.length + '</span>' +
+    return '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.mute + t('s_ignored') + '</h2>' + countBadge(num(S.ignored.length)) +
       '<span class="ag-hint" style="width:100%">' + esc(t('s_ignored_h')) + '</span></div>' +
       '<div class="ag-card-b ag-tbl">' + head + rows + '</div>' + limFoot('ign', 10, S.ignored.length) + '</section>';
   }
@@ -1810,7 +1814,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
         evPill(e) + '</div><div class="ag-ev-d">' + evDetail(e) + '</div></div>' +
         '<div class="ag-ev-time" title="' + esc(new Date(e.t * 1000).toLocaleString(loc())) + '">' + stamp(e.t) + '</div></div>';
     }).join('');
-    var evc = '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.list + esc(t('pv_ev_t')) + '</h2>' + (evAll.length ? '<span class="ag-count">' + num(evAll.length) + '</span>' : '') + '</div><div class="ag-card-b">' +
+    var evc = '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.list + esc(t('pv_ev_t')) + '</h2>' + (evAll.length ? countBadge(num(evAll.length)) : '') + '</div><div class="ag-card-b">' +
       (ev || '<div class="ag-empty ag-empty-sm">' + esc(t('pv_ev_none')) + '</div>') + limFoot('pev', 5, evAll.length) + '</div></section>';
     var cov = (S.groups || []).filter(function (g) { return g.pcov || g.under; });   // sağlayıcı / kiralık liste ya da /16 banının içinde
     function provName(a) {        // "DIGITALOCEAN-ASN - DigitalOcean, LLC, US" → "DigitalOcean, LLC"; bulut listesi → liste adı
@@ -1819,7 +1823,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       return n.replace(/^[^ ]+ - /, '').replace(/,\s*[A-Z]{2}$/, '');
     }
     var ccl = true;               // başlık ve açıklama üç engeli birden anar
-    var covc = cov.length ? '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.shield + esc(t(ccl ? 'pv_cov_t2' : 'pv_cov_t')) + '</h2><span class="ag-count">' + num(cov.length) + '</span>' +
+    var covc = cov.length ? '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.shield + esc(t(ccl ? 'pv_cov_t2' : 'pv_cov_t')) + '</h2>' + countBadge(num(cov.length)) +
       '<span class="ag-hint" style="width:100%">' + esc(t(ccl ? 'pv_cov_h2' : 'pv_cov_h')) + '</span></div><div class="ag-card-b">' +
       cov.slice(0, lim('cov', 3)).map(function (g) {
         var what = g.kind === 'partial' ? t('g_closed', svcNames(g.svc, g.extra) || t('svc_ports', String(g.ports || '').replace(/_/g, '–'))) : t('kind_' + g.kind);
