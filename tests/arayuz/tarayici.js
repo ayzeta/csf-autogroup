@@ -398,6 +398,15 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
       check('Ayarlar: sayı kutusu + / − bir adım atar', v1 === v0 + 1 && v2 === v0, `${v0} → ${v1} → ${v2}`);
       const dirty = await page.$('.ag-savebar, [data-act="cfgsave"]');
       check('Ayarlar: + sonra − ile taslak temiz (kaydet çubuğu yok)', !dirty || !(await dirty.isVisible()), '');
+      // eşik düşürülünce etkisi panelin tahmini değil: deneme turuna yönlendirir (önce "yaklaşık N blok daha banlanırdı"; tur izin /
+      // kapsama yüzünden bir kısmını banlamazdı). Taslak sonra geri alınır
+      if (v0 > 2) {
+        await page.click('[data-act="numstep"][data-k="THRESHOLD_24"][data-d="-1"]'); await page.waitForTimeout(200);
+        const hi = await page.evaluate(() => { const f = document.querySelector('#ag-f-THRESHOLD_24'); const w = f && f.closest('.ag-field'); const i = w && w.querySelector('.ag-field-i'); return i ? i.textContent : ''; });
+        const tryBtn = await page.$('[data-act="cfgtry"]');
+        check('Ayarlar: blok eşiği düşünce tahmini sayı yok, deneme turuna yönlendirir', /Kaydetmeden önce dene|Try before saving/.test(hi) && !/yaklaşık|about \d/.test(hi) && !!tryBtn, hi.slice(0, 90));
+        await page.click('[data-act="numstep"][data-k="THRESHOLD_24"][data-d="1"]'); await page.waitForTimeout(200);
+      }
     } else check('Ayarlar: sayı kutusu var', false, '#ag-f-THRESHOLD_24 yok');
   }
   {

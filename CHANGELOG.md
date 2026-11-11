@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.15.86 — 2026-11-11
+
+- Settings → Ban rules no longer estimates "about N more blocks would be
+  banned" when a block threshold is lowered. The estimate only counted single
+  bans per block, while the run also leaves out blocks that overlap an allow
+  entry, are already closed by a country or provider ban, or are muted, so it
+  could promise bans that would not happen. The field now points to *Try
+  before saving*, which runs the plugin's own dry run with the unsaved values
+  (the network threshold has worked this way since 1.15.75).
+
 ## 1.15.85 — 2026-11-11
 
 - Each IP line in a notification mail shows the service first, like the IP

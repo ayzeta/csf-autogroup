@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.85"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.86"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -3652,30 +3652,8 @@ do_status() {
             END { for (c in L) print L[c] }' "$EVENTS_FILE" | grep -E '^\{"t":[0-9]+,.*\}$')
         printf '"evx":[%s],' "${evx[*]}"
         prof evx
-        # Ayarlar → Eşikler: eşiğin etkisini panel hesaplasın diye ağ başına, her bloğun "kalıcı:geçici" tekil sayısı
-        # (banlı ya da yoksayılmış bloklar hariç; motorun turdaki sayımıyla aynı kurallar)
-        # geçici sayı turun geçici eşik sayımıyla aynı: son turdan bu yana aynı anda geçici banlı en çok tekil (tpk_load)
-        local -A DB=() TPC=()
-        local dp dx dl
-        tpk_load; for dx in "${!TPK_N[@]}"; do TPC[$dx]=${TPK_N[$dx]}; done
-        # adaylar bash'te (yalnız dizi bakışları); geniş banın kapsadığı bloklar tek awk geçişinde düşülür: blok başına ip2int +
-        # under_of döngüsü binlerce blokta ~0,4 sn sürüyordu
-        local -a DCAND=()
-        for dx in "${!count24[@]}" "${!TPC[@]}"; do
-            [[ "$dx" == x* ]] && continue
-            [ -n "${DB[$dx]}" ] && continue; DB[$dx]=1
-            [ -n "${DLINE[$dx.0/24]+x}" ] || [ "${TG_TTL[$dx.0/24]:-0}" -gt 0 ] && continue
-            ign_until "$dx.0/24" && continue
-            DCAND+=("$dx ${count24[$dx]:-0}:${TPC[$dx]:-0}")
-        done
-        printf '"dist":{%s},' "$( { for dx in "${!WD_LO[@]}"; do echo "W ${WD_LO[dx]} ${WD_HI[dx]}"; done; echo "#--"; printf '%s\n' "${DCAND[@]}"; } | awk '
-            !S && $0 == "#--" { S = 1; next }
-            !S { n++; WL[n] = $2 + 0; WH[n] = $3 + 0; next }
-            NF == 2 { split($1, o, "."); lo = ((o[1] * 256 + o[2]) * 256 + o[3]) * 256; for (i = 1; i <= n; i++) if (WL[i] <= lo && WH[i] >= lo + 255) next
-                      p = $1; sub(/\.[0-9]+$/, "", p); print p, $2 }' | sort | awk '
-            $1 != k { if (k != "") printf "%s\"%s\":[%s]", (n++ ? "," : ""), k, v; k = $1; v = "" }
-            { v = v (v == "" ? "" : ",") "\"" $2 "\"" }
-            END { if (k != "") printf "%s\"%s\":[%s]", (n ? "," : ""), k, v }')"
+        # Ayarlar → Eşikler: eşiğin etkisi panelde hesaplanmaz ("dist" çıktısı 1.15.86'da kalktı; panel "yaklaşık N blok" diyordu, tur
+        # izin / kapsama / susturma yüzünden o blokların bir kısmını banlamazdı). Tam sonuç: deneme turu (--dry-run --set).
         # ekrandaki IP'lerin posta günlüğünde yanlış şifreyle denediği hesaplar (IP listeleri ve IP kartı bu haritadan okur)
         local -A AQ=(); local aj="" ax; local -a AXS=()
         mapfile -t AXS < <(printf '%s\n' "${groups[*]}" "${review[*]}" "${ignored[*]}" "${recent[*]}" | grep -oE '"(ip|cidr)":"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"' | cut -d'"' -f4 | sort -u)

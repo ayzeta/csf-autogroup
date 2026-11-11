@@ -281,7 +281,8 @@ mcheck "IP kartı: tam izin satırı tek portluk satırdan önce (karar 'ban iş
 izgec() { printf '151.80.7.9 # musteri\n' >> "$A"; printf '%s|151.80.7.9||in|3600|lfd: (pop3d) Failed POP3 login from 151.80.7.9 (FR/France/-): 5 in the last 3600 secs\n' "$NOW" >> "$T"; }
 mk izw16; izgec; for x in 7.1 8.1 8.2 9.1; do single 151.80.$x sshd; done; printf 'WARN16_151.80 %s\n' "$(date -d '-3 days' +%F)" >> "$C"
 mcheck "izinli IP'nin geçici banı şüpheli ağ sayımına girmez (4 tekil + izinli IP, eşik 5: uyarı yok)" "! run --status --json 2>/dev/null | grep -q '\"cidr\":\"151.80.0.0/16\"'"
-mcheck "Ayarlar → Eşikler etkisi ve IP kartının eşiğe uzaklığı izinli IP'nin banını saymaz" "run --status --json 2>/dev/null | grep -q '\"dist\":{\"151.80\":\[\"1:0\",\"1:0\",\"2:0\"\]}' && run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"blk\":{\"s\":1,\"o\":0,\"t\":0,'"
+mcheck "IP kartının eşiğe uzaklığı izinli IP'nin banını saymaz" "run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"blk\":{\"s\":1,\"o\":0,\"t\":0,'"
+mcheck "durum çıktısında panelin eşik önizlemesi için \"dist\" yok (etki deneme turundan; 1.15.86)" "! run --status --json 2>/dev/null | grep -q '\"dist\":'"
 mkm izblk 1; printf '151.80.7.9 # musteri\n' >> "$A"; for x in 7.1 7.2 7.9; do single 151.80.$x sshd; done; quiet
 mcheck "blok eşiği: 2 tekil + izinli IP'nin kalıcı banı eşiği doldurmaz (ban da 'atlandı' satırı da yok)" "! grep -q '^151.80.7.0/24' '$D' && ! grep -q '\"type\":\"skip_wl\"' '$R/var/lib/csf_autogroup/events.jsonl' 2>/dev/null"
 mk iztmp; izgec; for x in 1 2; do printf '%s|151.80.7.%s||in|3600|lfd: (sshd) Failed SSH login from 151.80.7.%s\n' "$NOW" "$x" "$x" >> "$T"; done; quiet
