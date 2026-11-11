@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.15.77 — 2026-11-11
+
+- Needs review no longer suggests *Ban block (/24)* on a suspicious range or
+  network row. A block is banned automatically at its own threshold and its
+  singles then leave the row; the panel's own rule (60% of the row's IPs in one
+  block) only matched blocks skipped by an allow entry, which have their own
+  *Skipped* row. The narrower suggestion now always comes from the engine
+  (the announced range).
+- Every Needs review row keeps its actions in the **⋯** menu, like the other
+  lists: the ban suggestions first (narrowest first), then IP card and Mute.
+  Before, the narrowest suggestion sat on the row as a button while Mute was in
+  the menu, and rows without a suggestion had only the menu.
+- The *inside a country / provider ban* tag on ranges comes from the engine,
+  checked against the ranges CSF itself loads for `CC_DENY` (zone files or
+  ip2asn), instead of being guessed in the panel from the Team Cymru owner
+  cache.
+
 ## 1.15.76 — 2026-11-11
 
 - Suspicious range and suspicious network rows in Needs review are re-checked

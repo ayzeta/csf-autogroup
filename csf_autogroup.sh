@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.76"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.77"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -3611,6 +3611,19 @@ do_status() {
         for gi in "${WD_TXT[@]}"; do wdj+=("\"$gi\""); done
         ccw=$(conf_val CC_DENY | LC_ALL=C tr '[:lower:]' '[:upper:]' | tr -cd 'A-Z0-9,')
         printf '"wide":[%s],"ccd":"%s",' "${wdj[*]}" "$ccw"
+        # listelerdeki aralıkları ve IP'leri tamamen kapatan CC_DENY kodu (CSF verisinden; panel kendi tahminini yapmaz)
+        local gq=() gcj="" gx
+        # öğenin kendisi ve menülerinin önerdiği üstleri (blok /24, ağ /16): panel bir IP'nin kapsamasını içindeki bloktan da okur
+        local gpend=""
+        for gx in "${pending[@]}"; do [[ "$gx" =~ \"prefix\":\"([0-9.]+)\" ]] && gpend+="${BASH_REMATCH[1]}.0/24"$'\n'; done
+        while read -r gx; do [ -n "$gx" ] && gq+=("$gx"); done < <( {
+            printf '%s\n' "${groups[@]}" "${review[@]}" "${ignored[@]}" "${recent[@]}" 2>/dev/null | grep -oE '"(cidr|ip)":"[0-9./]+"' | cut -d'"' -f4
+            printf '%s' "$gpend"
+            printf '%s\n' "${!SINGLE_NOTE[@]}"; tb_load; printf '%s\n' "${!TB_IP[@]}"     # tekil ve geçici banlar (Geçmiş / IP kartı menüleri)
+          } | awk -F'[./]' 'NF >= 4 { print; if (NF == 4 || $5 + 0 > 24) print $1 "." $2 "." $3 ".0/24"; if (NF == 4 || $5 + 0 > 16) print $1 "." $2 ".0.0/16" }' | sort -u)
+        geo_ranges_cover "${gq[@]}"
+        for gx in "${!GEOC[@]}"; do gcj+="${gcj:+,}\"$gx\":\"${GEOC[$gx]}\""; done
+        printf '"gcov":{%s},' "$gcj"
         prof asn_banned_json
         prov_json; printf '"prov":%s,' "$REPLY"
         prof prov_json
@@ -4062,6 +4075,31 @@ csf_geo_cover() {   # ALT ÜST KOD… → REPLY = aralığı kapsayan kodlar (bo
                     a = ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4]; e = ((q[1] * 256 + q[2]) * 256 + q[3]) * 256 + q[4]; if (e >= L && a <= H) printf "AS%s %.0f %.0f\n", $3, a, e }' "$geo"
              } 2>/dev/null | sort -k1,1 -k2,2n | awk -v L="$lo" -v H="$hi" '{ if ($1 != k) { k = $1; r[k] = L - 1 } if ($2 <= r[k] + 1 && $3 > r[k]) r[k] = $3 }
                     END { for (k in r) if (r[k] >= H) print k }' | sort | paste -sd' ' -)
+}
+# Aralıkları tamamen kapatan CC_DENY (tam ülke / sağlayıcı banı) kodu, CSF'in kendi verisinden (bölge dosyası, yoksa ip2asn; csf.pl
+# kümeyi oradan doldurur): ARALIK|IP… → GEOC[girdi] = ilk kapsayan kod. Panelin "ülke banının içinde" etiketi bunu okur; önce panel
+# Team Cymru sahip önbelleğiyle tahmin ediyordu (CSF'in yüklediği aralıklardan farklı olabilir)
+geo_ranges_cover() {
+    declare -gA GEOC=(); GEOC=(); local IFS=$' \t\n'     # çağıran (durum çıktısı) IFS=, ile çalışıyor
+    local c z an="" geo="$CSF_VAR/Geo/ip2asn-combined.tsv" x k; local -a fz=()
+    for c in $(conf_val CC_DENY | LC_ALL=C tr '[:lower:],' '[:upper:] '); do z="$CSF_VAR/zone/${c,,}.zone"
+        if [ -r "$z" ]; then fz+=("$z"); elif [[ "$c" =~ ^AS([0-9]+)$ ]] && [ -r "$geo" ]; then an+=" ${BASH_REMATCH[1]}"; fi
+    done
+    [ $# -gt 0 ] && { [ ${#fz[@]} -gt 0 ] || [ -n "$an" ]; } || return 0
+    while read -r k c; do [ -n "$c" ] && GEOC[$k]="$c"; done < <(
+        { for x in "$@"; do k="$x"; [[ "$x" == */* ]] || x="$x/32"; cidr_range "$x" 2>/dev/null && printf 'I %s %s %s\n' "$k" "$R_LO" "$R_HI"; done
+          [ ${#fz[@]} -gt 0 ] && awk -F'[./]' 'NF >= 4 && $1 ~ /^[0-9]+$/ { f = FILENAME; sub(/.*\//, "", f); sub(/[.]zone$/, "", f)
+                b = (NF == 5 ? $5 : 32); a = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "R %s %.0f %.0f\n", toupper(f), a, a + 2 ^ (32 - b) - 1 }' "${fz[@]}"
+          [ -n "$an" ] && awk -F'\t' -v A="$an " 'index(A, " " $3 " ") && $1 ~ /^[0-9.]+$/ { split($1, p, "."); split($2, q, ".")
+                printf "R AS%s %.0f %.0f\n", $3, ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4], ((q[1] * 256 + q[2]) * 256 + q[3]) * 256 + q[4] }' "$geo"
+        } 2>/dev/null | sort -k1,1 -k2,2 -k3,3n | awk '
+            $1 == "R" { if ($2 != pk) { pk = $2; NK[++nk] = pk }                 # kod başına birleştirilmiş aralıklar (sıralı)
+                        n = N[pk] + 0; if (n && $3 <= H[pk, n] + 1) { if ($4 > H[pk, n]) H[pk, n] = $4 } else { N[pk] = ++n; L[pk, n] = $3; H[pk, n] = $4 }; next }
+            $1 == "I" { Q[++m] = $2; QL[m] = $3 + 0; QH[m] = $4 + 0 }
+            END { for (i = 1; i <= m; i++) for (j = 1; j <= nk; j++) { k = NK[j]
+                      lo = 1; hi = N[k]; r = 0                                   # ikili arama: başlangıcı QL ile aynı ya da küçük son aralık
+                      while (lo <= hi) { md = int((lo + hi) / 2); if (L[k, md] <= QL[i]) { r = md; lo = md + 1 } else hi = md - 1 }
+                      if (r && H[k, r] >= QH[i]) { print Q[i], k; break } } }')
 }
 # csf_geo_cover'ın toplu hâli (tur ve durum: birçok IP tek geçişte): IP… → GEOI[ip] = " KOD KOD " (CC_DENY / CC_DENY_PORTS'taki
 # kodlardan CSF verisinde IP'yi kapsayanlar), GEO_HAS = " verisi olan kodlar " (verisi olmayan kodda Cymru'ya bakılır)

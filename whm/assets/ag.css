@@ -392,7 +392,7 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-thead.ag-tr-p .ag-th { cursor: default; }
 .ag-thead.ag-tr-p .ag-th:hover { color: var(--ag-text-3); }
 /* kontrol edilecekler: ağ · durum · neden · sahip · işaretlendi · öneri düğmesi · menü */
-.ag-thead.ag-tr-r, .ag-tr.ag-tr-r { grid-template-columns: 150px 120px minmax(0, 1fr) minmax(0, 1.2fr) 100px 140px 36px; }   /* İşaretlendi başlığı 98 px (ölçüldü) */
+.ag-thead.ag-tr-r, .ag-tr.ag-tr-r { grid-template-columns: 150px 120px minmax(0, 1fr) minmax(0, 1.2fr) 100px 36px; }   /* İşaretlendi başlığı 98 px (ölçüldü) */
 .ag-tr.ag-tr-r { padding-top: 9px; padding-bottom: 4px; min-height: 40px; }
 .ag-tr-r .ag-td-why { min-width: 0; overflow-wrap: anywhere; }
 /* satırın notları: Durum sütunu hizasından başlar (18 + 150 + 12 px), satırla aynı zemin */
@@ -410,12 +410,10 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-td-why { font-size: 12.5px; color: var(--ag-text-2); min-width: 0; }
 .ag-td-why .ag-link { font-size: inherit; }
 .ag-td-why .ag-row-n { margin-top: 3px; }
-.ag-td-btn { display: flex; justify-content: flex-end; min-width: 0; }
-.ag-td-btn .ag-btn { white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .ag-tr-r .ag-td-main { display: flex; align-items: center; gap: 6px; min-width: 0; }
 /* dar kart (sağ sütunun yanında): sahip sütunu kalkar, not satırının başına geçer */
 @container agtbl (max-width: 860px) {
-  .ag-thead.ag-tr-r, .ag-tr.ag-tr-r { grid-template-columns: 140px 120px minmax(0, 1fr) 100px 124px 32px; gap: 10px; }
+  .ag-thead.ag-tr-r, .ag-tr.ag-tr-r { grid-template-columns: 140px 120px minmax(0, 1fr) 100px 32px; gap: 10px; }
   .ag-tr-r .ag-td-own { display: none; }
   .ag-tr-note { padding-left: 168px; }
   .ag-own-n { display: flex; align-items: center; gap: 6px; color: var(--ag-text-2); margin-bottom: 2px; }
@@ -978,8 +976,8 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
   /* adres tam kalır (max-content), kalan gün çubuğu kalan yere sığar: 340 px'te adres kesiliyordu */
   .ag-tr.ag-tr-p .ag-left .ag-days { width: auto; flex: 1 1 64px; max-width: 64px; min-width: 24px; }
   .ag-td-own .ag-flag { width: 22px; height: 22px; font-size: 10.5px; }
-  /* kontrol edilecekler: 1) ağ · durum · menü  2) neden  3) sahip  4) işaretlendi ····· öneri düğmesi */
-  .ag-tbl > .ag-item > .ag-tr.ag-tr-r { grid-template-columns: minmax(0, 1fr) auto 32px; grid-template-areas: "main state act" "why why why" "own own own" "when btn btn";
+  /* kontrol edilecekler: 1) ağ · durum · menü  2) neden  3) sahip  4) işaretlendi (eylemler menüde) */
+  .ag-tbl > .ag-item > .ag-tr.ag-tr-r { grid-template-columns: minmax(0, 1fr) auto 32px; grid-template-areas: "main state act" "why why why" "own own own" "when when when";
     column-gap: 8px; row-gap: 6px; padding: 10px 10px 10px 16px; }
   .ag-tr.ag-tr-r .ag-td-main { grid-area: main; }
   .ag-tr.ag-tr-r .ag-td-state { grid-area: state; }
@@ -987,7 +985,6 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
   .ag-tr.ag-tr-r .ag-td-why { grid-area: why; }
   .ag-tr.ag-tr-r .ag-td-own { grid-area: own; display: flex; font-size: 12px; }
   .ag-tr.ag-tr-r .ag-when { grid-area: when; display: block; font-size: 12px; text-align: left; }
-  .ag-tr.ag-tr-r .ag-td-btn { grid-area: btn; }
   .ag-tr.ag-tr-r .ag-td-why { white-space: normal; }
   .ag-tbl .ag-tr-note { padding-left: 16px; padding-right: 10px; }
   .ag-tbl .ag-own-n { display: none; }   /* telefonda sahip kendi satırında */

@@ -456,6 +456,9 @@ mcheck "hiyerarşi: eski sürümün /16 olay satırı bugünkü ölçütle yenid
 mk hpfx2;for p in 7 8; do own 151.80.$p 16276 OVH 151.80.0.0/20; done; for p in 200 201; do own 151.80.$p 16276 OVH 151.80.192.0/20; done
 for x in 7.1 7.2 8.1 200.1 201.1; do single 151.80.$x sshd; done; quiet
 mcheck "hiyerarşi: aynı sahibin tekilleri 2 duyurulan aralıkta (3 + 2, eşik 5) → şüpheli ağ; aralıklar eşiğin altında" "grep -q '\"type\":\"warn16\",\"cidr\":\"151.80.0.0/16\",\"n\":5,' \"\$(EVF)\" && ! grep -q '\"type\":\"warnpfx\"' \"\$(EVF)\""
+mk gcov; printf '%s\n' 'CC_DENY = "FR"' >> "$R/etc/csf/csf.conf"
+printf '151.80.7.0/24 # csf_autogroup: Auto-grouped /24 - Mon Nov 09 10:00:00 2026\n198.51.100.0/24 # csf_autogroup: Auto-grouped /24 - Mon Nov 09 10:00:00 2026\n' >> "$D"
+mcheck "ülke banı kapsaması CSF verisinden (gcov): FR bölgesindeki blok etiketli, dışındaki değil" "run --status --json 2>/dev/null | grep -o '\"gcov\":{[^}]*}' | grep -q '\"151.80.7.0/24\":\"FR\"' && ! run --status --json 2>/dev/null | grep -o '\"gcov\":{[^}]*}' | grep -q '198.51.100'"
 mk hown; for p in 7 8; do own 151.80.$p 16276 OVH 151.80.0.0/16; done; for p in 9 10; do own 151.80.$p 64500 BASKA 151.80.$p.0/24; done
 for x in 7.1 7.2 8.1 9.1 9.2 10.1; do single 151.80.$x sshd; done; quiet
 mcheck "hiyerarşi: aynı /16'da iki sahibin tekilleri (3 + 3, eşik 5) birbirine eklenmez → uyarı yok" "! grep -q '\"type\":\"warn16\"' \"\$(EVF)\""

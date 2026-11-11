@@ -219,6 +219,12 @@ async function layoutChecks(page, label, width) {
       const a = cs[i], b = cs[j]; if (a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1) return row.textContent.trim().slice(0, 30); }
     return null; }).filter(Boolean));
   check(`${label} · ${width} px · satır hücreleri üst üste binmiyor`, lap.length === 0, lap.slice(0, 3).join(' | '));
+  // tasarım standardı: liste satırının eylemleri yalnız ⋯ menüsünde (satırda düğme yok; bağlantı biçimindeki sayı/adres serbest).
+  // Kontrol edilecekler satırı önce karar düğmesini satırda, Sustur'u menüde gösteriyordu (1.15.77'de kalktı)
+  const rbtn = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-tbl > .ag-item > .ag-tr')).map(row => {
+    const b = Array.from(row.querySelectorAll('button.ag-btn')).filter(x => !x.closest('.ag-td-act, .ag-menu') && x.offsetWidth > 0)[0];
+    return b ? row.textContent.trim().slice(0, 25) + ' → ' + b.textContent.trim() : null; }).filter(Boolean));
+  check(`${label} · ${width} px · liste satırında eylem düğmesi yok (eylemler ⋯ menüsünde)`, rbtn.length === 0, rbtn.slice(0, 3).join(' | '));
 }
 const errs = [];          // sayfanın JS hataları: test yarıda düşerse de yazılır
 (async () => {
