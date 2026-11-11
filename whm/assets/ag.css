@@ -184,11 +184,9 @@
 .ag-flag { font-family: var(--ag-mono); font-size: 10.5px; font-weight: 700; width: 22px; height: 22px; border-radius: 50%; background: #eef0f6; color: var(--ag-text-2); display: inline-flex; align-items: center; justify-content: center; flex: none; }
 
 /* ── IP list (expand) ───────────────────────────────────────────── */
-.ag-ips { margin: 0 18px 12px; border: 1px solid var(--ag-line-soft); border-radius: var(--ag-radius-sm); background: #fff; overflow: hidden; }
-.ag-ip { display: grid; grid-template-columns: 128px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.2fr); gap: 12px; padding: 7px 12px; border-top: 1px solid var(--ag-line-soft); font-size: 12.5px; align-items: center; }
-.ag-ip:first-child { border-top: 0; }
-.ag-ip:nth-child(even) { background: #f4f5f8; }
-.ag-ip.ag-ip-h { background: #fafafb; padding-top: 6px; padding-bottom: 6px; font-size: 11px; font-weight: 650; color: var(--ag-text-3); text-transform: uppercase; letter-spacing: .04em; }
+/* satırın IP listesi: öteki IP tablolarıyla aynı bileşen (.ag-im-t, ipWhyCell); kutu yalnız çerçeve */
+.ag-ips { margin: 0 18px 12px; padding: 8px 12px 4px; border: 1px solid var(--ag-line-soft); border-radius: var(--ag-radius-sm); background: #fff; }
+.ag-ip-t .ag-ip-host { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-decoration: none; }
 .ag-im-t thead th { text-align: left; font-size: 11px; font-weight: 650; color: var(--ag-text-3); text-transform: uppercase; letter-spacing: .04em; padding: 0 10px 6px 0; white-space: nowrap; }
 .ag-im-t thead th.ag-im-st { text-align: right; padding-right: 0; }   /* durum sütunu (rozetler sağda); öteki son sütunlar içerikleri gibi sola */
 .ag-im-t th.ag-th-r { text-align: right; font-variant-numeric: tabular-nums; }
@@ -200,10 +198,7 @@
 .ag-thead.ag-tr-i .ag-th { cursor: default; }
 .ag-thead.ag-tr-i .ag-th:hover { color: var(--ag-text-3); }
 .ag-tr-i .ag-td-until { font-size: 12.5px; color: var(--ag-text-2); text-align: right; min-width: 0; }
-.ag-ip > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ag-ip .ag-mono { color: var(--ag-accent); cursor: pointer; }
-.ag-ip .ag-mono:hover { text-decoration: underline; }
-.ag-ip-more { padding: 7px 12px; font-size: 12px; color: var(--ag-text-3); border-top: 1px solid var(--ag-line-soft); }
+.ag-ip-more { padding: 6px 0; font-size: 12px; border-top: 1px solid var(--ag-line-soft); }
 
 /* ── Inputs / chips ─────────────────────────────────────────────── */
 .ag-input { height: 32px; border: 1px solid var(--ag-line); border-radius: var(--ag-radius-sm); padding: 0 11px; font: inherit; font-size: 13px; color: var(--ag-text); background: #fff; min-width: 0; transition: border-color .12s, box-shadow .12s; }
@@ -515,12 +510,8 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
   .ag-row-a { width: 100%; justify-content: flex-start; }
   .ag-thead { display: none; }
   /* IP satırı iki satır: 1) IP ····· hostname  2) ban sebebi (tamamı, gerekirse alta kayar); sahip bloğun satırında zaten var */
-  .ag-ip { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "ip host" "why why"; row-gap: 3px; column-gap: 10px; padding: 8px 12px; }
-  .ag-ip > :nth-child(1) { grid-area: ip; }
-  .ag-ip > :nth-child(2) { grid-area: host; text-align: right; font-size: 12px; color: var(--ag-text-3); }
-  .ag-ip > :nth-child(3) { display: none; }
-  .ag-ip > :nth-child(4) { grid-area: why; white-space: normal; font-size: 12px; line-height: 1.4; color: var(--ag-text-2); }
-  .ag-ip.ag-ip-h { display: none; }   /* satırlar alt alta dizilince sütun başlığı yanıltır (kart tabloları kaymalı, başlıklı kalır) */
+  .ag-ip-t th:nth-child(2), .ag-ip-t td:nth-child(2) { display: none; }   /* dar ekranda sahip sütunu yok (satırın sahibi notta) */
+  .ag-ip-t .ag-ip-host { max-width: 130px; }
   .ag-tbl > .ag-item > .ag-tr.ag-tr-i { padding: 10px 10px 10px 16px; }
   .ag-modal-b { padding-left: 22px; }
 }

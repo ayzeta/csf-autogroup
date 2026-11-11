@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.15.79 — 2026-11-11
+
+- Lists of offending IPs look and read the same everywhere: the IP list under
+  a Needs review or History row, the range card and the source details. Each
+  shows the service (for a repeat ban, the service of the earlier ban), lfd's
+  reason and the accounts tried, in that order, under *Service · reason*.
+  Before, the row list folded everything into one cut-off reason column, and
+  the source details showed the reason only for *other*.
+
 ## 1.15.78 — 2026-11-11
 
 - Durations are written the same way everywhere, in the panel, emails and the
