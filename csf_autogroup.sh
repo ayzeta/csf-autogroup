@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.77"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.78"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -398,7 +398,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_UA_TDONE="%s geçici izni kaldırıldı"
   M_UA_NONE="%s için csf.allow'da kendi satırı ya da geçici izin yok (Include edilen dosyadaki izin o dosyadan kaldırılır)"
   M_UA_FAIL="%s izinden çıkarılamadı: %s"
-  M_DUR_D="%s gün"; M_DUR_H="%s saat"; M_DUR_S="%s sn"
+  M_DUR_D="%s gün"; M_DUR_DH="%s gün %s sa"; M_DUR_H="%s sa"; M_DUR_HM="%s sa %s dk"; M_DUR_M="%s dk"; M_DUR_S="%s sn"
   M_A_CLEANED="%s · %s kayıt kaldırıldı"
   M_IN_COVER="Zaten kapsanıyor: %s"
   M_IN_SUM="İçinde: %s blok banı, %s tekil (%s do not delete), %s geçici ban, %s izlenen blok, %s başka aralık"
@@ -680,7 +680,7 @@ else
   M_UA_TDONE="temporary allow of %s removed"
   M_UA_NONE="%s has no line of its own in csf.allow and no temporary allow (an allow from an included file is removed in that file)"
   M_UA_FAIL="could not remove the allow of %s: %s"
-  M_DUR_D="%s days"; M_DUR_H="%s h"; M_DUR_S="%s s"
+  M_DUR_D="%s d"; M_DUR_DH="%s d %s h"; M_DUR_H="%s h"; M_DUR_HM="%s h %s min"; M_DUR_M="%s min"; M_DUR_S="%s s"
   M_A_CLEANED="%s · %s entries removed"
   M_IN_COVER="Already covered: %s"
   M_IN_SUM="Inside: %s block bans, %s singles (%s do not delete), %s temp bans, %s watched blocks, %s other ranges"
@@ -4318,10 +4318,13 @@ do_lookup() {
 # Çıkış kodu: 0 tamam · 1 başarısız · 2 geçersiz girdi · 3 meşgul · 4 ek onay gerekiyor (beyaz liste)
 declare -A CSF_TN=() CSF_TMS=()   # csf çağrı sayısı ve süresi (ms), komut başına
 ms_s() { printf '%d,%d' $(( $1 / 1000 )) $(( $1 % 1000 / 100 )); }   # 14230 → "14,2"
-dur_text() {     # SANİYE → "1 gün" / "6 saat" / "90 sn" (iletilerde)
-    local s="$1"
-    if [ $(( s % 86400 )) -eq 0 ]; then m "$M_DUR_D" $(( s / 86400 ))
-    elif [ $(( s % 3600 )) -eq 0 ]; then m "$M_DUR_H" $(( s / 3600 ))
+dur_text() {     # SANİYE → "7 gün" / "1 gün 6 sa" / "6 sa" / "1 sa 30 dk" / "15 dk" / "40 sn" — panelin dur() işleviyle aynı biçim
+    # (gün varken dakika, saat varken saniye yazılmaz). Önce tam gün / tam saat dışındaki her süre saniyeyle yazılıyordu ("5400 sn")
+    local s="${1:-0}" d h mn; [[ "$s" =~ ^[0-9]+$ ]] || s=0
+    d=$(( s / 86400 )); h=$(( s % 86400 / 3600 )); mn=$(( s % 3600 / 60 ))
+    if [ "$d" -gt 0 ]; then if [ "$h" -gt 0 ]; then m "$M_DUR_DH" "$d" "$h"; else m "$M_DUR_D" "$d"; fi
+    elif [ "$h" -gt 0 ]; then if [ "$mn" -gt 0 ]; then m "$M_DUR_HM" "$h" "$mn"; else m "$M_DUR_H" "$h"; fi
+    elif [ "$mn" -gt 0 ]; then m "$M_DUR_M" "$mn"
     else m "$M_DUR_S" "$s"; fi
 }
 act_out() {      # CODE MESAJ

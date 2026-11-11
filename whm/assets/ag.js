@@ -95,7 +95,7 @@
       no_events: 'Henüz kayıt yok. İlk turdan sonra burada görünecek.', no_match: 'Eşleşen kayıt yok.',
       c_t24: 'Blok banı (/24)', c_t24p: 'Silinmez ban eşiği', c_t16: 'Şüpheli ağ (/16)', c_tt24: 'Geçici blok banı (/24)',
       c_ret: 'İzleme süresi', c_lookup: 'Sahip / hostname sorgusu', c_on: 'açık', c_off: 'kapalı', c_days: '{0} gün', c_days0: '1 günden az', c_forever: 'Süresiz', ign_change: 'Süreyi değiştir', rewatch: 'İzlemeyi yeniden başlat', m_rewatch_t: '{0} izlemesi yeniden başlasın mı?', m_rewatch_b: 'İzleme süresi bugünden itibaren yeniden sayılır (Ayarlar → Ban kuralları → İzleme süresi kadar). Bu sürede aynı bloktan yeni geçici ban gelirse blok kalıcı banlanır.', w_rewatch: 'İzleme yeniden başlatılıyor…', ev_manual_rewatch: 'İzleme yeniden başladı', ign_forever: 'süresiz', ign_who: '{0} susturdu, {1}', ign_forever_l: 'süresiz susturuldu', st_ign_f: 'susturuldu (süresiz)', c_singles: '≥ {0} tekil', c_gloss: 'tekil = tek IP banı · blok = /24 · ağ = /16 · silinmez = CSF liste dolsa da silmez',
-      now: 'az önce', min_ago: '{0} dk önce', h_ago: '{0} sa önce', d_ago: '{0} gün önce', dur_h: '{0} sa {1} dk', dur_h0: '{0} sa', dur_d: '{0} gün', dur_m: '{0} dk',
+      now: 'az önce', min_ago: '{0} dk önce', h_ago: '{0} sa önce', d_ago: '{0} gün önce', dur_h: '{0} sa {1} dk', dur_h0: '{0} sa', dur_d: '{0} gün', dur_dh: '{0} gün {1} sa', dur_m: '{0} dk',
       cancel: 'Vazgeç', confirm: 'Onayla', close: 'Kapat', reload: 'Sayfayı yenile', type_to_confirm: 'Onaylamak için {0} yazın',
       m_ban16_t: '{0} kalıcı olarak banlansın mı?', m_ban16_b: 'Bu, ağdaki 65.536 adresin tamamını engeller. Ban silinmez olarak eklenir (CSF\'in "do not delete" işareti): liste dolsa da kendiliğinden kalkmaz.',
       m_force_t: 'Beyaz listeye rağmen banlansın mı?', m_force_b: 'Bu blok CSF beyaz listelerinden biriyle çakışıyor:',
@@ -206,7 +206,7 @@ ip_unban_lfd: 'Bu banı lfd koymuş; kaldırınca lfd aynı ihlali yeniden gör�
       no_events: 'Nothing recorded yet. Runs will show up here.', no_match: 'No matching entries.',
       c_t24: 'Block ban (/24)', c_t24p: 'Do not delete threshold', c_t16: 'Suspicious network (/16)', c_tt24: 'Temp block ban (/24)',
       c_ret: 'Watch period', c_lookup: 'Owner / hostname lookups', c_on: 'on', c_off: 'off', c_days: '{0} days', c_days0: 'under a day', c_forever: 'Indefinitely', ign_change: 'Change duration', rewatch: 'Restart the watch', m_rewatch_t: 'Restart the watch on {0}?', m_rewatch_b: 'The watch period starts again from today (the watch period under Settings → Ban rules → Watching). A new temporary ban from this block within that period makes the block permanent.', w_rewatch: 'Restarting the watch…', ev_manual_rewatch: 'Watch restarted', ign_forever: 'no end date', ign_who: '{0} muted it {1}', ign_forever_l: 'muted indefinitely', st_ign_f: 'muted (indefinitely)', c_singles: '≥ {0} singles', c_gloss: 'single = one-IP ban · block = /24 · network = /16 · do not delete = CSF keeps it even when the list is full',
-      now: 'just now', min_ago: '{0} min ago', h_ago: '{0} h ago', d_ago: '{0} d ago', dur_h: '{0} h {1} min', dur_h0: '{0} h', dur_d: '{0} d', dur_m: '{0} min',
+      now: 'just now', min_ago: '{0} min ago', h_ago: '{0} h ago', d_ago: '{0} d ago', dur_h: '{0} h {1} min', dur_h0: '{0} h', dur_d: '{0} d', dur_dh: '{0} d {1} h', dur_m: '{0} min',
       cancel: 'Cancel', confirm: 'Confirm', close: 'Close', reload: 'Reload page', type_to_confirm: 'Type {0} to confirm',
       m_ban16_t: 'Permanently ban {0}?', m_ban16_b: 'This blocks all 65,536 addresses in the network. The ban is added as "do not delete" and is kept even when the list is full.',
       m_force_t: 'Ban despite the whitelist?', m_force_b: 'This block overlaps a CSF whitelist entry:',
@@ -359,15 +359,15 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   }
   function bytes(n) { n = +n || 0; return n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(0) + ' KB' : (n / 1048576).toFixed(1) + ' MB'; }
   function loc() { return LANG === 'tr' ? 'tr-TR' : 'en-US'; }
+  // süre yazımının tek işlevi (motorun dur_text'iyle aynı biçim): gün / gün+sa / sa / sa+dk / dk. Önce gün bilmiyordu ("168 sa"),
+  // seçilecek süre (ttlName) ve Etkisini ölç (impDur, yuvarlayarak) ayrı yazıyordu
   function dur(s) {
     s = Math.max(0, s | 0);
-    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
-    return nb(h > 0 ? (m ? t('dur_h', h, m) : t('dur_h0', h)) : t('dur_m', m));
+    var d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+    return nb(d > 0 ? (h ? t('dur_dh', d, h) : t('dur_d', d)) : h > 0 ? (m ? t('dur_h', h, m) : t('dur_h0', h)) : t('dur_m', m));
   }
   // sayı ile birimi arasında bölünmez boşluk: dar satırda "süre: 1 / sa" diye ikiye ayrılıyordu (telefonda Geçmiş)
   function nb(s) { return String(s).replace(/(\d) (?=\S)/g, '$1 '); }
-  // seçilecek süre adı (tam gün → "N gün", tam saat → "N sa")
-  function ttlName(s) { s = +s || 0; return s >= 86400 && s % 86400 === 0 ? nb(t('dur_d', s / 86400)) : dur(s); }
   function pfx(cidr) { return String(cidr).replace(/\.0\/24$/, '').replace(/\.0\.0\/16$/, ''); }
 
   /* ── API ───────────────────────────────────────────────────────── */
@@ -1260,7 +1260,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     if (e.mode === 'svc' && (e.type === 'manual_ban' || e.type === 'manual_change')) d.push(t('ev_svc', svcNames(e.svc, e.extra) || t('svc_ports', String(e.ports || '').replace(/_/g, '–'))));
     if (e.mode === 'exc') d.push(t('ev_exc', svcNames(e.open, e.extra)));
     if (e.type === 'manual_change' && e.mode === 'all') d.push(t('ev_full'));
-    if ((e.type === 'manual_ban' || e.type === 'manual_allow') && e.ttl > 0) d.push(t('ev_ttl', ttlName(e.ttl)));   // süreli ban / izin
+    if ((e.type === 'manual_ban' || e.type === 'manual_allow') && e.ttl > 0) d.push(t('ev_ttl', dur(e.ttl)));   // süreli ban / izin
     if (e.type === 'manual_allow' && e.note) d.push(t('ev_note', e.note));
     if (e.type === 'manual_allow' && e.undeny) d.push(t('ev_undeny'));
     if (e.type === 'manual_unallow' && e.kind === 'temp') d.push(t('ev_tallow'));
@@ -1584,7 +1584,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   function thrWin(k) {
     if (k !== 'THRESHOLD_TEMP_24' || !CFG || !CFG.csf) return '';
     var tb = CFG.csf.tban || [0, 0];
-    return !tb[1] ? t('thr_win_0') : t('thr_win', tb[0] === tb[1] ? impDur(tb[0]) : impDur(tb[0]) + ' – ' + impDur(tb[1]));
+    return !tb[1] ? t('thr_win_0') : t('thr_win', tb[0] === tb[1] ? dur(tb[0]) : dur(tb[0]) + ' – ' + dur(tb[1]));
   }
   function cv(k) { return DRAFT[k] !== undefined ? DRAFT[k] : (CFG ? CFG.values[k] : ''); }
   function setNorm(k, v) {      // ASN ve kaynak listeleri küme gibi karşılaştırılır
@@ -2303,7 +2303,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
         var k = x[0], s0 = +x[1] || 0, e = +x[2] || 0, ne = +x[4] || e, st;
         if (x[5]) return '<tr><td>' + esc(tm(s0)) + '</td><td>' + esc(t('bl_ev')) + '</td><td>' + esc(whyText(x[3]) || x[3] || '') + '</td></tr>';   // olay kaydından
         // erken kaldırılan: kaldırıldığı tur; ban geçmişi kurulmadan önce kaldırılmışsa (bitiş = başlangıç) anı kayıtlı değil
-        if (k === 't') st = t('bl_t', impDur(Math.max(60, ne - s0))) + ' · ' + (e > now ? t('bl_on') : ne > e + 60 ? (e === s0 ? (early++, t('bl_early_x1')) : t('bl_early', tm(e))) : t('bl_end', tm(e)));
+        if (k === 't') st = t('bl_t', dur(Math.max(60, ne - s0))) + ' · ' + (e > now ? t('bl_on') : ne > e + 60 ? (e === s0 ? (early++, t('bl_early_x1')) : t('bl_early', tm(e))) : t('bl_end', tm(e)));
         else st = t('bl_p') + ' · ' + (e ? t(cov ? 'bl_rm_cov' : 'bl_rm', tm(e)) : t('bl_on'));
         return '<tr><td>' + esc(tm(s0)) + '</td><td>' + esc(st) + '</td><td>' + esc(whyText(x[3]) || x[3] || '') + '</td></tr>';
       }).join('') + '</tbody></table>' + (early ? '<div class="ag-muted" style="margin-top:4px">' + esc(t('bl_early_xn')) + '</div>' : '');
@@ -2324,13 +2324,12 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     return L.length ? '<div class="ag-im-hist ag-im-crawl"><h4 title="' + esc(t('cr_h')) + '">' + esc(t('cr_t')) + '</h4>' + L.map(function (x) { return '<p>' + x + '</p>'; }).join('') + '</div>' : '';
   }
   function impWait(a) { UI.impact[a] = 'wait'; render(); }
-  function impDur(sec) { sec = +sec || 0; return sec >= 3600 ? Math.round(sec / 3600) + (LANG === 'tr' ? ' sa' : ' h') : Math.max(1, Math.round(sec / 60)) + (LANG === 'tr' ? ' dk' : ' min'); }
   function impTk(k) { k = String(k || ''); return k.length >= 12 ? k.slice(6, 8) + '.' + k.slice(4, 6) + ' ' + k.slice(8, 10) + ':' + k.slice(10, 12) : ''; }
   // IP'nin şu anki durumu (motor: "temp:SANİYE,deny,deny24,imunify") → rozetler, her biri açıklamalı
   function impState(st) {
     var o = String(st || '').split(',').filter(Boolean).map(function (x) {
-      if (/^temp:/.test(x)) return '<span class="ag-pill ag-pill-bad" title="' + esc(t('im_st_temp_h')) + '">' + esc(t('im_st_temp', impDur(x.slice(5)))) + '</span>';
-      if (/^tempr:/.test(x)) return '<span class="ag-pill ag-pill-bad" title="' + esc(t('im_st_tempr_h')) + '">' + esc(t('im_st_tempr', impDur(x.slice(6)))) + '</span>';
+      if (/^temp:/.test(x)) return '<span class="ag-pill ag-pill-bad" title="' + esc(t('im_st_temp_h')) + '">' + esc(t('im_st_temp', dur(x.slice(5)))) + '</span>';
+      if (/^tempr:/.test(x)) return '<span class="ag-pill ag-pill-bad" title="' + esc(t('im_st_tempr_h')) + '">' + esc(t('im_st_tempr', dur(x.slice(6)))) + '</span>';
       if (/^asn:/.test(x)) return '<span class="ag-pill ag-pill-part" title="' + esc(t('im_st_asn_h')) + '">' + esc(t(x === 'asn:all' ? 'im_st_asn_all' : 'im_st_asn_p')) + '</span>';
       // ülke banı (CC_DENY: her şey, ülke port listesi: yalnız o portlar), kiralık liste, csf.deny port satırı (kısmi aralık banı)
       var m = /^cc:([A-Z]{2}):(all|ports)$/.exec(x);
@@ -2843,7 +2842,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   var TTL_CH = [0, 3600, 21600, 86400, 604800];
   function ttlHtml(TT, zero, d) {
     return '<div class="ag-mode" id="ag-ttl"><div class="ag-mode-h">' + esc(t('ip_ttl_h')) + '</div><div class="ag-chips">' +
-      (TT || TTL_CH).map(function (x) { return '<button type="button" class="ag-chip" data-ttl="' + x + '">' + esc(x ? ttlName(x) : t(zero || 'ip_ttl0')) + '</button>'; }).join('') +
+      (TT || TTL_CH).map(function (x) { return '<button type="button" class="ag-chip" data-ttl="' + x + '">' + esc(x ? dur(x) : t(zero || 'ip_ttl0')) + '</button>'; }).join('') +
       '</div>' + (d ? '<div class="ag-mode-d" id="ag-ttl-d"></div>' : '') + '</div>';
   }
   function ttlMark(W, ttl) {
@@ -3106,8 +3105,8 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       if (!W || !D) return;
       var h3 = W.querySelector('.ag-modal-h h3'), lead = W.querySelector('#ag-lead');
       // süre seçilince başlık ve açıklama da süreli bandan söz eder (önce "kalıcı olarak banlansın mı? … silinmez" kalıyordu)
-      if (h3) h3.innerHTML = changing() ? t('m_chg_t', cIn()) : M.mode === 'svc' ? t('m_svc_t', cIn()) : timed() ? t('m_bant_t', cIn(), esc(ttlName(TTL))) : (o.title || ttl());
-      if (lead) lead.innerHTML = M.mode === 'svc' ? (pfx ? t('m_svc_bpfx', num(Math.pow(2, 32 - bits))) : t(bits === 16 ? 'm_svc_b16' : 'm_svc_b24')) : timed() ? esc(t('m_bant_b', num(Math.pow(2, 32 - bits)), ttlName(TTL))) : (o.body || lead0());
+      if (h3) h3.innerHTML = changing() ? t('m_chg_t', cIn()) : M.mode === 'svc' ? t('m_svc_t', cIn()) : timed() ? t('m_bant_t', cIn(), esc(dur(TTL))) : (o.title || ttl());
+      if (lead) lead.innerHTML = M.mode === 'svc' ? (pfx ? t('m_svc_bpfx', num(Math.pow(2, 32 - bits))) : t(bits === 16 ? 'm_svc_b16' : 'm_svc_b24')) : timed() ? esc(t('m_bant_b', num(Math.pow(2, 32 - bits)), dur(TTL))) : (o.body || lead0());
       W.querySelectorAll('[data-mode]').forEach(function (b) { var on = b.getAttribute('data-mode') === M.mode; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
       var md = W.querySelector('#ag-md'); if (md) md.textContent = t('md_' + M.mode);
       var sb = W.querySelector('#ag-svcbox'); if (sb) sb.innerHTML = svcBox();

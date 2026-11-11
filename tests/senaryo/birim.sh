@@ -120,6 +120,14 @@ for f in "$REPO/csf_autogroup.sh" "$REPO"/tools/*.sh; do
     N=$((N + 1)); k=$(awk -f "$(dirname "$0")/tirnak.awk" "$f" | head -n 1)
     if [ -z "$k" ]; then echo "  ✓ tırnak içi yorumda kesme işareti yok: $(basename "$f")"; else F=$((F + 1)); echo "  ✗ $(basename "$f") $k"; fi
 done
+# süre yazımı (dur_text): panelin dur() işleviyle aynı biçim — gün / gün+sa / sa / sa+dk / dk / sn ("5400 sn" değil)
+eval "$(awk '/^m\(\) \{/{f=1} f{print} f && /^}$/{exit}' "$REPO/csf_autogroup.sh")"
+eval "$(awk '/^dur_text\(\) \{/{f=1} f{print} f && /^}$/{exit}' "$REPO/csf_autogroup.sh")"
+eval "$(grep -m1 '^  M_DUR_D=' "$REPO/csf_autogroup.sh")"
+for x in "604800|7 gün" "90000|1 gün 1 sa" "21600|6 sa" "5400|1 sa 30 dk" "900|15 dk" "40|40 sn"; do
+    N=$((N + 1)); r=$(dur_text "${x%%|*}")
+    if [ "$r" = "${x#*|}" ]; then echo "  ✓ süre ${x%%|*} sn → $r"; else F=$((F + 1)); echo "  ✗ süre ${x%%|*} sn → $r (beklenen ${x#*|})"; fi
+done
 # mangle PREROUTING sırası (sondaki boşluklu iptables çıktısı, önce ekle sonra sil): ayrı betik, taklit iptables
 N=$((N + 1)); if ms=$(bash "$H/mangle-sira.sh" 2>&1); then echo "  ✓ ${ms##*$'\n'}"; else F=$((F + 1)); printf '%s\n' "$ms" | grep '✗'; fi
 echo "Birim: $N durum, $F beklenmeyen"; [ "$F" -eq 0 ]

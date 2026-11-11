@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.15.78 — 2026-11-11
+
+- Durations are written the same way everywhere, in the panel, emails and the
+  log: days, days and hours, hours, hours and minutes, or minutes (*7 d*,
+  *1 d 6 h*, *1 h 30 min*). Before, the panel wrote a week as *168 h*, the
+  measure-impact window rounded to whole hours, and messages wrote any
+  duration that was not whole days or hours in seconds.
+
 ## 1.15.77 — 2026-11-11
 
 - Needs review no longer suggests *Ban block (/24)* on a suspicious range or
