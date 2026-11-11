@@ -859,6 +859,13 @@ mcheck "kalıcı pencere: /16 uyarısı eski tekilleri saymaz (3 yeni + 3 eski, 
 mk pw16b; for x in 7.1 8.1 9.1 10.1 11.1; do single 151.80.$x sshd; done; quiet
 mcheck "kalıcı pencere: aynı /16'da 5 yeni tekil → uyarı verilir (karşılaştırma)" "grep -q '\"type\":\"warn16\"' '$R/var/lib/csf_autogroup/events.jsonl'"
 node "$(wp "$H/render.js")" "$(wp "$REPO/whm/assets/ag.js")" "$(wp "$W/out")" "$@"; RC=$?
+# K7 bütün köklerde: liste satırı menüsü = Geçmiş menüsü (menu-esit.js). Yalnız listede satır doğurabilecek kökler (~4 dk)
+mkdir -p "$W/k7"
+for R in "$W"/roots/*; do
+    grep -q -E 'warn|skip_wl|allow_|part_open|add24|temp24|manual_ban' "$R/var/lib/csf_autogroup/events.jsonl" 2>/dev/null || [ -s "$R/etc/csf/csf.deny" ] || continue
+    run --status --json > "$W/k7/${R##*/}.json" 2>/dev/null
+done
+node "$(wp "$H/menu-esit.js")" "$(wp "${AG_JS:-$REPO/whm/assets/ag.js}")" "$(wp "$W/k7")" || RC=1   # AG_JS: kuralı eski panelle sınamak için
 printf '\nMotor kuralları\n%s' "$ML"
 [ "$MF" -gt 0 ] && { echo "$MF motor kuralı ihlali"; exit 1; }
 exit $RC

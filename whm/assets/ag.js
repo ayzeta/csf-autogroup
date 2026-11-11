@@ -950,10 +950,9 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       return { o: o, h: ownerHtml(o, false) };   // sahip yoksa hücre boş (telefonda tek "—" satırı olmasın)
     }
     // ortak satır: aynı sütunlar (Ağ/blok · Durum · Neden · Sahip · İşaretlendi · düğme · menü) + not satırı + açılır IP listesi
-    function rvRow(e, pill, whyH, mitems, note, ips) {
+    function rvRow(e, pill, whyH, note, ips) {
       var key = 'r:' + e.cidr, open = UI.open[key], ow = rvOwner(e, (e.ips || [])[0]);
-      var first = firstIp(e.cidr, e.ips);
-      if (ips) mitems = [{ act: 'toggle', label: open ? t('hide') : t('ips'), icon: 'list', attrs: 'data-key="' + esc(key) + '"' }].concat(mitems);
+      var mitems = (ips ? [MI.toggle(key, open)] : []).concat(actsRv(e), [MI.ipcard(firstIp(e.cidr, e.ips))]);
       return '<div class="ag-item" data-row="' + esc(e.cidr) + '"><div class="ag-tr ag-tr-r">' +
         '<div class="ag-td ag-td-main">' + rvDot(e) + cidrLink(e.cidr) + '</div>' +
         '<div class="ag-td ag-td-state">' + pill + '</div>' +
@@ -964,9 +963,6 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
         '<div class="ag-tr-note">' + (ow.o.asn ? '<span class="ag-own-n">' + ow.h + '</span>' : '') + (note ? '<div>' + note + '</div>' : '') +
           (rvDrop(e) ? '<div class="ag-muted">' + esc(rvDrop(e)) + '</div>' : '') + '</div>' +   // ne zaman kendiliğinden düşer
         (open && ips ? ipTable(e.ips, e.total) : '') + '</div>';
-    }
-    function exItem(target, svc) {   // izinli servisten hariç tut: menü öğesi (karar eylemi, en üstte)
-      return { act: 'svcexc', label: t('dr_exc_btn'), icon: 'ban', danger: true, attrs: 'data-t="' + esc(target) + '" data-n="' + esc(svc) + '" title="' + esc(t('dr_exc_h')) + '"' };
     }
     // İzinli ama saldırıyor: tek IP (ban işlemiyor / lfd yoksaydı) ya da bir izin kaydının aralığından birden çok IP
     function abRow(e) {
@@ -988,19 +984,12 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       if (acS) L.push(esc(acS.charAt(0).toUpperCase() + acS.slice(1)));
       if (!grp && x.why) L.push(esc(t('ab_last', whyText(x.why), rel(x.t))));   // satırın İşaretlendi sütunu ilk kayıt, burada son kayıt ve zamanı
       var note = L.join('</div><div>');      // rvRow her satırı kendi div'inde gösterir
-      // menü: IP kartı (aralık gönderilmez) + Yoksay — öteki Kontrol edilecekler satırlarıyla aynı
-      return rvRow(e, pill, whyH,
-        (src.svc && bk !== 's' ? [exItem(e.cidr, src.svc)] : []).concat(x.ip ? [{ act: 'ipcard', label: t('ipcard'), icon: 'search', attrs: 'data-ip="' + esc(x.ip) + '"' }] : [])
-          .concat([{ act: 'ignore', label: t('ignore'), icon: 'mute', attrs: 'data-c="' + esc(e.cidr) + '"' }]), note, grp);
+      return rvRow(e, pill, whyH, note, grp);   // menü: actsAllow (öteki listeler ve Geçmiş ile aynı)
     }
     // Kısmi banı yetmiyor: kısmi bandan sonra kapalı olmayan servislere gelen saldırılar blok/ağ eşiğine ulaştı
     function poRow(e) {
       var pill = statePill('part', t('po'), t('po_h'));
-      return rvRow(e, pill, esc(countList(e.since || {})),
-        [{ act: 'chg', label: t('chg'), icon: 'ban', danger: true, attrs: 'data-c="' + esc(e.cidr) + '"' },
-         { act: 'ipcard', label: t('ipcard'), icon: 'search', attrs: 'data-ip="' + esc(firstIp(e.cidr)) + '"' },
-         { act: 'ignore', label: t('ignore'), icon: 'mute', attrs: 'data-c="' + esc(e.cidr) + '"' }],
-        esc(t('po_n', svcNames(e.svc, e.extra) || '?')), false);
+      return rvRow(e, pill, esc(countList(e.since || {})), esc(t('po_n', svcNames(e.svc, e.extra) || '?')), false);   // menü: actsPo
     }
     // uzun listede 20'şer (en önemliler önde: tekrar edenler, sonra en yeni)
     var items = S.review.slice().sort(function (a, b) { return (repOf(b) - repOf(a)) || (b.t - a.t); }).slice(0, lim('rv', 20)).map(function (e) {
@@ -1013,19 +1002,9 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       var P = rvParts(e, nIp), meta = P.meta, det = P.det, pnote = P.pnote, apx = P.apx;
       var owner = shortOwner(e.owner || ownerOfIps(e.ips) || (function (o) { return o.asn ? o.label : ''; })(ownerOf(e.cidr)));   // "sağlayıcı yok" ipucu sahip sanılmasın
       var first = firstIp(e.cidr, hasIps ? e.ips : null);
-      // en dar öneri satırda düğme; ötekiler ve diğer işler ⋯ menüsünde
-      var B = [];
-      if (apx) B.push({ act: 'banpfx', label: t('banpfx', '/' + bitsOf(apx.p)), icon: 'ban', danger: true, attrs: 'data-c="' + esc(apx.p) + '" title="' + esc(t('banpfx_h', num(Math.pow(2, 32 - bitsOf(apx.p))))) + '"' });
-      if (is16) B.push({ act: 'ban16', label: lbl16(pfx(e.cidr)), icon: 'ban', danger: true, attrs: 'data-t="' + esc(pfx(e.cidr)) + '"' });
-      else if (e.type === 'warnpfx') B.push({ act: 'banpfx', label: t('banpfx', '/' + bitsOf(e.cidr)), icon: 'ban', danger: true, attrs: 'data-c="' + esc(e.cidr) + '" title="' + esc(t('banpfx_h', num(Math.pow(2, 32 - bitsOf(e.cidr))))) + '"' });
-      else B.push({ act: 'banforce', label: t('ban_anyway'), icon: 'ban', danger: true, attrs: 'data-t="' + esc(pfx(e.cidr)) + '" data-wl="' + esc(e.wl || '') + '"' });
-      // eylemler öteki listelerdeki gibi yalnız ⋯ menüsünde: önce ban önerileri (en dar önce: duyurulan aralık → ağ), sonra IP kartı,
-      // Sustur. Önce en dar öneri satırda düğmeydi, Sustur menüdeydi; karar düğmesi olmayan satırlarda yalnız menü vardı
-      var swl = /services\.allow \(([^)]+)\): ([0-9.\/]+)/.exec(e.wl || '');    // izinli servis listesi yüzünden atlandı
-      var mitems = B.concat([{ act: 'ipcard', label: t('ipcard'), icon: 'search', attrs: 'data-ip="' + esc(first) + '"' },
-                             { act: 'ignore', label: t('ignore'), icon: 'mute', attrs: 'data-c="' + esc(e.cidr) + '"' }])
-        .concat(swl ? [{ act: 'svcexc', label: t('dr_exc_btn') + ' (' + swl[2] + ')', icon: 'ban', danger: true, attrs: 'data-t="' + esc(swl[2]) + '" data-n="' + esc(swl[1]) + '"' }] : []);
-      if (hasIps) mitems.unshift({ act: 'toggle', label: open ? t('hide') : t('ips'), icon: 'list', attrs: 'data-key="' + esc(key) + '"' });
+      // eylemler öteki listelerdeki gibi yalnız ⋯ menüsünde ve tek kaynaktan (actsReview: ban önerileri en dar önce, izinli servis
+      // istisnası, Sustur); Geçmiş'in menüsü de aynı işlevi kullanır
+      var mitems = (hasIps ? [MI.toggle(key, open)] : []).concat(actsReview(e), [MI.ipcard(first)]);
       // sahip: olaydaki IP'lerden ya da sahip önbelleğinden; bayrak + AS + ad (Aktif blok banları ile aynı)
       var o = ownerOf(e.cidr), i0 = hasIps ? e.ips[0] : null;
       if (!o.asn && i0 && i0.asn) o = { asn: i0.asn, cc: i0.cc, name: ownName(i0.owner), label: i0.owner };
@@ -1110,18 +1089,8 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       var gshort = (g.kind === 'temp' || g.kind === 'manual') && g.ttl > 0 ? dur(g.ttl) : g.kind === 'partial' ? (svcNames(g.svc, g.extra) || String(g.ports || '').replace(/_/g, '–')) : (g.open || g.open_extra) ? t('g_open', svcNames(g.open, g.open_extra)) : '';
       var first = firstIp(g.cidr, ev && ev.ips);
       var when = g.added ? relT(g.added) : '—';
-      var items = [];
-      if (ev && ev.ips && ev.ips.length) items.push({ act: 'toggle', label: open ? t('hide') : t('ips'), icon: 'list', attrs: 'data-key="' + esc(key) + '"' });
-      items.push({ act: 'ipcard', label: t('ipcard'), icon: 'search', attrs: 'data-ip="' + esc(first) + '"' });
-      // geçici blok banı: İzlenenler ve Geçmiş'teki gibi buradan da kalıcıya alınır
-      if (g.kind === 'temp' && bitsOf(g.cidr) === 24 && !g.under) items.push({ act: 'promote', label: t('promote'), icon: 'ban', attrs: 'data-t="' + esc(g.cidr.replace(/\.0\/24$/, '')) + '"' });
-      if ((g.kind === 'manual' && !(g.ttl > 0) || g.kind === 'partial') && bitsOf(g.cidr) >= 16 && bitsOf(g.cidr) <= 24 ||
-          g.kind === 'partial' && bitsOf(g.cidr) === 32)   // süreli banın kipi değişmez (kaldırıp yeniden konur); tek IP kısmi banı da değişir
-        items.push({ act: 'chg', label: t('chg'), icon: 'sliders', attrs: 'data-c="' + esc(g.cidr) + '"' });
-      // tek IP banı: bir üst seviye blok (aralık banlarında olduğu gibi ağdan önce)
-      if (bitsOf(g.cidr) === 32 && bitsOf(g.under) > 24) items.push({ act: 'ban24', label: lbl24(pfxOf(g.cidr.replace(/\/32$/, ''))), icon: 'ban', danger: true, attrs: 'data-t="' + esc(pfxOf(g.cidr.replace(/\/32$/, ''))) + '"' });
-      if (bitsOf(g.cidr) > 16 && bitsOf(g.under) > 16) items.push({ act: 'ban16', label: lbl16(p16(g.cidr)), icon: 'ban', danger: true, attrs: 'data-t="' + esc(p16(g.cidr)) + '"' });
-      items.push({ act: 'unban', label: t('unban'), icon: 'x', danger: true, attrs: 'data-c="' + esc(g.cidr) + '" data-dnd="' + (g.dnd ? 1 : 0) + '" data-kind="' + esc(g.kind) + '" data-restore="' + (g.restore || 0) + '"' });
+      // eylemler tek kaynaktan (actsGroup; Geçmiş'in menüsü de aynı)
+      var items = (ev && ev.ips && ev.ips.length ? [MI.toggle(key, open)] : []).concat(actsGroup(g), [MI.ipcard(first)]);
       var gtag = g.under ? underPill(g.under) : g.pcov ? pcovNote(g.pcov) : ccPill(g.cidr);
       return '<div class="ag-item" data-row="' + esc(g.cidr) + '"><div class="ag-tr">' +
         '<div class="ag-td ag-td-main">' + newDot(g.added) + cidrLink(g.cidr) + '</div>' +
@@ -1547,22 +1516,17 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     var rows = shown.map(function (p) {
       var cidr = p.prefix + '.0/24', o = ownerOf(cidr), ev = (OWNERS[cidr] || {}).ev, key = 'p:' + cidr, open = UI.open[key];
       // neden izleniyor: geçici blok banının IP'leri ve sebepleri (olay kaydından)
-      var pitems = [];
-      if (ev && ev.ips && ev.ips.length) pitems.push({ act: 'toggle', label: open ? t('hide') : t('ips'), icon: 'list', attrs: 'data-key="' + esc(key) + '"' });
+      var pitems = ev && ev.ips && ev.ips.length ? [MI.toggle(key, open)] : [];
       var left = Math.max(0, p.days_left), ret = S.config.retention || 180, pct = Math.max(0, Math.min(100, left * 100 / ret));
       var urg = left < 7 ? ' bad' : left < 30 ? ' warn' : '';
-      var first = ev && ev.ips && ev.ips[0] ? ev.ips[0].ip : p.prefix + '.1';
+      var first = firstIp(cidr, ev && ev.ips);
       return '<div class="ag-item" data-row="' + esc(cidr) + '"><div class="ag-tr ag-tr-p">' +
         '<div class="ag-td ag-td-stack">' + cidrLink(cidr) +
         (p.temp_ttl > 0 ? '<span class="ag-t-warn">' + t('ttl_left', dur(p.temp_ttl)) + '</span>' : '') + (p.under ? underPill(p.under, true) : '') + '</div>' +
         '<div class="ag-td ag-td-own">' + ownerHtml(o) + '</div>' +
         '<div class="ag-td ag-when ag-td-since">' + esc(dayStr(p.since)) + '</div>' +
         '<div class="ag-td ag-td-left"><div class="ag-left' + urg + '"><div class="ag-days"><i style="width:' + pct + '%"></i></div><span>' + (left > 0 ? t('c_days', num(left)) : t('c_days0')) + '</span></div></div>' +   // "0 gün" bitmiş gibi okunuyordu
-        '<div class="ag-td ag-td-act">' + menu('pm:' + p.prefix, pitems.concat(p.under ? [] : [{ act: 'promote', label: t('promote'), icon: 'ban', attrs: 'data-t="' + esc(p.prefix) + '"' }])
-                                .concat(bitsOf(p.under) > 16 ? [{ act: 'ban16', label: lbl16(p16(p.prefix)), icon: 'ban', danger: true, attrs: 'data-t="' + esc(p16(p.prefix)) + '"' }] : []).concat([
-                                { act: 'rewatch', label: t('rewatch'), icon: 'clock', attrs: 'data-t="' + esc(p.prefix) + '"' },
-                                { act: 'forget', label: t('forget'), icon: 'x', attrs: 'data-t="' + esc(p.prefix) + '"' },
-                                { act: 'ipcard', label: t('ipcard'), icon: 'search', attrs: 'data-ip="' + esc(first) + '"' }])) + '</div></div>' +
+        '<div class="ag-td ag-td-act">' + menu('pm:' + p.prefix, pitems.concat(actsPending(p), [MI.ipcard(first)])) + '</div></div>' +
         (open && ev ? ipTable(ev.ips, ev.total) : '') + '</div>';
     }).join('');
     var pager = pages > 1 ? '<div class="ag-pager"><span>' + t('of_n', from + 1, from + shown.length, list.length) + '</span>' +
@@ -4770,47 +4734,74 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     if (/^warn|^skip_wl$/.test(e.type)) return t('st_left');
     return '';
   }
-  function itemMenu(c, e, st) {  // öğe için şu an geçerli eylemler — Genel bakış'taki satırlarla aynı eylemler ve pencereler
-    var items = [], bits = bitsOf(c), p16v = /\//.test(c) || /^\d/.test(c) ? p16(c) : '', p24 = pfxOf(String(c).split('/')[0]);
-    function first() { return firstIp(c, e.ips); }
-    if (st.r) {
-      // izinli / yoksayılan / sunucu IP'si satırı: Kontrol edilecekler'deki gibi (abRow) ban yok; izinli servis istisnası sunucu IP'sinde yok
-      // (önce "Yine de banla" çıkıyordu, sunucu IP'sinde pencere "banlanamaz" diyordu)
-      var abr = st.r.type === 'allow_ban' || st.r.type === 'allow_grp', self = abr && abKind(st.r) === 's';
-      // kısmi banı yetmeyen aralık: Kontrol edilecekler satırıyla (poRow) aynı eylem — banı değiştir (önce "Yine de banla" çıkıyordu)
-      if (st.r.type === 'part_open') items.push({ act: 'chg', label: t('chg'), icon: 'sliders', attrs: 'data-c="' + esc(c) + '"' });
-      else if (!abr && bits === 16) items.push({ act: 'ban16', label: lbl16(p16v), icon: 'ban', danger: true, attrs: 'data-t="' + esc(p16v) + '"' });
-      else if (!abr) items.push({ act: 'banforce', label: t('ban_anyway'), icon: 'ban', danger: true, attrs: 'data-t="' + esc(p24) + '" data-wl="' + esc(st.r.wl || '') + '"' });
-      var hwl = /services\.allow \(([^)]+)\): ([0-9.\/]+)/.exec(st.r.wl || '');
-      if (hwl && !self) items.push({ act: 'svcexc', label: t('dr_exc_btn') + ' (' + hwl[2] + ')', icon: 'ban', danger: true, attrs: 'data-t="' + esc(hwl[2]) + '" data-n="' + esc(hwl[1]) + '"' });
-      items.push({ act: 'ignore', label: t('ignore'), icon: 'mute', attrs: 'data-c="' + esc(c) + '"' });
-    } else if (st.g) {
-      if ((st.g.kind === 'manual' && !(st.g.ttl > 0) || st.g.kind === 'partial') && bits >= 16 && bits <= 24 || st.g.kind === 'partial' && bits === 32)
-        items.push({ act: 'chg', label: t('chg'), icon: 'sliders', attrs: 'data-c="' + esc(c) + '"' });
-      if (bits === 32 && bitsOf(st.g.under) > 24) items.push({ act: 'ban24', label: lbl24(p24), icon: 'ban', danger: true, attrs: 'data-t="' + esc(p24) + '"' });   // Genel bakış'taki gibi
-      // geçici blok banı ve aynı blok izleniyor: İzlenenler'deki "Kalıcı yap" burada da
-      if (st.p && !st.p.under) items.push({ act: 'promote', label: t('promote'), icon: 'ban', attrs: 'data-t="' + esc(st.p.prefix) + '"' });
-      if (bits > 16 && bitsOf(st.g.under) > 16) items.push({ act: 'ban16', label: lbl16(p16v), icon: 'ban', danger: true, attrs: 'data-t="' + esc(p16v) + '"' });
-      items.push({ act: 'unban', label: t('unban'), icon: 'x', danger: true, attrs: 'data-c="' + esc(c) + '" data-dnd="' + (st.g.dnd ? 1 : 0) + '" data-kind="' + esc(st.g.kind) + '" data-restore="' + (st.g.restore || 0) + '"' });
-    } else if (st.p) {
-      if (!st.p.under) items.push({ act: 'promote', label: t('promote'), icon: 'ban', attrs: 'data-t="' + esc(st.p.prefix) + '"' });
-      if (bitsOf(st.p.under) > 16) items.push({ act: 'ban16', label: lbl16(p16(st.p.prefix)), icon: 'ban', danger: true, attrs: 'data-t="' + esc(p16(st.p.prefix)) + '"' });
-      items.push({ act: 'rewatch', label: t('rewatch'), icon: 'clock', attrs: 'data-t="' + esc(st.p.prefix) + '"' });
-      items.push({ act: 'forget', label: t('forget'), icon: 'x', attrs: 'data-t="' + esc(st.p.prefix) + '"' });
-    } else if (!st.cov && !st.ig) {
+  /* Satır eylemleri tek kaynak (standartlaştırma G6): her liste öğesi türünün karar eylemleri bir işlevde; Genel bakış satırları ve
+     Geçmiş'in ⋯ menüsü (itemMenu) aynı işlevi çağırır. Önce dört yerde ayrı yazılıydı: Geçmiş şüpheli aralık satırına "Yine de banla"
+     (ilk /24) veriyordu, liste "Duyurulan aralığı banla"; geçici blok banında "Kalıcı yap" iki ayrı koşula bağlıydı.
+     Menü sırası: IP'ler → karar eylemleri (dar → geniş ban, değiştir, kaldır) → Sustur → IP kartı → satıra git. */
+  var MI = {
+    toggle: function (key, open) { return { act: 'toggle', label: open ? t('hide') : t('ips'), icon: 'list', attrs: 'data-key="' + esc(key) + '"' }; },
+    ipcard: function (ip) { return { act: 'ipcard', label: t('ipcard'), icon: 'search', attrs: 'data-ip="' + esc(ip) + '"' }; },
+    goto: function (c) { return { act: 'goto', label: t('goto'), icon: 'search', attrs: 'data-c="' + esc(c) + '"' }; },
+    ignore: function (c) { return { act: 'ignore', label: t('ignore'), icon: 'mute', attrs: 'data-c="' + esc(c) + '"' }; },
+    chg: function (c) { return { act: 'chg', label: t('chg'), icon: 'sliders', attrs: 'data-c="' + esc(c) + '"' }; },
+    ban16: function (v) { return { act: 'ban16', label: lbl16(v), icon: 'ban', danger: true, attrs: 'data-t="' + esc(v) + '"' }; },
+    ban24: function (p24) { return { act: 'ban24', label: lbl24(p24), icon: 'ban', danger: true, attrs: 'data-t="' + esc(p24) + '"' }; },
+    banpfx: function (c) { return { act: 'banpfx', label: t('banpfx', '/' + bitsOf(c)), icon: 'ban', danger: true, attrs: 'data-c="' + esc(c) + '" title="' + esc(t('banpfx_h', num(Math.pow(2, 32 - bitsOf(c))))) + '"' }; },
+    banforce: function (p24, wl) { return { act: 'banforce', label: t('ban_anyway'), icon: 'ban', danger: true, attrs: 'data-t="' + esc(p24) + '" data-wl="' + esc(wl || '') + '"' }; },
+    // izinli servisten hariç tut: hedef satırın kendisi değilse (izin kaydının aralığı) etikette yazılır
+    svcexc: function (target, svc, row) { return { act: 'svcexc', label: t('dr_exc_btn') + (target !== row ? ' (' + target + ')' : ''), icon: 'ban', danger: true, attrs: 'data-t="' + esc(target) + '" data-n="' + esc(svc) + '" title="' + esc(t('dr_exc_h')) + '"' }; },
+    promote: function (pfx3) { return { act: 'promote', label: t('promote'), icon: 'ban', attrs: 'data-t="' + esc(pfx3) + '"' }; },
+    rewatch: function (pfx3) { return { act: 'rewatch', label: t('rewatch'), icon: 'clock', attrs: 'data-t="' + esc(pfx3) + '"' }; },
+    forget: function (pfx3) { return { act: 'forget', label: t('forget'), icon: 'x', attrs: 'data-t="' + esc(pfx3) + '"' }; },
+    unban: function (g) { return { act: 'unban', label: t('unban'), icon: 'x', danger: true, attrs: 'data-c="' + esc(g.cidr) + '" data-dnd="' + (g.dnd ? 1 : 0) + '" data-kind="' + esc(g.kind) + '" data-restore="' + (g.restore || 0) + '"' }; }
+  };
+  var SVC_WL_RE = /services\.allow \(([^)]+)\): ([0-9.\/]+)/;     // izinli servis listesi kaydı: (servis, aralık)
+  // Kontrol edilecekler: şüpheli ağ / aralık, atlandı — ban önerileri (en dar önce), izinli servis istisnası, Sustur
+  function actsReview(e) {
+    var A = [], apx = rvParts(e, '').apx, swl = SVC_WL_RE.exec(e.wl || '');
+    if (apx) A.push(MI.banpfx(apx.p));
+    if (/\/16$/.test(e.cidr)) A.push(MI.ban16(pfx(e.cidr)));
+    else if (e.type === 'warnpfx') A.push(MI.banpfx(e.cidr));
+    else A.push(MI.banforce(pfx(e.cidr), e.wl));
+    if (swl) A.push(MI.svcexc(swl[2], swl[1], e.cidr));
+    A.push(MI.ignore(e.cidr));
+    return A;
+  }
+  // izinli / yoksayılan / sunucu IP'si ihlal satırı: ban yok (izin önce kalkar); izinli servis kaydıysa o IP hariç tutulur
+  function actsAllow(e) {
+    var sm = /services\.allow \(([^)]+)\)/.exec(e.wl || ''), self = e.type === 'allow_ban' && abKind(e) === 's';
+    return (sm && !self ? [MI.svcexc(e.cidr, sm[1], e.cidr)] : []).concat([MI.ignore(e.cidr)]);
+  }
+  function actsPo(e) { return [MI.chg(e.cidr), MI.ignore(e.cidr)]; }   // kısmi banı yetmiyor: banı değiştir
+  // aktif aralık / IP banı
+  function actsGroup(g) {
+    var A = [], b = bitsOf(g.cidr), ip = g.cidr.replace(/\/\d+$/, '');
+    if (g.kind === 'temp' && b === 24 && !g.under) A.push(MI.promote(pfxOf(ip)));   // İzlenenler'deki "Kalıcı yap"
+    if ((g.kind === 'manual' && !(g.ttl > 0) || g.kind === 'partial') && b >= 16 && b <= 24 || g.kind === 'partial' && b === 32) A.push(MI.chg(g.cidr));
+    if (b === 32 && bitsOf(g.under) > 24) A.push(MI.ban24(pfxOf(ip)));   // tek IP banı: bir üst seviye blok
+    if (b > 16 && bitsOf(g.under) > 16) A.push(MI.ban16(p16(g.cidr)));
+    A.push(MI.unban(g));
+    return A;
+  }
+  // izlenen blok
+  function actsPending(p) {
+    return (p.under ? [] : [MI.promote(p.prefix)]).concat(bitsOf(p.under) > 16 ? [MI.ban16(p16(p.prefix))] : []).concat([MI.rewatch(p.prefix), MI.forget(p.prefix)]);
+  }
+  function actsRv(e) { return e.type === 'allow_ban' || e.type === 'allow_grp' ? actsAllow(e) : e.type === 'part_open' ? actsPo(e) : actsReview(e); }
+  function itemMenu(c, e, st) {  // öğe için şu an geçerli eylemler — Genel bakış'taki satırlarla aynı işlevler (acts*)
+    var items, bits = bitsOf(c), p16v = /\//.test(c) || /^\d/.test(c) ? p16(c) : '', p24 = pfxOf(String(c).split('/')[0]);
+    if (st.r) items = actsRv(st.r);
+    else if (st.g) items = actsGroup(st.g);
+    else if (st.p) items = actsPending(st.p);
+    else if (!st.cov && !st.ig) {
       // artık hiçbir listede değil: yeniden banlamak ya da bloğunu/ağını banlamak hâlâ mümkün
-      if (bits === 16) items.push({ act: 'ban16', label: lbl16(p16v), icon: 'ban', danger: true, attrs: 'data-t="' + esc(p16v) + '"' });
-      else if (/^\d/.test(String(c))) {
-        items.push({ act: 'ban24', label: lbl24(p24), icon: 'ban', danger: true, attrs: 'data-t="' + esc(p24) + '"' });
-        items.push({ act: 'ban16', label: lbl16(p16v), icon: 'ban', danger: true, attrs: 'data-t="' + esc(p16v) + '"' });
-      }
+      items = bits === 16 ? [MI.ban16(p16v)] : /^\d/.test(String(c)) ? [MI.ban24(p24), MI.ban16(p16v)] : [];
     } else if (st.cov && bits > 16 && covBits(st.cov) > 16 && bitsOf(st.cov.under) > 16) {
       // blok banının içinde: ağı banlamak hâlâ anlamlı; blok yalnız geçici banlıysa kalıcı banlamak da (IP kartıyla aynı)
-      if (st.cov.kind === 'temp' && bits > 24) items.push({ act: 'ban24', label: lbl24(p24), icon: 'ban', danger: true, attrs: 'data-t="' + esc(p24) + '"' });
-      items.push({ act: 'ban16', label: lbl16(p16v), icon: 'ban', danger: true, attrs: 'data-t="' + esc(p16v) + '"' });
-    }
-    if (st.r || st.g || st.p) items.push({ act: 'goto', label: t('goto'), icon: 'search', attrs: 'data-c="' + esc(c) + '"' });
-    items.push({ act: 'ipcard', label: t('ipcard'), icon: 'search', attrs: 'data-ip="' + esc(first()) + '"' });
+      items = (st.cov.kind === 'temp' && bits > 24 ? [MI.ban24(p24)] : []).concat([MI.ban16(p16v)]);
+    } else items = [];
+    items = items.concat([MI.ipcard(firstIp(c, e.ips))]);
+    if (st.r || st.g || st.p) items.push(MI.goto(c));
     return items;
   }
   /* Genel bakış'ta bir satıra git: sayfasını aç, ayrıntısını aç, kaydır ve vurgula (mail bağlantısı da bunu kullanır) */

@@ -95,6 +95,18 @@ for (const s of scen) {
   const ka = scr['IP kartı ' + IP].filter(x => BAN.test(x[0])).map(x => x[0]).sort().join(','),
         ha = scr['Geçmiş ' + IP].filter(x => BAN.test(x[0])).map(x => x[0]).sort().join(',');
   if (ka !== ha) fail(s, `IP kartı [${ka || '—'}] ile Geçmiş [${ha || '—'}] farklı ban eylemleri sunuyor (${IP})`);
+  // K7: bir liste satırının ⋯ menüsü ile Geçmiş'in aynı öğe için menüsü aynı eylemleri sunar (tek kaynak: acts*). Öğe birden çok
+  // listedeyse Geçmiş en önce gelenin eylemlerini sunar (Kontrol edilecekler → aralık banı → izlenen); yalnız o liste karşılaştırılır.
+  // Önce Geçmiş şüpheli aralık satırına "Yine de banla" (ilk /24), duyurulan aralık önerisi yoktu; "Kalıcı yap" ayrı koşuldaydı
+  const act2 = a => a.map(i => i.act + '|' + ((/data-[tc]="([^"]*)"/.exec(i.attrs || '') || [])[1] || '')).filter(x => !/^(toggle|ipcard|goto)\|/.test(x)).sort().join(', ');
+  Object.keys(menus).forEach(k => {
+    const kind = k.slice(0, 3), c = kind === 'pm:' ? k.slice(3) + '.0/24' : k.slice(3);
+    if (!/^(rm|gm|pm):$/.test(kind) || !IN(c)) return;
+    const ist = AG.itemState(c);
+    if (!ist || (kind !== 'rm:' && ist.r) || (kind === 'pm:' && ist.g)) return;
+    const h = act2(AG.itemMenu(c, { type: 'x', ips: [] }, ist)), l = act2(menus[k]);
+    if (h !== l) fail(s, `${c}: liste menüsü [${l || '—'}] ile Geçmiş menüsü [${h || '—'}] farklı`);
+  });
   // K6: sunulan ban, motorun banla penceresinde "zaten banlı" diye reddediliyorsa düğme çıkmaza götürür
   const inn = {};
   for (const [k, f] of [['ban24', 'in24'], ['ban16', 'in16']]) {

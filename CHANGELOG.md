@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.15.84 — 2026-11-11
+
+- History's ⋯ menu offers the same actions as the row in Overview. For a
+  suspicious range it offered "Ban anyway", which banned only the range's
+  first /24; it now offers "Ban the announced range", like the list. The
+  announced-range suggestion of a suspicious network row was missing there too.
+- Every list builds its row menu in the same order: IPs, decision actions
+  (narrowest ban first, change, remove), Mute, IP card.
+- "Exclude from allowed services" shows the same label and hint in every row.
+
 ## 1.15.83 — 2026-11-11
 
 - A state has the same colour on every screen. "Measure impact" showed bans
