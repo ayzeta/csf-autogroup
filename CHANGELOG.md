@@ -1,5 +1,51 @@
 # Changelog
 
+## 1.15.93 — 2026-11-11
+
+Texts that described a rule differently from what the code does were corrected.
+
+- *Try before saving* ran with the saved permanent single window instead of the
+  unsaved one: the panel sent it but the plugin's server side dropped it.
+- Removing a temp block ban offered to restore its single bans and said the ban
+  leaves the permanent list. A temp block ban is only lifted (`csf -tr`); the
+  window now says so and has no restore option.
+- Without `dig` / `host` (or with lookups off), the dependency note said blocks
+  relying on `CC_IGNORE`, `CC_ALLOW` or `csf.rignore` are not banned; they are
+  banned, since those lists can't be checked. The lookup setting says this too.
+- Old block removal: the window said "do not delete" blocks are removed too;
+  they are kept, and so are blocks tried recently.
+- The weekly summary's provider counts showed the provider-ban heading instead
+  of "+N blocks not from CSF Auto-Group" (one message name was used twice).
+- Several texts still said a watched block becomes permanent "if it comes back"
+  or "on the next violation"; they now give the real condition (the temp
+  threshold reached at the same time, or the block threshold in permanent
+  singles), and say that blocks whose ban was removed outside the plugin are
+  watched too.
+- Allowing an IP for a limited time no longer says its permanent ban is
+  deleted: only an allow with no end does that.
+- Texts no longer say CSF is reloaded where it is not: removing a temp ban,
+  excluding an address from the allowed services (LF_IPSET on), saving settings
+  that don't change the provider ban.
+- Pausing: the texts list everything that is removed (provider and
+  rented-server bans, the block counter, the ban guard) and that no
+  notifications or weekly summary go out.
+- Port list limits: the error said "at most 15" for provider and rented-server
+  ports, which accept 50; the per-list rule has its own message (ranges with a
+  dash, `/udp`, at most 15).
+- Notification channels: firewall and list problems go by email once a day
+  while they last and to Slack once when they start and once when resolved;
+  run notices also cover old-block removal and lists that can't be downloaded.
+- Smaller corrections: settings paths in emails, the English order of numbers
+  in two log lines, rented-server texts that assumed "selected ports" for every
+  list, the crawl criterion ("10 or more" IPs), the owner and Imunify360 refresh
+  texts, Needs review drop dates (the latest date; a row drops earlier when it
+  no longer applies), open services counting IPs, suspicious ranges counted with
+  networks in the summary filters, the `LF_SELECT` / `IGNORE_ALLOW` notes.
+- A cron line that runs every minute (`*`) or at listed minutes (`0,30`) was
+  read as "runs are not scheduled" or as hourly; the run interval is now read
+  from both forms.
+- Unused panel texts were removed.
+
 ## 1.15.92 — 2026-11-11
 
 - The texts about watched blocks say what actually makes them permanent: within

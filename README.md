@@ -28,14 +28,14 @@ never auto-banned: first the range the owner announces (`/17`–`/23`), and the
 - **English / Türkçe** — the plugin, logs and emails.
 - **Works on phones** — the page adapts to small screens.
 
-**Version 1.11.0** ([changelog](CHANGELOG.md), [roadmap](ROADMAP.md)) · root-only WHM plugin on cPanel servers. On servers without
+[Changelog](CHANGELOG.md) · [roadmap](ROADMAP.md) · root-only WHM plugin on cPanel servers. On servers without
 cPanel the same engine runs from cron and the command line
 ([details](#without-cpanel)).
 
 **Terms used everywhere** (plugin, emails, log): a *single* is one banned IP, a
 *block* is a `/24` (banned automatically), an *announced range* is the `/17`–`/23`
 its owner announces on the internet, a *network* is a `/16` (ranges and networks
-are never banned, only flagged as *suspicious*), a *provider* is an ASN.
+are never banned automatically, only flagged as *suspicious*; you can ban them by hand), a *provider* is an ASN.
 
 ---
 
@@ -130,27 +130,28 @@ settings, with no prompts. `config.env` is left untouched.
 - **Colors** — one meaning, one color everywhere (badges, icons, chart): red full
   ban, violet made permanent, teal temp ban, blue partial ban, amber suspicious
   network, gray whitelist skip.
-- **Needs review** — suspicious ranges, suspicious networks and whitelist-skipped blocks from the last 7
-  days, as a table: why it was flagged (how many IPs hit which services),
+- **Needs review** — suspicious ranges, suspicious networks and whitelist-skipped blocks from the review
+  period (*Days kept in the list*, `REVIEW_DAYS`, default 7 days), as a table: why it was flagged (how many IPs hit which services),
   owner, when, and the narrowest ban that would do; clicking the IP count lists
-  every IP's hostname, owner and ban reason, with what it tried in the last
-  7 days when the logs show it: mail accounts, SSH users, FTP accounts,
+  every IP's hostname, owner and ban reason, with what it tried in the review
+  period when the logs show it: mail accounts, SSH users, FTP accounts,
   cPanel / WHM / Webmail logins, web password users, and the sites and
   addresses ModSecurity blocked (for a ModSecurity ban, only that rule's).
   Only the lines lfd itself counts are read, from the log files set in
   `csf.conf`. An lfd repeat ban (PERMBLOCK) says why it became
   permanent — how many temp bans in what time — and the service of the earlier
-  ban when lfd's log still has it. A range whose violations a provider ban
+  temp ban when the ban history still has it (or the trigger on the PERMBLOCK line). A range whose violations a provider ban
   or rented-server list already closes is left out. A network flagged on 3 or
   more separate days is marked *repeating* and moves to the top.
-  It also lists offending IPs lfd can not stop, read from the lfd logs of the last
-  7 days: an address in `csf.allow` is still banned by lfd (with CSF's default
-  `IGNORE_ALLOW = "0"`) but the ban does not work (*Ban not working*); with
-  `IGNORE_ALLOW = "1"`, or in `csf.ignore` / `csf.rignore`, lfd does not ban it
-  at all (*Ignored*; CSF refuses to ban an ignored address on its own, but a ban
-  on its block cuts it). An advanced allow line (`tcp|in|d=22|s=…`) opens one
+  It also lists offending IPs lfd can not stop, read from the lfd logs of the review
+  period (*Days kept in the list*, default 7 days): an address in `csf.allow` is still banned by lfd (with CSF's default
+  `IGNORE_ALLOW = "0"`) but the ban does not work (*Ban not working*; the same when
+  the allow came after the ban); with `IGNORE_ALLOW = "1"` lfd does not ban it
+  (*lfd ignored*); in `csf.ignore` / `csf.rignore` (or `GLOBAL_IGNORE`, `CC_IGNORE`,
+  `RELAYHOSTS`) lfd does not ban it either (*Ignored*; `csf -d` refuses only
+  addresses in `csf.ignore`, and a ban on the block cuts it). An advanced allow line (`tcp|in|d=22|s=…`) opens one
   direction only. A permanent ban blocks both directions (unless
-  `LF_BLOCKINONLY = "1"`), and so do lfd's temp bans unless `LF_SELECT` is on,
+  `LF_BLOCKINONLY = "1"`), and so do lfd's temp bans unless `LF_SELECT` is on and `LF_TRIGGER` is off,
   so the replies are dropped and the ban still works. The exceptions are a
   matching line for the other direction (`tcp|out|s=22|d=…`) and a ban that
   blocks incoming traffic only. Each row names the allow or ignore entry behind it,
@@ -158,8 +159,8 @@ settings, with no prompts. `config.env` is left untouched.
   lfd took from `CC_IGNORE`, `RELAYHOSTS` or a reverse-DNS match in
   `csf.rignore` is traced the way lfd traces it. Failed logins coming from the
   server's own address (lfd never bans those) show as *Server's IP*, with
-  the mail accounts that tried wrong passwords from inside the server when the
-  mail log shows them. *Flagged* on these rows is the first record in the
+  the accounts tried from inside the server (mail, SSH, FTP, cPanel…) when the
+  logs show them. *Flagged* on these rows is the first record in the
   review window; the note carries the last record and its time. Several
   offending IPs from one allow entry, block or network are grouped like normal bans.
   A ban on an address allowed on all ports does not work (CSF applies allows
@@ -167,18 +168,21 @@ settings, with no prompts. `config.env` is left untouched.
   counted anywhere: not toward block or network thresholds, the threshold
   preview in Settings, or the IP card's distance to the threshold.
   A partial ban whose open services keep being hit shows as *Open service*
-  (counting the violations of the last 7 days after the ban).
-  Every row says when it drops off the list by itself if nothing new comes:
-  7 days (the *Days kept in the list* setting) after its last attempt, warning
-  or violation. To silence a row before that, use Mute.
+  (counting the IPs that hit the open services after the ban, within the review period).
+  Every row says the latest date it drops off the list by itself if nothing new comes:
+  the review period (*Days kept in the list*, default 7 days) after its last attempt,
+  warning or violation. Rows are re-checked against today's data and drop earlier
+  when they no longer apply. To silence a row before that, use Mute.
 - **Active range bans** — a sortable, paged table with each block's owner,
   searchable by CIDR, AS number or organisation. Filters show their counts.
-  Blocks that became permanent on a second violation are tagged *repeat
-  offender*; temp block bans show their time left. **⋯ → IPs** lists the IPs
+  Watched blocks that reached the temp threshold again are tagged *came back,
+  permanent*; temp block bans show their time left. **⋯ → IPs** lists the IPs
   and ban reasons behind any block (from the event log). The
-  *Old* filter lists block bans older than the old-block limit (default 365
-  days), with a button to remove them all.
-- **Watched** — `/24`s that were temp-banned once. If, within the watch period,
+  *Old* filter lists automatic block bans older than the old-block limit (default 365
+  days), except ones marked `do not delete` and ones still being tried, with a button
+  to remove them all.
+- **Watched** — `/24`s that got a temp block ban, or whose permanent ban was removed
+  outside the plugin (CSF's list limit, by hand). If, within the watch period,
   as many of its IPs as the temp threshold are temp-banned at the same time (temp
   bans that come and go one by one do not add up), or the block's permanent
   singles reach the block threshold, it becomes permanent + `do not delete`. Sorted by days left; **⋯ → IPs** shows the IPs
@@ -202,8 +206,8 @@ settings, with no prompts. `config.env` is left untouched.
   network, country, provider and rented-server list, with its state, how far it
   is from its threshold and its ban button) and *Who*;
   changing a threshold shows its effect on the current entries; suspicious
-  networks show the services hit and suggest a single block when most
-  singles sit in one.
+  networks show the services hit and suggest the announced range that holds
+  most of their singles among the ranges over the suspicious-range threshold.
 - **History actions** — every row has a **⋯** menu with what can be done with
   that item *now* (ban, change, remove, mute, show in Overview, IP card), and
   the newest row of each item says its current state ("banned now", "in To
@@ -267,9 +271,10 @@ it, gets **Remove ban**.
 An IP can also be allowed from its IP card (Whitelist → **Allow…**): with no
 end (a csf.allow line, with an optional note) or for 1 hour to 7 days (CSF's
 temporary allows, both directions). The allow comes before every ban; the
-rented-server lists and the ban guard pick it up right away. CSF deletes the
-IP's permanent single ban from csf.deny when allowing it (a `do not delete` line
-stays but no longer works). **Remove allow** deletes the IP's own csf.allow
+rented-server lists and the ban guard pick it up right away. With no end, CSF
+deletes the IP's permanent single ban from csf.deny (a `do not delete` line
+stays but no longer works); a timed allow leaves csf.deny alone, so that ban
+works again when the allow ends. **Remove allow** deletes the IP's own csf.allow
 line or temporary allow; allows from included files are removed in those files.
 
 Range bans (`/24`, `/16`, announced range) can be timed too (*Everything*, 1
@@ -286,7 +291,8 @@ other ranges and port-limited rules), shows any whitelist overlap, and offers
 range (block bans, single bans, other ranges, `do not delete` ones included)
 leaves the permanent list and the temp bans leave the temp list; the window
 shows how many lines each list frees and what happens to each row. Watching
-ends for blocks inside either way; port-limited rules are left alone. The
+ends for blocks inside when covered entries are removed (with the option off it
+goes on); port-limited rules are left alone. The
 removed permanent entries are saved: when you later remove the ban, **Restore
 the N entries removed when this ban was added** puts them back exactly as they
 were (comments, dates and `do not delete` markers). Temp bans are not restored,
@@ -294,10 +300,11 @@ they would have expired anyway. The removed IPs and their ban reasons also stay
 with the new ban (**⋯ → IPs**). A range containing one of this server's own IPs
 can't be banned at all.
 
-Removing an **automatic** block ban works the same way: **Restore the N single
-bans this ban rests on** (on by default) puts the single bans it replaced back
-in the permanent list, with their original reasons, so those IPs are not fully
-unblocked with the block. Restored singles count towards the block threshold
+Removing an **automatic permanent** block ban works the same way: **Restore the N single
+bans this ban rests on** (on by default) puts the IPs it replaced back in the
+permanent list as permanent single bans dated today, with their original reasons,
+so those IPs are not fully unblocked with the block. A temp block ban is only lifted
+(`csf -tr`); the single bans inside are left as they are and there is nothing to restore. Restored singles count towards the block threshold
 like any single ban: if they meet it, the block is banned again on the next
 run (the dialog says so), otherwise when new bans complete it. IPs already banned, covered by another range ban or in the allow list are
 skipped. Old block bans removed automatically are not restored, since that
@@ -348,13 +355,13 @@ full one.
 | Change ban | change what a CSF Auto-Group ban blocks (everything / selected services / everything except) |
 | Ban anyway | ban a whitelist-skipped `/24` (overrides the whitelist) |
 | Make permanent | make a watched `/24` permanent right away |
-| Stop watching | forget a watched `/24` (next violation counts as the first) |
+| Stop watching | forget a watched `/24` (it is then treated like any unwatched block) |
 | Restart watch | start a watched `/24`'s watch period again from today (**⋯** in Watched and the IP card) |
 | Remove | lift a block ban (`do not delete` blocks too; `csf.deny` is backed up first) |
 | Remove old ones | on the *Old* filter: remove every block ban older than the old-block limit |
 | Mute | hide an item from review for 7/30/90 days or indefinitely (its emails, Slack messages and History records stop too, also for addresses inside a muted range), from a Needs review row's **⋯** or the IP card; *Muted* and the IP card show who muted it and when; change the duration or unmute under *Muted*, unmute from the IP card too. Muting does not touch bans or lfd; "ignore" in the panel only ever means CSF's own ignore (csf.ignore, IGNORE_ALLOW) |
 | IPs | a block's IPs and ban reasons, as recorded in the event log |
-| Dry run | show what a run would do; changes nothing, sends nothing |
+| Dry run | show the ban and notification decisions a run would make; changes nothing, sends nothing (list refreshes and Needs review records are skipped) |
 | Run now | run immediately instead of waiting for cron |
 
 Manual actions are logged as `MANUAL (user): …` and appear on the History tab.
@@ -395,12 +402,15 @@ its own:
 - **Notifications** — an *Events and channels* table: five kinds of event
   (firewall problem, list filling up, run notices, allowed-IP violations and
   open services, weekly summary) × two channels (email, Slack), each cell on
-  or off. Run notices are the bans, suspicious networks and skips; the
+  or off. Run notices are the bans, suspicious ranges and networks, skips,
+  old-block removal and lists that can't be downloaded; the
   allowed-IP violation and open-service records are the allowed / ignored /
   server-IP and open-service rows of *Needs review*, sent once per IP or
   range per day and never for what you muted. Both go by email at the end
-  of the run and on Slack collected into at most one message per hour;
-  firewall and list problems go right away. The email address comes from WHM's Basic WebHost
+  of the run and on Slack collected into at most one message per
+  `SLACK_BATCH_MIN` minutes (default 60; a list that can't be downloaded goes
+  right away); firewall and list problems go to Slack right away (once when
+  they start and once when resolved) and by email once a day while they last. The email address comes from WHM's Basic WebHost
   Manager Setup (or any address you type); the Slack address is the one set
   there, read at send time and never stored by the plugin. The plugin sends
   the HTML emails and Slack messages itself, so nothing arrives twice. *Send
@@ -418,7 +428,8 @@ its own:
   first run after it downloads them, so that run takes longer); how often the
   rented-server and allowed-service lists are downloaded again and after how
   many failed days it is reported; how old CSF's ASN data
-  may get; how often Imunify360's list is read (default 60 minutes). The
+  may get; how often Imunify360's lists (block list and whitelist) are read
+  (default 60 minutes). The
   Providers cards link here.
 - **Server** — version and update, CSF's list limits (read-only, with how full
   each list is), a **Server requirements** card listing the tools CSF
@@ -446,11 +457,11 @@ block that comes back turns into a permanent one.
 | Trigger | Action |
 |--------|--------|
 | `/24` with **≥3** permanent single bans | permanently ban the `/24`, remove the singles |
-| `/24` with **≥5** permanent singles | ban `/24` + `do not delete` |
-| announced range (`/17`–`/23`, from the IP lookup) with **≥4** singles across **≥2** `/24`s (permanent and temp counted together, each IP once) | flag as suspicious range by email, suggest banning that range, no auto-ban; reported again only when a new IP comes in (at most once a day). With a partial ban on the range, only bans after it count |
+| `/24` with **≥5** permanent singles when it is banned (or a watched `/24`) | ban `/24` + `do not delete` |
+| announced range (`/17`–`/23`, from the owner cache) with **≥4** singles across **≥2** `/24`s (permanent and temp counted together, each IP once) | flag as suspicious range by email, suggest banning that range, no auto-ban; reported again only when a new IP comes in (at most once a day). With a partial ban on the range, only bans after it count |
 | `/16` with **≥5** singles of the same owner across **≥2** sub-units (announced ranges; a `/24` when the range is unknown, `/24` or `/16` and wider; banned blocks count as sub-units, their singles do not) | flag as suspicious network by email, no auto-ban, same repeat rules. Singles that all sit in one announced range report that range instead; bans of different owners in the same `/16` are not added together |
 | `/24` with **≥3** temp bans at the same time (first time) | temp-ban the `/24` for 12h, watch it |
-| same `/24` seen again (temp bans or permanent singles while watched) | permanent ban + `do not delete` |
+| watched `/24` with **≥3** temp bans at the same time again, or **≥3** permanent singles | permanent ban + `do not delete` |
 | plugin's block ban left `csf.deny` without the plugin (CSF drops the oldest unmarked lines when `DENY_IP_LIMIT` is reached) | watch the `/24`, alert by email and in History |
 | deny list **≥80%** of its limit | alert: email once a day; Slack once when it starts and once when resolved |
 | CSF disabled / in testing mode / rules not loaded, or LFD not running | alert: email once a day; Slack once when it starts and once when resolved |
@@ -463,7 +474,8 @@ do not count toward the block (`/24`) and network (`/16`) thresholds or the
 provider ranking, and when the block is banned they are removed with the
 others. Lines without a date count. Temp singles count for as long as each ban
 lasts: every run looks at the temp bans since the previous run and takes the
-largest number in a block that were banned at the same moment. So the count
+largest number in a block that were banned at the same moment (a temp ban lifted
+before it expires counts only until the run before its removal). So the count
 does not depend on how often the run starts, and each ban counts for the time
 lfd gave it, whatever `LF_TRIGGER_PERM` / `LF_*_PERM` / `CT_BLOCK_TIME` say on
 that server. The first run after installing or updating starts counting from
@@ -482,7 +494,7 @@ card's *Ban history* and the range card's IP table all read it. The first run
 fills it from lfd's log archives.
 
 Temp bans already covered by a permanent block are cleared, watch records expire
-after 180 days (configurable), and the log is capped. Singles marked
+after the watch period (`SAYAC_RETENTION_DAYS`, default 180 days), and the log is capped. Singles marked
 `do not delete` are never removed. A `/24` already covered by a broader block in
 `csf.deny` (a `/22`, `/16`, …) is left alone. Folding singles into ranges also
 keeps `csf.deny` from overflowing its line limit.
@@ -507,7 +519,9 @@ The plain-text part looks like this:
 
 - **Owner** — ASN, organisation and country, from
   [Team Cymru's](https://www.team-cymru.com/ip-asn-mapping) free DNS service (no
-  account or API key). Cached for 30 days.
+  account or API key). Cached for `OWNER_TTL_DAYS` (default 30 days); after that a
+  run looks it up again (a limited number of blocks per run) and the old info is
+  used until then.
 - **Hostname** — each IP's reverse DNS.
 - **Reason** — why LFD banned it, from the ban's own comment. ModSecurity bans
   show the rule's message (e.g. `ModSecurity 1302: WP LOGIN VIEW RATE LIMIT…`),
@@ -515,7 +529,10 @@ The plain-text part looks like this:
   named in the ModSecurity log when that isn't available.
 
 Lookups are plain DNS queries (`dig` or `host`) with a short timeout. Set
-`LOOKUP=0` to turn them off. Alert emails end with a link to the plugin
+`LOOKUP=0` to turn them off: cached owners are still used, new blocks get none
+(suspicious range and network counts go by owner and announced range), and
+`CC_IGNORE`, `CC_ALLOW` and `csf.rignore` can't be checked, so blocks they would
+protect are banned too. Alert emails end with a link to the plugin
 (`https://server:2087/ → Plugins → CSF Auto-Group`).
 
 ### Whitelists
@@ -532,7 +549,7 @@ every list CSF uses to say "don't block this". If **any** entry overlaps the
 | Server's own IPs | a `/24` containing one of this server's addresses |
 | `CC_IGNORE`, `CC_ALLOW` in `csf.conf` | the block's country code or `ASnnnn` |
 | `csf.rignore` | a banned IP whose reverse DNS matches (forward-confirmed, like LFD) |
-| Imunify360 whitelist (only with Imunify360) | the server's local whitelist: manual entries and search engine bots Imunify whitelisted; expired entries are ignored, refreshed hourly |
+| Imunify360 whitelist (only with Imunify360) | the server's local whitelist: manual entries and search engine bots Imunify whitelisted; expired entries are ignored, refreshed every `IMUNIFY_REFRESH_MIN` minutes (default 60) |
 
 This matters most for `csf.ignore`: CSF lets `csf.allow` addresses through even
 inside a banned range, but `csf.ignore` only stops LFD, so a `/24` ban would
@@ -709,7 +726,8 @@ restoring `config.env` is enough.
   (lfd fills the address sets); the screen shows how many ranges are loaded.
   Turning it off removes only what the plugin added.
 - **Needs review** leaves out a suspicious network when every offending IP is
-  in a banned provider and the ban covers the service hit (a Web-only ban
+  covered by a wider ban (a banned provider, a country ban in CSF or an active
+  rented-server list) and that ban covers the service hit (a Web-only ban
   covers web violations, not SSH ones); no warning is sent for it.
 - Block bans already inside a banned provider stay in `csf.deny`; they are
   marked *inside a provider ban* (checked against the ranges CSF loaded) and
@@ -719,8 +737,9 @@ restoring `config.env` is enough.
 - **CSF's ASN data:** lfd downloads `/var/lib/csf/Geo/ip2asn-combined.tsv` only
   when it is missing, so the addresses go stale; the plugin has lfd download it
   again when it is older than the period set in the card (default 25 days),
-  checked on every run, so it is refreshed on the first run after the period is
-  up.
+  checked on every run while CSF has a provider ban, so it is refreshed on the first
+  run after the period is up (lfd is restarted for it; if lfd has not downloaded it
+  within 12 hours, the old file is put back and it is tried again 12 hours later).
 - A provider ban set up by hand in CSF is adopted the first time.
 - This server's own provider is never banned.
 
@@ -736,7 +755,7 @@ first, so they pass country and provider bans, on every port. Lists are
 downloaded again as often as set under **Refresh** in the card (default every
 day, in the first run after the refresh hour, 04:00 by default); a list that fails to download, or returns far fewer
 addresses than before, keeps its previous version; ranges wider than /16 are
-refused. Yandex and Facebook don't publish address lists.
+refused (Microsoft 365: up to /12). Yandex and Facebook don't publish address lists.
 
 Google and OpenAI publish several lists, one per kind of visitor; each shows as
 a chip on its box. Google: crawlers
@@ -762,8 +781,8 @@ works by hand (`--check` shows what would change, `--remove` takes it out).
 rent out to anyone (virtual servers); the Providers tab can block those:
 Google Cloud, AWS (EC2), Azure, Oracle Cloud, DigitalOcean, Linode and Vultr.
 **What to block** is set per box with the same picker as a manual range ban:
-*Everything*, *Selected services* (web, SSH, FTP, cPanel, incoming mail, mail
-client, DNS, other ports) or *Everything except* the services you keep open
+*Everything*, *Selected services* (web, SSH, FTP, cPanel, mail sending (SMTP), mail
+reading (IMAP/POP), DNS, other ports) or *Everything except* the services you keep open
 (for example a list where only port 80 should stay reachable). The service
 chips show how many offending IPs from that list hit each service. Only new
 incoming connections are dropped in every mode, so connections this server

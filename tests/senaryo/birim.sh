@@ -137,6 +137,22 @@ for x in "$L15"$'\n'"$L10" "$L10"$'\n'"$L15" "$L10"; do
     if [ "$REPLY" = "$w" ]; then echo "  ✓ cymru_line: $(printf '%s' "$x" | grep -o '/[0-9]*' | tr '\n' ' ')→ $(grep -o '[0-9.]*/[0-9]*' <<< "$REPLY")"
     else F=$((F + 1)); echo "  ✗ cymru_line: $(printf '%s' "$x" | tr '\n' ' ') → $REPLY (beklenen $w)"; fi
 done
+# cron dakika alanı → tur aralığı (saniye): */N, tek dakika, * (her dakika), dakika listesi (en kısa ara); okunamayan 0.
+# 1.15.93 öncesi "*" ve "0,30" yanlış okunuyordu (0 → "turlar zamanlanmamış", 3600 → gecikme eşiği yanlış).
+eval "$(awk '/^cron_interval\(\) \{/{f=1} f{print} f && /^}$/{exit}' "$REPO/csf_autogroup.sh")"
+while read -r c w; do
+    [ -n "$c" ] || continue
+    N=$((N + 1)); g=$(cron_interval "$c")
+    if [ "$g" = "$w" ]; then echo "  ✓ cron_interval $c → $g"; else F=$((F + 1)); echo "  ✗ cron_interval $c → $g (beklenen $w)"; fi
+done <<< '*/15 900
+7 3600
+* 60
+0,30 1800
+0,15,30,45 900
+5,50 900
+08,09 60
+0-30/5 0
+@hourly 0'
 # mangle PREROUTING sırası (sondaki boşluklu iptables çıktısı, önce ekle sonra sil): ayrı betik, taklit iptables
 N=$((N + 1)); if ms=$(bash "$H/mangle-sira.sh" 2>&1); then echo "  ✓ ${ms##*$'\n'}"; else F=$((F + 1)); printf '%s\n' "$ms" | grep '✗'; fi
 echo "Birim: $N durum, $F beklenmeyen"; [ "$F" -eq 0 ]

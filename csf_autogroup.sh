@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.92"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.93"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -116,7 +116,7 @@ EVENTS_FILE="${EVENTS_FILE:-$(dirname "$SAYAC_FILE")/events.jsonl}"   # WHM ekle
 # Olay kaydının saklama süresi (gün): banlar, uyarılar, elle işlemler ve ayar değişiklikleri EVENTS_DAYS, tur kayıtları RUN_DAYS.
 # Önce satır sayısıyla tutuluyordu (5000 olay, 1000 tur): tur sıklığı değişince kapsadığı süre de değişiyordu (30 dakikada
 # 1000 tur ~21 gün, 15 dakikada ~10 gün) ve 30 günlük karşılaştırma ile haftalık özetin tur sayımı eksik kalıyordu.
-# RUN_DAYS en az 31: özet kartlarının 30 gün önceyle karşılaştırması tur kayıtlarından okunur.
+# RUN_DAYS en az 31: 30 günlük grafik ve haftalık özetin tur sayımı tur kayıtlarından okunur (özet kartları 7 gün önceyle karşılaştırır).
 EVENTS_DAYS="${EVENTS_DAYS:-180}"
 RUN_DAYS="${RUN_DAYS:-31}"
 IGNORE_FILE="${IGNORE_FILE:-$(dirname "$SAYAC_FILE")/ignored}"       # "yoksay" denen /16 ve /24'ler
@@ -290,12 +290,12 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_LV_NET="ağ"
   M_WARNPFX="ŞÜPHELİ ARALIK: %s - %s IP (%s kalıcı, %s geçici), %s farklı blok - elle bakın"
   M_WARNPFX_B="%s -> %s IP (%s kalıcı, %s geçici), %s farklı bloktan"
-  M_WARN16_APX="    Tekillerin çoğu duyurulan %s aralığında (şüpheli aralık); /16 yerine o aralığı banlamak yetebilir."
+  M_WARN16_APX="    Tekillerin %s / %s'si duyurulan %s aralığında (şüpheli aralık); /16 yerine o aralığı banlamak yetebilir."
   M_MAILPFX_SUBJ="%s şüpheli aralık"
   M_MAILPFX_BODY="Aşağıdaki duyurulan aralıklarda (sahibinin internete duyurduğu /17–/23) birçok bloktan tekil ban (kalıcı ve geçici) birikti.\nAralık banlanmadı; elle bakmanız önerilir (panelde: Duyurulan aralığı banla):"
   M_AVIOL="İzinli IP'den ihlal (Geçmiş'e yazıldı): %s → %s, son 24 saatte %s kez"
-  M_POPEN="Açık servis (Geçmiş'e yazıldı): %s kısmi banından sonra açık kalan servislere %s ihlal"
-  M_AVIOL_SUBJ="%s izinli IP'den ihlal"; M_AVIOL_BODY="lfd kuralına takılan ama banlanmayan IP'ler (izinli, yoksayılan ya da sunucunun kendi adresi); IP başına günde bir kez:"
+  M_POPEN="Açık servis (Geçmiş'e yazıldı): %s kısmi banından sonra açık kalan servislere %s IP ihlal etti"
+  M_AVIOL_SUBJ="%s izinli IP'den ihlal"; M_AVIOL_BODY="lfd kuralına takılan ama banlanmayan ya da banı işlemeyen IP'ler (izinli, yoksayılan ya da sunucunun kendi adresi); IP başına günde bir kez:"
   M_AV_N="%s kez"; M_AV_SRC="kayıt: %s"; M_AV_LAST="son: %s (%s)"
   # günlüklerde denenenler (acct_text; panelde ac_*)
   M_ACCT_mail="denenen posta hesapları: %s"; M_ACCT_ssh="denenen SSH kullanıcıları: %s"; M_ACCT_ftp="denenen FTP hesapları: %s"
@@ -306,8 +306,8 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_SVCN_web="Web"; M_SVCN_ssh="SSH"; M_SVCN_ftp="FTP"; M_SVCN_cp="cPanel · WHM · Webmail"; M_SVCN_min="Gelen posta"; M_SVCN_mout="Giden posta"; M_SVCN_wout="Giden web"
   M_SVCN_smtp="Posta gönderme (SMTP)"; M_SVCN_mread="Posta okuma (IMAP/POP)"; M_SVCN_sync="E-posta istemcisi"; M_SVCN_dns="DNS"; M_SVCN_scan="port taraması"; M_SVCN_repeat="tekrar banlanan"; M_SVCN_other="diğer"; M_SVCN_norec="sebebi kayıtlı değil"
   M_AVK_b="ban işlemiyor"; M_AVK_i="lfd yoksaydı"; M_AVK_y="yoksayılıyor"; M_AVK_s="sunucu IP'si"
-  M_POPEN_SUBJ="%s açık servis"; M_POPEN_BODY="Kısmi banın açık bıraktığı servislere eşik kadar ihlal geldi; banı değiştirip onları da kapatabilirsiniz:"; M_POPEN_L="kapalı: %s · açık servislere %s ihlal"
-  M_DG_RV="Kontrol edilecekler (7 gün): %s izinli IP'den ihlal kaydı · %s açık servis kaydı"
+  M_POPEN_SUBJ="%s açık servis"; M_POPEN_BODY="Kısmi banın açık bıraktığı servislere eşik kadar ihlal geldi; banı değiştirip onları da kapatabilirsiniz:"; M_POPEN_L="kapalı: %s · açık servislere %s IP ihlal etti"
+  M_DG_RV="Son 7 günün kontrol kayıtları: %s izinli IP'den ihlal kaydı · %s açık servis kaydı"
   M_MAIL16_BODY="Aşağıdaki ağlarda (/16) birçok bloktan tekil ban (kalıcı ve geçici) birikti. Ağ banlanmadı;\nelle bakmanız önerilir:"
   M_MAIL16_SUBJ="%s şüpheli ağ"
   M_TCLEAN="Temizlendi: %s (kalıcı ban kapsamında)"
@@ -323,9 +323,9 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_T24_DONE="Geçici blok turu bitti. %s yeni geçici blok banı, %s kalıcıya alındı."
   M_MAILT24_BODY="Aşağıdaki bloklar (/24) 12 saatliğine geçici banlandı:"
   M_MAILT24_SUBJ="%s geçici blok banı"
-  M_MAILT24P_BODY="Aşağıdaki bloklar (/24) daha önce geçici banlanmıştı; tekrar geldikleri için kalıcı ve silinmez (do not delete) olarak banlandı:"
+  M_MAILT24P_BODY="Aşağıdaki bloklar (/24) izleniyordu ve yine geçici eşik kadar IP'si aynı anda geçici banlandı; kalıcı ve silinmez (do not delete) olarak banlandı:"
   M_MAILT24P_SUBJ="%s blok kalıcıya alındı"
-  M_PROV16="%s: ihlal eden IP'lerin hepsi sağlayıcı banıyla zaten kapalı (%s), uyarı atlandı"
+  M_PROV16="%s: ihlal eden IP'lerin hepsi daha geniş bir banla (sağlayıcı, ülke ya da kiralık liste) zaten kapalı (%s), uyarı atlandı"
   M_TSKIP16="ATLANDI şüpheli %s: %s zaten kalıcı banlı"
   M_WL_LOADED="Beyaz liste yüklendi: %s aralık, %s rignore alan adı"
   M_WL_SELF="sunucu IP'si"; M_FOREVER="süresiz"
@@ -344,11 +344,11 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_MAIL_PERMFULL_SUBJ="kalıcı liste %%%s dolu"
   M_MAIL_PERMFULL_BODY="CSF'in kalıcı ban listesi (csf.deny) dolmak üzere. Dolunca CSF en eski banları kendisi siler; silinmez (do not delete) işareti olmayan blok banları da gidebilir. Eski banları kaldırın ya da DENY_IP_LIMIT'i yükseltin."
   M_MAIL_TEMPFULL_SUBJ="geçici liste %%%s dolu"
-  M_MAIL_TEMPFULL_BODY="CSF'in geçici ban listesi dolmak üzere. Dolunca yeni geçici banlar eklenemeyebilir. Geçici banların süresinin dolmasını bekleyin ya da DENY_TEMP_IP_LIMIT'i yükseltin."
+  M_MAIL_TEMPFULL_BODY="CSF'in geçici ban listesi dolmak üzere. Sınır aşılınca lfd, sınırın üstündeki kadar en eski geçici banı süresi dolmadan kaldırır. Geçici banların süresinin dolmasını bekleyin ya da DENY_TEMP_IP_LIMIT'i yükseltin."
   M_MAIL_DETAIL="Detay için: tail -100 %s"
   M_SUBJ_PREFIX="CSF Auto-Group: "
   M_EXP_SUBJ="%s eski blok banı kaldırıldı"
-  M_EXP_BODY="Aşağıdaki blok banları %s günden eski olduğu için kaldırıldı (Ayarlar → Saklama):"
+  M_EXP_BODY="Aşağıdaki blok banları %s günden eski olduğu için kaldırıldı (Ayarlar → Ban kuralları → Eski banlar):"
   M_EXP_LINE="%s -> %s gün önce eklenmişti"
   M_EXP_LOG="ESKİ BLOK KALDIRILDI: %s (%s gün)"
   M_EXP_FAIL="HATA eski blok kaldırılamadı: %s"
@@ -425,16 +425,16 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_SVC_FAIL_BODY="Şu izinli servis listeleri uyarı süresinden uzun süredir indirilemiyor: %s. Eski listeler kullanılıyor; adresi Sağlayıcılar → İzinli servisler → Kaynak adresleri'nden düzeltebilirsiniz."
   M_SVC_FAIL_OK="İzinli servis listeleri yeniden indirilebiliyor"
   M_CFG_ASN="AS ile başlayan numaralar, virgülle (en çok 50)"
-  M_CFG_PORTS="virgüllü portlar ya da aralıklar (30000:35000), en çok 15"
-  M_CFG_CLM="ad=kip:servisler:portlar (kip svc, all ya da exc; svc'de servis ya da port), en çok 100 liste"
+  M_CFG_PORTS="virgüllü portlar ya da aralıklar (30000:35000), en çok 50"
+  M_CFG_CLM="ad=kip:servisler:portlar (kip svc, all ya da exc; svc'de servis ya da port; portlar virgüllü, aralık tireyle: 8080,30000-35000,443/udp, en çok 15), en çok 100 liste"
   M_ASN_APPLIED="Sağlayıcı banı CSF'e uygulandı: %s"
   M_ASN_REMOVED="Sağlayıcı banı CSF'ten kaldırıldı: %s"
-  M_ASN_CONFLICT="Sağlayıcı banı uygulanmadı: CC_DENY_PORTS'taki %s aynı port listesini kullanıyor (TCP %s, UDP %s); değiştirmek onları da etkilerdi"
+  M_ASN_CONFLICT="Sağlayıcı banının port listesi kısmı uygulanmadı: CC_DENY_PORTS'taki %s aynı port listesini kullanıyor (TCP %s, UDP %s); değiştirmek onları da etkilerdi. Eklentinin önceden yazdıkları kalır, 'Her şey' seçili sağlayıcılar yine uygulanır"
   M_ASN_SELF="Sağlayıcı banı uygulanmadı: %s bu sunucunun kendi sağlayıcısı"
   M_C24_CLOSED="%s.0/24 banlanmadı: %s tekilin yalnız %s tanesi açık bir servise; ötekilerin servisi zaten kapalı (sağlayıcı banı, kiralık liste, ülke ya da kısmi ban)"
   M_ASN_NOSELF="Sağlayıcı banı uygulanmadı: %s — sunucunun kendi sağlayıcısı öğrenilemedi (DNS ve CSF'in ASN verisi yok); kendi sağlayıcısını banlamamak için yeni sağlayıcı eklenmiyor"
   M_SVC_REMOVED="İzinli servisler kapatıldı; csf.allow'daki Include satırı ve liste kaldırıldı"
-  M_PAUSED="CSF Auto-Group duraklatıldı: yeni ban konmuyor; sağlayıcı banı ve kiralık sunucu banı CSF'te kaldırıldı (Ayarlar → Zamanlama'dan açılır)"
+  M_PAUSED="CSF Auto-Group duraklatıldı: yeni ban ve bildirim yok; sağlayıcı banı, kiralık sunucu banı, blok sayacı ve ban koruması kaldırıldı (Ayarlar → Genel'den açılır)"
   M_CLOUD_REMOVED="Kiralık sunucu banı kapatıldı; kural, adres kümesi ve csfpost.sh satırı kaldırıldı"
   M_CLOUD_FAIL_SUBJ="kiralık sunucu listesi indirilemiyor (%s)"
   M_CLOUD_FAIL_BODY="Şu kiralık sunucu listeleri uyarı süresinden uzun süredir indirilemiyor: %s. Eski listeler kullanılıyor; adresi Sağlayıcılar → Kiralık sunucular → Adres düğmesinden düzeltebilirsiniz."
@@ -445,10 +445,11 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_CL_NONE="hiçbir şey"
   M_ASN_REFRESH="CSF'in ASN verisi %s günlüktü; yenilensin diye lfd yeniden başlatıldı (ASN banı: %s)"
   M_ASN_REFRESH_FAIL="CSF'in ASN verisi eski (%s gün) ama lfd yeniden başlatılamadı; ASN banı eski adreslerle çalışıyor"
+  M_ASN_REFRESH_NODL="lfd CSF'in ASN verisini 12 saatte indirmedi; eski veri geri kondu, 12 saat sonra yeniden denenecek"
   M_ORPHANS="Banı CSF ekranından kaldırılmış %s eski kayıt temizlendi (kurtarma kopyası / izin satırı)"
   M_LIM_GONE="Blok banı eklenti dışında kaldırıldı (CSF liste sınırı ya da elle), izlemeye alındı: %s"
   M_LIM_SUBJ="CSF %s blok banını sildi — liste sınırı"
-  M_LIM_BODY="Bu blok banları csf.deny'den eklenti dışında kalktı: CSF'in liste sınırı (DENY_IP_LIMIT = %s; işaretsiz en eski satırlar silinir) ya da elle kaldırma. Bloklar izlemeye alındı; yeniden ihlal ederlerse silinmez kalıcı ban konur."
+  M_LIM_BODY="Bu blok banları csf.deny'den eklenti dışında kalktı: CSF'in liste sınırı (DENY_IP_LIMIT = %s; işaretsiz en eski satırlar silinir) ya da elle kaldırma. Bloklar izlemeye alındı; izleme süresinde geçici eşik kadar IP'si aynı anda geçici banlanırsa ya da kalıcı ban eşiği kadar kalıcı tekil birikirse silinmez kalıcı ban konur."
   M_A_TIME="Elle işlem süresi (%s): %s sn"
   M_PART_NOTE="   Not: bu ağda kısmi ban var (%s · %s); yalnız seçilen servisler kapalı, diğer portlardan gelenler sürebilir"
   M_PART_AFTER="   Yalnız kısmi bandan (%s) sonra gelen banlar sayıldı."
@@ -522,10 +523,10 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_H_PBT="Sağlayıcı banı"; M_H_PBS="Bu sağlayıcılar CSF'te banlı; sıralamalarda gösterilmez"; M_H_PBK="Kapalı"; M_H_PBR="Aralık"
   M_H_PBALL="her şey"; M_H_PBNL="CSF henüz yüklemedi"
   M_H_SVC="İzinli servisler: csf.allow'da %s adres · son indirme %s"; M_H_SVCF="uyarı süresinden uzun süredir indirilemiyor: %s"
-  M_DG_PB="Sağlayıcı banı (sıralamalarda gösterilmez):"; M_DG_PBL="   %-9s %-44s %s"
+  M_DG_PBH="Sağlayıcı banı (sıralamalarda gösterilmez):"; M_DG_PBL="   %-9s %-44s %s"
   M_H_PROV="Sağlayıcı"; M_H_BLK="Blok"; M_H_SGL="Tekil"; M_H_OTH="CSF Auto-Group dışı"; M_H_OTHV="+%s blok"
   M_H_IMT="Imunify360'ın en çok engellediği sağlayıcılar"; M_H_IMS="Sunucunun kendi kara listesi · %s IP"; M_H_IPS="IP"; M_H_RSN="Sebep"
-  M_H_EXPT="İzlemesi bitecek bloklar"; M_H_EXPS="14 gün içinde; tekrar gelirlerse kalıcı olurlar"; M_H_DAYS="%s gün"; M_H_NONE_S="Yok"
+  M_H_EXPT="İzlemesi bitecek bloklar"; M_H_EXPS="14 gün içinde; o zamana kadar geçici eşik aynı anda yeniden dolarsa ya da blok eşiği kadar kalıcı tekil birikirse kalıcı olurlar"; M_H_DAYS="%s gün"; M_H_NONE_S="Yok"
   M_H_RUNS="Tur sağlığı"; M_H_RUNSS="son 7 gün"; M_H_RUNSV="%s tur · beklenen ~%s"
   M_H_GLOSS="tekil = tek IP banı · blok = /24 · ağ = /16 · do not delete = CSF liste dolsa da silmez"
   M_SQ_SUBJ="%s tur bildirimi (son %s dk)"
@@ -574,12 +575,12 @@ else
   M_LV_NET="network"
   M_WARNPFX="SUSPICIOUS RANGE: %s - %s IPs (%s permanent, %s temp), %s distinct blocks - review manually"
   M_WARNPFX_B="%s -> %s IPs (%s permanent, %s temp) across %s distinct blocks"
-  M_WARN16_APX="    Most singles are in the announced range %s (suspicious range); banning it instead of the /16 may be enough."
+  M_WARN16_APX="    %s of %s singles are in the announced range %s (suspicious range); banning it instead of the /16 may be enough."
   M_MAILPFX_SUBJ="%s suspicious range(s)"
   M_MAILPFX_BODY="Single bans (permanent and temp) have piled up across several blocks of the following announced ranges (the /17-/23 its owner announces on the internet).\nThe range was not banned; manual review recommended (in the panel: Ban announced range):"
   M_AVIOL="Violation from allowed IP (recorded in History): %s → %s, %s times in the last 24 hours"
-  M_POPEN="Open service (recorded in History): %s violations on the services the partial ban on %s leaves open"
-  M_AVIOL_SUBJ="%s violations from allowed IPs"; M_AVIOL_BODY="IPs that tripped an lfd rule but were not banned (allowed, ignored or the server's own address); once per IP per day:"
+  M_POPEN="Open service (recorded in History): after the partial ban on %s, %s IPs hit the services it leaves open"
+  M_AVIOL_SUBJ="%s violations from allowed IPs"; M_AVIOL_BODY="IPs that tripped an lfd rule but were not banned or whose ban does not work (allowed, ignored or the server's own address); once per IP per day:"
   M_AV_N="%s times"; M_AV_SRC="entry: %s"; M_AV_LAST="last: %s (%s)"
   M_ACCT_mail="mail accounts tried: %s"; M_ACCT_ssh="SSH users tried: %s"; M_ACCT_ftp="FTP accounts tried: %s"
   M_ACCT_cp="cPanel/WHM logins tried: %s"; M_ACCT_htp="web password users tried: %s"; M_ACCT_web="targets: %s"; M_ACCT_N="failed"; M_ACCT_NW="blocked"
@@ -588,8 +589,8 @@ else
   M_SVCN_web="Web"; M_SVCN_ssh="SSH"; M_SVCN_ftp="FTP"; M_SVCN_cp="cPanel · WHM · Webmail"; M_SVCN_min="Incoming mail"; M_SVCN_mout="Outgoing mail"; M_SVCN_wout="Outgoing web"
   M_SVCN_smtp="Mail sending (SMTP)"; M_SVCN_mread="Mail reading (IMAP/POP)"; M_SVCN_sync="Mail client"; M_SVCN_dns="DNS"; M_SVCN_scan="port scan"; M_SVCN_repeat="banned repeatedly"; M_SVCN_other="other"; M_SVCN_norec="reason not recorded"
   M_AVK_b="ban not working"; M_AVK_i="ignored by lfd"; M_AVK_y="ignored"; M_AVK_s="server IP"
-  M_POPEN_SUBJ="%s open services"; M_POPEN_BODY="The services a partial ban leaves open took violations up to the threshold; change the ban to close them too:"; M_POPEN_L="closed: %s · %s violations on the open services"
-  M_DG_RV="Needs review (7 days): %s allowed-IP violation records · %s open-service records"
+  M_POPEN_SUBJ="%s open services"; M_POPEN_BODY="The services a partial ban leaves open took violations up to the threshold; change the ban to close them too:"; M_POPEN_L="closed: %s · %s IPs hit the open services"
+  M_DG_RV="Review records of the last 7 days: %s allowed-IP violation records · %s open-service records"
   M_MAIL16_BODY="Single bans (permanent and temp) have piled up across several blocks of the following networks (/16). The network was not banned;\nmanual review recommended:"
   M_MAIL16_SUBJ="%s suspicious network(s)"
   M_TCLEAN="Cleaned: %s (covered by a permanent ban)"
@@ -605,9 +606,9 @@ else
   M_T24_DONE="Temp block pass done. %s new temp block ban(s), %s made permanent."
   M_MAILT24_BODY="The following blocks (/24) were temp-banned for 12 hours:"
   M_MAILT24_SUBJ="%s temp block ban(s)"
-  M_MAILT24P_BODY="The following blocks (/24) had been temp-banned before and came back, so they are now permanently banned (do not delete):"
+  M_MAILT24P_BODY="The following blocks (/24) were being watched and again had as many IPs as the temp threshold temp-banned at the same time, so they are now permanently banned (do not delete):"
   M_MAILT24P_SUBJ="%s block(s) made permanent"
-  M_PROV16="%s: every offending IP is already blocked by the provider ban (%s), warning skipped"
+  M_PROV16="%s: every offending IP is already blocked by a wider ban (provider, country or rented-server list) (%s), warning skipped"
   M_TSKIP16="SKIPPED suspicious %s: %s already permanently banned"
   M_WL_LOADED="Whitelist loaded: %s ranges, %s rignore domains"
   M_WL_SELF="server IP"; M_FOREVER="indefinitely"
@@ -626,11 +627,11 @@ else
   M_MAIL_PERMFULL_SUBJ="permanent list %s%% full"
   M_MAIL_PERMFULL_BODY="CSF's permanent ban list (csf.deny) is almost full. When it is full, CSF removes the oldest bans itself; block bans without do not delete can go too. Remove old bans or raise DENY_IP_LIMIT."
   M_MAIL_TEMPFULL_SUBJ="temp list %s%% full"
-  M_MAIL_TEMPFULL_BODY="CSF's temp ban list is almost full. When it is full, new temp bans may not be added. Wait for temp bans to expire or raise DENY_TEMP_IP_LIMIT."
+  M_MAIL_TEMPFULL_BODY="CSF's temp ban list is almost full. Once it goes over the limit, lfd removes as many of the oldest temp bans as are over it, before they expire. Wait for temp bans to expire or raise DENY_TEMP_IP_LIMIT."
   M_MAIL_DETAIL="Details: tail -100 %s"
   M_SUBJ_PREFIX="CSF Auto-Group: "
   M_EXP_SUBJ="%s old block ban(s) removed"
-  M_EXP_BODY="The following block bans were removed because they are older than %s days (Settings → Retention):"
+  M_EXP_BODY="The following block bans were removed because they are older than %s days (Settings → Ban rules → Old bans):"
   M_EXP_LINE="%s -> added %s days ago"
   M_EXP_LOG="OLD BLOCK REMOVED: %s (%s days)"
   M_EXP_FAIL="ERROR could not remove old block: %s"
@@ -707,16 +708,16 @@ else
   M_SVC_FAIL_BODY="These allowed service lists haven't downloaded for longer than the warning period: %s. The old lists are still used; fix the address under Providers → Allowed services → Source addresses."
   M_SVC_FAIL_OK="Allowed service lists download again"
   M_CFG_ASN="numbers starting with AS, comma separated (at most 50)"
-  M_CFG_PORTS="comma separated ports or ranges (30000:35000), at most 15"
-  M_CFG_CLM="name=mode:services:ports (mode svc, all or exc; svc needs a service or a port), at most 100 lists"
+  M_CFG_PORTS="comma separated ports or ranges (30000:35000), at most 50"
+  M_CFG_CLM="name=mode:services:ports (mode svc, all or exc; svc needs a service or a port; ports comma separated, ranges with a dash: 8080,30000-35000,443/udp, at most 15), at most 100 lists"
   M_ASN_APPLIED="Provider ban applied to CSF: %s"
   M_ASN_REMOVED="Provider ban removed from CSF: %s"
-  M_ASN_CONFLICT="Provider ban not applied: %s in CC_DENY_PORTS share the port list (TCP %s, UDP %s); changing it would affect them too"
+  M_ASN_CONFLICT="Provider ban port-list part not applied: %s in CC_DENY_PORTS share the port list (TCP %s, UDP %s); changing it would affect them too. What the plugin wrote earlier stays, and providers set to 'Everything' are still applied"
   M_ASN_SELF="Provider ban not applied: %s is this server's own provider"
-  M_C24_CLOSED="%s.0/24 not banned: only %s of %s singles hit an open service; the others' service is already closed (provider ban, rented-server list, country or partial ban)"
+  M_C24_CLOSED="%s.0/24 not banned: of %s singles only %s hit an open service; the others' service is already closed (provider ban, rented-server list, country or partial ban)"
   M_ASN_NOSELF="Provider ban not applied: %s — this server's own provider is unknown (no DNS answer, no CSF ASN data); no new provider is added so the server's own isn't banned"
   M_SVC_REMOVED="Allowed services turned off; the Include line in csf.allow and the list were removed"
-  M_PAUSED="CSF Auto-Group is paused: no new bans; the provider ban and the rented-server ban are off in CSF (turn it back on in Settings → Schedule)"
+  M_PAUSED="CSF Auto-Group is paused: no new bans or notifications; the provider ban, the rented-server ban, the block counter and the ban guard are removed (turn it back on in Settings → General)"
   M_CLOUD_REMOVED="Rented-server ban turned off; the rule, the address set and the csfpost.sh line were removed"
   M_CLOUD_FAIL_SUBJ="rented-server list can't be downloaded (%s)"
   M_CLOUD_FAIL_BODY="These rented-server lists haven't downloaded for longer than the warning period: %s. The old lists are still used; fix the address under Providers → Rented servers → the Address button."
@@ -727,10 +728,11 @@ else
   M_CL_NONE="nothing"
   M_ASN_REFRESH="CSF's ASN data was %s days old; lfd restarted to refresh it (ASN ban: %s)"
   M_ASN_REFRESH_FAIL="CSF's ASN data is old (%s days) but lfd couldn't be restarted; the ASN ban uses old addresses"
+  M_ASN_REFRESH_NODL="lfd did not download CSF's ASN data within 12 hours; the old data is back in place and it is tried again in 12 hours"
   M_ORPHANS="Cleaned up %s leftover entries of bans removed outside the plugin (restore copies / allow lines)"
   M_LIM_GONE="Block ban removed outside the plugin (CSF list limit or by hand), now watched: %s"
   M_LIM_SUBJ="CSF removed %s block ban(s) — list limit"
-  M_LIM_BODY="These block bans left csf.deny without the plugin: CSF's list limit (DENY_IP_LIMIT = %s; the oldest unmarked lines are deleted) or a manual removal. The blocks are now watched; if they violate again they get a permanent do-not-delete ban."
+  M_LIM_BODY="These block bans left csf.deny without the plugin: CSF's list limit (DENY_IP_LIMIT = %s; the oldest unmarked lines are deleted) or a manual removal. The blocks are now watched; if, within the watch period, as many of their IPs as the temp threshold are temp-banned at the same time or permanent singles reach the permanent ban threshold, they get a permanent do-not-delete ban."
   M_A_TIME="Manual action time (%s): %s s"
   M_PART_NOTE="   Note: this network has a partial ban (%s · %s); only the selected services are blocked, traffic to other ports can continue"
   M_PART_AFTER="   Only bans added after the partial ban (%s) were counted."
@@ -804,10 +806,10 @@ else
   M_H_PBT="Provider ban"; M_H_PBS="These providers are banned in CSF; the rankings leave them out"; M_H_PBK="Blocked"; M_H_PBR="Ranges"
   M_H_PBALL="everything"; M_H_PBNL="not loaded by CSF yet"
   M_H_SVC="Allowed services: %s addresses in csf.allow · last download %s"; M_H_SVCF="Not downloaded for longer than the warning period: %s"
-  M_DG_PB="Provider ban (left out of the rankings):"; M_DG_PBL="   %-9s %-44s %s"
+  M_DG_PBH="Provider ban (left out of the rankings):"; M_DG_PBL="   %-9s %-44s %s"
   M_H_PROV="Provider"; M_H_BLK="Blocks"; M_H_SGL="Singles"; M_H_OTH="Not from CSF Auto-Group"; M_H_OTHV="+%s blocks"
   M_H_IMT="Providers Imunify360 blocks most"; M_H_IMS="This server's own blacklist · %s IPs"; M_H_IPS="IPs"; M_H_RSN="Reason"
-  M_H_EXPT="Watched blocks expiring"; M_H_EXPS="within 14 days; they become permanent if they return"; M_H_DAYS="%s days"; M_H_NONE_S="None"
+  M_H_EXPT="Watched blocks expiring"; M_H_EXPS="within 14 days; they become permanent if, before then, the temp threshold is reached at the same time again or permanent singles reach the block threshold"; M_H_DAYS="%s days"; M_H_NONE_S="None"
   M_H_RUNS="Run health"; M_H_RUNSS="last 7 days"; M_H_RUNSV="%s runs · ~%s expected"
   M_H_GLOSS="single = one-IP ban · block = /24 · network = /16 · do not delete = CSF keeps it even when the list is full"
   M_SQ_SUBJ="%s run notices (last %s min)"
@@ -5806,7 +5808,7 @@ geo_refresh() {  # her tur: ASN banı varsa ve CSF'in ASN verisi (ip2asn) ayarda
     mv0=$(cat "$geo.moved" 2>/dev/null); [[ "$mv0" =~ ^[0-9]+$ ]] || mv0=0
     if [ ! -e "$geo" ] && [ -e "$geo.old" ] && [ $(( now - mv0 )) -ge 43200 ]; then
         mv -f "$geo.old" "$geo" && lfd_restart
-        echo "$now" > "$geo.tried"; log "$(m "$M_ASN_REFRESH_FAIL" "?")"
+        echo "$now" > "$geo.tried"; log "$M_ASN_REFRESH_NODL"
     fi
     [ -e "$geo" ] && rm -f "$geo.moved"
     tr0=$(cat "$geo.tried" 2>/dev/null); [[ "$tr0" =~ ^[0-9]+$ ]] && [ $(( now - tr0 )) -lt 43200 ] && return 0
@@ -6971,7 +6973,18 @@ cron_interval() { # crontab'daki dakika alanı → saniye (bilinmiyorsa 0); [ön
     local c; if [ $# -gt 0 ]; then c="$1"; else c="$(cron_now)"; fi
     case "$c" in
         "*/"*) [[ "${c#*/}" =~ ^[0-9]+$ ]] && echo $(( ${c#*/} * 60 )) || echo 0 ;;
-        [0-9]*) echo 3600 ;;
+        "*") echo 60 ;;
+        *,*)    # dakika listesi (0,15,30,45): en kısa ara, saat dönüşü dahil
+            [[ "$c" =~ ^[0-9]+(,[0-9]+)+$ ]] || { echo 0; return; }
+            local -a a; local i g m=3600
+            IFS=$'\n' read -r -d '' -a a < <(printf '%s\n' ${c//,/ } | sort -n -u; printf '\0')
+            [ "${#a[@]}" -gt 1 ] || { echo 3600; return; }
+            for (( i = 0; i < ${#a[@]}; i++ )); do
+                if [ "$i" -eq 0 ]; then g=$(( 10#${a[0]} + 60 - 10#${a[${#a[@]}-1]} )); else g=$(( 10#${a[i]} - 10#${a[i-1]} )); fi
+                [ "$g" -lt "$m" ] && m=$g
+            done
+            echo $(( m * 60 )) ;;
+        [0-9]*) [[ "$c" =~ ^[0-9]+$ ]] && echo 3600 || echo 0 ;;
         *) echo 0 ;;
     esac
 }
@@ -7075,7 +7088,7 @@ digest_build() { # → DG_SUBJ, DG_BODY
         [ -n "$cll" ] && cll=$(m "$M_DG_CLOUD" "$cll")
     fi
     if [ -n "$ASB_ORD" ] || [ -n "$svl" ] || [ -n "$cll" ]; then
-        DG_BODY+="$M_DG_PB$NL"
+        DG_BODY+="$M_DG_PBH$NL"
         for a in "${ASB_A[@]}"; do
             asn_name "AS$a"; owner="$REPLY"; asn_setn "AS$a"; b="$REPLY"
             hv="$([ "${ASB[$a]}" = all ] && echo "$M_H_PBALL" || echo "${pk:--}")"
@@ -7696,7 +7709,7 @@ level_warn() {
     else
         log "$(m "$M_WARN16" "${c%.0.0/16}" "$n" "$np" "$nt" "$ns")"
         b+="$(m "$M_WARN16_B" "${c%.0.0/16}" "$n" "$np" "$nt" "$ns")$NL"
-        [ -n "$LW_APX" ] && { b+="$(m "$M_WARN16_APX" "$LW_APX")$NL"; ex+=("apx=\"$LW_APX\""); }
+        [ -n "$LW_APX" ] && { b+="$(m "$M_WARN16_APX" "$LW_APN" "$LW_APT" "$LW_APX")$NL"; ex+=("apx=\"$LW_APX\""); }
     fi
     WL_HIT=""; wl_overlap "$lo" "$hi" && b+="$(m "$M_WL_NOTE" "$WL_HIT")$NL"
     part_note "$lo" "$hi" && b+="$(m "$M_PART_NOTE" "${REPLY%%|*}" "${REPLY#*|}")$NL"
@@ -7726,6 +7739,7 @@ for prefix in $(printf '%s\n' "${!NO_KEYS[@]}" | sort -V); do
     # tekillerin çoğu eşiği aşmış tek bir duyurulan aralıktaysa uyarıda o aralık önerilir (panel satırı ve mail aynı alanı okur)
     LW_APX=""; declare -A ap=(); for ip in ${NO_IPS[$NH_K]}; do net_unit "${ip%.*}"; [ -n "$NU_PF" ] && ap[$NU_PF]=$(( ${ap[$NU_PF]:-0} + 1 )); done
     for c in "${!ap[@]}"; do pfx_hit "$c" && { [ -z "$LW_APX" ] || [ "${ap[$c]}" -gt "${ap[$LW_APX]}" ]; } && LW_APX="$c"; done
+    LW_APN=0; [ -n "$LW_APX" ] && LW_APN="${ap[$LW_APX]}"; LW_APT=$(printf '%s\n' ${NO_IPS[$NH_K]} | grep -c .)    # mailde panelin r_apfx'iyle aynı sayı: aralıktaki / bütün tekiller
     unset ap
     if level_warn warn16 "$prefix.0.0/16" "${NO_IPS[$NH_K]}"; then warn16=$((warn16 + 1)); warn_body+="$LW_BODY"; fi
 done

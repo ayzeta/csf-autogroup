@@ -67,5 +67,8 @@ odd=$(printf '%s\n' "$defs" | awk '$1 % 2 { print $2 }')
 if [ -n "$odd" ]; then bad=$((bad + 1)); echo "  ✗ TR ve EN'de sayısı eşit olmayan motor metni:"; printf '%s\n' "$odd" | sed 's/^/      /'; fi
 wp() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi; }
 node "$(wp "$H/sozluk.js")" "$(wp "$JS")" || bad=$((bad + 1))     # her durum rozeti Terimler'de açıklanmış mı
+node "$(wp "$H/olu.js")" "$(wp "$JS")" "$(wp "$REPO")" || bad=$((bad + 1))   # sözlükte kullanılmayan anahtar yok
+node "$(wp "$H/yol.js")" "$(wp "$JS")" "$(wp "$SH")" || bad=$((bad + 1))     # "Ayarlar → …" yolları ayar ekranında var
+node "$(wp "$H/yer.js")" "$(wp "$JS")" "$(wp "$SH")" || bad=$((bad + 1))     # TR ↔ EN yer tutucuları, port sınırı metinleri
 if [ "$bad" -eq 0 ]; then echo "Terim tutarlılığı: eski ad kalmadı"; exit 0; fi
 echo "Terim tutarlılığı: $bad sorun"; exit 1

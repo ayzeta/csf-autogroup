@@ -87,6 +87,16 @@ for key in $(php -r '$s = file_get_contents($argv[1]); $i = strpos($s, "case '"'
     printf '%s\n' "$cl" | grep -qx "$key" || printf 'PANEL\t%s\t-\tapi.php kaydediyor ama motorun ayar listesinde (CFG_KEYS) yok\n' "$key" >> "$W/engine.out"
 done
 
+# "Kaydetmeden önce dene" anahtarları üç yerde aynı küme: motor CFG_TRY_KEYS (ayar listesinde olanlar), api.php dry_run'ın $try
+# listesi (listede olmayan --set sessizce düşer), panelin TRY_KEYS'i (hangi değişiklikte düğme çıkar). 1.15.92'de PERM_WINDOW_DAYS
+# panelde ve motorda vardı, api.php'de yoktu: deneme kaydedilmiş değerle koşuyordu
+sorted() { tr ' ,' '\n\n' | tr -d "'[];" | sed '/^$/d' | sort -u | paste -sd' ' -; }
+ek=$(for k in $(sed -n 's/^CFG_TRY_KEYS="\([^"]*\)".*/\1/p' "$ENG"); do sed -n 's/^CFG_KEYS="\([^"]*\)".*/ \1 /p' "$ENG" | grep -q " $k " && echo "$k"; done | sorted)
+ak=$(awk "/case 'dry_run'/{f=1} f && /\\\$try = \\[/{g=1} g{print} g && /\\];/{exit}" "$API" | sed 's/.*\$try = \[//' | grep -oE "'[A-Z0-9_]+'" | sorted)
+jk=$(grep -oE "var TRY_KEYS = \[[^]]*\]" "$REPO/whm/assets/ag.js" | grep -oE "'[A-Z0-9_]+'" | sorted)
+if [ -z "$ek" ] || [ "$ek" != "$ak" ] || [ "$ek" != "$jk" ]; then
+    printf 'TRY\t-\t-\tdeneme anahtarları farklı: motor [%s] · api.php [%s] · ag.js [%s]\n' "$ek" "$ak" "$jk" >> "$W/engine.out"
+fi
 n=$(grep -c . "$W/values.tsv"); bad=$(cat "$W/panel.out" "$W/engine.out" | grep -c .)
 if [ "$bad" -eq 0 ]; then echo "Ayar tutarlılığı: $n değerin hepsi panelden ve motordan geçiyor"; exit 0; fi
 echo "Ayar tutarlılığı: $n değerden $bad tanesi reddedildi"; cat "$W/panel.out" "$W/engine.out" | sed 's/^/  ✗ /'

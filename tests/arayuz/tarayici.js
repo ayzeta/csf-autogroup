@@ -351,6 +351,10 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
       if (!j.owners || Array.isArray(j.owners)) j.owners = {};
       (j.ignored || []).forEach(g => { const p = String(g.cidr).replace(/\/\d+$/, '').split('.').slice(0, 3).join('.');
         if (!j.owners[p] || j.owners[p][0] === '-') j.owners[p] = ['64500', 'TR', 'TEST-AS - Turk Telekomunikasyon Anonim Sirketi Uzun Bir Kurum Adi Ornegi, TR']; });
+      // geçici blok banının olay kaydı (IP'leriyle): Kaldır penceresi geri yükleme kutusunu bu kayıttan kurar. Yalnız sahip dizinine
+      // giren evx'e eklenir (Geçmiş ve sayaçlar değişmez). 1.15.92'de geçici blokta da kutu çıkıyordu, motor geçici blokta onu okumuyordu
+      j.evx = (j.evx || []).concat([{ t: j.now - 600, type: 'temp24', cidr: '203.0.113.0/24', n: 3,
+        ips: ['203.0.113.5', '203.0.113.6', '203.0.113.7'].map(ip => ({ ip: ip, why: '(sshd) Failed SSH login from ' + ip })) }]);
     }
     // gövde açıkça verilir: { response, json } birlikte verilince özgün gövde gidiyordu (enjeksiyon hiç işlemiyordu; ölçüldü)
     return route.fulfill({ status: r.status(), contentType: 'application/json', body: JSON.stringify(j) });
@@ -358,6 +362,19 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
   console.log('Arayüz');
   await page.goto(URL, { waitUntil: 'networkidle', timeout: 90000 }); await ready(page);
   check('sayfa açıldı, durum yüklendi', await page.$('.ag-head') !== null);
+  // geçici blok banını kaldırma penceresi: motor geçici blokta yalnız csf -tr yapar (geri yükleme yok, csf -r yok) → pencerede geri
+  // yükleme kutusu ve "kalıcı listeden kaldırılır" yok; aynı olay kaydıyla kalıcı blokta kutu var (karşılaştırma). Düğme sayfaya
+  // eklenip tıklanır: test verisinde geçici blok banı olmayabilir
+  for (const kd of ['temp', 'perm']) {
+    await page.evaluate(k => { const b = document.createElement('button'); b.id = 'ag-test-ub'; b.setAttribute('data-act', 'unban'); b.setAttribute('data-c', '203.0.113.0/24');
+      b.setAttribute('data-kind', k); b.setAttribute('data-dnd', '0'); b.setAttribute('data-restore', '0'); document.getElementById('ag-app').appendChild(b); }, kd);
+    await page.click('#ag-test-ub'); await page.waitForSelector('.ag-modal [data-m="ok"]', { timeout: 8000 }).catch(() => {});
+    const ub = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); return m ? { box: !!m.querySelector('#ag-restore'), txt: m.innerText } : null; });
+    if (kd === 'temp') check('geçici blok banını kaldır: geri yükleme kutusu ve "kalıcı listeden" yok', !!ub && !ub.box && !/kalıcı listeden|permanent list/.test(ub.txt), JSON.stringify(ub && { box: ub.box, txt: ub.txt.slice(0, 160) }));
+    else check('kalıcı otomatik blok banını kaldır: aynı kayıtla geri yükleme kutusu var', !!ub && ub.box, JSON.stringify(ub && { box: ub.box }));
+    await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('.ag-modal'), null, { timeout: 5000 }).catch(() => {});
+    await page.evaluate(() => { const b = document.getElementById('ag-test-ub'); if (b) b.remove(); });
+  }
   // Tur süresi ipucu: calistir.sh'nin olay kaydına eklediği tur (motorun durum çıktısından): kısmen inen liste "indirilemedi" der
   const tips = await page.$$eval('.ag-spark i', L => L.map(i => i.title));
   check('Tur süresi ipucu turu uzatan işleri yazar (yenilenen, inemeyen, csf -r)', tips.some(x => /izinli servis listeleri yenilendi/.test(x) &&

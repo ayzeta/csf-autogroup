@@ -153,8 +153,10 @@ switch ($a) {
         // Hiçbir şeyi değiştirmez; çıktı olduğu gibi gösterilir. "Kaydetmeden önce dene" için
         // kaydedilmemiş eşikler --set ile geçer (script yalnız bu anahtarları kabul eder).
         $args = ['--dry-run'];
+        // motorun CFG_TRY_KEYS'i ve ag.js TRY_KEYS ile aynı küme (tests/ayar-tutarliligi denetler; PERM_WINDOW_DAYS eksikti,
+        // panel gönderiyordu ama burada düşüyordu: deneme kayıtlı değerle koşuyordu)
         $try = ['THRESHOLD_24', 'THRESHOLD_24_PERMANENT', 'THRESHOLD_16', 'THRESHOLD_PFX', 'THRESHOLD_TEMP_24', 'THRESHOLD_TEMP_16',
-                'LOOKUP', 'LOOKUP_TIMEOUT', 'SAYAC_RETENTION_DAYS', 'REVIEW_DAYS'];
+                'PERM_WINDOW_DAYS', 'LOOKUP', 'LOOKUP_TIMEOUT', 'SAYAC_RETENTION_DAYS', 'REVIEW_DAYS'];
         foreach ((array) ($_POST['set'] ?? []) as $k => $v) {
             if (in_array($k, $try, true) && preg_match('/^[0-9]{1,6}$/', (string) $v)) {
                 $args[] = '--set';
