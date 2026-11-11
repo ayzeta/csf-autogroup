@@ -305,6 +305,23 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
+  /* Durum rozeti: aynı durum her ekranda aynı renk. Renk sınıfı yalnız burada (tests/tek-kaynak denetler).
+     Veri durumları: perm kalıcı ban · temp geçici ban · prom kalıcıya alınmış · part kısmi (servis/port, kiralık liste) · allow izinli /
+     yoksayılan / susturulan · watch izleniyor · warn şüpheli, uyarı · n nötr. Arayüz durumları: ok, uwarn, bad, acc, none (renksiz). */
+  var ST_CLS = { perm: 'ag-pill-ban', temp: 'ag-pill-temp', prom: 'ag-pill-prom', part: 'ag-pill-part', allow: 'ag-pill-skip', watch: 'ag-pill-temp',
+    warn: 'ag-pill-dw', n: 'ag-pill-n', ok: 'ag-pill-ok', uwarn: 'ag-pill-warn', bad: 'ag-pill-bad', acc: 'ag-pill-acc', none: '' };
+  // Geçmiş simgesi aynı durumun rengini taşır
+  var ST_ICO = { perm: 'd-ban', temp: 'd-temp', prom: 'd-prom', part: 'd-part', allow: 'd-skip', watch: 'd-temp', warn: 'd-warn', n: 'n', acc: 'acc', ok: 'n', uwarn: 'warn', bad: 'bad', none: 'n' };
+  function stOf(st) { return Object.prototype.hasOwnProperty.call(ST_CLS, st) ? st : 'n'; }
+  function stCls(st) { var c = ST_CLS[stOf(st)]; return 'ag-pill' + (c ? ' ' + c : ''); }
+  // st durum, text düz metin (kaçırılır), title ipucu, cls ek sınıflar ("ag-pill-xs" gibi). İçi HTML olan rozet: stAttr
+  function stAttr(st, cls, title) { return 'class="' + stCls(st) + (cls ? ' ' + cls : '') + '" data-st="' + stOf(st) + '"' + (title ? ' title="' + esc(title) + '"' : ''); }
+  function statePill(st, text, title, cls) { return '<span ' + stAttr(st, cls, title) + '>' + esc(text) + '</span>'; }
+  // blok / aralık banının durumu (Aktif aralık banları, aralık kartı, IP kartı seviye tablosu aynı)
+  function grpSt(g) {
+    if (!g) return 'n';
+    return g.kind === 'partial' ? 'part' : g.kind === 'promoted' ? 'prom' : g.kind === 'temp' || g.kind === 'manual' && g.ttl > 0 ? 'temp' : g.kind === 'perm' || g.kind === 'manual' ? 'perm' : 'n';
+  }
   function num(n) { return Number(n || 0).toLocaleString(LANG === 'tr' ? 'tr-TR' : 'en-US'); }
   function nowSec() { return Date.now() / 1000 + CLOCK; }
   function rel(ts) {
@@ -331,8 +348,8 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     var u = UPD, has = u && u.ok && !u.uptodate, blocked = has && (u.dirty || u.diverged);
     var state = !u ? '<span class="ag-muted">' + t('upd_never') + '</span>'
       : !u.ok ? '<span class="ag-upd-bad">' + esc(t('upd_err_' + u.error) !== 'upd_err_' + u.error ? t('upd_err_' + u.error) : tErr(u.error || '?')) + '</span>'
-      : u.uptodate ? '<span class="ag-pill ag-pill-ok">' + t('upd_ok') + '</span>'
-      : '<span class="ag-pill ag-pill-acc" title="' + esc(t('upd_new_h')) + '">' + esc(t('upd_new', u.latest)) + '</span>';
+      : u.uptodate ? statePill('ok', t('upd_ok'))
+      : statePill('acc', t('upd_new', u.latest), t('upd_new_h'));
     var commits = has ? '<ul class="ag-commits ag-upd-commits">' + (u.commits || []).map(function (c) { return '<li><code>' + esc(c.hash) + '</code> ' + esc(c.subject) + '</li>'; }).join('') + '</ul>' : '';
     var acts = '<button class="ag-btn" data-act="updcheck"' + (UPD_BUSY ? ' disabled' : '') + '>' + (UPD_BUSY ? '<span class="ag-spin ag-spin-sm"></span> ' + t('upd_checking') : IC.download + t('upd_check')) + '</button>' +
       (has && !blocked ? '<button class="ag-btn ag-btn-primary" data-act="update">' + t('upd_apply') + '</button>' : '');
@@ -348,11 +365,11 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     var rows = D.map(function (d) {
       var ok = d.s === 'ok', warn = d.s === 'warn', opt = d.k === 'imunify' || d.k === 'modsec' || d.k === 'sqlite3';
       var wk = 'dep_' + d.k + '_w', txt = ok ? t('dep_' + d.k) : warn && t(wk) !== wk ? t(wk) : t('dep_' + d.k + '_x');   // uyarı metni olmayan araçta eksik metni (ham anahtar görünmesin)
-      var pill = ok ? 'ag-pill-ok' : opt ? 'ag-pill-n' : warn ? 'ag-pill-warn' : (d.k === 'csf' ? 'ag-pill-bad' : 'ag-pill-warn');
+      var pill = ok ? 'ok' : opt ? 'n' : warn ? 'uwarn' : (d.k === 'csf' ? 'bad' : 'uwarn');
       return '<div class="ag-dep"><div class="ag-dep-ic ' + (ok ? 'ok' : opt ? 'n' : 'bad') + '">' + (ok ? IC.check : IC.alert) + '</div>' +
         '<div class="ag-dep-m"><div class="ag-dep-t"><b>' + esc(DEP_NAMES[d.k] || d.k) + '</b>' + (opt ? '<span class="ag-muted">' + t('dep_opt') + '</span>' : '') + '</div>' +
         '<div class="ag-dep-d">' + esc(txt) + '</div></div>' +
-        '<span class="ag-pill ' + pill + '" title="' + esc(t(ok ? 'dep_ok_h' : 'dep_missing_h')) + '">' + t('dep_' + (ok ? 'ok' : warn ? 'warn' : 'missing')) + '</span></div>';
+        statePill(pill, t('dep_' + (ok ? 'ok' : warn ? 'warn' : 'missing')), t(ok ? 'dep_ok_h' : 'dep_missing_h')) + '</div>';
     }).join('');
     return '<section class="ag-card ag-depcard"><div class="ag-card-h"><h2>' + IC.shield + t('st_deps') + '</h2><span class="ag-hint">' + t('st_deps_h') + '</span></div>' +
       '<div class="ag-deps">' + rows + '</div></section>';
@@ -863,10 +880,10 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   function ipTable(ips, total) {
     if (!ips || !ips.length) return '';
     var rows = ips.map(function (i) {
-      var own = i.asn ? '<span class="ag-own-s">' + ownerHtml(ownerOfIp(i)) + '</span>' : i.owner ? esc(shortOwner(i.owner)) : (i.res === 'kept' ? '<span class="ag-pill ag-pill-n" title="' + esc(t('dnd_h')) + '">' + esc(t('dnd_s')) + '</span>' : '');
+      var own = i.asn ? '<span class="ag-own-s">' + ownerHtml(ownerOfIp(i)) + '</span>' : i.owner ? esc(shortOwner(i.owner)) : (i.res === 'kept' ? statePill('n', t('dnd_s'), t('dnd_h')) : '');
       var ak = abKind(i);
-      var alp = i.al != null && i.bk ? '<span class="ag-pill ag-pill-skip ag-pill-xs" title="' + esc(t('ab_' + ak + (ak === 'y' && !i.al ? '_n0' : '_n'), ak === 's' ? i.ip : i.al || t('ab_src_none'))) + '">' + esc(t('ab_' + ak)) + '</span> ' : '';
-      return '<tr><td><span class="ag-cidr" data-ip="' + esc(i.ip) + '">' + esc(i.ip) + '</span>' + (i.host ? '<div class="ag-muted ag-ip-host" title="' + esc(i.host) + '">' + esc(i.host) + '</div>' : '') + '</td>' +
+      var alp = i.al != null && i.bk ? statePill('allow', t('ab_' + ak), t('ab_' + ak + (ak === 'y' && !i.al ? '_n0' : '_n'), ak === 's' ? i.ip : i.al || t('ab_src_none')), 'ag-pill-xs') + ' ' : '';
+      return '<tr><td>' + cidrLink(i.ip) + (i.host ? '<div class="ag-muted ag-ip-host" title="' + esc(i.host) + '">' + esc(i.host) + '</div>' : '') + '</td>' +
         '<td>' + own + '</td>' +
         '<td>' + alp + ipWhyCell(i, i.acct || (S.accts || {})[i.ip]) + '</td></tr>';
     }).join('');
@@ -958,7 +975,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       var bk = grp ? 'g' : abKind(e);
       // ne yapılır (izni kim kaldırır) satırda değil, rozetin ipucunda: not iki kısa satır (kaynak · son kayıt)
       var how = src.svc || !e.wl ? '' : t(bk === 'y' ? 'ab_y_own' : 'ab_own', src.file || '?');
-      var pill = '<span class="ag-pill ag-pill-skip" title="' + esc(t('ab_' + bk + '_h') + (how ? ' ' + how : '')) + '">' + esc(t('ab_' + bk)) + '</span>';
+      var pill = statePill('allow', t('ab_' + bk), t('ab_' + bk + '_h') + (how ? ' ' + how : ''));
       var key = 'r:' + e.cidr, sv = {};
       (e.ips || []).forEach(function (i) { var k = i.svc || svcOfReason(i.why); sv[k] = (sv[k] || 0) + 1; });
       var whyH = grp ? '<button class="ag-link" data-act="toggle" data-key="' + esc(key) + '">' + esc(t('n_ip', num(e.n))) + '</button> · ' + esc(countList(sv))
@@ -978,7 +995,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     }
     // Kısmi banı yetmiyor: kısmi bandan sonra kapalı olmayan servislere gelen saldırılar blok/ağ eşiğine ulaştı
     function poRow(e) {
-      var pill = '<span class="ag-pill ag-pill-part" title="' + esc(t('po_h')) + '">' + esc(t('po')) + '</span>';
+      var pill = statePill('part', t('po'), t('po_h'));
       return rvRow(e, pill, esc(countList(e.since || {})),
         [{ act: 'chg', label: t('chg'), icon: 'ban', danger: true, attrs: 'data-c="' + esc(e.cidr) + '"' },
          { act: 'ipcard', label: t('ipcard'), icon: 'search', attrs: 'data-ip="' + esc(firstIp(e.cidr)) + '"' },
@@ -990,8 +1007,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       if (e.type === 'allow_ban' || e.type === 'allow_grp') return abRow(e);
       if (e.type === 'part_open') return poRow(e);
       var key = 'r:' + e.cidr, open = UI.open[key], is16 = /\/16$/.test(e.cidr), hasIps = e.ips && e.ips.length;
-      var pill = e.type === 'skip_wl' ? '<span class="ag-pill ag-pill-skip"' + evTitle(e.type) + '>' + t('ev_skip_wl') + '</span>'
-        : '<span class="ag-pill ag-pill-dw"' + evTitle(e.type) + '>' + esc(t('ev_' + e.type)) + '</span>';
+      var pill = evPill(e);   // Geçmiş'teki olay rozetiyle aynı
       // IP sayısı tıklanınca IP listesi açılır (ayrı "IP'ler" düğmesi yerine)
       var nIp = e.n == null ? '' : hasIps ? '<button class="ag-link" data-act="toggle" data-key="' + esc(key) + '" aria-expanded="' + !!open + '">' + esc(t('n_ip', num(e.n))) + '</button>' : esc(t('n_ip', num(e.n)));
       var P = rvParts(e, nIp), meta = P.meta, det = P.det, pnote = P.pnote, apx = P.apx;
@@ -1024,7 +1040,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
         // notlar: Durum sütunu hizasından başlar; dar kartta sahip de burada (sahip sütunu gizlenir). "Tekrar ediyor" rozeti de
         // burada, sahibin önünde: ağ sütununda adresi daraltıp gizliyordu, alt satıra inince satırın ilk satır hizasını bozuyordu
         // (sahip satırı geniş ekranda ve telefonda gizli; rozet her düzende görünsün diye kendi kabında, sahibin yanında)
-        '<div class="ag-tr-note">' + (repOf(e) ? '<div class="ag-note-top"><span class="ag-pill ag-pill-dw ag-rep" title="' + esc(t('rep_h', num(e.rep))) + '">' + esc(t('rep_n', num(e.rep))) + '</span>' : '') +
+        '<div class="ag-tr-note">' + (repOf(e) ? '<div class="ag-note-top">' + statePill('warn', t('rep_n', num(e.rep)), t('rep_h', num(e.rep)), 'ag-rep') : '') +
           (o.asn || owner ? '<span class="ag-own-n">' + ownH + '</span>' : '') + (repOf(e) ? '</div>' : '') + (det.length ? '<div>' + det.join(' · ') + '</div>' : '') + pnote +
           (rvDrop(e) ? '<div class="ag-muted">' + esc(rvDrop(e)) + '</div>' : '') + '</div>' +
         (open ? ipTable(e.ips, e.total) : '') + '</div>';
@@ -1087,7 +1103,6 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     var from = UI.gp * PAGE, shown = list.slice(from, from + PAGE);
     var rows = shown.map(function (g) {
       var o = ownerOf(g.cidr), ev = (OWNERS[g.cidr] || {}).ev, key = 'g:' + g.cidr, open = UI.open[key];
-      var kindCls = { perm: 'ag-pill-ban', promoted: 'ag-pill-prom', temp: 'ag-pill-temp', manual: 'ag-pill-ban', partial: 'ag-pill-part' }[g.kind] || 'ag-pill-n';
       // kısmi banda kapalı servisler, istisnalı tam banda açık bırakılanlar
       // geçici banın kalan süresi rozetin içinde değil altında (dar sütunda kesiliyordu)
       var gnote = (g.kind === 'temp' || g.kind === 'manual') && g.ttl > 0 ? t('left_short', dur(g.ttl)) : g.kind === 'partial' ? t('g_closed', svcNames(g.svc, g.extra) || t('svc_ports', String(g.ports || '').replace(/_/g, '–'))) : (g.open || g.open_extra) ? t('g_open', svcNames(g.open, g.open_extra)) : '';
@@ -1107,10 +1122,10 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       if (bitsOf(g.cidr) === 32 && bitsOf(g.under) > 24) items.push({ act: 'ban24', label: lbl24(pfxOf(g.cidr.replace(/\/32$/, ''))), icon: 'ban', danger: true, attrs: 'data-t="' + esc(pfxOf(g.cidr.replace(/\/32$/, ''))) + '"' });
       if (bitsOf(g.cidr) > 16 && bitsOf(g.under) > 16) items.push({ act: 'ban16', label: lbl16(p16(g.cidr)), icon: 'ban', danger: true, attrs: 'data-t="' + esc(p16(g.cidr)) + '"' });
       items.push({ act: 'unban', label: t('unban'), icon: 'x', danger: true, attrs: 'data-c="' + esc(g.cidr) + '" data-dnd="' + (g.dnd ? 1 : 0) + '" data-kind="' + esc(g.kind) + '" data-restore="' + (g.restore || 0) + '"' });
-      var gtag = g.under ? '<span class="ag-ctag" title="' + esc(t('under_h', g.under)) + '">' + esc(t('under', '/' + bitsOf(g.under))) + '</span>' : g.pcov ? pcovNote(g.pcov) : ccPill(g.cidr);
+      var gtag = g.under ? underPill(g.under) : g.pcov ? pcovNote(g.pcov) : ccPill(g.cidr);
       return '<div class="ag-item" data-row="' + esc(g.cidr) + '"><div class="ag-tr">' +
         '<div class="ag-td ag-td-main">' + newDot(g.added) + cidrLink(g.cidr) + '</div>' +
-        '<div class="ag-td ag-td-state"><span class="ag-pill ' + kindCls + '" title="' + esc(t('kind_' + g.kind + '_h') + (g.dnd ? ' ' + t('kind_dnd_h') : '') + (gnote ? ' · ' + gnote : '') + (g.hit ? ' · ' + t('g_hit', rel(g.hit)) : '')) + '">' + (g.dnd ? IC.lock : '') +
+        '<div class="ag-td ag-td-state"><span ' + stAttr(grpSt(g), '', t('kind_' + g.kind + '_h') + (g.dnd ? ' ' + t('kind_dnd_h') : '') + (gnote ? ' · ' + gnote : '') + (g.hit ? ' · ' + t('g_hit', rel(g.hit)) : '')) + '>' + (g.dnd ? IC.lock : '') +
           '<span class="ag-pill-t">' + esc(t('kind_' + g.kind) + (gshort ? ' · ' + gshort : '')) + '</span></span></div>' +
         // sahip ve onu kapsayan geniş ban yan yana: "/16 içinde", "sağlayıcı banında", "bulut listesinde", "ülke banında"
         // etiket varken AS rozeti yer kaplamasın: AS numarası ipucunda (o.label) duruyor, ad ve etiket görünür kalsın
@@ -1156,19 +1171,19 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       oldBar() + '<div class="ag-card-b ag-tbl" id="ag-groups-b">' + groupRows() + '</div></section>';
   }
 
-  var EV_CLASS = {
-    add24: 'ag-pill-ban', promote: 'ag-pill-prom', temp24: 'ag-pill-temp', skip_wl: 'ag-pill-skip', warnpfx: 'ag-pill-dw', warn16: 'ag-pill-dw',
-    warn16t: 'ag-pill-dw', allow_viol: 'ag-pill-skip', part_open: 'ag-pill-part', clean_temp: 'ag-pill-n', manual_ban: 'ag-pill-ban', manual_change: 'ag-pill-n', manual_unban: 'ag-pill-n',
-    manual_forget: 'ag-pill-n', manual_rewatch: 'ag-pill-n', manual_ignore: 'ag-pill-n', manual_unignore: 'ag-pill-n', manual_allow: 'ag-pill-skip', manual_unallow: 'ag-pill-n', fix_udp: 'ag-pill-part', provider: 'ag-pill-ban', svc_fail: 'ag-pill-dw', cloud_fail: 'ag-pill-dw', limit_gone: 'ag-pill-dw', config: 'ag-pill-acc', test_mail: 'ag-pill-n', digest: 'ag-pill-n'
+  // olay türünün durumu (rozet ve simge rengi ST_CLS / ST_ICO'dan); listede olmayan tür nötr
+  var EV_ST = {
+    add24: 'perm', promote: 'prom', temp24: 'temp', skip_wl: 'allow', warnpfx: 'warn', warn16: 'warn', warn16t: 'warn', allow_viol: 'allow', part_open: 'part',
+    manual_ban: 'perm', manual_allow: 'allow', fix_udp: 'part', provider: 'perm', svc_fail: 'warn', cloud_fail: 'warn', limit_gone: 'warn', config: 'acc'
   };
   var EV_GROUP = {
     bans: ['add24', 'promote', 'temp24', 'manual_ban'], warn: ['warnpfx', 'warn16', 'warn16t'], skip: ['skip_wl'], aviol: ['allow_viol'], po: ['part_open'],
     manual: ['manual_ban', 'manual_change', 'manual_unban', 'manual_allow', 'manual_unallow', 'manual_forget', 'manual_rewatch', 'manual_ignore', 'manual_unignore', 'provider'], clean: ['clean_temp', 'expire', 'fix_udp', 'limit_gone']
   };
   // olay rozeti açıklaması (üzerine gelince); elle işlemler tek açıklamayı paylaşır
-  function evTitle(type) {
+  function evTip(type) {
     var k = 'evh_' + (/^manual_/.test(type) ? 'manual' : type), v = t(k);
-    return v === k ? '' : ' title="' + esc(v) + '"';
+    return v === k ? '' : v;
   }
   // sağlayıcı banı olayı: bir önceki sağlayıcı banı olayına göre ne değişti (yoksa boş → listenin tamamı yazılır)
   function provOnlyDel(e) {     // önceki sağlayıcı olayına göre yalnız çıkarılan var, eklenen yok
@@ -1290,24 +1305,22 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     if (e.type === 'expire' && e.age != null) d.push(t('exp_age', num(e.age)));
     // önünde metin olmayan saat ayırıcısız (nosep); CSS ":first-child" metin düğümünü saymıyor, metnin ardındaki saati de ayırıcısız bırakıyordu
     var dt = esc(d.join(' · ')), tmA = dt ? (tmHtml || '') : '', tmZ = dt ? '' : String(tmHtml || '').replace('class="ag-ev-tm2"', 'class="ag-ev-tm2 nosep"');   // metin yoksa saat eskisi gibi sonda
-    return dt + tmA + (noteHtml || '') + (fromLog ? ' <span class="ag-pill ag-pill-n ag-pill-xs" title="' + esc(t('from_log_h')) + '">' + esc(t('from_log')) + '</span>' : '') + (e.dnd && (e.type === 'add24' || e.type === 'promote' || e.type === 'temp24') ? ' <span class="ag-pill ag-pill-n ag-pill-xs" title="' + esc(t('dnd_h')) + '">' + esc(t('dnd_s')) + '</span>' : '') +
+    return dt + tmA + (noteHtml || '') + (fromLog ? ' ' + statePill('n', t('from_log'), t('from_log_h'), 'ag-pill-xs') : '') + (e.dnd && (e.type === 'add24' || e.type === 'promote' || e.type === 'temp24') ? ' ' + statePill('n', t('dnd_s'), t('dnd_h'), 'ag-pill-xs') : '') +
       (owner ? '<div class="ag-ev-o">' + esc(owner) + '</div>' : '') + tmZ;
   }
   var EV_ICON = {
-    add24: ['ban', 'd-ban'], manual_ban: ['ban', 'd-ban'], manual_change: ['sliders', 'n'], promote: ['lock', 'd-prom'], temp24: ['clock', 'd-temp'], warnpfx: ['alert', 'd-warn'], warn16: ['alert', 'd-warn'], warn16t: ['alert', 'd-warn'],
-    manual_allow: ['check', 'd-skip'], skip_wl: ['check', 'd-skip'], allow_viol: ['alert', 'd-skip'], part_open: ['sliders', 'd-part'], fix_udp: ['sliders', 'd-part'], provider: ['globe', 'd-ban'], svc_fail: ['alert', 'd-warn'], cloud_fail: ['alert', 'd-warn'], limit_gone: ['alert', 'd-warn'], clean_temp: ['x', 'n'], expire: ['hour', 'n'], config: ['sliders', 'acc'], test_mail: ['inbox', 'n'], digest: ['inbox', 'n']
+    add24: 'ban', manual_ban: 'ban', manual_change: 'sliders', promote: 'lock', temp24: 'clock', warnpfx: 'alert', warn16: 'alert', warn16t: 'alert',
+    manual_allow: 'check', skip_wl: 'check', allow_viol: 'alert', part_open: 'sliders', fix_udp: 'sliders', provider: 'globe', svc_fail: 'alert', cloud_fail: 'alert', limit_gone: 'alert', clean_temp: 'x', expire: 'hour', config: 'sliders', test_mail: 'inbox', digest: 'inbox'
   };
-  // olay rengi ve simgesi: türüne göre; kısmi elle ban mavi (kısmi), kaldırılan sağlayıcı banı nötr
-  function evCls(e) {
-    if (e.type === 'manual_ban' && e.mode === 'svc') return 'ag-pill-part';
-    if (e.type === 'provider' && (!e.asn && !e.all || provOnlyDel(e))) return 'ag-pill-n';
-    return EV_CLASS[e.type] || 'ag-pill-n';
+  // olayın durumu: türüne göre; kısmi elle ban kısmi, süreli elle ban geçici (Aktif aralık banları'ndaki gibi), kaldırılan sağlayıcı banı nötr
+  function evSt(e) {
+    if (e.type === 'manual_ban' && e.mode === 'svc') return 'part';
+    if (e.type === 'manual_ban' && e.ttl > 0) return 'temp';
+    if (e.type === 'provider' && (!e.asn && !e.all || provOnlyDel(e))) return 'n';
+    return EV_ST[e.type] || 'n';
   }
-  function evIcon(e) {
-    if (e.type === 'manual_ban' && e.mode === 'svc') return ['ban', 'd-part'];
-    if (e.type === 'provider' && (!e.asn && !e.all || provOnlyDel(e))) return ['globe', 'n'];
-    return EV_ICON[e.type] || (/^manual_/.test(e.type) ? ['sliders', 'n'] : ['list', 'n']);
-  }
+  function evPill(e) { return statePill(evSt(e), t('ev_' + e.type), evTip(e.type)); }
+  function evIcon(e) { return [EV_ICON[e.type] || (/^manual_/.test(e.type) ? 'sliders' : 'list'), ST_ICO[evSt(e)] || 'n']; }
   /* Geçmiş sekmesi: eklentinin işleri · Ayarlar sekmesi (cfg): ayar değişiklikleri, test maili, özet */
   var CFG_TYPES = ['config', 'test_mail', 'digest'];
   function events(cfg) {
@@ -1345,7 +1358,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       var e = g[0], key = 'eg:' + e.t + ':' + e.type, open = UI.open[key], ic = evIcon(e), cs = g.map(function (x) { return x.cidr || ''; }).filter(Boolean);
       return '<div class="ag-item"><div class="ag-ev clickable" data-act="toggle" aria-expanded="' + !!open + '" data-key="' + esc(key) + '">' +
         '<div class="ag-ev-ic ' + ic[1] + '">' + IC[ic[0]] + '</div><div class="ag-ev-b"><div class="ag-ev-t"><span class="ag-ev-n">' + esc(t('ev_grp_n', num(g.length))) + '</span>' +
-        '<span class="ag-pill ' + evCls(e) + '"' + evTitle(e.type) + '>' + esc(t('ev_' + e.type)) + '</span>' +
+        evPill(e) +
         '<span class="ag-ev-time" title="' + esc(new Date(e.t * 1000).toLocaleString(loc())) + '">' + stamp(e.t) + '<span class="ag-chev">' + (open ? '▾' : '▸') + '</span></span></div>' +
         '<div class="ag-ev-d"><span class="ag-mono">' + esc(cs.slice(0, 3).join(', ')) + '</span>' + (cs.length > 3 ? ' +' + num(cs.length - 3) : '') + ' · ' + evDetail(e, '',
         '<span class="ag-ev-tm2" title="' + esc(new Date(e.t * 1000).toLocaleString(loc())) + '">' + stamp(e.t) + '<span class="ag-chev">' + (open ? '▾' : '▸') + '</span></span>') + '</div></div>' +
@@ -1370,8 +1383,8 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
         '<div class="ag-ev-ic ' + ic[1] + '">' + IC[ic[0]] + '</div>' +
         '<div class="ag-ev-b"><div class="ag-ev-t">' + newDot(NEW_TYPES.indexOf(e.type) >= 0 ? e.t : 0) +
         // adres de IP kartını açsın (diğer tablolar gibi): tek IP kendisi, blok/ağ için ilk kayıtlı IP ya da ağın .1'i
-        (e.cidr ? cidrLink(e.cidr) : '') + '<span class="ag-pill ' + evCls(e) + '"' + evTitle(e.type) + '>' + esc(t('ev_' + e.type)) + '</span>' + tm + '</div>' +
-        '<div class="ag-ev-d">' + evDetail(e, note ? ' <span class="ag-pill ag-pill-n ag-pill-xs ag-ev-st" title="' + esc(t('st_tip')) + '">' + esc(note) + '</span>' : '', tm2) + '</div></div>' +
+        (e.cidr ? cidrLink(e.cidr) : '') + evPill(e) + tm + '</div>' +
+        '<div class="ag-ev-d">' + evDetail(e, note ? ' ' + statePill('n', note, t('st_tip'), 'ag-pill-xs ag-ev-st') : '', tm2) + '</div></div>' +
         '<div class="ag-ev-m">' + (mitems ? menu('hm:' + key, mitems) : '<span class="ag-ev-m0"></span>') + '</div></div>' +   // menüsüz satırda yer tutucu: zaman sütunu kaymasın
         (open ? ipTable(e.ips, e.total) : '') + '</div>';
     }
@@ -1411,7 +1424,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   function asnAddBtn(a) {
     var inl = CFG && (',' + String(cv('ASN_LIST') || '') + ',' + String(cv('ASN_ALL') || '') + ',').indexOf(',' + a + ',') >= 0 && String(cv('ASN_BAN')) === '1';
     var saved = CFG && (',' + String(CFG.values.ASN_LIST || '') + ',' + String(CFG.values.ASN_ALL || '') + ',').indexOf(',' + a + ',') >= 0 && String(CFG.values.ASN_BAN) === '1';
-    return inl ? '<span class="ag-pill ag-pill-ban ag-asn-act" title="' + esc(t(saved ? 'pv_inlist_h' : 'pv_inlist_uh')) + '">' + esc(t(saved ? 'pv_inlist2' : 'pv_inlist_u')) + '</span>'
+    return inl ? statePill('perm', t(saved ? 'pv_inlist2' : 'pv_inlist_u'), t(saved ? 'pv_inlist_h' : 'pv_inlist_uh'), 'ag-asn-act')
       : '<button class="ag-btn ag-btn-sm ag-btn-danger ag-asn-act" data-act="asnadd" data-v="' + esc(a) + '" title="' + esc(t('pv_add_h')) + '">' + esc(t('pv_add')) + '</button>';
   }
   // uzun listeler başta kısa: UI.lim[anahtar] kadar satır; altbilgi "5 / 23 gösteriliyor · Daha fazla · Hepsi · Daralt"
@@ -1452,7 +1465,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       // Öneri: en az 5 kendi grup banı (≥15 saldırgan, 5 ayrı blok) ve CC_DENY'de değilse.
       // port listesiyle banlı sağlayıcı: sıralamada yalnız açık servislere saldırı sürdüğü için var
       var dp = S.dports || [], dps = portsName(dp[0], dp[1]);
-      var tail = a.denied ? '<div><span class="ag-pill ag-pill-part ag-pill-xs" title="' + esc(t('asn_pban_h')) + '">' + esc(t('asn_pban', dps || '—')) + '</span></div>'
+      var tail = a.denied ? '<div>' + statePill('part', t('asn_pban', dps || '—'), t('asn_pban_h'), 'ag-pill-xs') + '</div>'
         : a.groups >= 5 ? '<div><button class="ag-link" data-act="asnhint" data-asn="' + esc(a.asn) + '" data-name="' + esc(name) + '" data-g="' + num(a.groups) + '" title="' + esc(t('asn_hint_h')) + '">' + t('asn_hint') + '</button></div>' : '';
       return asnRow(i, a, pct(wt(a), max), '<div class="ag-asn-ls">' + L.map(function (x) { return '<div>' + x + '</div>'; }).join('') + '</div>' + tail + whyl, a.blocks ? pct(a.blocks * 4, max) : 0);
     }).join('');
@@ -1464,7 +1477,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       var parts = [t('p_bn', num(a.blocks))];
       if (a.groups) parts.push('<span class="ag-muted">' + t('p_g', num(a.groups)) + '</span>');
       if (a.singles) parts.push('<span class="ag-muted">' + t('p_t', num(a.singles)) + '</span>');
-      return asnRow(i, a, pct(a.blocks, max), parts.join(' · ') + (a.denied ? ' · <span class="ag-pill ag-pill-ok">' + t('asn_denied') + '</span>' : ''));
+      return asnRow(i, a, pct(a.blocks, max), parts.join(' · ') + (a.denied ? ' · ' + statePill('perm', t('asn_denied')) : ''));
     }).join('');
   }
   function imReason(k) { var v = t('imr_' + k); return v === 'imr_' + k ? t('imr_other', k) : v; }   // Imunify360 sebep kodu → açıklama
@@ -1511,9 +1524,9 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     var dp = S.dports || [], pk = portsName(dp[0], dp[1]);
     var body = BN.slice(0, lim('asn:ban', 5)).map(function (b, i) {
       var ai = asnInfo(b.asn, b.name), nm = ownName(ai.name);
-      var how = b.how === 'cloud' ? '<span class="ag-pill ag-pill-part ag-pill-xs" title="' + esc(t('bn_cloud_h')) + '">' + esc(t('bn_cloud', clName(b.src))) + '</span>'
-        : b.how === 'all' ? '<span class="ag-pill ag-pill-ban ag-pill-xs" title="' + esc(t('bn_all_h')) + '">' + esc(t('bn_all')) + '</span>'
-        : '<span class="ag-pill ag-pill-part ag-pill-xs" title="' + esc(t('bn_ports_h')) + '">' + esc(pk ? t('cm_svc', pk) : '—') + '</span>';
+      var how = b.how === 'cloud' ? statePill('part', t('bn_cloud', clName(b.src)), t('bn_cloud_h'), 'ag-pill-xs')
+        : b.how === 'all' ? statePill('perm', t('bn_all'), t('bn_all_h'), 'ag-pill-xs')
+        : statePill('part', pk ? t('cm_svc', pk) : '—', t('bn_ports_h'), 'ag-pill-xs');
       var ld = b.how === 'cloud' ? '' : b.n === 0 ? (setsLoading() ? ' · <span class="ag-muted" title="' + esc(t('pv_set_load_h')) + '">' + esc(t('pv_set_load')) + '</span>' : ' · <span class="ag-warn-t">' + esc(t('bn_nl')) + '</span>') : b.n > 0 ? ' · ' + esc(t('pv_set_n', num(b.n))) : '';
       // sıra numarası yok: bu bir sıralama değil liste (numara yalnız "En çok engellenen"de)
       return '<div class="ag-asn-r"><div class="ag-asn-m"><div class="ag-asn-t">' + ownerHtml({ asn: b.asn, cc: ai.cc, name: ai.name || nm, label: ai.name || nm }) + '</div>' +
@@ -1829,8 +1842,8 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     var evAll = evList().filter(function (e) { return /^(provider|svc_fail|cloud_fail)$/.test(e.type); }).sort(function (a, b) { return b.t - a.t; });
     var ev = evAll.slice(0, lim('pev', 5)).map(function (e) {
       var ic = evIcon(e);
-      return '<div class="ag-ev"><div class="ag-ev-ic ' + ic[1] + '">' + IC[ic[0]] + '</div><div class="ag-ev-b"><div class="ag-ev-t">' + (e.cidr ? '<span class="ag-cidr">' + esc(e.cidr) + '</span>' : '') +
-        '<span class="ag-pill ' + evCls(e) + '"' + evTitle(e.type) + '>' + esc(t('ev_' + e.type)) + '</span></div><div class="ag-ev-d">' + evDetail(e) + '</div></div>' +
+      return '<div class="ag-ev"><div class="ag-ev-ic ' + ic[1] + '">' + IC[ic[0]] + '</div><div class="ag-ev-b"><div class="ag-ev-t">' + (e.cidr ? cidrLink(e.cidr) : '') +
+        evPill(e) + '</div><div class="ag-ev-d">' + evDetail(e) + '</div></div>' +
         '<div class="ag-ev-time" title="' + esc(new Date(e.t * 1000).toLocaleString(loc())) + '">' + stamp(e.t) + '</div></div>';
     }).join('');
     var evc = '<section class="ag-card"><div class="ag-card-h"><h2>' + IC.list + esc(t('pv_ev_t')) + '</h2>' + (evAll.length ? '<span class="ag-count">' + num(evAll.length) + '</span>' : '') + '</div><div class="ag-card-b">' +
@@ -1981,7 +1994,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       return '<div class="ag-urled-r" data-src="' + kind + '|' + (s.builtin ? 'b' : 'x') + '|' + esc(s.nm) + '"' + (s.builtin ? ' data-def="' + esc(s.def) + '" data-fdef="' + esc(s.fdef) + '" data-ldef="' + esc(s.ldef) + '"' : '') + '>' +
         (c.subs.length > 1 && !nameIn ? '<span class="ag-muted">' + esc(s.label) + '</span>' : '') +
         '<div class="ag-url-in">' + nameIn + '<input class="ag-input ag-mono" ' + attr + ' spellcheck="false" value="' + esc(s.url) + '" aria-label="' + esc(t('m_add_url')) + '">' +
-        (ch ? '<span class="ag-pill ag-pill-dw">' + esc(t('pv_url_changed')) + '</span><button type="button" class="ag-link" data-act="' + (cl ? 'cloudurlreset' : 'svcurlreset') + '" data-k="' + esc(s.nm) + '">' + esc(t('pv_url_reset')) + '</button>' : '') + '</div>' + fx + '</div>';
+        (ch ? statePill('warn', t('pv_url_changed')) + '<button type="button" class="ag-link" data-act="' + (cl ? 'cloudurlreset' : 'svcurlreset') + '" data-k="' + esc(s.nm) + '">' + esc(t('pv_url_reset')) + '</button>' : '') + '</div>' + fx + '</div>';
     }).join('');
     var LB = srcLabels(), head = c.builtin ? '' : '<div class="ag-urled-r ag-urled-meta"><label>' + esc(t('m_add_title')) + '<input class="ag-input" data-lbl="' + kind + '|' + esc(c.k) + '" maxlength="60" spellcheck="false" value="' + esc(LB[kind + ':' + c.k] || c.k) + '"></label>' +
       '<label>' + esc(t('m_add_desc')) + '<input class="ag-input" data-lbl="' + kind + '|' + esc(c.k) + ':d" maxlength="120" spellcheck="false" placeholder="' + esc(t('pv_card_own')) + '" value="' + esc(LB[kind + ':' + c.k + ':d'] || '') + '"></label></div>';
@@ -2265,9 +2278,9 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     var sv = Object.keys(B.svc || {}).sort(function (x, y) { return B.svc[y] - B.svc[x]; }).map(function (k) { return k === 'repeat' ? t('p_svc_rep', num(B.svc[k])) : svcShort(k) + ' ' + num(B.svc[k]); }).join(', ');   // En çok engellenenler kartıyla aynı söz (svcList)
     var stc = (B.items || []).map(function (x) { return String(x[3] || ''); }).filter(function (v, i, A) { return A.indexOf(v) === i; }).length > 1;
     var items = (B.items || []).map(function (x) {
-      var cv = String(x[3] || ''), cvh = cv === 'open' ? '<span class="ag-pill ag-pill-ban ag-pill-xs" title="' + esc(t('im_bi_open_h')) + '">' + esc(t('im_bi_open')) + '</span>'
-        : /^cloud:/.test(cv) ? '<span class="ag-pill ag-pill-part ag-pill-xs" title="' + esc(t('im_bi_cloud_h')) + '">' + esc(t('im_bi_cloud', clName(cv.slice(6)))) + '</span>'
-        : '<span class="ag-pill ag-pill-skip ag-pill-xs" title="' + esc(t('im_bi_allow_h')) + '">' + esc(t('im_bi_allow', cv.slice(6))) + '</span>';
+      var cv = String(x[3] || ''), cvh = cv === 'open' ? statePill('perm', t('im_bi_open'), t('im_bi_open_h'), 'ag-pill-xs')
+        : /^cloud:/.test(cv) ? statePill('part', t('im_bi_cloud', clName(cv.slice(6))), t('im_bi_cloud_h'), 'ag-pill-xs')
+        : statePill('allow', t('im_bi_allow', cv.slice(6)), t('im_bi_allow_h'), 'ag-pill-xs');
       var bt = x[1] || (evList().filter(function (e) { return e.cidr === x[0] && /^(add24|temp24|promote|manual_ban)$/.test(e.type); })
         .sort(function (p2, q2) { return p2.t - q2.t; })[0] || {}).t;
       return '<tr><td class="ag-mono" data-ip="' + esc(x[0]) + '">' + esc(x[0]) + '</td><td>' + (bt ? esc(rel(bt)) : '<span class="ag-muted">' + esc(t('im_bt_nod')) + '</span>') + '<div class="ag-muted ag-im-ex">' + esc(x[5] || '') + '</div></td>' + (stc ? '<td class="ag-im-st">' + cvh + '</td>' : '') + '</tr>';
@@ -2341,19 +2354,20 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   // IP'nin şu anki durumu (motor: "temp:SANİYE,deny,deny24,imunify") → rozetler, her biri açıklamalı
   function impState(st) {
     var o = String(st || '').split(',').filter(Boolean).map(function (x) {
-      if (/^temp:/.test(x)) return '<span class="ag-pill ag-pill-bad" title="' + esc(t('im_st_temp_h')) + '">' + esc(t('im_st_temp', dur(x.slice(5)))) + '</span>';
-      if (/^tempr:/.test(x)) return '<span class="ag-pill ag-pill-bad" title="' + esc(t('im_st_tempr_h')) + '">' + esc(t('im_st_tempr', dur(x.slice(6)))) + '</span>';
-      if (/^asn:/.test(x)) return '<span class="ag-pill ag-pill-part" title="' + esc(t('im_st_asn_h')) + '">' + esc(t(x === 'asn:all' ? 'im_st_asn_all' : 'im_st_asn_p')) + '</span>';
+      // renkler öteki ekranlarla aynı: geçici ban temp, kalıcı / her şeyi kapatan ban perm, servis/port banı part (önce banlar arayüz kırmızısıydı)
+      if (/^temp:/.test(x)) return statePill('temp', t('im_st_temp', dur(x.slice(5))), t('im_st_temp_h'));
+      if (/^tempr:/.test(x)) return statePill('temp', t('im_st_tempr', dur(x.slice(6))), t('im_st_tempr_h'));
+      if (/^asn:/.test(x)) return statePill(x === 'asn:all' ? 'perm' : 'part', t(x === 'asn:all' ? 'im_st_asn_all' : 'im_st_asn_p'), t('im_st_asn_h'));
       // ülke banı (CC_DENY: her şey, ülke port listesi: yalnız o portlar), kiralık liste, csf.deny port satırı (kısmi aralık banı)
       var m = /^cc:([A-Z]{2}):(all|ports)$/.exec(x);
-      if (m) return '<span class="ag-pill ' + (m[2] === 'all' ? 'ag-pill-bad' : 'ag-pill-part') + '" title="' + esc(t('im_st_cc_h')) + '">' + esc(t(m[2] === 'all' ? 'im_st_cc_all' : 'im_st_cc_p', m[1])) + '</span>';
-      if (/^cloud:/.test(x)) return '<span class="ag-pill ag-pill-part" title="' + esc(t('im_st_cloud_h')) + '">' + esc(t('im_st_cloud', clName(x.slice(6)))) + '</span>';
-      if (/^port:/.test(x)) return '<span class="ag-pill ag-pill-part" title="' + esc(t('im_st_port_h')) + '">' + esc(t('im_st_port', x.slice(5).replace(/;/g, ', '))) + '</span>';
-      if (x === 'watch') return '<span class="ag-pill ag-pill-temp" title="' + esc(t('im_st_watch_h')) + '">' + esc(t('im_st_watch')) + '</span>';
+      if (m) return statePill(m[2] === 'all' ? 'perm' : 'part', t(m[2] === 'all' ? 'im_st_cc_all' : 'im_st_cc_p', m[1]), t('im_st_cc_h'));
+      if (/^cloud:/.test(x)) return statePill('part', t('im_st_cloud', clName(x.slice(6))), t('im_st_cloud_h'));
+      if (/^port:/.test(x)) return statePill('part', t('im_st_port', x.slice(5).replace(/;/g, ', ')), t('im_st_port_h'));
+      if (x === 'watch') return statePill('watch', t('im_st_watch'), t('im_st_watch_h'));
       var k = { deny: 'im_st_deny', deny24: 'im_st_deny24', imunify: 'im_st_imu' }[x];
-      return k ? '<span class="ag-pill ag-pill-bad" title="' + esc(t(k + '_h')) + '">' + esc(t(k)) + '</span>' : '';
+      return k ? statePill('perm', t(k), t(k + '_h')) : '';
     }).join(' ');
-    return o || '<span class="ag-pill" title="' + esc(t('im_st_none_h')) + '">' + esc(t('im_st_none')) + '</span>';
+    return o || statePill('none', t('im_st_none'), t('im_st_none_h'));
   }
   // cevap kodlarını sözle: "3 başarılı · 27 reddedildi (403) · 23 yönlendirildi"
   function impCodes(o) {
@@ -2441,7 +2455,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     var BOTS = [[/googlebot|google-inspectiontool|adsbot-google|storebot-google|googleother/i, 'google'], [/bingbot|msnbot|adidxbot/i, 'bing'], [/duckduckbot|duckassist/i, 'duckduckgo'],
       [/applebot/i, 'apple'], [/gptbot|chatgpt-user|oai-searchbot/i, 'openai'], [/uptimerobot/i, 'uptimerobot'], [/pingdom/i, 'pingdom'], [/statuscake/i, 'statuscake'], [/stripe/i, 'stripe'], [/mollie/i, 'mollie'], [/microsoft office|outlook|exchange/i, 'microsoft365']];
     var svcOn = String(cv('SVC_ALLOW')) === '1', svcPick = String(cv('SVC_SOURCES') || '').split(',');
-    function allow(x) { return x[2] >= x[1] && x[2] > 0 ? ' <span class="ag-pill ag-pill-ok" title="' + esc(t('im_al_h')) + '">' + esc(t('pv_imp_al', x[3])) + '</span>' : x[2] > 0 ? ' <span class="ag-pill ag-pill-ok">' + esc(t('pv_imp_alp', num(x[2]), num(x[1]), x[3])) + '</span>' : ''; }
+    function allow(x) { return x[2] >= x[1] && x[2] > 0 ? ' ' + statePill('allow', t('pv_imp_al', x[3]), t('im_al_h')) : x[2] > 0 ? ' ' + statePill('allow', t('pv_imp_alp', num(x[2]), num(x[1]), x[3])) : ''; }
     function botNote(x) {
       if (x[2] >= x[1]) return '';
       var m = BOTS.filter(function (b2) { return b2[0].test(x[0]); })[0]; if (!m) return '';
@@ -3253,19 +3267,21 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   function tempAt(c) { return (S.groups || []).some(function (g) { return g.kind === 'temp' && g.cidr === c; }); }
   function lbl24(a) { var c = a + '.0/24'; return partialAt(c) ? t('chg24') : tempAt(c) ? t('ban24_perm') : partialOver(c) ? t('ban24_full') : t('ban24'); }
   function tip24(a) { var o = partialOver(a + '.0/24'); return o && !partialAt(a + '.0/24') ? ' title="' + esc(t('ban24_full_h', svcNames(o.svc, o.extra) || o.ports)) + '"' : ''; }
+  // kapsayan ban etiketi ("/16 içinde", "ülke banında", "sağlayıcı banında", "kiralık listede"): her listede aynı bileşen
+  function coverTag(text, title, cls) { return '<span class="ag-ctag' + (cls ? ' ' + cls : '') + '" title="' + esc(title) + '">' + esc(text) + '</span>'; }
   function ccPill(c) {          // ülke ya da sağlayıcı banının (CC_DENY) içinde kalan blok
     var o = outerCover(c);
-    return o && o.kind === 'cc' ? '<span class="ag-ctag" title="' + esc(t('under_cc_h', o.cidr)) + '">' + esc(t(/ AS\d/.test(o.cidr) ? 'under_asn' : 'under_cc')) + '</span>' : '';
+    return o && o.kind === 'cc' ? coverTag(t(/ AS\d/.test(o.cidr) ? 'under_asn' : 'under_cc'), t('under_cc_h', o.cidr)) : '';
   }
   function setsLoading() {      // lfd 10 dk içinde başladı: boş ülke/ASN kümesi henüz dolmamış olabilir
     var h = (S && S.health) || {}; return h.lfd_age >= 0 && h.lfd_age < 600;
   }
   function pcovNote(a) {        // sağlayıcı banının ya da bulut listesinin (CSF'in yüklediği aralıklarla doğrulanmış) içinde kalan ban
     var cl = /^cloud:/.test(a);
-    return '<span class="ag-ctag" title="' + esc(cl ? t('under_cl_h', clName(a.slice(6))) : t('under_pv_h', a)) + '">' + esc(t(cl ? 'under_cl' : 'under_asn')) + '</span>';
+    return coverTag(t(cl ? 'under_cl' : 'under_asn'), cl ? t('under_cl_h', clName(a.slice(6))) : t('under_pv_h', a));
   }
-  function underPill(u, hp) {   // daha geniş bir banın içinde kalan blok
-    return '<span class="ag-pill ag-pill-n ag-under" title="' + esc(t(hp ? 'under_hp' : 'under_h', u)) + '">' + esc(t('under', '/' + bitsOf(u))) + '</span>';
+  function underPill(u, hp) {   // daha geniş bir banın içinde kalan blok (Aktif aralık banları ve İzlenenler aynı etiket)
+    return coverTag(t('under', '/' + bitsOf(u)), t(hp ? 'under_hp' : 'under_h', u), hp ? 'ag-under' : '');
   }
 
   var TERMS = { tr: [['§','Banlar'],['İhlal / ihlal eden IP','lfd\'nin ban sebebi saydığı olay: art arda hatalı giriş, ModSecurity eşleşmesi, port taraması… İhlal eden IP, bu olayların geldiği adres. Şifresini unutan bir kullanıcı da ihlal üretir.'],['Tekil','Tek bir IP\'nin banı. lfd koyar (çok sayıda hatalı giriş, ModSecurity, port taraması…). Kalıcı ya da geçici olabilir.'],['Blok (/24)','Aynı 256 adreslik bloktan yeterince tekil gelince eklentinin bloğun tamamına koyduğu ban.'],['Ağ (/16)','65.536 adreslik ağ. Eklenti ağı kendiliğinden banlamaz; çok bloktan ihlal gelirse "şüpheli ağ" diye bildirir, banı siz koyarsınız.'],['Duyurulan aralık','Bir sağlayıcının internete ilan ettiği adres aralığı (ör. /18). İhlal eden IP\'lerin çoğu tek bir aralıktaysa bütün ağ yerine yalnız o aralığı banlamak yetebilir.'],['Tam / kısmi','Tam ban aralıktan gelen her bağlantıyı kapatır. Kısmi ban yalnız seçilen servisleri (ör. Web) kapatır; o aralıktan diğer bağlantılar açık kalır.'],['Kalıcı / geçici','Kalıcı ban siz kaldırana kadar durur. Eklentinin geçici blok banı 12 saat sürer, sonra blok izlemeye alınır. Panelden süreli koyduğunuz ban (tek IP ya da aralık) seçtiğiniz süre kadar durur.'],['İzlenen','Bir kez geçici banlanmış blok. İzleme süresi içinde yeniden ihlal ederse kalıcı banlanır.'],['Tekrar geldi, kalıcı','Geçici banı bittikten sonra izleme süresinde yeniden ihlal eden blok. Kalıcı banlanır ve silinmez işaretini alır.'],['Elle','Panelden sizin koyduğunuz ban. Eklenti onu kendiliğinden kaldırmaz; süre seçtiyseniz süre bitince CSF kaldırır (rozette kalan süre yazar).'],['Silinmez (do not delete)','CSF kalıcı liste dolunca en eski satırları siler; csf.deny içinde "do not delete" işaretli banlar silinmez. Eklentinin kalıcıya aldığı ve elle koyduğunuz blok banları bu işareti alır.'],['Eski','Ayarlardaki gün sınırından eski blok banı. Son {AD} günde ihlal görülen blok eski sayılmaz. İsterseniz eskiler kendiliğinden kaldırılır (Ayarlar → Ban kuralları → Eski banlar).'],['Aralık banı','Tek bir IP yerine bir adres aralığını kapatan ban: blok (/24), ağ (/16), duyurulan aralık ya da kısmi ban. Genel bakıştaki "Aktif aralık banları" bunları sayar; lfd\'nin tekil banları ayrı tutulur.'],['Gereksizleşen ban','Daha geniş bir engelin (sağlayıcı banı, kiralık sunucu listesi, /16 ban) zaten kapattığı ban. Kaldırmak listede yer açar.'],['§','Sağlayıcı ve listeler'],['Sağlayıcı (ASN)','İnternette adres aralıklarını duyuran şirket ya da kurum; AS numarasıyla tanınır (ör. AS14061 DigitalOcean).'],['Sağlayıcı banı','Bir sağlayıcının bütün ağını kapatır. "Port listesi" seçilirse yalnız o portlar (varsayılan web), "Her şey" seçilirse bütün portlar kapanır. En geniş engel; sağlayıcının kendi servisleri de kapanır.'],['Kiralık sunucular','Bulut firmalarının (Google Cloud, AWS, Azure…) herkese kiraladığı sunucuların listeleri. İhlallerin çoğu buradan gelir; seçilen portlarda kapatılır, firmaların kendi servisleri (Googlebot, Gmail) bu listelerde yoktur.'],['İzinli servisler','Adreslerini yayımlayan servisler (Googlebot, Bing, ödeme bildirimleri…). İzin listesine yazılır, her banın önüne geçer. Bir adresi ihlal ediyorsa "İzinli servislerden hariç tut" ile yalnız o adres çıkarılır.'],['CDN arkasındaki site','Alan adı (ya da www adı) sunucuya değil bir CDN\'e (QUIC.cloud, Cloudflare…) ya da başka bir adrese yönleniyor. O sitenin ziyaretçileri güvenlik duvarına CDN üzerinden gelir: CSF banı onları kesemez, kesmenin yeri CDN\'in paneli. Eklenti bu siteleri günde bir DNS ile tanır; Etkisini ölç ve sızıntı denetimi onların isteklerini ayrı gösterir.'],['§','İzin ve yoksayma (CSF)'],['İzin listesi (beyaz liste)','csf.allow ve onun Include ettiği dosyalar (izinli servisler dahil). CSF izni bandan önce uygular: izinli bir adres banlansa da sunucuya ulaşır. Tek portluk izin satırı (ör. yalnız SSH) yalnız o portu açar. Bir IP\'ye IP kartından izin verilebilir (süresiz ya da süreli) ve o izin oradan kaldırılır.'],['Yoksayma','csf.ignore ve csf.rignore (ters DNS adına göre). Yalnız lfd\'nin banlamasını durdurur; güvenlik duvarında izin değildir. CSF yoksayılan bir IP\'yi tek başına banlamaz, ama içinde olduğu blok banlanırsa o IP de kesilir.'],['IGNORE_ALLOW','csf.conf\'taki CSF ayarı. 0 (varsayılan) ise lfd izin listesindeki bir IP\'yi de banlar ama ban işlemez ("Ban işlemiyor"); 1 ise hiç banlamaz, her denemeyi günlüğe "ignored" diye yazar ("lfd yoksaydı"). Eklenti iki durumu da gösterir.'],['§','Kontrol edilecekler'],['Kontrol edilecekler','Eklentinin kendiliğinden banlamayıp kararı size bıraktığı durumlar. Satırlar son {RD} günden gelir ve bugünkü veriyle yeniden sınanır; artık geçerli değilse kendiliğinden düşer. Her satır son kaydından {RD} gün sonra düşer (izinli / sunucu IP\'si satırında son deneme, şüpheli ağ ve atlandıda son uyarı, açık serviste açık servislere son ihlal); tarih satırın notunda yazar. Daha önce susturmak için Sustur (7, 30, 90 gün ya da süresiz).'],['Şüpheli aralık','Sahibinin internete duyurduğu bir aralıkta (/17–/23) en az {TPX} tekil, en az 2 farklı bloktan ihlal etmiş. Öneri o aralığı banlamaktır; eklenti kendiliğinden banlamaz. Aralık bilgisi IP sorgusundan gelir.'],['Şüpheli ağ','Bir ağda (/16) aynı sahibin en az {T16} tekili, en az 2 farklı alt birimden (duyurulan aralık, bilinmiyorsa blok) ihlal etmiş. Tekillerin hepsi tek bir duyurulan aralıktaysa ağ değil o aralık bildirilir; farklı sahiplerin banları birbirine eklenmez. Eklenti ağı kendiliğinden banlamaz.'],['Atlandı','Blok eşiği aşıldı ama blok bir izin ya da yoksayma listesiyle çakıştığı için banlanmadı. "Yine de banla" bloğun izinli olmayan adreslerini kapatır.'],['Ban işlemiyor','lfd bu IP\'yi banladı ama IP izin listesinde: ban işlemez, IP sunucuya ulaşır (IGNORE_ALLOW = 0).'],['lfd yoksaydı','lfd başarısız denemeleri gördü ama banlamadı, çünkü IP izin listesinde ve IGNORE_ALLOW = 1.'],['Yoksayılıyor','lfd başarısız denemeleri gördü ama IP yoksayılanlarda (csf.ignore, GLOBAL_IGNORE, csf.rignore, CC_IGNORE, RELAYHOSTS) olduğu için banlamadı; satırda hangisi olduğu yazar. Bloğunu banlarsanız kesilir.'],['Sunucu IP\'si (kendi adresi)','lfd başarısız denemeleri saydı ama banlamadı, çünkü IP sunucunun kendi adreslerinden biri: lfd kendi adreslerini her zaman yoksayar (ignoreip). Denemeler sunucunun içinden gelir; posta günlüğünde görünen hesap satırda yazar. Bu IP banlanamaz.'],['İzinli aralık','Aynı izin kaydının içinden birden çok IP ihlal ediyor; karar tek tek IP\'ler değil o kayıt hakkında. İzinli servisse aralığı hariç tutabilirsiniz.'],['Açık servis','Kısmi banlı bir aralıktan, ban konduktan sonra açık bırakılan servislere blok ya da ağ eşiği kadar ihlal geldi. Banı değiştirip o servisleri de kapatabilirsiniz.'],['Tekrar ediyor','Aynı ağ son günlerde birden çok ayrı gün şüpheli olarak işaretlendi; listede üste alınır.'],['Susturulan','Kontrol edilecekler\'de sizin susturduğunuz satır: seçtiğiniz süre boyunca listede görünmez, maili ve Slack bildirimi gelmez. Banlar ve lfd değişmez; CSF\'in yoksaymasıyla (csf.ignore) ilgisi yoktur.'],['§','Araçlar'],['Tur','Eklentinin cron ile düzenli çalışması (Ayarlar → Genel): CSF listelerini okur, blok ve ağ kararlarını verir, bildirimleri gönderir. Genel bakıştaki durum çubuğu son turu ve süresini gösterir.'],['Deneme turu','Hiçbir şeyi değiştirmeden bir turun ne yapacağını gösterir (kuru çalıştırma). Ayarlar\'da kaydedilmemiş değerlerle de denenebilir.'],['ModSecurity','Web uygulaması güvenlik duvarı (Apache modülü). Kuralı tetikleyen istekler lfd\'de "mod_security" sebebiyle banlanır; kural mesajı cPanel\'in eşleşme kaydından (modsec.sqlite) okunur.'],['Imunify360','CloudLinux\'un güvenlik paketi. Kendi kara listesi ve gri listesi (WebShield) CSF\'ten önce çalışır; beyaz listesi csf.allow\'a Include ile girer. Eklenti Imunify\'ın engellediklerini ayrı sekmede gösterir ve Imunify yönlendirmesinin CSF banlarını atlamasını engeller (ban koruması).'],['Ters DNS / ileri doğrulama','IP\'den ada (PTR) ve addan yeniden IP\'ye çözüm. csf.rignore ve izinli servis denetimleri bir adı yalnız iki yön tutarlıysa (ad bu IP\'ye geri çözülüyorsa) geçerli sayar; lfd de öyle yapar.'],['Team Cymru','Bir IP\'nin sağlayıcısını (ASN) ve ülkesini DNS ile sorduğumuz açık servis; sahip bilgileri buradan gelir ve önbellekte tutulur (Ayarlar → Kaynaklar ve yenileme).'],['AbuseIPDB','IP kartındaki dış bağlantı: adresin başka sunuculardan gelen şikâyet geçmişi. Eklenti sorgu yapmaz, sayfayı açar.'],['CSF','ConfigServer Security & Firewall: sunucunun güvenlik duvarı. Banları o uygular; eklenti onun listelerine yazar.'],['lfd','CSF\'in günlükleri izleyen parçası. Hatalı giriş, ModSecurity, port taraması gibi ihlallerde tekil banları o koyar; eklenti bu banları bloklara ve ağlara göre gruplar.']], en: [['§','Bans'],['Violation / offending IP','What lfd counts as a ban reason: repeated failed logins, a ModSecurity match, a port scan… The offending IP is the address they came from. A user who forgot a password produces a violation too, which is why it is not called an attack.'],['Single','A ban on one IP, added by lfd (failed logins, ModSecurity, port scans…). Permanent or temporary.'],['Block (/24)','When enough singles come from the same 256-address block, the plugin bans the whole block.'],['Network (/16)','A 65,536-address network. The plugin never bans it by itself; when violations come from many blocks it reports a "suspicious network" and you decide.'],['Announced range','An address range a provider announces on the internet (e.g. /18). If most offending IPs sit in one range, banning just that range may be enough instead of the whole network.'],['Full / partial','A full ban closes every connection from the range. A partial ban closes only the chosen services (e.g. Web); other connections from that range stay open.'],['Permanent / temporary','A permanent ban stays until you remove it. The plugin\'s temporary block ban lasts 12 hours, then the block is watched. A timed ban you add from the panel (one IP or a range) lasts as long as you chose.'],['Watched','A block that had a temporary ban. If it violates again within the watch period it is banned permanently.'],['Came back, permanent','A block that violated again within the watch period after its temporary ban. It is banned permanently and marked kept.'],['Manual','A ban you added from the panel. The plugin never removes it by itself; if you chose a duration, CSF removes it when the time is up (the badge shows the time left).'],['Kept (do not delete)','When CSF\'s permanent list is full it deletes the oldest lines; bans marked "do not delete" in csf.deny are kept. Blocks the plugin makes permanent and blocks you ban by hand get this mark.'],['Old','A block ban older than the day limit in Settings. A block with a violation in the last {AD} days is not old. Old ones can be removed automatically (Settings → Ban rules → Old bans).'],['Range ban','A ban on an address range instead of one IP: a block (/24), a network (/16), an announced range or a partial ban. "Active range bans" on the Overview counts these; lfd\'s single bans are kept apart.'],['Ban no longer needed','A ban that a wider block (provider ban, rented-server list, /16 ban) already covers. Removing it frees a line.'],['§','Providers and lists'],['Provider (ASN)','The company or organisation that announces address ranges on the internet; known by its AS number (e.g. AS14061 DigitalOcean).'],['Provider ban','Blocks a provider\'s whole network. With "Port list" only those ports (web by default) are closed, with "Everything" every port. The widest block; the provider\'s own services are blocked too.'],['Rented servers','Lists of the servers cloud companies (Google Cloud, AWS, Azure…) rent out to anyone. Most violations come from them; blocked on the chosen ports. The companies\' own services (Googlebot, Gmail) are not in these lists.'],['Allowed services','Services that publish their addresses (Googlebot, Bing, payment notifications…). Written to the allow list, they come before every ban. If one of their addresses violates, "Exclude from allowed services" takes out just that address.'],['Site behind a CDN','The domain (or its www name) points to a CDN (QUIC.cloud, Cloudflare…) or another address instead of the server. Its visitors reach the firewall through the CDN: a CSF ban can not cut them; the place to block them is the CDN\'s panel. The plugin detects these sites once a day by DNS; Measure impact and the leak check show their requests separately.'],['§','Allows and ignores (CSF)'],['Allow list (whitelist)','csf.allow and the files it includes (allowed services too). CSF applies allows before bans: an allowed address reaches the server even when banned. A single-port allow line (e.g. SSH only) opens just that port. One IP can be allowed from its IP card (with no end or for a time), and that allow is removed there.'],['Ignore','csf.ignore and csf.rignore (by reverse DNS name). It only stops lfd from banning; it is not a firewall allow. CSF refuses to ban an ignored IP on its own, but a ban on its block cuts it too.'],['IGNORE_ALLOW','A CSF setting in csf.conf. With 0 (the default) lfd also bans an IP in the allow list but the ban does not work ("Ban not working"); with 1 it does not ban and logs every attempt as "ignored" ("lfd ignored"). The plugin shows both.'],['§','Needs review'],['Needs review','What the plugin did not ban on its own and leaves to you. Rows come from the last {RD} days and are re-checked against today\'s data; a row that no longer applies drops out by itself. Each row drops out {RD} days after its last record (the last attempt for allowed / server-IP rows, the last warning for suspicious networks and skips, the last violation of the open services for an open service); the date is in the row\'s note. To silence one earlier, use Mute (7, 30, 90 days or indefinitely).'],['Suspicious range','At least {TPX} singles from at least 2 different blocks of a range its owner announces on the internet (/17-/23). The suggestion is to ban that range; the plugin does not ban it by itself. The range comes from the IP lookup.'],['Suspicious network','At least {T16} singles of the same owner from at least 2 different sub-units (announced range, or block when unknown) of one network (/16). When all singles are in one announced range, that range is reported instead; bans of different owners are not added together. The plugin does not ban the network by itself.'],['Skipped','The block threshold was reached but the block overlaps an allow or ignore list, so it was not banned. "Ban anyway" closes the block\'s addresses that are not allowed.'],['Ban not working','lfd banned this IP but it is in the allow list: the ban does not work and the IP reaches the server (IGNORE_ALLOW = 0).'],['lfd ignored','lfd saw the failed attempts but did not ban, because the IP is in the allow list and IGNORE_ALLOW = 1.'],['Ignored','lfd saw the failed attempts but did not ban because the IP is ignored (csf.ignore, GLOBAL_IGNORE, csf.rignore, CC_IGNORE, RELAYHOSTS); the row says which. Banning its block cuts it.'],['Server\'s IP (its own address)','lfd counted the failed attempts but did not ban, because the IP is one of the server\'s own addresses: lfd always ignores its own addresses (ignoreip). The attempts come from inside the server; the account seen in the mail log is shown on the row. This IP can not be banned.'],['Allowed range','Several IPs from inside one allow entry are violating; the decision is about that entry, not the single IPs. For an allowed service you can exclude the range.'],['Open service','Since a partial ban went in, the services it left open were hit up to the block or network threshold. Change the ban to close them too.'],['Repeating','The same network was flagged as suspicious on several separate days recently; it moves to the top of the list.'],['Muted','A Needs review row you muted: for the chosen time it is hidden and sends no email or Slack message. Bans and lfd do not change; unrelated to CSF\'s ignore (csf.ignore).'],['§','Tools'],['Run','The plugin\'s scheduled execution by cron (Settings → Schedule): it reads CSF\'s lists, decides on blocks and networks and sends the notifications. The status bar on the Overview shows the last run and its duration.'],['Dry run','Shows what a run would do without changing anything. In Settings it can also use the unsaved values.'],['ModSecurity','The web application firewall (an Apache module). Requests that trigger a rule are banned by lfd with the reason "mod_security"; the rule message is read from cPanel\'s hit log (modsec.sqlite).'],['Imunify360','CloudLinux\'s security suite. Its own block list and greylist (WebShield) act before CSF; its whitelist enters csf.allow through an Include. The plugin shows what Imunify blocks on its own tab and stops Imunify\'s redirect from bypassing CSF bans (ban guard).'],['Reverse DNS / forward check','Resolving an IP to a name (PTR) and the name back to an IP. csf.rignore and the allowed-service checks accept a name only when both directions agree (the name resolves back to this IP); lfd does the same.'],['Team Cymru','The public service we ask by DNS for an IP\'s provider (ASN) and country; owner information comes from it and is cached (Settings → Sources and refresh).'],['AbuseIPDB','An external link on the IP card: the address\'s complaint history reported from other servers. The plugin does not query it; it opens the page.'],['CSF','ConfigServer Security & Firewall: the server\'s firewall. It applies the bans; the plugin writes to its lists.'],['lfd','The part of CSF that watches the logs. It adds the single bans for failed logins, ModSecurity hits, port scans…; the plugin groups those bans into blocks and networks.']] };
@@ -4000,7 +4016,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       var body = dr.querySelector('#ag-dr-b'); if (!body) return;
       dr._d = d;                     // tek IP banı / kaldırma penceresi kartın verisiyle açılır
       if (!d.ok) { body.innerHTML = empty('alert', d.error === 'bad_ip' ? t('bad_ip') : (d.error || d.message || '?')); return; }
-      var host = d.host ? '<span class="ag-mono">' + esc(d.host) + '</span> <span class="ag-pill ' + (d.fwd ? 'ag-pill-ok' : 'ag-pill-n') + '">' + (d.fwd ? t('l_fwd') : t('l_nofwd')) + '</span>'
+      var host = d.host ? '<span class="ag-mono">' + esc(d.host) + '</span> ' + statePill(d.fwd ? 'ok' : 'n', d.fwd ? t('l_fwd') : t('l_nofwd'))
         : '<span class="ag-muted">' + t('l_noptr') + '</span>';
       var owner = d.asn ? ownerHtml({ asn: d.asn, cc: d.cc, name: d.asname || '', label: 'AS' + d.asn + ' ' + (d.asname || '') }) : d.cc ? flag(d.cc) : '';   // bayrak başta (öteki listeler gibi)
       var mb = coverBits(d);                                         // IP'yi kapsayan en geniş tam ban (ban düğmeleri buna göre)
@@ -4012,12 +4028,12 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
          aralık, ülke, sağlayıcı, kiralık liste; her seviye bir satır, kendi durumu ve ban düğmesiyle) · Geçmiş · Kim. Önce bütün
          kapsamalar tek listedeydi ve yalnız bloğun eşiği yazıyordu ("blok geçici banlanır" IP'nin kendisi sanılıyordu). */
       var own = [];                  // IP'nin kendi banı: kalıcı tekil, geçici, kısmi satır (kim koyduysa)
-      if (d.deny) own.push('<span class="ag-pill ag-pill-ban" title="' + esc(t('l_perm_single_h')) + '">' + t('l_perm_single') + '</span>' + rawLine(d.deny));
-      if (d.temp) own.push('<span class="ag-pill ag-pill-temp">' + t('l_temp') + '</span>' + rawLine(d.temp));
+      if (d.deny) own.push(statePill('perm', t('l_perm_single'), t('l_perm_single_h')) + rawLine(d.deny));
+      if (d.temp) own.push(statePill('temp', t('l_temp')) + rawLine(d.temp));
       (d.covers || []).forEach(function (c) {
         if (c.kind === 'port' && c.own && (c.cidr === ip || c.cidr === ip + '/32')) {
           var opx = (/;ports=([0-9a-z,\/-]+)/.exec(c.line || '') || [])[1];
-          own.push('<span class="ag-pill ag-pill-part" title="' + esc(t('l_part_h')) + '">' + esc(t('l_part_ip')) + '</span>' + rawLine(c.line) + '<div class="ag-muted" style="margin-top:2px">' + esc(t('l_part_d', svcNames(c.svc, opx) || c.ports)) + '</div>');
+          own.push(statePill('part', t('l_part_ip'), t('l_part_h')) + rawLine(c.line) + '<div class="ag-muted" style="margin-top:2px">' + esc(t('l_part_d', svcNames(c.svc, opx) || c.ports)) + '</div>');
         }
       });
       var wl = [d.wl, d.rig ? 'csf.rignore: ' + d.rig : ''].filter(Boolean).map(esc).join('<br>');
@@ -4035,7 +4051,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
           });
           if (!row) return { h: '', btn: '' };
           // satırın aralığı yalnız kartın IP'sinden farklıysa (ağ /16, blok /24) yazılır; aynıysa IP üç kez görünüyordu
-          var h = esc(t('rg_rv', rvLabel(row), rel(row.t))) + (row.cidr === ip ? '' : ' <span class="ag-cidr" data-ip="' + esc(row.cidr) + '">' + esc(row.cidr) + '</span>');
+          var h = esc(t('rg_rv', rvLabel(row), rel(row.t))) + (row.cidr === ip ? '' : ' ' + cidrLink(row.cidr));
           if (hit && hit.bk) {
             // tablodaki satırla aynı veri, kısa satırlar hâlinde: son kayıt ve zamanı + sayı (kendi IP'nin denemeleri Denemeler'de); izin
             // kaynağı yalnız kartın Beyaz liste bölümünde yoksa (kendi IP'de kaynak ve "banlanamaz" cümlesi de orada)
@@ -4057,7 +4073,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       var wide = (d.covers || []).filter(function (c) { return c.kind === 'cidr'; }).sort(function (x, y) { return bitsOf(x.cidr) - bitsOf(y.cidr); })[0];
       function lvBan(cidr, bits) {   // seviyenin kendi banı ya da onu kapsayan daha geniş ban; yoksa null
         var g = grpAt(cidr), c = cvrAt(cidr), p = prtAt(cidr), x = [];
-        if (wide && bitsOf(wide.cidr) < bits) return { s: t('lv_under', wide.cidr), k: 'ban', x: x };
+        if (wide && bitsOf(wide.cidr) < bits) return { s: t('lv_under', wide.cidr), k: 'perm', x: x };
         if (c || (g && g.kind !== 'partial')) {
           var ce = (OWNERS[cidr] || {}).ev;
           if (g && g.added) x.push(t('rg_added', dayStr(g.added), rel(g.added)) + (g.dnd ? ' · ' + t('dnd_s') : ''));
@@ -4066,7 +4082,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
             var mine = ce.ips.filter(function (z) { return z.ip === ip; })[0]; if (mine && mine.why) x.push(t('own_why', whyText(mine.why)));
           }
           if (c && (c.open || c.open_extra)) x.push(t('l_open', svcNames(c.open, c.open_extra)));
-          return { s: g && (g.kind === 'temp' || g.kind === 'manual') && g.ttl > 0 ? t('lv_temp', dur(g.ttl)) : c && !g ? t('lv_perm_x') : t('lv_perm'), k: 'ban', x: x, line: c ? c.line : '' };
+          return { s: g && (g.kind === 'temp' || g.kind === 'manual') && g.ttl > 0 ? t('lv_temp', dur(g.ttl)) : c && !g ? t('lv_perm_x') : t('lv_perm'), k: g ? grpSt(g) : 'perm', x: x, line: c ? c.line : '' };
         }
         if (p || (g && g.kind === 'partial')) {
           var ppx = p ? (/;ports=([0-9a-z,\/-]+)/.exec(p.line || '') || [])[1] : g.extra;
@@ -4108,11 +4124,11 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       })();
       if (pb && pb <= 16) lv.push([t('lv_pfx'), cidrLink(d.pfx), lvBan(d.pfx, pb) || { s: t('lv_none'), k: '', x: [] }]);   // /16'dan geniş: banlanamaz, bilgi
       var ccC = (d.covers || []).filter(function (c) { return (c.kind === 'cc' || c.kind === 'ccport') && !/^AS/.test(c.what); })[0];
-      if (ccC) lv.push([t('lv_cc'), flag(ccC.what), { s: ccC.kind === 'cc' ? t('lv_cc_all') : t('lv_cc_ports', portsName(ccC.tcp, ccC.udp) || '—'), k: 'ban', x: [] }]);
+      if (ccC) lv.push([t('lv_cc'), flag(ccC.what), { s: ccC.kind === 'cc' ? t('lv_cc_all') : t('lv_cc_ports', portsName(ccC.tcp, ccC.udp) || '—'), k: ccC.kind === 'cc' ? 'perm' : 'part', x: [] }]);
       else if (d.cc) lv.push([t('lv_cc'), flag(d.cc), { s: t('lv_cc_none'), k: '', x: [] }]);   // sağlayıcı satırı gibi: ban yokken de seviye görünür
       if (d.asn || (d.covers || []).some(function (c) { return /^AS/.test(c.what || ''); })) {
         var aC = (d.covers || []).filter(function (c) { return (c.kind === 'asn' || c.kind === 'ccport') && /^AS/.test(c.what || ''); })[0];
-        var ar = aC ? { s: aC.kind === 'asn' ? t('lv_asn_all') : t('lv_asn_ports', portsName(aC.tcp, aC.udp) || '—'), k: aC.kind === 'asn' ? 'ban' : 'part', x: [] } : { s: t('lv_asn_none'), k: '', x: [] };
+        var ar = aC ? { s: aC.kind === 'asn' ? t('lv_asn_all') : t('lv_asn_ports', portsName(aC.tcp, aC.udp) || '—'), k: aC.kind === 'asn' ? 'perm' : 'part', x: [] } : { s: t('lv_asn_none'), k: '', x: [] };
         if (aC) { ar.html = ccDiff(aC.what) + asnNoData(aC.what); ar.btn = '<button class="ag-btn ag-btn-sm" data-act="tab" data-tab="prov">' + esc(t('pv_open_tab')) + '</button>'; }   // banlı: değiştirmek / kaldırmak için
         // banlı değilse Blok / Ağ gibi kendi ban düğmesi (önce yalnız Genel bakış'taki sıralamada "Banla…" vardı)
         else if (d.asn && !d.self) ar.btn = '<button class="ag-btn ag-btn-sm ag-btn-danger" data-act="asnhint" data-asn="' + esc(d.asn) + '" data-name="' + esc(shortName(d.asname || '') || 'AS' + d.asn) + '" data-g="">' + esc(t('lv_asn_ban')) + '</button>';
@@ -4132,7 +4148,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       var lvT = '<table class="ag-im-t ag-lv-t"><thead><tr><th>' + esc(t('lv_c1')) + '</th><th>' + esc(t('lv_c2')) + '</th><th>' + esc(t('lv_c3')) + '</th></tr></thead><tbody>' +
         lv.map(function (r) {
           var o = r[2];
-          return '<tr><td>' + esc(r[0]) + '</td><td class="ag-lv-c">' + r[1] + '</td><td><span class="ag-lv-st' + (o.k ? ' ' + o.k : '') + '">' + esc(o.s) + '</span>' +
+          return '<tr><td>' + esc(r[0]) + '</td><td class="ag-lv-c">' + r[1] + '</td><td><span class="ag-lv-st' + (o.k ? ' ' + o.k + '" data-st="' + o.k : '') + '">' + esc(o.s) + '</span>' +
             (o.x || []).map(function (l) { return '<div class="ag-muted ag-lv-x">' + esc(l) + '</div>'; }).join('') + (o.html || '') + rawLine(o.line || '') +
             (o.btn ? '<div class="ag-lv-act">' + o.btn + '</div>' : '') + '</td></tr>';
         }).join('') + '</tbody></table>';
@@ -4317,7 +4333,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   // düşme tarihi. Daraltma ban düğmeleri ve Yoksay kartın üstündeki işlem satırına gider.
   function rvCard(rv) {
     var h = esc(t('rg_rv', rvLabel(rv), rel(rv.t)) + (rv.n ? ' ' + t('rg_rv_n', num(rv.n)) : ''));
-    if ((rv.rep || 0) >= (S.repeat_min || 3)) h += ' <span class="ag-pill ag-pill-dw ag-pill-xs" title="' + esc(t('rep_h', num(rv.rep))) + '">' + esc(t('rep_n', num(rv.rep))) + '</span>';
+    if ((rv.rep || 0) >= (S.repeat_min || 3)) h += ' ' + statePill('warn', t('rep_n', num(rv.rep)), t('rep_h', num(rv.rep)), 'ag-pill-xs');
     var L = [], acts = [];
     if (rv.type === 'part_open') L.push(esc(t('po_n', svcNames(rv.svc, rv.extra) || '?')));
     else if (rv.type !== 'allow_ban' && rv.type !== 'allow_grp') {
@@ -4374,14 +4390,13 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       // aralığın kendi banı (eklentinin listesinde): türü, ne zaman, silinmez mi, kaç tekille; dayandığı saldırılar olay kaydında
       var g = (S.groups || []).filter(function (x) { return x.cidr === cidr; })[0], gev = (OWNERS[cidr] || {}).ev;
       if (g && g.kind !== 'partial') {
-        var gcls = { perm: 'ag-pill-ban', promoted: 'ag-pill-prom', temp: 'ag-pill-temp', manual: 'ag-pill-ban' }[g.kind] || 'ag-pill-n';
-        lay.push('<span class="ag-pill ' + gcls + '" title="' + esc(t('kind_' + g.kind + '_h') + (g.dnd ? ' ' + t('kind_dnd_h') : '')) + '">' + esc(t('rg_own', t('kind_' + g.kind))) + '</span>' +
+        lay.push(statePill(grpSt(g), t('rg_own', t('kind_' + g.kind)), t('kind_' + g.kind + '_h') + (g.dnd ? ' ' + t('kind_dnd_h') : '')) +
           '<div class="ag-muted" style="margin-top:3px">' + esc([g.added ? t('rg_added', dayStr(g.added), rel(g.added)) : '',
             g.n ? t('rg_gn', num(grpN(g))) : '', (g.kind === 'temp' || g.kind === 'manual') && g.ttl > 0 ? t('left_short', dur(g.ttl)) : '', g.dnd ? t('dnd_s') : ''].filter(Boolean).join(' · ')) + '</div>');
       }   // kapsayan ban (d.cover) yalnız sonuç satırında yazılır; katman listesinde ve soruda yinelenmez
-      if (own) lay.push('<span class="ag-pill ag-pill-part" title="' + esc(t('l_part_h')) + '">' + esc(t('rg_part', svcNames(d.partial_svc, d.partial_extra) || '?')) + '</span>');
-      if (d.cloud) lay.push('<span class="ag-pill ag-pill-part" title="' + esc(t('rg_cloud_h')) + '">' + esc(t('rg_cloud', clName(d.cloud), cpText(d.cloud_mode, d.cloud_tcp, d.cloud_udp))) + '</span>');
-      if (d.ccport) lay.push('<span class="ag-pill ag-pill-part" title="' + esc(t('rg_ccp_h')) + '">' + esc(t('rg_ccp', d.ccport, portsName(d.ccp_tcp, d.ccp_udp) || '—')) + '</span>');
+      if (own) lay.push(statePill('part', t('rg_part', svcNames(d.partial_svc, d.partial_extra) || '?'), t('l_part_h')));
+      if (d.cloud) lay.push(statePill('part', t('rg_cloud', clName(d.cloud), cpText(d.cloud_mode, d.cloud_tcp, d.cloud_udp)), t('rg_cloud_h')));
+      if (d.ccport) lay.push(statePill('part', t('rg_ccp', d.ccport, portsName(d.ccp_tcp, d.ccp_udp) || '—'), t('rg_ccp_h')));
       // saldırılan servis kapalı mı: aralığın tam banı, kendi kısmi banı, kiralık liste ya da sağlayıcının port listesi
       // aralığın kendi tam banı da tamamını kapatır: kalıcı, kalıcıya alınmış, elle ya da süresi dolmamış geçici blok banı
       // (önce yalnız kapsayan kalıcı ban — d.cover — sayılıyordu; geçici blok banlı aralık "kısmi banlı, SSH açık" görünüyordu)
@@ -4460,12 +4475,12 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       var MAXR = 12;
       var ipRows = order.map(function (ip, i) {
         var r = R[ip];
-        var st = r.st === 'temp' ? '<span class="ag-pill ag-pill-temp ag-pill-xs">' + esc(t('l_temp') + (r.left != null ? ' · ' + t('left_short', dur(r.left)) : '')) + '</span>'
-          : r.st === 'perm' ? '<span class="ag-pill ag-pill-ban ag-pill-xs">' + esc(t('rg_st_perm')) + '</span>'
+        var st = r.st === 'temp' ? statePill('temp', t('l_temp') + (r.left != null ? ' · ' + t('left_short', dur(r.left)) : ''), '', 'ag-pill-xs')
+          : r.st === 'perm' ? statePill('perm', t('rg_st_perm'), '', 'ag-pill-xs')
           // tam izin (csf.allow, sunucu IP'si) banı etkisiz kılar; csf.ignore yalnız lfd'yi durdurur: aralığın kısmi banı ona da uygulanır
-          : r.st === 'alw' ? '<span class="ag-pill ag-pill-skip ag-pill-xs" title="' + esc(r.al || '') + '">' + esc(t('ab_' + abKind(r))) + '</span>' +
-            (!r.full ? r.pl.map(function (x) { return ' <span class="ag-pill ag-pill-part ag-pill-xs">' + esc(x) + '</span>'; }).join('') + (!r.pl.length && rWide ? '<div class="ag-muted">' + esc(t('rg_st_rpart')) + '</div>' : '') : '')
-          : r.st === 'part' ? r.pl.map(function (x) { return '<span class="ag-pill ag-pill-part ag-pill-xs">' + esc(x) + '</span>'; }).join(' ')
+          : r.st === 'alw' ? statePill('allow', t('ab_' + abKind(r)), r.al || '', 'ag-pill-xs') +
+            (!r.full ? r.pl.map(function (x) { return ' ' + statePill('part', x, '', 'ag-pill-xs'); }).join('') + (!r.pl.length && rWide ? '<div class="ag-muted">' + esc(t('rg_st_rpart')) + '</div>' : '') : '')
+          : r.st === 'part' ? r.pl.map(function (x) { return statePill('part', x, '', 'ag-pill-xs'); }).join(' ')
           : '<span class="' + (r.st === 'none' ? 'ag-rg-open' : 'ag-muted') + '">' + esc(t('rg_st_' + r.st)) + '</span>';
         return '<tr' + (i >= MAXR ? ' class="ag-rg-more" hidden' : '') + '><td class="ag-mono" data-ip="' + esc(ip) + '">' + esc(ip) + '</td><td class="ag-im-st">' + st +
           '</td><td>' + ipWhyCell(r, d.accts && d.accts[ip], [r.t && r.st !== 'temp' && r.st !== 'perm' ? esc(t('rg_last_ban', dayStr(r.t))) : '']) + '</td></tr>';
@@ -4480,7 +4495,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       // tablonun dışında kalan banlar ve kurallar (bloklar, aralık satırları, izlenen bloklar, kısmi banlar, port kuralları)
       // aralığın kendisi banlıyken kendi eski izleme kaydı (sayaç) anlamsız: listede gösterilmez
       var wat = (d.watched || []).filter(function (x) { return !((d.cover || pw) && x === cidr); });
-      function lst(a) { return a.length ? ' ' + a.slice(0, 3).map(function (x) { return '<span class="ag-cidr" data-ip="' + esc(x) + '">' + esc(x) + '</span>'; }).join(', ') + (a.length > 3 ? ' <span class="ag-muted">+' + num(a.length - 3) + '</span>' : '') : ''; }
+      function lst(a) { return a.length ? ' ' + a.slice(0, 3).map(function (x) { return cidrLink(x); }).join(', ') + (a.length > 3 ? ' <span class="ag-muted">+' + num(a.length - 3) + '</span>' : '') : ''; }
       var opart = (d.own_partial || []).filter(function (x) { return x !== cidr; });
       var inH = [
         d.blocks.length ? t('rg_in_blk', num(d.blocks.length)) + lst(d.blocks) : '',

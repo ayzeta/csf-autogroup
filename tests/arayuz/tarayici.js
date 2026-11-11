@@ -90,6 +90,21 @@ window.agKart = function () {
 };`;
 // sayfa yeniden çizilse de (veri geç geldi, yoklama) tıklama anında öğeyi yeniden bulur; page.$ tutamacı geçersiz kalıyordu
 // ("Element is not attached to the DOM", ara sıra)
+// aynı durum aynı renk: data-st taşıyan rozet (.ag-pill) ve seviye metni (.ag-lv-st) bütün ekranlarda ve kartlarda tek renk.
+// ST_CLS (ag.js) tek kaynak; önce Etkisini ölç'te banlar arayüz kırmızısı, izinli istekler yeşildi, IP kartında geçici blok banı kalıcı rengindeydi
+const ST_SEEN = {};
+async function stRenk(page, ad) {
+  const sts = await page.evaluate(() => Array.from(document.querySelectorAll('[data-st]')).filter(e => e.offsetWidth > 0).map(e => {
+    const cs = getComputedStyle(e), p = e.classList.contains('ag-pill');
+    return { st: e.getAttribute('data-st'), p, bg: p ? cs.backgroundColor : '', fg: cs.color, tx: e.textContent.trim().slice(0, 30) }; }));
+  const bad = [];
+  sts.forEach(x => {
+    const o = ST_SEEN[x.st] = ST_SEEN[x.st] || {};
+    function cmp(k, v) { if (!o[k]) o[k] = { v, tx: x.tx, ad }; else if (o[k].v !== v) bad.push(x.st + ' "' + x.tx + '" ' + v + ' ≠ "' + o[k].tx + '" (' + o[k].ad + ') ' + o[k].v); }
+    if (x.p) { cmp('bg', x.bg); cmp('fg', x.fg); } else cmp('fg', x.fg);   // seviye metninin rengi rozetin yazı rengiyle aynı
+  });
+  check(`${ad} · aynı durum aynı renk (${sts.length} rozet)`, bad.length === 0, bad.slice(0, 3).join(' | '));
+}
 async function tik(page, sel) { const l = page.locator(sel).first(); if (!(await l.count())) return false; await l.click({ timeout: 15000 }); return true; }
 async function kartKurallari(page, ad) {
   await page.evaluate(KURAL);
@@ -103,6 +118,7 @@ async function kartKurallari(page, ad) {
   check(`kart ${ad} · ülke kodu rozetin yanında yinelenmiyor`, k.ulke.length === 0, k.ulke.slice(0, 3).join(' | '));
   check(`kart ${ad} · IP / aralık yazan her öğe tıklanıyor`, k.ipb.length === 0, k.ipb.slice(0, 4).join(' | '));
   check(`kart ${ad} · sütun başlıkları hücrelerle aynı hizada`, k.hiz.length === 0, k.hiz.slice(0, 4).join(' | '));
+  await stRenk(page, 'kart ' + ad);
 }
 async function layoutChecks(page, label, width) {
   await page.evaluate(KURAL);
@@ -229,6 +245,7 @@ async function layoutChecks(page, label, width) {
   const lnk = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-cidr[data-ip]')).filter(e => e.offsetWidth > 0)
     .map(e => { const tx = e.textContent.trim(), d = e.getAttribute('data-ip'); return tx === d || tx === d + '/32' ? null : tx + ' → ' + d; }).filter(Boolean));
   check(`${label} · ${width} px · adres bağlantısı yazdığı adresi açar`, lnk.length === 0, lnk.slice(0, 3).join(' | '));
+  await stRenk(page, `${label} · ${width} px`);
 }
 const errs = [];          // sayfanın JS hataları: test yarıda düşerse de yazılır
 (async () => {

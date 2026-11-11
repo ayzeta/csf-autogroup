@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.15.83 — 2026-11-11
+
+- A state has the same colour on every screen. "Measure impact" showed bans
+  in the error red and allowed requests in green; the IP card's level table
+  showed a temporary block ban and a country port ban in the permanent-ban
+  colour; the provider ranking showed "Already blocked in CSF" in green. They
+  now use the same colours as the lists: permanent, temporary, partial,
+  allowed.
+- A timed manual ban shows in the temporary colour in the lists and in
+  History, like other temporary bans.
+- The "inside /16", "in the country ban" and "in the provider ban" tags look
+  the same in every list (Watched blocks used a different badge).
+- A few addresses that looked like links but did not open anything now open
+  their card.
+
 ## 1.15.82 — 2026-11-11
 
 - Clicking an address opens what it says everywhere: an IP opens its IP card,

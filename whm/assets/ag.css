@@ -1030,7 +1030,10 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
 /* kimlik (aralık, AS numarası, ülke) bölünmez; kurum / liste adı satır atlar (telefonda tabloyu genişletip düğmeyi taşırıyordu) */
 .ag-lv-t .ag-lv-c .ag-cidr, .ag-lv-t .ag-lv-c b, .ag-lv-t .ag-lv-c .ag-flag { white-space: nowrap; }
 /* (eski: yalnız ekran ≤600 px iken kırılıyordu; kartın genişliği ekrandan bağımsız) */
-.ag-lv-st.ban { color: var(--ag-d-ban-t); font-weight: 600; }
+/* durum adları rozetlerle aynı (ag.js ST_CLS): aynı durum aynı renk */
+.ag-lv-st.perm { color: var(--ag-d-ban-t); font-weight: 600; }
+.ag-lv-st.temp { color: var(--ag-d-temp-t); font-weight: 600; }
+.ag-lv-st.prom { color: var(--ag-d-prom-t); font-weight: 600; }
 .ag-lv-st.part { color: var(--ag-d-part-t); font-weight: 600; }
 .ag-lv-st.watch { color: var(--ag-d-temp-t); font-weight: 600; }
 .ag-lv-x { margin-top: 2px; font-size: 12px; }
