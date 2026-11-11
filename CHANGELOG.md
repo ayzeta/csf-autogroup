@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.15.91 — 2026-11-11
+
+- The announced range of an IP is the most specific prefix its owner
+  announces. Team Cymru can answer with several nested prefixes (for example
+  3.98.0.0/15 inside 3.64.0.0/10) in a different order each time; the plugin
+  took the first line, so the IP card and the list menus could offer
+  different ranges for the same IP. Owner entries saved before this version
+  are refreshed over the next runs (50 blocks per run), and an IP lookup that
+  sees a different range refreshes that block first.
+
 ## 1.15.90 — 2026-11-11
 
 - List menus (Active range bans, Watched blocks, History) offer *Ban

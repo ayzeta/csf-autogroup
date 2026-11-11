@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.90"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.91"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1704,6 +1704,17 @@ ptr_lookup() {   # IP → REPLY = hostname ya da boş; PTR_UNK=1 ise sorulamadı
     fi
     REPLY="${PTR_OF[$1]}"
 }
+cymru_line() {   # Cymru origin cevabı (çok satır olabilir) → REPLY = en dar önekli satır
+    # Ölçüldü (2026-11-11, 45.168.98.3.origin.asn.cymru.com): iki satır "3.98.0.0/15" ve onu kapsayan "3.64.0.0/10", sıra sorgudan sorguya
+    # değişiyor. Önce ilk satır alınıyordu: aynı IP için sahip önbelleği /10, IP sorgusu /15 dedi (liste menüsü ile IP kartı farklı aralık
+    # önerdi). Trafik en özgül duyuruya göre yönlenir: en dar önek. Sahip önbelleği, IP sorgusu ve mail satırı bunu kullanır.
+    local l b best="" bb=-1
+    while IFS= read -r l; do
+        [[ "$l" =~ \|[[:space:]]*[0-9.]+/([0-9]{1,2})[[:space:]]*\| ]] || { [ -z "$best" ] && best="$l"; continue; }
+        b=${BASH_REMATCH[1]}; (( b > bb )) && { bb=$b; best="$l"; }
+    done <<< "$1"
+    REPLY="$best"
+}
 owner_lookup() { # IP → OWN_LONG ("AS60729 ARTIKEL10, DE"), OWN_SHORT ("AS60729 DE"), OWN_ASN, OWN_CC; OWN_UNK=1 ise sorulamadı
     local p="${1%.*}" a b c d txt asn cc name
     OWN_UNK=0
@@ -1717,7 +1728,7 @@ owner_lookup() { # IP → OWN_LONG ("AS60729 ARTIKEL10, DE"), OWN_SHORT ("AS6072
             OWN_LONG=""; OWN_SHORT=""; OWN_ASN=""; OWN_CC=""; return
         fi
         unset 'OWN_OLD[$p]'
-        txt="${REPLY%%$NL*}"
+        cymru_line "$REPLY"; txt="$REPLY"
         # "60729 | 185.220.101.0/24 | DE | ripencc | 2017-09-12"
         asn=$(printf '%s' "$txt" | cut -d'|' -f1 | awk '{print $1}')
         cc=$(printf '%s' "$txt" | cut -d'|' -f3 | tr -d ' ')
@@ -1748,6 +1759,10 @@ owners_load() {  # sahip önbelleği → OWN_A/C/N/T/P/L/S (geçerli ve süresi 
     # çıktısını ~1 sn uzatıyordu. Değerler çift tırnak içinde, \ " $ ` kaçışlı.
     [ -r "$OWNERS_FILE" ] || return 0
     local min=$(( $(date +%s) - OWNER_TTL_DAYS * 86400 )) ows
+    # 1.15.91 kesimi: bu andan (2026-11-11 15:46 UTC) önce yazılan kayıtların duyurulan aralığı Cymru cevabının ilk satırından (çok satırda
+    # rastgele; artık cymru_line en darı seçer) — bir kez eskimiş sayılır, tur her seferinde BACKFILL_MAX kadarını yeniler (877 blok ≈ 18 tur).
+    # Sabit an: ilk okumada yazılan bir kesim, yükseltmeden sonra doğru yazılmış kayıtları da eskitiyordu (durum tablosu hiyerarşi düştü)
+    [ "$min" -lt 1794412000 ] && min=1794412000
     pa "own_önce"
     ows="$(LC_ALL=C awk -F'|' -v min="$min" '
         function q(x) { gsub(/[\\"$`]/, "\\\\&", x); return "\"" x "\"" }
@@ -1880,7 +1895,7 @@ ip_line() {      # IP NOTE WITH_OWNER(0|1) → REPLY = "   - IP  hostname  [ASN 
         if [ "$OWN_UNK" = 0 ] && [ -n "$OWN_ASN" ] && [ -z "${OWN_P[$q]}" ]; then
             IFS=. read -r a b c d <<< "$1"
             if dns_q TXT "$d.$c.$b.$a.origin.asn.cymru.com"; then
-                OWN_P[$q]=$(printf '%s' "${REPLY%%$NL*}" | cut -d'|' -f2 | tr -d ' '); [[ "${OWN_P[$q]}" =~ ^[0-9.]+/[0-9]{1,2}$ ]] || OWN_P[$q]=""
+                cymru_line "$REPLY"; OWN_P[$q]=$(printf '%s' "$REPLY" | cut -d'|' -f2 | tr -d ' '); [[ "${OWN_P[$q]}" =~ ^[0-9.]+/[0-9]{1,2}$ ]] || OWN_P[$q]=""
                 OWN_NEW[$q]=1
             fi
         fi
@@ -4127,7 +4142,7 @@ do_lookup() {
     if [ -n "$host" ] && resolve_a "$host" && printf '%s\n' "$REPLY" | grep -qxF "$ip"; then fwd=true; fi
     IFS=. read -r a b c d <<< "$ip"
     if dns_q TXT "$d.$c.$b.$a.origin.asn.cymru.com"; then
-        txt="${REPLY%%$NL*}"      # "60729 | 185.220.101.0/24 | DE | ripencc | 2017-09-12"
+        cymru_line "$REPLY"; txt="$REPLY"      # "60729 | 185.220.101.0/24 | DE | ripencc | 2017-09-12" (çok satırda en dar önek)
         asn=$(printf '%s' "$txt" | cut -d'|' -f1 | awk '{print $1}')
         pfx=$(printf '%s' "$txt" | cut -d'|' -f2 | tr -d ' ')
         cc=$(printf '%s' "$txt" | cut -d'|' -f3 | tr -d ' ')
@@ -4141,7 +4156,8 @@ do_lookup() {
         # kart AS212238). Panel sahip dosyasına yazmaz (turla yarışmasın): yalnız işaret dosyasına satır ekler
         if [[ "$asn" =~ ^[0-9]+$ ]]; then
             owners_load
-            [ -n "${OWN_A[$a.$b.$c]+x}" ] && [ "${OWN_A[$a.$b.$c]}" != "$asn" ] && [ "$DRY" != 1 ] && echo "$a.$b.$c" >> "$OWNERS_FILE.stale" 2>/dev/null
+            # sahip ya da duyurulan aralık önbellektekinden farklıysa blok eskimiş sayılır, tur önce onu yeniler (liste menüsü kartla aynı aralığı önersin)
+            [ -n "${OWN_A[$a.$b.$c]+x}" ] && { [ "${OWN_A[$a.$b.$c]}" != "$asn" ] || { [ -n "$pfx" ] && [ "${OWN_P[$a.$b.$c]}" != "$pfx" ]; }; } && [ "$DRY" != 1 ] && echo "$a.$b.$c" >> "$OWNERS_FILE.stale" 2>/dev/null
         fi
     fi
     [ -n "${DENY_IP[$ip]+x}" ] && deny="$(deny_line "$ip")"

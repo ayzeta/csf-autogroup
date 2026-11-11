@@ -128,6 +128,15 @@ for x in "604800|7 gün" "90000|1 gün 1 sa" "21600|6 sa" "5400|1 sa 30 dk" "900
     N=$((N + 1)); r=$(dur_text "${x%%|*}")
     if [ "$r" = "${x#*|}" ]; then echo "  ✓ süre ${x%%|*} sn → $r"; else F=$((F + 1)); echo "  ✗ süre ${x%%|*} sn → $r (beklenen ${x#*|})"; fi
 done
+# Cymru origin cevabında en dar önek (cymru_line): gerçek cevap (2026-11-11, 45.168.98.3.origin.asn.cymru.com), iki satır, sıra
+# sorgudan sorguya değişiyor; ilk satırı almak aynı IP için bazen /10 bazen /15 veriyordu
+eval "$(awk '/^cymru_line\(\) \{/{f=1} f{print} f && /^}$/{exit}' "$REPO/csf_autogroup.sh")"
+L15='"16509 | 3.98.0.0/15 | US | arin | 2017-12-20"'; L10='"16509 | 3.64.0.0/10 | US | arin | 2017-12-20"'
+for x in "$L15"$'\n'"$L10" "$L10"$'\n'"$L15" "$L10"; do
+    N=$((N + 1)); cymru_line "$x"; w=$([ "$x" = "$L10" ] && echo "$L10" || echo "$L15")
+    if [ "$REPLY" = "$w" ]; then echo "  ✓ cymru_line: $(printf '%s' "$x" | grep -o '/[0-9]*' | tr '\n' ' ')→ $(grep -o '[0-9.]*/[0-9]*' <<< "$REPLY")"
+    else F=$((F + 1)); echo "  ✗ cymru_line: $(printf '%s' "$x" | tr '\n' ' ') → $REPLY (beklenen $w)"; fi
+done
 # mangle PREROUTING sırası (sondaki boşluklu iptables çıktısı, önce ekle sonra sil): ayrı betik, taklit iptables
 N=$((N + 1)); if ms=$(bash "$H/mangle-sira.sh" 2>&1); then echo "  ✓ ${ms##*$'\n'}"; else F=$((F + 1)); printf '%s\n' "$ms" | grep '✗'; fi
 echo "Birim: $N durum, $F beklenmeyen"; [ "$F" -eq 0 ]

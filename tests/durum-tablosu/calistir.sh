@@ -588,6 +588,11 @@ run --lookup 151.80.7.9 --json > /dev/null 2>&1
 mcheck "sahip: IP kartı önbellekten farklı sahip görünce blok işaretlenir" "grep -qx '151.80.7' '$OF.stale'"
 quiet
 mcheck "sahip: tur işaretli bloğu yeniden sorar (önbellek taze sahiple, işaret temizlenir)" "grep -q '^151.80.7|16276|' '$OF' && [ ! -s '$OF.stale' ]"
+# sahip aynı, duyurulan aralık farklı (önbellekte /20, sorguda /16): blok yine işaretlenir (1.15.91; liste menüsü kartla aynı aralığı önersin)
+mk own3; OF="$R/var/lib/csf_autogroup/owners"
+printf '151.80.7|16276|FR|OVH - OVH SAS, FR|%s|151.80.0.0/20\n' "$NOW" > "$OF"; single 151.80.7.9 sshd
+run --lookup 151.80.7.9 --json > /dev/null 2>&1
+mcheck "sahip: IP kartı önbellekten farklı duyurulan aralık görünce de blok işaretlenir" "grep -qx '151.80.7' '$OF.stale'"
 
 # Tek IP'ye izin (IP kartı, --action allow1 / unallow1): süresiz csf -a (CSF kalıcı tekil satırı siler, "do not delete" satırı
 # kalır — ölçüldü), süreli csf -ta (iki yönlü); not satıra yazılır, geçersiz not ve zaten izinli IP reddedilir; IP kartı kendi
