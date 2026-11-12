@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.103"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.104"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -2991,12 +2991,29 @@ cov_decide() {
     else REPLY=none; fi
     return 0
 }
-cov_text() {     # ANAHTAR → REPLY = iletilerde kapsamanın adı ve kapattığı: "ülke banı FR (her şey)", "kısmi ban 1.2.3.0/24 (TCP 80, 443 · UDP 443)"
+ports_names() {  # TCP UDP (virgüllü port listeleri) → REPLY = servis adlarıyla ("Web, SSH, port 8080, UDP 53"); panelin portsName'i ile aynı
+    # kural: bir servis bütün TCP portları (web ve DNS için UDP 443 / 53 de) listedeyse adıyla, kalan portlar "port …" / "UDP …"
+    local t=",$1," u=",$2," k q ok out="" T U
+    for k in web ssh ftp cp smtp mread dns; do
+        svc_ports "$k" || continue; T="$REPLY"; [ -n "$T" ] || continue
+        case "$k" in web) U=443 ;; dns) U=53 ;; *) U="" ;; esac
+        ok=1; for q in ${T//,/ }; do [[ "$t" == *",$q,"* ]] || { ok=0; break; }; done
+        [ "$ok" = 1 ] && for q in ${U//,/ }; do [[ "$u" == *",$q,"* ]] || { ok=0; break; }; done
+        [ "$ok" = 1 ] || continue
+        svc_names "$k"; out+="${out:+, }$REPLY"
+        for q in ${T//,/ }; do t="${t//,$q,/,}"; done; for q in ${U//,/ }; do u="${u//,$q,/,}"; done
+    done
+    t="${t#,}"; t="${t%,}"; u="${u#,}"; u="${u%,}"; t="${t//:/-}"; u="${u//:/-}"
+    [ -n "$t" ] && out+="${out:+, }port ${t//,/, }"
+    [ -n "$u" ] && out+="${out:+, }UDP ${u//,/, }"
+    REPLY="$out"
+}
+cov_text() {     # ANAHTAR → REPLY = iletilerde kapsamanın adı ve kapattığı: "ülke banı FR (her şey)", "kısmi ban 1.2.3.0/24 (Web)"
     local nm v p=""
     cov_parts "$1"; nm="$CVN"
     [ "$CVK" = cl ] && { cloud_label "$nm"; nm="$REPLY"; }
     case "$CVK" in ban|temp) ;; *)
-        p="${CVT:+TCP ${CVT//,/, }}${CVT:+${CVU:+ · }}${CVU:+UDP ${CVU//,/, }}"
+        ports_names "$CVT" "$CVU"; p="$REPLY"       # panelin satırıyla aynı ad ("Web", "SSH, port 8080"): önce mail ham port yazıyordu
         case "$CVM" in all) p="$M_CL_ALL" ;; exc) p=$(m "$M_CL_EXC" "${p:--}") ;; esac ;;
     esac
     v="M_UK_$CVK"; REPLY="$(m "${!v}" "$nm")${p:+ ($p)}"
@@ -7190,7 +7207,9 @@ imunify_top() {  # [N] → IM_TOP satırları "ASN|KURUM|CC|IP sayısı|SEBEP:n,
 }
 ev_reason() {    # CIDR → REPLY = "3 IP · (sshd) Failed SSH login" (olay kaydından; yoksa boş)
     local id
-    REPLY=$(grep -F "\"cidr\":\"$1\"" "$EVENTS_FILE" 2>/dev/null | grep -F '"ips":[{' | tail -n 1 | awk -v f="$M_H_RSUM" '
+    # yalnız banın kendi olayı: aynı adresin başka türden kaydı (ban altında ihlal, açık servis) banın sebebi değildir — gerçek CSF
+    # denemesinde elle kısmi ban özet mailinde "3 IP · ModSecurity" ile listelendi (IP'ler sonradan gelen ihlal kaydınındı)
+    REPLY=$(grep -F "\"cidr\":\"$1\"" "$EVENTS_FILE" 2>/dev/null | grep -E '"type":"(add24|promote|temp24|manual_ban|manual_change)"' | grep -F '"ips":[{' | tail -n 1 | awk -v f="$M_H_RSUM" '
         NR == 1 { s = $0; n = 0
                   while (match(s, /"why":"([^"\\]|\\.)*"/)) { w = substr(s, RSTART + 7, RLENGTH - 8); gsub(/\\"/, "\"", w); C[w]++; n++; s = substr(s, RSTART + RLENGTH) }
                   if (n) { b = ""; bm = 0; for (w in C) if (C[w] > bm) { bm = C[w]; b = w }; printf f, n, b }
@@ -7292,18 +7311,20 @@ digest_build() { # → DG_SUBJ, DG_BODY
     DG_BODY+="$M_DG_NEW$NL"
     if [ -r "$EVENTS_FILE" ]; then
         while IFS='|' read -r cidr owner hk; do
-            ev_reason "$cidr"; local rs="$REPLY"
+            ev_reason "$cidr"; local rs="$REPLY" op="${cidr%/*}"; op="${op%.*}"
+            [ -n "$owner" ] || owner="${OWN_L[$op]:-}"       # olay yazılırken sahip bilinmiyorduysa (elle ban) sahip önbelleğinden
             DG_BODY+="   $(printf '%-18s' "$cidr") ${owner:--}${rs:+ · $rs}$NL"; n=$((n + 1))
             hv="M_H_K_$hk"; h_esc "${owner:-—}"; [ -n "$rs" ] && { local ho="$REPLY"; h_esc "$rs"; REPLY="$ho<br><span style=\"font-size:12px;color:#5f6776;\">$REPLY</span>"; }
             hcls="background:#f3f4f6;color:#4b5563;border:1px solid #e6e8ef"
             [ "$hk" = promote ] && hcls="background:#f3edff;color:#7c3aed;border:1px solid #ddd0fb"
             [ "$hk" = manual_ban ] && hcls="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca"
             hr+="<tr$([ $((n % 2)) = 0 ] && echo ' bgcolor="#f7f8fa" style="background:#f7f8fa;"')><td style=\"padding:8px 8px 8px 18px;font-family:$H_MONO;font-weight:600;\">$cidr</td><td style=\"padding:8px;color:#4b5563;\">$REPLY</td><td align=\"right\" style=\"padding:8px 18px 8px 8px;\"><span style=\"$hcls;border-radius:10px;padding:2px 8px;font-size:11.5px;font-weight:600;white-space:nowrap;\">${!hv:-$hk}</span></td></tr>"
-        done < <(awk -v s="$since" '
+        done < <(awk -v s="$since" "$AWK_EVC"'
             match($0, /"t":[0-9]+/) { t = substr($0, RSTART + 4, RLENGTH - 4) + 0 } t < s { next }
             /"type":"(add24|promote|manual_ban)"/ {
                 c = ""; o = ""
                 if (match($0, /"cidr":"[0-9.\/]+"/)) c = substr($0, RSTART + 8, RLENGTH - 9)
+                if (match($0, /"type":"[a-z0-9_]+"/) && evcls(substr($0, RSTART + 8, RLENGTH - 9), c) == "") next     # sayımla aynı küme: elle tek IP banı blok banı değil
                 if (match($0, /"owner":"([^"\\]|\\.)*"/)) { o = substr($0, RSTART + 9, RLENGTH - 10); gsub(/\\"/, "\"", o) }
                 if (match($0, /"type":"[a-z0-9_]+"/)) ty = substr($0, RSTART + 8, RLENGTH - 9)
                 print c "|" o "|" ty }' "$EVENTS_FILE" | tail -n 25)

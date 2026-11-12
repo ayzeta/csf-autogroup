@@ -796,7 +796,10 @@ mcheck "saklama · süresi dolmamış kayıt varken dosya yeniden yazılmaz (yal
 mk dgsay; EV="$R/var/lib/csf_autogroup/events.jsonl"
 printf '{"t":%s,"type":"add24","cidr":"151.80.7.0/24","n":3}\n{"t":%s,"type":"add24","cidr":"151.80.7.0/24","n":3}\n{"t":%s,"type":"add24","cidr":"151.80.7.0/24","n":3}\n' $(( NOW - 40 )) $(( NOW - 35 )) $(( NOW - 30 )) >> "$EV"   # üç ham kayıt, tek blok banı
 printf '{"t":%s,"type":"manual_ban","cidr":"151.80.9.0/24","by":"root"}\n{"t":%s,"type":"manual_ban","cidr":"151.80.10.5","by":"root","kind":"ip"}\n{"t":%s,"type":"temp24","cidr":"151.80.11.0/24","n":3}\n' $(( NOW - 25 )) $(( NOW - 20 )) $(( NOW - 15 )) >> "$EV"
+# aynı adresin başka türden kaydı (ban altında ihlal) banın sebebi sanılmaz; elle tek IP banı "Yeni blok banları" listesinde de yok
+printf '{"t":%s,"type":"under_ban","cidr":"151.80.9.0/24","ck":"ban","n":1,"ips":[{"ip":"151.80.9.9","why":"(sshd) Failed SSH login"}]}\n' $(( NOW - 10 )) >> "$EV"
 run --digest > "$W/out/dgsay.txt" 2>&1; run --status --json > "$W/out/dgsay.json" 2>/dev/null
+mcheck "haftalık özet listesi: elle banın satırında başka kaydın IP'leri yok; elle tek IP banı listede yok" "grep -q '151.80.9.0/24' '$W/out/dgsay.txt' && ! grep '151.80.9.0/24' '$W/out/dgsay.txt' | grep -q 'Failed SSH' && ! grep -q '151.80.10.5' '$W/out/dgsay.txt'"
 mcheck "haftalık özet: blok banı sayısı grafikle aynı kuralla (2 blok banı, 1 geçici blok banı, 2 elle işlem)" "grep -q '2 blok banı · 1 geçici blok banı' '$W/out/dgsay.txt' && grep -q ' 2 elle işlem' '$W/out/dgsay.txt'"
 mcheck "Etkinlik grafiği: aynı veride bugünün blok banı 2 (elle tek IP banı sayılmaz), geçici 1" "grep -qE '\"A\":\[[0-9,]*,2\],\"T\":\[[0-9,]*,1\]' '$W/out/dgsay.json'"
 mk daily; printf '%s\n' "CLOUD_BAN=1" "CLOUD_SOURCES=aws" >> "$R/app/config.env"; quiet
@@ -987,6 +990,8 @@ mcheck "ban altında ihlal: susturulan aralığın IP'leri olaya girmez (5 tekil
 mcheck "ban altında ihlal satırı: susturulan aralığın IP'lerinin satırı yok, ötekilerin var" "[ -z \"\$(rvrow 151.80.7.1)\" ] && rvrow 151.80.8.1 | grep -q '\"type\":\"under_ban\"'"
 mkm cvmail 1; ccfr; quiet; cvback 172800; s5; quiet
 mcheck "ban altında ihlal maili: kapsamanın adı ve kapattığı, IP satırları (e-posta sınıfı IE_REVIEW)" "mtext | grep -q 'ülke banı FR (her şey)' && mtext | grep -q '151.80.7.1 '"
+mkm cvpmail 1; pline 151.80.0.0/16 '-2 days'; s8; quiet
+mcheck "ban altında ihlal maili: kısmi banın kapattığı servis adıyla (panel satırıyla aynı: Web), ham port değil" "mtext | grep -q 'kısmi ban 151.80.0.0/16 (Web)'"
 mkm cvmdry 1; ccfr; quiet; cvback 172800; s5; run --dry-run > "$W/out/cvmdry.txt" 2>&1
 mcheck "deneme turu: ban altında ihlal bildirimini gösterir; olay ve işaret yazmaz" "grep -q 'ülke banı FR (her şey)' '$W/out/cvmdry.txt' && grep -q '151.80.7.1 ' '$W/out/cvmdry.txt' && [ \"\$(uev)\" = 0 ] && [ ! -s '$R/var/lib/csf_autogroup/under.seen' ]"
 mkm cvmail0 1; echo "IE_REVIEW=0" >> "$R/app/config.env"; ccfr; quiet; cvback 172800; s5; quiet

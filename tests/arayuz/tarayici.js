@@ -74,6 +74,8 @@ window.agKardes = function (root) {
   });
   // "her IP bütün servislere ulaşabilir" diyen kart ayrıca tek tek servis saymaz (canlıda: banlı olmayan aralıkta "Aralığın geneline
   // açık: Web."); tek IP'nin kendi kısmi banı "aralık" demez
+  // ban altında ihlal kaydı olan kart "ihlallerin hepsi kesiliyor" demez (gerçek CSF denemesinde tam banlı aralığın kartında ikisi birlikteydi)
+  if (/Ban altında ihlal olarak işaretli|marked as Violation under a ban/i.test(tx) && /hepsi kesiliyor|Every violation above is cut/.test(tx)) R.push('ban altında ihlal kaydı varken "hepsi kesiliyor"');
   if (/bütün servislere ulaşabilir|can reach every service/.test(tx) && /geneline açık:|Open for the range as a whole:/.test(tx)) R.push('her şey açıkken ayrıca açık servis satırı');
   (tx.match(/Kısmi \\(bu IP\\)[^\\n]*\\n[^\\n]*\\n?[^\\n]*bu aralıktan[^\\n]*/g) || []).forEach(m => R.push('tek IP banı "aralık" diyor: ' + m.replace(/\\s+/g, ' ').slice(0, 80)));
   return R;

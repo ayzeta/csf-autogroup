@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.15.104 — 2026-11-13
+
+Found by producing a violation under a ban on a real CSF and opening the panel
+on that data.
+
+- A range that has a ban of its own and a Needs review row (violation under a
+  ban, open service) now offers the same actions everywhere. Active range bans
+  offered Change ban / Remove ban, while the Needs review menu and the range
+  card of the same range offered only Mute.
+- Range card: a fully banned range with a violation-under-a-ban record no
+  longer says "every violation above is cut; nothing to do" right under it.
+- Violation-under-a-ban email and log: what a partial ban closes is named as in
+  the panel ("Web"), not as raw ports.
+- Weekly summary, new block bans list: a manual ban no longer shows the IPs of
+  another record of the same address as its reason, shows its owner, and a
+  manual single-IP ban is not listed (as it is not counted).
+
 ## 1.15.103 — 2026-11-13
 
 - IP card: a single IP's own partial ban says "from this IP" (it said "from

@@ -33,7 +33,10 @@ for (const f of fs.readdirSync(DIR).filter(f => f.endsWith('.json')).sort()) {
     const kind = k.slice(0, 3), c = kind === 'pm:' ? k.slice(3) + '.0/24' : k.slice(3);
     if (!/^(rm|gm|pm):$/.test(kind)) return;
     const ist = AG.itemState(c);
-    if (!ist || (kind !== 'rm:' && ist.r) || (kind === 'pm:' && ist.g)) return;   // Geçmiş en önce gelen listenin eylemlerini sunar
+    // öğe birden çok listedeyse de (banı var + Kontrol edilecekler satırı var) her listenin menüsü Geçmiş'inkiyle aynı olmalı: eylemler
+    // birleşimdir (objActs, 1.15.104). Önce bu satırlar denetim dışıydı ("Geçmiş ilk listenin eylemlerini sunar") ve gerçek CSF
+    // denemesinde kısmi banlı aralığın iki menüsü farklı çıktı
+    if (!ist) return;
     rows++;
     const r = kind === 'rm:' ? (st.review || []).filter(x => x.cidr === c)[0] : null;
     const ty = kind === 'rm:' ? (r ? r.type : '?') + (r && /services\.allow/.test(r.wl || '') ? '+svc' : '') : kind.slice(0, 2);
