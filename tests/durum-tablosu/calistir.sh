@@ -14,7 +14,12 @@ mkdir -p "$W/out" "$W/bin"; cp "$H"/bin/* "$W/bin/"; chmod +x "$W"/bin/*
 wp() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi; }
 NOW=$(date +%s); DT=$(LC_ALL=C date '+%a %b %d %H:%M:%S %Y')
 
+# İlerleme: AG_ILERLEME=dosya verilirse her kök kurulurken ve her kural sonuçlanınca o dosyaya saatli bir satır yazılır (koşu ~25 dk
+# sürer, sonuç tablosu en sonda basılır; yarıda kalan ya da takılan koşuda nerede kaldığı buradan okunur)
+PROG="${AG_ILERLEME:-/dev/null}"; : > "$PROG" 2>/dev/null || PROG=/dev/null
+ilerle() { printf '%s %s\n' "$(date +%T)" "$1" >> "$PROG"; }
 mk() {   # ad → temiz kök: boş listeler, sınırlar, taklit araçlar
+    ilerle "kök $1"
     R="$W/roots/$1"; mkdir -p "$R/app" "$R/etc/csf" "$R/var/lib/csf" "$R/var/lib/csf_autogroup"
     D="$R/etc/csf/csf.deny"; T="$R/var/lib/csf/csf.tempban"; A="$R/etc/csf/csf.allow"; C="$R/var/lib/csf_autogroup/counter"
     : > "$D"; : > "$T"; : > "$C"; printf '127.0.0.1\n' > "$A"; : > "$R/etc/csf/csf.ignore"; : > "$R/etc/csf/csf.rignore"
@@ -56,7 +61,7 @@ mk partopen;   quiet --action ban24 151.80.7 --mode svc --svc web
 # ── motor kuralları (ekran dışı): yazılan satırlar ve uyarılar ──
 MF=0; ML=""
 mcheck() { [ -n "$2" ] || { ML+="  ✗ motor: $1 (kuralın komutu boş)"$'\n'; MF=$((MF + 1)); return; }   # tırnak hatası sessizce geçmesin
-    if eval "$2"; then ML+="  ✓ $1"$'\n'; else ML+="  ✗ motor: $1"$'\n'; MF=$((MF + 1)); fi; }
+    if eval "$2"; then ML+="  ✓ $1"$'\n'; ilerle "  ✓ $1"; else ML+="  ✗ motor: $1"$'\n'; MF=$((MF + 1)); ilerle "  ✗ $1"; fi; }
 R="$W/roots/b24part"
 mcheck "web kısmi banı UDP 443'ü de kapatır (HTTP/3)" "grep -q '^udp|in|d=443|s=151.80.7.0/24 ' '$R/etc/csf/csf.deny'"
 mk b24exc; quiet --action ban24 151.80.7 --mode exc --svc web
@@ -452,7 +457,7 @@ for x in 7.1 7.2 8.1 8.2 9.1; do single 151.80.$x sshd; done; quiet
 mcheck "hiyerarşi: tekiller tek duyurulan aralıkta (/20, 3 blok, 5 tekil) → şüpheli aralık uyarısı" "grep -q '\"type\":\"warnpfx\",\"cidr\":\"151.80.0.0/20\",\"n\":5,' \"\$(EVF)\""
 mcheck "hiyerarşi: tek aralıktaki tekiller /16 uyarısı vermez (öneri o aralık)" "! grep -q '\"type\":\"warn16\"' \"\$(EVF)\""
 mcheck "hiyerarşi: Kontrol edilecekler'de şüpheli aralık satırı, /16 satırı yok" "rvrow 151.80.0.0/20 | grep -q '\"type\":\"warnpfx\"' && [ -z \"\$(rvrow 151.80.0.0/16)\" ]"
-mcheck "hiyerarşi: IP kartı aralık basamağı turla aynı (5 tekil, 3 blok, tutuyor), ağ basamağı tutmuyor (1 alt birim)" "run --lookup 151.80.7.1 --json 2>/dev/null | grep -q '\"net\":{\"n\":5,\"b\":3,\"u\":1,\"t\":5,\"h\":false},\"pnet\":{\"p\":\"151.80.0.0/20\",\"n\":5,\"b\":3,\"t\":4,\"h\":true}'"
+mcheck "hiyerarşi: IP kartı aralık basamağı turla aynı (5 tekil, 3 blok, tutuyor), ağ basamağı aralığın tekillerini yeniden saymaz (0)" "run --lookup 151.80.7.1 --json 2>/dev/null | grep -q '\"net\":{\"n\":0,\"b\":0,\"u\":0,\"t\":5,\"h\":false},\"pnet\":{\"p\":\"151.80.0.0/20\",\"n\":5,\"b\":3,\"t\":4,\"h\":true}'"
 printf '{"t":%s,"type":"warn16","cidr":"151.80.0.0/16","n":5,"perm":5,"temp":0,"subnets":3,"total":5,"ips":[{"ip":"151.80.7.1","why":"x"},{"ip":"151.80.8.1","why":"x"}]}\n' "$NOW" >> "$(EVF)"
 mcheck "hiyerarşi: eski sürümün /16 olay satırı bugünkü ölçütle yeniden sınanır (tekiller tek aralıkta → satır yok, aralık satırı var)" "[ -z \"\$(rvrow 151.80.0.0/16)\" ] && rvrow 151.80.0.0/20 | grep -q warnpfx"
 mk hpfx2;for p in 7 8; do own 151.80.$p 16276 OVH 151.80.0.0/20; done; for p in 200 201; do own 151.80.$p 16276 OVH 151.80.192.0/20; done
@@ -467,7 +472,10 @@ mcheck "hiyerarşi: aynı /16'da iki sahibin tekilleri (3 + 3, eşik 5) birbirin
 mk hblk; for p in 7 8 9; do own 151.80.$p 16276 OVH 151.80.0.0/20; done; own 151.80.100 16276 OVH 151.80.96.0/19
 printf '151.80.100.0/24 # csf_autogroup: Auto-grouped /24 - Mon Nov 09 10:00:00 2026\n' >> "$D"
 for x in 7.1 7.2 8.1 8.2 9.1; do single 151.80.$x sshd; done; quiet
-mcheck "hiyerarşi: banlı blok alt birim sayılır (5 tekil tek aralıkta + başka aralıkta banlı blok) → aralık ve ağ uyarısı" "grep -q '\"type\":\"warnpfx\",\"cidr\":\"151.80.0.0/20\"' \"\$(EVF)\" && grep -q '\"type\":\"warn16\",\"cidr\":\"151.80.0.0/16\",\"n\":5,.*\"apx\":\"151.80.0.0/20\"' \"\$(EVF)\""
+mcheck "hiyerarşi: 5 tekil tek aralıkta + başka aralıkta banlı blok → yalnız aralık uyarısı (bildirilen aralığın tekilleri /16'da yeniden sayılmaz)" "grep -q '\"type\":\"warnpfx\",\"cidr\":\"151.80.0.0/20\"' \"\$(EVF)\" && ! grep -q '\"type\":\"warn16\"' \"\$(EVF)\""
+mk hpfx3; for p in 7 8 9; do own 151.80.$p 16276 OVH 151.80.0.0/20; done; for p in 200 201 202; do own 151.80.$p 16276 OVH 151.80.$p.0/24; done
+for x in 7.1 7.2 8.1 8.2 9.1 200.1 200.2 201.1 201.2 202.1; do single 151.80.$x sshd; done; quiet
+mcheck "hiyerarşi: aralıkta 5 + aralığın dışında 3 blokta 5 tekil → aralık uyarısı 5, ağ uyarısı yalnız dışındaki 5 ile (10 değil)" "grep -q '\"type\":\"warnpfx\",\"cidr\":\"151.80.0.0/20\",\"n\":5,' \"\$(EVF)\" && grep -q '\"type\":\"warn16\",\"cidr\":\"151.80.0.0/16\",\"n\":5,' \"\$(EVF)\""
 mk tbexp2; printf '%s\n' "$(( NOW - 7200 ))|151.80.7.9||in|3600|lfd: (sshd) Failed SSH login from 151.80.7.9" "$NOW|151.80.7.10||in|3600|lfd: (sshd) Failed SSH login from 151.80.7.10" >> "$T"
 mcheck "geçici liste: IP kartının blok geçici sayısı duran satırları sayar (tur gibi: 2)" "run --lookup 151.80.7.10 --json 2>/dev/null | grep -q '\"blk\":{[^}]*\"t\":2,'"
 # İzlemeyi yeniden başlat: sayaç satırının tarihi bugün olur, olay yazılır; izlenmeyen blok reddedilir
@@ -881,13 +889,75 @@ mcheck "geniş duyurulan aralık (/11): ilk /16 dışındaki bloğun CC_IGNORE k
 mk wpfx2
 mcheck "geniş duyurulan aralık (/12) banlanır: csf.deny'de tek satır, eklentinin yorumuyla" "quiet --action banpfx 151.80.0.0/12; grep -q '^151.80.0.0/12 # csf_autogroup:' '$D'"
 mcheck "duyurulan aralık eylemi /16 almaz (ağ banı ban16)" "! run --action banpfx 151.80.0.0/16 >/dev/null 2>&1 && ! grep -q '^151.80.0.0/16' '$D'"
+# ── Kapsama defteri + tek karar (1.15.94) ──
+# Defter (covers): tur her kapsamayı ilk gördüğü anla yazar; karar tekil başına tek yerde (cov_decide): kapsamadan önce banlanan sessiz,
+# kapsamanın kapatmadığı servise gelen eşiğe sayılır, kapattığı servise sonradan gelen "ban altında ihlal" olayı (under_ban).
+# cvback: defterdeki başlangıçları geriye alır (kapsama "N saniyedir yürürlükte"); tekiller o anın tarihiyle (pdt now) yazılır.
+CVF() { echo "$R/var/lib/csf_autogroup/covers"; }
+cvback() { sed -i -E "s/\|[0-9]+\$/|$(( $(date +%s) - $1 ))/" "$(CVF)"; }
+uev() { grep -c '"type":"under_ban"' "$(EVF)" 2>/dev/null; }
+ccfr() { printf '%s\n' 'CC_DENY = "FR"' >> "$R/etc/csf/csf.conf"; }
+s5() { local x dn; dn=$(pdt now); for x in 7.1 7.2 8.1 8.2 9.1; do single 151.80.$x sshd "$dn"; done; }
+mk cvled; ccfr; printf '%s\n' "151.80.50.0/24 # Manually denied - $DT" >> "$D"
+quiet --action ban24 151.80.7 --mode svc --svc web; quiet; cp "$(CVF)" "$W/cvled.1" 2>/dev/null; quiet
+mcheck "kapsama defteri: tur her kapsamayı (tam aralık, kısmi, ülke) başlangıcıyla yazar; ikinci tur başlangıcı değiştirmez" "grep -qE '^ban:151\.80\.50\.0/24\|[0-9]+\$' \"\$(CVF)\" && grep -qE '^cc:FR\|all\|\|\|[0-9]+\$' \"\$(CVF)\" && grep -qE '^part:151\.80\.7\.0/24\|,80,443,\|,443,\|[0-9]+\$' \"\$(CVF)\" && cmp -s \"\$(CVF)\" '$W/cvled.1'"
+sed -i '/^CC_DENY = /d' "$R/etc/csf/csf.conf"; quiet
+mcheck "kapsama defteri: kalkan kapsamanın satırı silinir, kalanlar durur" "! grep -q '^cc:FR' \"\$(CVF)\" && grep -q '^ban:151.80.50.0/24|' \"\$(CVF)\""
+mk cvdry; ccfr; quiet --dry-run
+mcheck "kapsama defteri: deneme turu yazmaz; gerçek tur yazar" "[ ! -e \"\$(CVF)\" ] && { quiet; [ -s \"\$(CVF)\" ]; }"
+mk cvund; ccfr; quiet; cvback 172800; s5; quiet; quiet
+mcheck "ban altında ihlal: ülke banı 2 gündür yürürlükteyken banlanan 5 tekil → ağ uyarısı yok, tek olay (ülke FR, 5 IP); ikinci tur yinelemez" "! grep -q '\"type\":\"warn16\"' \"\$(EVF)\" && [ \"\$(uev)\" = 1 ] && grep -q '\"type\":\"under_ban\",\"ck\":\"cc\",\"cn\":\"FR\".*\"n\":5,' \"\$(EVF)\""
+single 151.80.10.1 sshd "$(pdt now)"; quiet
+mcheck "ban altında ihlal: aynı gün yeni IP gelse de kapsama başına günde bir olay" "[ \"\$(uev)\" = 1 ]"
+sed -i "s/^$(date +%F)\t/$(date -d yesterday +%F)\t/" "$R/var/lib/csf_autogroup/under.seen"; quiet; quiet
+mcheck "ban altında ihlal: ertesi gün yalnız yeni IP bildirilir (1 IP), sonra yinelenmez" "[ \"\$(uev)\" = 2 ] && grep '\"type\":\"under_ban\"' \"\$(EVF)\" | tail -n 1 | grep -q '\"n\":1,.*\"ips\":\[{\"ip\":\"151.80.10.1\"'"
+# Kontrol edilecekler satırı: geniş kapsamada (ülke banı) IP başına bir satır, olayla aynı alanlar (ck, cn, cm) + since, last
+mcheck "ban altında ihlal satırı: ülke banında IP başına satır (6 IP → 6 satır), kapatan ban alanlarıyla" "[ \$(run --status --json 2>/dev/null | grep -o '\"type\":\"under_ban\",\"cidr\":\"151\.80\.[0-9.]*\",\"ck\":\"cc\",\"cn\":\"FR\",\"cm\":\"all\"' | wc -l) = 6 ] && rvrow 151.80.10.1 | grep -q '\"since\":[0-9]*,\"n\":1,\"last\":[0-9]*,\"csfr\":0,.*\"ips\":\[{\"ip\":\"151.80.10.1\".*\"svc\":\"ssh\"'"
+mk cvfirst; ccfr; s5; quiet
+mcheck "ilk kurulum: zaten duran kapsamanın başlangıcı ilk turun anı — önceki tekiller 'önce' (olay yok, uyarı yok), defter yazıldı" "[ \"\$(uev)\" = 0 ] && ! grep -q '\"type\":\"warn16\"' \"\$(EVF)\" && grep -q '^cc:FR|' \"\$(CVF)\""
+mk cvpay; ccfr; quiet; cvback 1800; s5; quiet
+mcheck "sayım payı: kapsama 30 dk önce başladı, lfd penceresi 3600 sn (varsayılan) → banlar 'önce' (olay yok, uyarı yok)" "[ \"\$(uev)\" = 0 ] && ! grep -q '\"type\":\"warn16\"' \"\$(EVF)\" && [ -s \"\$(CVF)\" ]"
+mk cvpay2; ccfr; printf '%s\n' 'LF_INTERVAL = "600"' >> "$R/etc/csf/csf.conf"; quiet; cvback 1800; s5; quiet
+mcheck "sayım payı: LF_INTERVAL 600 iken aynı banlar pencerenin dışında → ban altında ihlal" "[ \"\$(uev)\" = 1 ]"
+# geniş kapsamada karar tekil başına: önce "IP'lerin hepsi kapalıysa" bütün uyarı atlanıyor, biri açıksa hepsi sayılıyordu
+s8() { local x dn; dn=$(pdt now); for x in 7.1 8.1 9.1; do single 151.80.$x mod_security "$dn"; done; for x in 10.1 11.1 12.1 13.1 14.1; do single 151.80.$x sshd "$dn"; done; }
+mk cvmix; printf '%s\n' 'CC_DENY_PORTS = "FR"' 'CC_DENY_PORTS_TCP = "80,443"' 'CC_DENY_PORTS_UDP = "443"' >> "$R/etc/csf/csf.conf"; quiet; cvback 172800; s8; quiet
+mcheck "tekil başına karar: web'i kapatan ülke port banı altında 3 web + 5 SSH tekili → ağ uyarısı yalnız 5 SSH ile, 3 web ban altında ihlal" "grep -q '\"type\":\"warn16\",\"cidr\":\"151.80.0.0/16\",\"n\":5,' \"\$(EVF)\" && grep -q '\"type\":\"under_ban\",\"ck\":\"cc\",\"cn\":\"FR\".*\"n\":3,' \"\$(EVF)\""
+pline() { printf '%s\n' "tcp|in|d=80,443|s=$1 # csf_autogroup: elle kısmi ban (root) [svc=web] - do not delete - $(pdt "$2")" "udp|in|d=443|s=$1 # csf_autogroup: elle kısmi ban (root) [svc=web] - do not delete - $(pdt "$2")" >> "$D"; }
+mk cvpart; pline 151.80.0.0/16 '-2 days'; s8; quiet
+mcheck "kısmi ban: kapalı servise (web) bandan sonra gelen 3 tekil ban altında ihlal, açık servise (SSH) gelen 5 tekil ağ uyarısı" "grep -q '\"type\":\"warn16\",\"cidr\":\"151.80.0.0/16\",\"n\":5,' \"\$(EVF)\" && grep -q '\"type\":\"under_ban\",\"cidr\":\"151.80.0.0/16\",\"ck\":\"part\".*\"n\":3,' \"\$(EVF)\""
+mcheck "satır = adres: şüpheli ağ satırı varken açık servis de ikinci satır açmaz, o satıra eklenir (po: web kapalı, SSH 5); önce hiç görünmüyordu" "rvrow 151.80.0.0/16 | grep -q '\"type\":\"warn16\".*\"po\":{\"svc\":\"web\",\"extra\":\"\",\"since\":{\"ssh\":5},\"n\":5,'"
+mcheck "ban altında ihlal satırı: aralığın başka satırı (şüpheli ağ) varken ikinci satır açılmaz, kayıt o satıra eklenir (ub: kısmi ban, 3 IP)" "rvrow 151.80.0.0/16 | grep -q '\"type\":\"warn16\".*\"ub\":{\"ck\":\"part\",\"cn\":\"151.80.0.0/16\",\"cm\":\"ports\",\"tcp\":\"80,443\",\"udp\":\"443\",\"since\":[0-9]*,\"n\":3,.*\"ips\":\[{\"ip\":\"151.80.7.1\"' && [ \$(run --status --json 2>/dev/null | grep -o '\"review\":\[.*\],\"ignored\"' | grep -o '\"cidr\":\"151.80.0.0/16\"' | wc -l) = 1 ]"
+mk cvp24; for x in 1 2 3; do single 151.80.7.$x sshd "$(pdt '-2 days')"; done; pline 151.80.7.0/24 '-1 day'; quiet
+mcheck "kısmi bandan önceki tekiller blok eşiğine sayılmaz (servisleri açık kalsa da): blok tam banlanmaz" "! grep -q '^151.80.7.0/24' '$D'"
+for x in 4 5 6; do single 151.80.7.$x sshd "$(pdt now)"; done; quiet
+mcheck "kısmi bandan sonra açık servise gelen 3 tekil blok eşiğini doldurur: blok banlanır" "grep -q '^151.80.7.0/24' '$D'"
+mk cvban; printf '%s\n' "151.80.7.0/24 # Manually denied - $(pdt '-3 days')" >> "$D"; quiet; cvback 172800
+grep '"type":"run"' "$(EVF)" | tail -n 1 | sed -E "s/\"t\":[0-9]+/\"t\":$(date +%s)/; s/\"csfr\":[0-9]+/\"csfr\":1/" >> "$(EVF)"      # o an csf -r çalıştıran bir tur kaydı
+single 151.80.7.9 sshd "$(pdt now)"; quiet
+mcheck "ban altında ihlal: tam aralık banının içinde sonradan banlanan tekil → olay (aralık banı); ban anında csf -r çalıştıysa sayısı yazılır" "grep -q '\"type\":\"under_ban\",\"cidr\":\"151.80.7.0/24\",\"ck\":\"ban\".*\"n\":1,\"csfr\":1,' \"\$(EVF)\""
+mcheck "ban altında ihlal satırı: aralık banında aralık başına tek satır, csf -r sayısıyla; IP kartı aynı satırı bulur (ips)" "rvrow 151.80.7.0/24 | grep -q '\"type\":\"under_ban\",\"cidr\":\"151.80.7.0/24\",\"ck\":\"ban\".*\"n\":1,.*\"csfr\":1,.*\"ips\":\[{\"ip\":\"151.80.7.9\"'"
+mk cvtmp; printf '%s\n' "$(( NOW - 3 * 86400 ))|151.80.7.0/24||inout|864000|csf_autogroup: temp block 151.80.7.0/24" >> "$T"; quiet; cvback 172800
+printf '%s|151.80.7.9||in|3600|lfd: (sshd) Failed SSH login from 151.80.7.9\n' "$(date +%s)" >> "$T"; quiet
+mcheck "ban altında ihlal: geçici aralık banının içinde sonradan geçici banlanan tekil → olay (geçici aralık banı), csf -r yok (0)" "grep -q '\"type\":\"under_ban\",\"cidr\":\"151.80.7.0/24\",\"ck\":\"temp\".*\"n\":1,\"csfr\":0,' \"\$(EVF)\""
+mk cvign; ccfr; quiet; cvback 172800; s5; quiet --action ignore 151.80.7.0/24 0; quiet
+mcheck "ban altında ihlal: susturulan aralığın IP'leri olaya girmez (5 tekilin 2'si susturulmuş /24'te → 3 IP)" "grep -q '\"type\":\"under_ban\",\"ck\":\"cc\".*\"n\":3,' \"\$(EVF)\""
+mcheck "ban altında ihlal satırı: susturulan aralığın IP'lerinin satırı yok, ötekilerin var" "[ -z \"\$(rvrow 151.80.7.1)\" ] && rvrow 151.80.8.1 | grep -q '\"type\":\"under_ban\"'"
+mkm cvmail 1; ccfr; quiet; cvback 172800; s5; quiet
+mcheck "ban altında ihlal maili: kapsamanın adı ve kapattığı, IP satırları (e-posta sınıfı IE_REVIEW)" "mtext | grep -q 'ülke banı FR (her şey)' && mtext | grep -q '151.80.7.1 '"
+mkm cvmail0 1; echo "IE_REVIEW=0" >> "$R/app/config.env"; ccfr; quiet; cvback 172800; s5; quiet
+mcheck "IE_REVIEW=0: ban altında ihlal mail yazmaz, Geçmiş'e yine yazılır" "[ ! -e '$R/mail_calls.log' ] && [ \"\$(uev)\" = 1 ]"
+ilerle "motor kuralları bitti ($MF ihlal); ekran tablosu (render.js)"
 node "$(wp "$H/render.js")" "$(wp "$REPO/whm/assets/ag.js")" "$(wp "$W/out")" "$@"; RC=$?
+ilerle "ekran tablosu bitti (çıkış $RC); K7 durum çıktıları"
 # K7 bütün köklerde: liste satırı menüsü = Geçmiş menüsü (menu-esit.js). Yalnız listede satır doğurabilecek kökler (~4 dk)
 mkdir -p "$W/k7"
 for R in "$W"/roots/*; do
     grep -q -E 'warn|skip_wl|allow_|part_open|add24|temp24|manual_ban' "$R/var/lib/csf_autogroup/events.jsonl" 2>/dev/null || [ -s "$R/etc/csf/csf.deny" ] || continue
+    ilerle "K7 ${R##*/}"
     run --status --json > "$W/k7/${R##*/}.json" 2>/dev/null
 done
+ilerle "K7 karşılaştırma (menu-esit.js)"
 node "$(wp "$H/menu-esit.js")" "$(wp "${AG_JS:-$REPO/whm/assets/ag.js}")" "$(wp "$W/k7")" || RC=1   # AG_JS: kuralı eski panelle sınamak için
 printf '\nMotor kuralları\n%s' "$ML"
 [ "$MF" -gt 0 ] && { echo "$MF motor kuralı ihlali"; exit 1; }

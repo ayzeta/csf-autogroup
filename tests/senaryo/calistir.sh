@@ -139,16 +139,23 @@ fi
 cell() {   # KATMAN SALDIRI BEKLENEN — kısmi ban önceden konmuşsa saldırılar bandan sonra (bugün), uyarıyı motor üretir
     mk; layer "$1"; attack "$2"; run >/dev/null 2>&1; check "kapsama · $1 · $2" "$3" "$(review)"
 }
+# Karar tekil başına (1.15.94, cov_decide): servisi kapalı tekil sayılmaz, açık kalanlar sayılır. 5 web (kapalı) + 1 SSH (açık) →
+# sayılan 1 tekil, eşiğin (5) altında: satır yok. Önce "hepsi kapalı değilse" altısı birden sayılıyordu (mix, pssh, ptag: G).
 for k in liste-web asn-web; do
-    cell $k web -; cell $k mail G; cell $k ssh G; cell $k mix G; cell $k pweb -; cell $k pssh G; cell $k pyok -
+    cell $k web -; cell $k mail G; cell $k ssh G; cell $k mix -; cell $k pweb -; cell $k pssh -; cell $k pyok -
 done
 cell yok web G
-cell liste-web ptag G      # PERMBLOCK satırının [LF_SSHD] etiketinden: SSH, listeyle kapalı değil
+cell liste-web ptag -      # PERMBLOCK satırının [LF_SSHD] etiketinden: SSH, listeyle kapalı değil — ama tek başına (5 web kapalı)
 cell asn-posta web G; cell asn-posta mail -; cell asn-posta mix G
 cell asn-hepsi web -; cell asn-hepsi ssh -; cell asn-hepsi mix -
 cell ulke-hepsi web -; cell ulke-hepsi ssh -
 cell ulke-web web -; cell ulke-web ssh G
-cell kismi-once web G; cell kismi-once mail G; cell kismi-once ssh G     # web kısmi banından sonra web gelmesi = sızıntı, o da görünür
+# web kısmi banından sonra web gelmesi: eşiğe sayılmaz (şüpheli ağ uyarısı yok), ayrı kayıt olur — "ban altında ihlal" (under_ban):
+# Kontrol edilecekler'de aralığın satırı (o da görünür) ve Geçmiş olayı
+cell kismi-once web G
+check "kapsama · kismi-once · web → satır 'ban altında ihlal', şüpheli ağ uyarısı yok" G "$(grep -q '"type":"under_ban","cidr":"151.80.0.0/16","ck":"part"' "$R/st.json" && ! grep -q '"type":"warn16"' "$R/var/lib/csf_autogroup/events.jsonl" && echo G || echo -)"
+check "kapsama · kismi-once · web → ban altında ihlal olayı (6 IP)" G "$(grep -q '"type":"under_ban","cidr":"151.80.0.0/16","ck":"part".*"n":6,' "$R/var/lib/csf_autogroup/events.jsonl" 2>/dev/null && echo G || echo -)"
+cell kismi-once mail G; cell kismi-once ssh G
 
 # kiralık liste ayarı açık ama gerçekte etkin değilse kapsama sayılmaz (liste dosyaları diskte kalsa da)
 # uyarı liste yokken oluşmuş, sonra liste açılmış: etkinken gizlenir, eklenti duraklatılınca yeniden görünür
@@ -205,12 +212,13 @@ for ord in 24-16 16-24; do
 done
 
 # ── 3e) Otomatik blok banı: servisi zaten kapalı tekiller (katman konmadan önceki saldırılar) eşiğe sayılmaz ──
-b24() { mk; layer "$1"; for x in 1 2 3; do single 151.80.7.$x "$2" "$OLD"; done; run >/dev/null 2>&1; grep -q '^151.80.7.0/24 ' "$D" && echo G || echo -; }
+b24() { mk; layer "$1"; for x in 1 2 3; do single 151.80.7.$x "$2" "${3:-$OLD}"; done; run >/dev/null 2>&1; grep -q '^151.80.7.0/24 ' "$D" && echo G || echo -; }   # 3: tekillerin tarihi
 check "blok banı · katman yok, web saldırısı → banlanır" G "$(b24 yok web)"
 check "blok banı · liste web'i kapatıyor, web saldırısı → banlanmaz" - "$(b24 liste-web web)"
 check "blok banı · liste web'i kapatıyor, SSH saldırısı → banlanır" G "$(b24 liste-web ssh)"
 check "blok banı · /16 kısmi web banı var, web saldırısı → banlanmaz" - "$(b24 kismi-once web)"
-check "blok banı · /16 kısmi web banı var, SSH saldırısı → banlanır" G "$(b24 kismi-once ssh)"
+check "blok banı · /16 kısmi web banı var, bandan sonra SSH saldırısı → banlanır" G "$(b24 kismi-once ssh "$DT")"
+check "blok banı · /16 kısmi web banı var, bandan önceki SSH tekilleri → banlanmaz (o banla ele alınmış)" - "$(b24 kismi-once ssh "$P5")"
 check "blok banı · sağlayıcı banı web'i kapatıyor, web saldırısı → banlanmaz" - "$(b24 asn-web web)"
 check "blok banı · sağlayıcı banı web'i kapatıyor, SSH saldırısı → banlanır" G "$(b24 asn-web ssh)"
 check "blok banı · sağlayıcı tümden banlı, SSH saldırısı → banlanmaz" - "$(b24 asn-hepsi ssh)"

@@ -355,6 +355,18 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
       // giren evx'e eklenir (Geçmiş ve sayaçlar değişmez). 1.15.92'de geçici blokta da kutu çıkıyordu, motor geçici blokta onu okumuyordu
       j.evx = (j.evx || []).concat([{ t: j.now - 600, type: 'temp24', cidr: '203.0.113.0/24', n: 3,
         ips: ['203.0.113.5', '203.0.113.6', '203.0.113.7'].map(ip => ({ ip: ip, why: '(sshd) Failed SSH login from ' + ip })) }]);
+      // ban altında ihlal (1.15.94): test makinesinde bu kaydı doğuran veri yok (kapsamanın defterde eskimesi gerekir) → iki satır
+      // eklenir: kendi satırı (kiralık liste, IP başına) ve başka türden satıra eklenmiş kayıt (şüpheli ağ + kısmi ban, "ub"). Eski
+      // tarihli: sıralamada sona düşer, Sustur akışının ilk satırı olmaz; susturulmuşsa eklenmez (akış onları düşmüş görmeli)
+      const mute = c => (j.ignored || []).some(g => g.cidr === c), d0 = j.now - 5 * 86400, d1 = j.now - 2 * 86400;
+      const uip = (ip, w, s) => ({ ip: ip, host: '', why: w, svc: s, t: d1, owner: '', asn: '', cc: '', pfx: '' });
+      j.review = j.review || [];
+      if (!mute('198.51.100.200')) j.review.push({ t: d1, type: 'under_ban', cidr: '198.51.100.200', ck: 'cl', cn: 'aws', cm: 'svc', tcp: '80,443', udp: '443', since: d0, n: 1, last: d1, csfr: 1, total: 1,
+        ips: [uip('198.51.100.200', 'mod_security (id:2008) triggered', 'web')] });
+      if (!mute('198.18.0.0/16')) j.review.push({ t: d1 - 60, type: 'warn16', cidr: '198.18.0.0/16', n: 5, perm: 5, temp: 0, subnets: 3, wl: '', total: 5,
+        ips: ['198.18.7.1', '198.18.7.2', '198.18.8.1', '198.18.8.2', '198.18.9.1'].map(ip => uip(ip, '(sshd) Failed SSH login', 'ssh')),
+        ub: { ck: 'part', cn: '198.18.0.0/16', cm: 'ports', tcp: '80,443', udp: '443', since: d0, n: 2, last: d1, csfr: 0, total: 2,
+          ips: ['198.18.20.1', '198.18.21.1'].map(ip => uip(ip, 'mod_security (id:2008) triggered', 'web')) } });
     }
     // gövde açıkça verilir: { response, json } birlikte verilince özgün gövde gidiyordu (enjeksiyon hiç işlemiyordu; ölçüldü)
     return route.fulfill({ status: r.status(), contentType: 'application/json', body: JSON.stringify(j) });
@@ -535,16 +547,47 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
   const rows =await page.evaluate(() => Array.from(document.querySelectorAll('.ag-item[data-row] .ag-tr-r')).map(r => ({
     cidr: r.closest('.ag-item').getAttribute('data-row'), ip: (r.querySelector('.ag-cidr') || {}).getAttribute ? r.querySelector('.ag-cidr').getAttribute('data-ip') : '' })));
   console.log(`  Kontrol edilecekler: ${rows.length} satır`);
+  // ban altında ihlal: kendi satırı rozetiyle ve notuyla (kapatan ban); başka türden satırda (şüpheli ağ) ikinci rozet + not, açılan IP
+  // listesinde eklenen IP'ler aynı rozetle. Satır = adres: aynı adrese ikinci satır açılmaz
+  {
+    const ub = await page.evaluate(() => {
+      const row = c => document.querySelector(`.ag-item[data-row="${c}"]`), tx = e => e ? e.textContent.replace(/\s+/g, ' ').trim() : '';
+      const a = row('198.51.100.200'), b = row('198.18.0.0/16');
+      return { a: a ? tx(a.querySelector('.ag-td-state')) + ' | ' + tx(a.querySelector('.ag-tr-note')) : 'yok',
+        b: b ? tx(b.querySelector('.ag-td-state')) + ' | ' + tx(b.querySelector('.ag-ub-l')) : 'yok',
+        nb: document.querySelectorAll('.ag-item[data-row="198.18.0.0/16"]').length };
+    });
+    check('ban altında ihlal satırı: rozet ve not (kapatan: kiralık liste AWS, kapattığı Web, csf -r)', /^(Ban altında ihlal|Violation under a ban) \| .*AWS.*\(.*Web.*\).*csf -r/.test(ub.a), ub.a);
+    check('ban altında ihlal eki: şüpheli ağ satırının Durum sütununda ikinci rozet, notta açıklaması (2 IP, kısmi ban), tek satır', /^(Şüpheli ağ|Suspicious network) ?(Ban altında ihlal|Violation under a ban) \| (Ban altında ihlal|Violation under a ban): 2 IP/.test(ub.b) && ub.nb === 1, ub.b + ' · satır ' + ub.nb);
+    // tek kural (rvStates): satırın bütün durumları Durum sütununda rozet; not bölümü yalnız açıklama — rozet taşımaz
+    const np = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-tbl .ag-tr-note [data-st], .ag-tbl .ag-tr-note .ag-pill')).map(e => e.textContent.trim()).join(', '));
+    check('durum standardı: Kontrol edilecekler satırlarının not bölümünde rozet yok (durumlar Durum sütununda)', np === '', np);
+    const tg = await page.$('.ag-item[data-row="198.18.0.0/16"] .ag-td-why [data-act="toggle"]');
+    if (tg) {
+      await tg.click(); await page.waitForTimeout(400);
+      const ipr = await page.evaluate(() => { const rs = Array.from(document.querySelectorAll('.ag-item[data-row="198.18.0.0/16"] .ag-ip-t tbody tr'));
+        return rs.length + ' satır, rozetli ' + rs.filter(r => /Ban altında ihlal|Violation under a ban/.test(r.textContent)).length; });
+      check('ban altında ihlal eki: IP listesinde 5 + 2 IP, eklenen 2 IP rozetli', ipr === '7 satır, rozetli 2', ipr);
+      const tg2 = await page.$('.ag-item[data-row="198.18.0.0/16"] .ag-td-why [data-act="toggle"]'); if (tg2) { await tg2.click(); await page.waitForTimeout(300); }
+    } else check('ban altında ihlal eki: IP listesi açılır', false, 'aç/kapa bağlantısı yok');
+  }
   for (const r of rows) {
     const before = errs.length;
     const el = await page.$(`.ag-item[data-row="${r.cidr}"] .ag-cidr`);
     if (!el) continue;
     await el.click();
     await page.waitForFunction(() => { const d = document.querySelector('.ag-drawer'); return d && d.innerText.length > 40 && !d.querySelector('.ag-spin'); }, null, { timeout: 20000 }).catch(function () {});
+    // aralık satırı (/16, /24…) aralık kartını açar: başlık hemen gelir, gövde motorun cevabıyla (ölçüldü: ~2 sn) — karar satırı
+    // çizilene kadar beklenir (önce Kontrol edilecekler'de aralık satırı olan test verisi yoktu, gövde beklenmeden denetleniyordu)
+    if (/\//.test(r.cidr)) await page.waitForSelector('.ag-drawer .ag-verdict', { timeout: 30000 }).catch(function () {});
     await page.waitForTimeout(300);
     const txt = await page.evaluate(() => { const d = document.querySelector('.ag-drawer'); return d ? d.innerText : ''; });
+    if (process.env.AG_TANI && /\//.test(r.cidr)) console.log('  [tanı] ' + r.cidr + ' ' + await page.evaluate(() => { const d = document.querySelector('.ag-drawer'); return d ? 'spin=' + !!d.querySelector('.ag-spin') + ' html=' + d.innerHTML.length + ' :: ' + d.innerText.replace(/\s+/g, ' ').slice(0, 400) : 'kart yok'; }));
     check(`IP kartı açılıyor: ${r.cidr}`, errs.length === before && txt.length > 40, errs.slice(before).join(' | '));
     await kartKurallari(page, r.cidr);
+    // durum standardı: satırın birden çok durumu varsa IP kartı da hepsini gösterir (şüpheli ağ + ban altında ihlal)
+    if (r.cidr === '198.18.0.0/16') check('durum standardı: IP kartı satırın ek durumunu da gösterir (ban altında ihlal rozeti ve açıklaması)',
+      /(Ban altında ihlal|Violation under a ban)[\s\S]*(Ban altında ihlal|Violation under a ban): 2 IP/.test(txt), txt.replace(/\s+/g, ' ').slice(0, 300));
     // kartın Kontrol edilecekler satırı Yoksay (yoksayılmamışsa) ya da Yoksaymayı kaldır sunmalı
     const cardIgn = await page.evaluate(() => !!document.querySelector('.ag-drawer [data-act="ignore"], .ag-drawer [data-act="unignore"]'));
     check(`IP kartında Sustur / kaldır var: ${r.cidr}`, cardIgn);

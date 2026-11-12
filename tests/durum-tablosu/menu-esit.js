@@ -36,7 +36,7 @@ for (const f of fs.readdirSync(DIR).filter(f => f.endsWith('.json')).sort()) {
     if (!ist || (kind !== 'rm:' && ist.r) || (kind === 'pm:' && ist.g)) return;   // Geçmiş en önce gelen listenin eylemlerini sunar
     rows++;
     const r = kind === 'rm:' ? (st.review || []).filter(x => x.cidr === c)[0] : null;
-    const ty = kind === 'rm:' ? (r ? r.type : '?') + (r && r.apx ? '+apx' : '') + (r && /services\.allow/.test(r.wl || '') ? '+svc' : '') : kind.slice(0, 2);
+    const ty = kind === 'rm:' ? (r ? r.type : '?') + (r && /services\.allow/.test(r.wl || '') ? '+svc' : '') : kind.slice(0, 2);
     kinds[ty] = (kinds[ty] || 0) + 1;
     const h = act2(AG.itemMenu(c, { type: 'x', ips: [] }, ist)), l = act2(menus[k]);
     if (h !== l) { fails++; console.log(`  ✗ ${f.replace('.json', '')} ${c} (${ty}): liste [${l || '—'}] ≠ Geçmiş [${h || '—'}]`); }

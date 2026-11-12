@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.15.94 — 2026-11-12
+
+One decision for "is this single ban already covered by a wider ban".
+
+- The plugin now keeps a ledger of every covering ban (range ban, temp range
+  ban, partial ban, provider or country ban, rented-server list) with the time
+  it first saw it and the ports it closes. A ban that was already in place when
+  the plugin is updated starts at the update; nothing is claimed about the past.
+- Every single ban is judged on its own, in one place, and the block threshold,
+  the suspicious range / network counts, Needs review and the notifications all
+  read that decision:
+  - banned before the covering ban, or within lfd's counting window after it
+    started (`LF_INTERVAL`): not counted, nothing reported;
+  - banned later for a service the covering ban leaves open: counted as usual;
+  - banned later for a service the covering ban closes: not counted, recorded
+    as a new *Violation under a ban* (History, Needs review, email and Slack in
+    the review class; once per ban per day, new IPs only). The record says if
+    `csf -r` was running when the IP was banned.
+- Under a provider ban, a country ban or a rented-server list the decision used
+  to be all or nothing: if one offending IP hit an open service, every IP was
+  counted, and if all were covered the whole warning was dropped. Now only the
+  IPs that hit an open service count.
+- Singles banned before a partial ban no longer count toward the automatic
+  `/24` ban either (they already did not count toward suspicious networks).
+- A suspicious network (`/16`) no longer counts the singles of an announced
+  range that is over its own threshold: that range is reported as a suspicious
+  range, and the same IPs are not reported twice. The IP card's network count
+  follows the same rule, and the "most singles are in range X" hint is gone.
+- One row per address in Needs review: when an address has more than one
+  state (suspicious network, repeating, violation under a ban, open service),
+  all of them show as badges in the State column, and the IP card and the range
+  card show the same badges and notes. An open-service finding on a range that
+  already had a row used to be left out; the "repeating" badge sat in the notes.
+- The weekly summary counts violation-under-a-ban records with the other
+  review records.
+
 ## 1.15.93 — 2026-11-11
 
 Texts that described a rule differently from what the code does were corrected.

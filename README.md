@@ -169,6 +169,12 @@ settings, with no prompts. `config.env` is left untouched.
   preview in Settings, or the IP card's distance to the threshold.
   A partial ban whose open services keep being hit shows as *Open service*
   (counting the IPs that hit the open services after the ban, within the review period).
+  An IP that lfd banned for a service a ban already closes (a range ban, a
+  partial ban, a provider or country ban, a rented-server list) shows as
+  *Violation under a ban*: one row per range for range bans, one row per IP
+  for the wider ones, naming the ban that closes the service and since when,
+  and saying so if `csf -r` was running when the IP was banned (the firewall
+  is open briefly while rules reload).
   Every row says the latest date it drops off the list by itself if nothing new comes:
   the review period (*Days kept in the list*, default 7 days) after its last attempt,
   warning or violation. Rows are re-checked against today's data and drop earlier
@@ -189,7 +195,8 @@ settings, with no prompts. `config.env` is left untouched.
   and reasons behind the temp block ban.
 - **History** (its own tab) — every ban, promotion, skip, warning and manual
   action, and once a day the findings in Needs review that are otherwise
-  recomputed from the logs (violations from allowed IPs, open services), so
+  recomputed from the logs (violations from allowed IPs, open services,
+  violations under a ban), so
   they stay after the review row is gone; back to the start of the event log:
   20 per page, like the other lists; the last page's **›** loads older entries
   from the event log. Work from before the event log existed is
@@ -206,8 +213,7 @@ settings, with no prompts. `config.env` is left untouched.
   network, country, provider and rented-server list, with its state, how far it
   is from its threshold and its ban button) and *Who*;
   changing a threshold shows its effect on the current entries; suspicious
-  networks show the services hit and suggest the announced range that holds
-  most of their singles among the ranges over the suspicious-range threshold.
+  networks show the services hit.
 - **History actions** — every row has a **⋯** menu with what can be done with
   that item *now* (ban, change, remove, mute, show in Overview, IP card), and
   the newest row of each item says its current state ("banned now", "in To
@@ -405,8 +411,9 @@ its own:
   or off. Run notices are the bans, suspicious ranges and networks, skips,
   old-block removal and lists that can't be downloaded; the
   allowed-IP violation and open-service records are the allowed / ignored /
-  server-IP and open-service rows of *Needs review*, sent once per IP or
-  range per day and never for what you muted. Both go by email at the end
+  server-IP, open-service and violation-under-a-ban rows of *Needs review*,
+  sent once per IP, range or ban per day (a violation under a ban only when
+  a new IP shows up) and never for what you muted. Both go by email at the end
   of the run and on Slack collected into at most one message per
   `SLACK_BATCH_MIN` minutes (default 60; a list that can't be downloaded goes
   right away); firewall and list problems go to Slack right away (once when
@@ -458,8 +465,8 @@ block that comes back turns into a permanent one.
 |--------|--------|
 | `/24` with **≥3** permanent single bans | permanently ban the `/24`, remove the singles |
 | `/24` with **≥5** permanent singles when it is banned (or a watched `/24`) | ban `/24` + `do not delete` |
-| announced range (`/17`–`/23`, from the owner cache) with **≥4** singles across **≥2** `/24`s (permanent and temp counted together, each IP once) | flag as suspicious range by email, suggest banning that range, no auto-ban; reported again only when a new IP comes in (at most once a day). With a partial ban on the range, only bans after it count |
-| `/16` with **≥5** singles of the same owner across **≥2** sub-units (announced ranges; a `/24` when the range is unknown, `/24` or `/16` and wider; banned blocks count as sub-units, their singles do not) | flag as suspicious network by email, no auto-ban, same repeat rules. Singles that all sit in one announced range report that range instead; bans of different owners in the same `/16` are not added together |
+| announced range (`/17`–`/23`, from the owner cache) with **≥4** singles across **≥2** `/24`s (permanent and temp counted together, each IP once) | flag as suspicious range by email, suggest banning that range, no auto-ban; reported again only when a new IP comes in (at most once a day). With a partial ban on the range, only bans after it that hit a service it leaves open count |
+| `/16` with **≥5** singles of the same owner across **≥2** sub-units (announced ranges; a `/24` when the range is unknown, `/24` or `/16` and wider; banned blocks count as sub-units, their singles do not) | flag as suspicious network by email, no auto-ban, same repeat rules. The singles of an announced range that is over its own threshold are reported with that range and not counted again here; bans of different owners in the same `/16` are not added together |
 | `/24` with **≥3** temp bans at the same time (first time) | temp-ban the `/24` for 12h, watch it |
 | watched `/24` with **≥3** temp bans at the same time again, or **≥3** permanent singles | permanent ban + `do not delete` |
 | plugin's block ban left `csf.deny` without the plugin (CSF drops the oldest unmarked lines when `DENY_IP_LIMIT` is reached) | watch the `/24`, alert by email and in History |
@@ -725,10 +732,16 @@ restoring `config.env` is enough.
 - After saving, the setting is written to CSF right away and lfd is restarted
   (lfd fills the address sets); the screen shows how many ranges are loaded.
   Turning it off removes only what the plugin added.
-- **Needs review** leaves out a suspicious network when every offending IP is
-  covered by a wider ban (a banned provider, a country ban in CSF or an active
-  rented-server list) and that ban covers the service hit (a Web-only ban
-  covers web violations, not SSH ones); no warning is sent for it.
+- A single ban is judged on its own against every ban that already covers
+  its address (a range ban, a partial ban, a banned provider, a country ban in
+  CSF or an active rented-server list). The plugin keeps a ledger of when it
+  first saw each of these (`covers` in its state directory; a ban that was
+  already there when the plugin was updated starts at the update). A single
+  banned before the covering ban, or within lfd's counting window after it
+  (`LF_INTERVAL`), is left out of the thresholds silently; one banned later for
+  a service the covering ban leaves open counts as usual (a Web-only ban
+  covers web violations, not SSH ones); one banned later for a service it
+  closes does not count and is recorded as a *Violation under a ban*.
 - Block bans already inside a banned provider stay in `csf.deny`; they are
   marked *inside a provider ban* (checked against the ranges CSF loaded) and
   the Providers tab lists them under *Bans no longer needed* and can remove them.

@@ -402,10 +402,11 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-tr-note { padding: 0 18px 9px 180px; font-size: 12px; line-height: 1.45; color: var(--ag-text-3); }
 .ag-tr-note:not(:has(div, .ag-own-n:not(:empty))) { padding-bottom: 5px; }
 .ag-tr-note .ag-row-n { margin-top: 2px; }
+.ag-tr-note .ag-ub-l { margin-top: 2px; }   /* satırın ek durumunun (ban altında ihlal, açık servis) açıklaması; rozeti Durum sütununda */
+/* Durum sütunu satırın bütün durumlarını taşır (rvStates): alt alta, ana durum üstte */
+.ag-tr-r .ag-td-state { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
 .ag-own-n { display: none; }
 /* "tekrar ediyor" rozeti not satırının başında; dar kartta sahip aynı satırda yanında */
-.ag-note-top { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin-bottom: 3px; }
-.ag-note-top .ag-own-n { margin-bottom: 0; }
 .ag-tbl > .ag-item:nth-child(odd) > .ag-tr-note { background: var(--ag-zebra); }
 .ag-tbl > .ag-item:hover > .ag-tr, .ag-tbl > .ag-item:hover > .ag-tr-note { background: var(--ag-row-hover); }
 .ag-thead.ag-tr-r .ag-th { cursor: default; }
@@ -858,7 +859,6 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
 .ag-oldbar { display: flex; align-items: center; gap: 10px; padding: 10px 18px; background: var(--ag-warn-soft); border-bottom: 1px solid var(--ag-warn-line); color: var(--ag-warn); font-size: 12.5px; font-weight: 550; flex-wrap: wrap; }
 .ag-oldbar svg { width: 16px; height: 16px; flex: none; }
 .ag-oldbar span { flex: 1; min-width: 200px; }
-.ag-rep { font-size: 11px; }
 
 /* Ayarlar → Sunucu: sürüm ve güncelleme */
 .ag-upd { padding: 16px 22px 18px; display: flex; flex-direction: column; gap: 12px; }
@@ -1357,9 +1357,9 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
   .ag-prow-st, .ag-prow > .ag-chips { grid-column: 1 / -1; justify-self: start; }
   .ag-prow > [data-act="srcinfo"] { grid-column: 2; justify-self: end; }   /* 1.15.47: düğme Etkisini ölç (asnimpact) değil Ayrıntı; eski seçici tutmuyordu, düğme satır boyu uzuyordu */
 }
-/* kart tablolarındaki IP'ler tıklanınca IP kartını açar: bağlantı görünümü (altı çizili), bölünmeden */
-.ag-im-t td[data-ip] { color: var(--ag-accent); cursor: pointer; white-space: nowrap; text-decoration: underline; text-decoration-color: var(--ag-accent-line); text-underline-offset: 3px; }
-.ag-im-t td[data-ip]:hover { text-decoration-color: currentColor; }
+/* kart tablolarındaki IP'ler ortak adres bağlantısıyla (cidrLink → .ag-cidr; tıklanınca IP kartı), bölünmeden. Önce dört tabloda hücrenin
+   kendisi bağlantıydı (td[data-ip], 12,5 px): öteki tablolardaki adresle aynı görünmüyordu (arayüz testinin görünüm envanteri buldu) */
+.ag-im-t .ag-cidr { white-space: nowrap; }
 /* aralık kartı · IP tablosu: banlı olmayan IP göze çarpar; "tümünü göster" tablonun altında */
 .ag-rg-open { color: var(--ag-bad); font-weight: 600; white-space: nowrap; }
 .ag-rg-ipt + .ag-link { margin-top: 8px; }
