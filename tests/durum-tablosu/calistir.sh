@@ -541,6 +541,13 @@ mcheck "tek IP: geçici ban iki yönlü ve süreli (csf -td … -d inout)" "grep
 mcheck "tek IP: seçilen servisler kalıcı kısmi satır (SSH TCP, UDP 443), tam ban satırı yok" "grep -q '^tcp|in|d=22|s=151.80.7.52 # csf_autogroup: elle /32 kısmi ban' '$D' && grep -q '^udp|in|d=443|s=151.80.7.52 ' '$D' && ! grep -q '^151.80.7.52 ' '$D'"
 quiet --action ban1 151.80.7.50; quiet --action ban1 151.80.7.53 --mode svc --svc web --ttl 600; quiet --action ban1 203.0.113.10
 mcheck "tek IP: banlı IP ikinci kez banlanmaz, geçici ban servisle konmaz, sunucunun kendi IP'si banlanmaz" "[ \"\$(grep -c '^151.80.7.50 ' '$D')\" = 1 ] && ! grep -q '151.80.7.53' '$D' '$T' && ! grep -q '203.0.113.10' '$D' '$T'"
+# eklentinin kendi tek IP banları (kalıcı, süreli, kısmi) durum çıktısının ban listesinde: Geçmiş'in "şu an banlı" notu ve menüsü
+# buradan okur. 1.15.97'ye kadar tam tek IP banları listede yoktu: Geçmiş "artık banlı değil" diyor, IP kartı "tamamen banlı" (canlıda)
+gst() { run --status --json 2>/dev/null | grep -o '"groups":\[.*\],"pending"'; }
+mcheck "tek IP: eklentinin kalıcı ve süreli tek IP banı durum listesinde (elle; süreli olan kalan süreyle), kısmi olan da" "gst | grep -q '{\"cidr\":\"151.80.7.50\",\"kind\":\"manual\",\"dnd\":true' && gst | grep -q '{\"cidr\":\"151.80.7.51\",\"kind\":\"manual\",\"dnd\":false,\"n\":0,\"added\":[0-9]*,\"ttl\":3[0-9][0-9][0-9]' && gst | grep -q '{\"cidr\":\"151.80.7.52\",\"since\":{[^}]*},\"kind\":\"partial\"'"
+single 151.80.7.59 sshd
+mcheck "tek IP: lfd'nin tekil banı listeye girmez (yalnız eklentinin kendi banları)" "! gst | grep -q '\"cidr\":\"151.80.7.59\"'"
+sed -i '/^151\.80\.7\.59 /d' "$D"
 printf '151.80.7.54 # müşteri\n' >> "$A"
 mcheck "tek IP: beyaz listedeki IP onaysız banlanmaz (kod 4)" "run --action ban1 151.80.7.54 --json 2>/dev/null | grep -q '\"code\":4' && ! grep -q '^151.80.7.54 ' '$D'"
 LP=$(run --lookup 151.80.7.52 --json 2>/dev/null)

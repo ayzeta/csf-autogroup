@@ -542,10 +542,10 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   // sahip gösteriminin tek bileşeni: bayrak + AS rozeti (ipucunda tam ad) + kısa kurum adı (ipucunda tam etiket). Önce 9 yerde ayrı
   // yazılıyordu: kimi rozet ipucunda adı vermiyor, kimi adı kısaltmıyor, IP listesinde rozetsiz düz metindi. o = {asn, cc, name, label}
   // noAsn: yanında kapsayan ban etiketi varken AS rozeti yer kaplamasın (numara ad ipucunda)
-  function ownerHtml(o, none, noAsn) {
+  function ownerHtml(o, none, noAsn, slot) {   // slot: ülke yokken bayrağın yeri boş ayrılır (alt alta sağlayıcı satırları aynı hizada)
     if (!o || !o.asn) return none === false ? '' : ownNone(o);
     var nm = shortName(o.name || '');
-    return flag(o.cc) + (noAsn ? '' : asnB(o.asn, o.name || '')) + '<span class="ag-org" title="' + esc(o.label || o.name || '') + '">' + esc(nm) + '</span>';
+    return (o.cc ? flag(o.cc) : slot ? '<span class="ag-flag ag-flag-0" aria-hidden="true">--</span>' : '') + (noAsn ? '' : asnB(o.asn, o.name || '')) + '<span class="ag-org" title="' + esc(o.label || o.name || '') + '">' + esc(nm) + '</span>';
   }
   function ownerOfIp(i) { return i && i.asn ? { asn: i.asn, cc: i.cc, name: ownName(i.owner), label: i.owner } : {}; }   // IP satırının sahibi (olay / durum JSON'u)
   function ownNone(o) { return o && o.none ? '<span class="ag-muted ag-own-none" title="' + esc(t('own_none_h')) + '">' + esc(t('own_none')) + '</span>' : '<span class="ag-muted ag-own-none">—</span>'; }
@@ -1446,7 +1446,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   function asnRow(i, a, w, sub, w2, noAct) {
     var name = String(a.name || '').replace(/^[^ ]+ - /, '').replace(/,\s*[A-Z]{2}$/, '');
     return '<div class="ag-asn-r"><div class="ag-asn-m">' +
-      '<div class="ag-asn-t">' + (a.cc ? '' : '<span class="ag-flag ag-flag-0" aria-hidden="true">--</span>') + ownerHtml({ asn: a.asn, cc: a.cc, name: a.name, label: a.name }) + '</div>' +
+      '<div class="ag-asn-t">' + ownerHtml({ asn: a.asn, cc: a.cc, name: a.name, label: a.name }, undefined, false, true) + '</div>' +
       (w == null ? '' : '<div class="ag-asn-b" title="' + esc(t(UI.at === 'blk' ? 'asn_bar_blk' : UI.at === 'im' ? 'asn_bar_im' : 'asn_bar_atk')) + '"><i style="width:' + w + '%"></i>' + (w2 ? '<i class="o" style="width:' + w2 + '%"></i>' : '') + '</div>') + '<div class="ag-sub">' + sub + '</div></div>' +
       (ASN_ROW_ACT && a.asn && !noAct ? asnAddBtn('AS' + a.asn) : '') + '</div>';
   }
@@ -2170,7 +2170,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       var md = '<div class="ag-chips">' + [['ports', 'pv_row_ports'], ['all', 'pv_row_all']].map(function (o) {
         return '<button type="button" class="ag-chip' + ((o[0] === 'all') === isAll ? ' on' : '') + '" data-act="asnmode" data-k="' + esc(a) + '" data-v="' + o[0] + '" title="' + esc(t(o[1] + '_h')) + '">' + esc(t(o[1])) + '</button>';
       }).join('') + '</div>';
-      return '<div class="ag-prow" id="ag-prow-' + esc(a) + '"><div class="ag-prow-nm">' + ownerHtml({ asn: a, cc: asnInfo(a).cc, name: names[a] || '', label: names[a] || '' }) + '</div>' +
+      return '<div class="ag-prow" id="ag-prow-' + esc(a) + '"><div class="ag-prow-nm">' + ownerHtml({ asn: a, cc: asnInfo(a).cc, name: names[a] || '', label: names[a] || '' }, undefined, false, true) + '</div>' +
         '<div class="ag-prow-st">' + st + '</div>' + md +
         '<button class="ag-btn ag-btn-sm" data-act="srcinfo" data-v="' + esc(a) + '" aria-expanded="' + sd + '">' + (sd ? IC.x + esc(t('pv_imp_hide')) : IC.search + esc(t('sd_btn'))) + '</button>' +
         '<button class="ag-iconbtn" data-act="asnrm" data-v="' + esc(a) + '" title="' + esc(t('pv_rm')) + '" aria-label="' + esc(t('pv_rm')) + '">' + IC.x + '</button>' +

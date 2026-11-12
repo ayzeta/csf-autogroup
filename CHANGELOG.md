@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.15.98 — 2026-11-12
+
+- A single-IP ban placed from the panel (permanent or timed) was missing from
+  the active bans list: History said "no longer banned" and offered *Ban IP*
+  again while the IP card said "fully banned". The plugin's own single-IP bans
+  are now in the list (lfd's single bans are not; they are counted toward the
+  thresholds as before).
+- The row alignment for a provider without a known country now also holds in
+  the provider ban list (1.15.97 fixed only the suggestion list).
+
 ## 1.15.97 — 2026-11-12
 
 More from the item-by-item walk through the live panel.

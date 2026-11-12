@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.97"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.98"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -3196,6 +3196,13 @@ read_temp_groups() {
             TG_TTL[$ip]=$(( TB_E[i] - now )); TG_NOTE[$ip]="$note"; TG_T[$ip]=${TB_T[i]}
         fi
     done
+    # eklentinin süreli tek IP banı (IP'yi banla, süreli): o da eklentinin kendi banı — listede, kalan süresiyle (kind manual)
+    local re_s='csf_autogroup: (elle geçici tekil ban|manual temporary single ban)'
+    for i in "${!TB_A[@]}"; do
+        ip="${TB_A[i]}"; [[ "$ip" == */* ]] && continue
+        [[ "${TB_C[i]}" =~ $re_s ]] && [ -z "${TG_TTL[$ip]+x}" ] || continue
+        TG_TTL[$ip]=$(( TB_E[i] - now )); TG_NOTE[$ip]="${TB_C[i]}"; TG_T[$ip]=${TB_T[i]}; TG_K[$ip]=manual
+    done
 }
 
 # Olay kaydından önceki işler: günlükteki (ve arşivlerindeki) iş satırları bir kez olaya çevrilir ve
@@ -3347,7 +3354,11 @@ do_status() {
     local g_tok=() g_kind=() g_dnd=() g_n=() g_ds=() g_ep=()
     while IFS= read -r line; do
         tok="${line%%[[:space:]]*}"
-        [[ "$tok" =~ $CIDR4_RE && "$tok" == */* ]] || continue
+        [[ "$tok" =~ $CIDR4_RE ]] || continue
+        # tek IP satırı yalnız eklentinin kendi tek IP banıysa (IP kartı / menü → IP'yi banla): o da listede. Önce yalnız aralıklar
+        # alınıyordu: eklentinin koyduğu kalıcı tek IP banı Aktif banlar'da yoktu, Geçmiş kaydı "artık banlı değil" diyor ve yeniden
+        # "IP'yi banla" sunuyordu; IP kartı ise "tamamen banlı" (canlıda görüldü). lfd'nin tekilleri liste dışı kalır (eşik sayımında)
+        [[ "$tok" == */* ]] || [[ "$line" == *"csf_autogroup:"* ]] || continue
         case "$line" in *Auto-grouped*|*csf_autogroup:*) ;; *) continue ;; esac
         kind=perm; [[ "$line" == *"from temp"* ]] && kind=promoted; [[ "$line" == *csf_autogroup:* ]] && kind=manual
         dnd=false; is_dnd "$line" && dnd=true
@@ -3392,7 +3403,7 @@ do_status() {
         [ "$kind" != manual ] && [ "$dnd" = false ] && blk_old "$tok" "$added" "$now" && gx+=",\"old\":true"   # expire_blocks'un ölçütü
         groups+=("{\"cidr\":\"$tok\",\"kind\":\"$kind\",\"dnd\":$dnd,${HIT[$tok]:+\"hit\":${HIT[$tok]},}\"n\":${g_n[gi]},\"added\":$added,\"ttl\":0${gu:+,\"under\":\"$gu\"}${PCOV[$tok]:+,\"pcov\":\"${PCOV[$tok]}\"}$gx}")
         pa "gj · json satırı"
-        [ "$added" -gt 0 ] && ghist+="$added $kind $tok"$'\n'
+        [ "$added" -gt 0 ] && [[ "$tok" == */* ]] && ghist+="$added $kind $tok"$'\n'      # grafik yalnız aralık banlarını sayar (tek IP banı değil)
         [ "$JSON" = 1 ] || gtext+=("$(printf '%-18s %-9s %s' "$tok" "$kind" "$([ "$dnd" = true ] && echo 'do not delete')")")
     done
     pa "gj grup satırları"; pc "gj grup" "${#g_tok[@]}"; pc "gj kısmi ban" "${#PB_P[@]}"
