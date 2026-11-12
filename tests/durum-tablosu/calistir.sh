@@ -179,6 +179,11 @@ mcheck "tur süresi: yavaş mail gönderimi run olayında 'notify' adımı olara
 mkav() { mkm "$1" 1; echo "LFD_LOG=$R/lfd.log" >> "$R/app/config.env"; : > "$R/lfd.log"; printf '151.80.7.9 # Ofis yedek - Tue Oct 31 2023\n' >> "$A"; lfdb 3600 151.80.7.9; }
 mkav avmail; quiet
 mcheck "izinli IP ihlali: mail gider, izin kaydı yorumuyla (panelle aynı); olay kaynağında da yorum" "mtext | grep -q '151.80.7.9.*csf.allow: 151.80.7.9 (Ofis yedek - Tue Oct 31 2023)' && grep -q '\"type\":\"allow_viol\".*Ofis yedek' '$R/var/lib/csf_autogroup/events.jsonl'"
+# deneme turu aynı bildirimi gösterir (önce bu üç bildirimi hiç hesaplamıyordu); olay, gün işareti ve mail yazılmaz, sonraki gerçek tur bildirir
+mkav avdry; run --dry-run > "$W/out/avdry.txt" 2>&1
+mcheck "deneme turu: izinli IP ihlali bildirimini gösterir; olay, işaret ve mail yazmaz" "grep -q '151.80.7.9.*csf.allow: 151.80.7.9 (Ofis yedek' '$W/out/avdry.txt' && ! grep -q '\"type\":\"allow_viol\"' '$R/var/lib/csf_autogroup/events.jsonl' 2>/dev/null && [ ! -s '$R/var/lib/csf_autogroup/allowviol.seen' ] && [ ! -e '$R/mail_calls.log' ]"
+quiet
+mcheck "deneme turundan sonraki gerçek tur bildirimi yine yapar" "grep -q '\"type\":\"allow_viol\"' '$R/var/lib/csf_autogroup/events.jsonl' && mtext | grep -q '151.80.7.9'"
 mkav avcat; echo "IE_REVIEW=0" >> "$R/app/config.env"; quiet
 mcheck "IE_REVIEW=0: izinli IP ihlali mail yazmaz (IE_RUN açık olsa da), Geçmiş'e yine yazılır" "[ ! -e '$R/mail_calls.log' ] && grep -q '\"type\":\"allow_viol\"' '$R/var/lib/csf_autogroup/events.jsonl'"
 mkav avign; quiet --action ignore 151.80.7.9 0; quiet
@@ -591,7 +596,7 @@ mcheck "IP kartı: adresin port satırları tek grup (sonuç kutusunda adres bir
 # posta portları sunucudan (her sunucuda farklı olabilir): exim.conf daemon_smtp_ports (WHM "exim on another port" 26 ekler), yoksa
 # varsayılan; durum JSON svcp çiplerin portlarını verir. Taklit kökte ss'e bakılmaz (makinenin süreçleri test verisi değil)
 printf '%s\n' '# exim' 'daemon_smtp_ports = 25 : 26 : 465 : 587' 'tls_on_connect_ports = 465' > "$R/exim.conf"
-mcheck "posta portları: exim.conf'tan (25, 26, 465, 587), dosya yoksa varsayılan 25, 465, 587; IMAP/POP varsayılanı" "EXIM_CONF='$R/exim.conf' run --status --json 2>/dev/null | grep -q '\"svcp\":{\"ssh\":\"[0-9,]*\",\"smtp\":\"25,26,465,587\",\"mread\":\"110,143,993,995\"}' && EXIM_CONF='$R/yok.conf' run --status --json 2>/dev/null | grep -q '\"smtp\":\"25,465,587\"'"
+mcheck "posta portları: exim.conf'tan (25, 26, 465, 587), dosya yoksa varsayılan 25, 465, 587; IMAP/POP varsayılanı" "EXIM_CONF='$R/exim.conf' run --status --json 2>/dev/null | grep -q '\"svcp\":{\"ssh\":\"[0-9,]*\",\"smtp\":\"25,26,465,587\",\"mread\":\"110,143,993,995\",\"quic\":[01]}' && EXIM_CONF='$R/yok.conf' run --status --json 2>/dev/null | grep -q '\"smtp\":\"25,465,587\"'"
 mcheck "posta portları: SMTP servisli kısmi ban sunucunun portlarını kapatır (26 dahil)" "EXIM_CONF='$R/exim.conf' run --action ban24 151.80.9 --mode svc --svc smtp >/dev/null 2>&1; grep -q '^tcp|in|d=25,26,465,587|s=151.80.9.0/24 ' '$D'"
 # sahip önbelleği: süresi geçmiş kayıt gösterilir (önce okunmuyor, listelerde "—" kalıyordu); kısmi ban, susturulan ve tekilin bloğu
 # haritada; IP kartının taze sorgusu önbellekten farklı sahip görünce blok işaretlenir ve tur onu yeniden sorar
@@ -607,6 +612,12 @@ printf '151.80.10|9996|FR|OLAY-AS - Olay, FR|%s|\n' "$NOW" >> "$OF"
 printf '{"t":%s,"type":"manual_unban","cidr":"151.80.10.5","by":"root"}\n' "$NOW" >> "$R/var/lib/csf_autogroup/events.jsonl"
 run --status --json > "$W/out/own1.olay.json" 2>/dev/null
 mcheck "sahip: olay kaydındaki adresin bloğu da haritada (listede durmasa da)" "grep -q '\"151.80.10\":\[\"9996\"' '$W/out/own1.olay.json'"
+# olay kaydından önceki işler (günlükten çıkarılan kayıtlar) Geçmiş'te aynı listede: onların adresi de (canlıda 1.15.99 sonrası
+# yalnız "eski kayıt" satırları sahipsiz kalmıştı)
+printf '151.80.11|9995|FR|ESKIKAYIT-AS - Eski Kayit, FR|%s|\n' "$NOW" >> "$OF"
+printf '{"t":%s,"type":"warn16t","cidr":"151.80.11.0/24","day":"2026-01-01","n":5,"subnets":3,"src":"log"}\n' $(( NOW - 90 * 86400 )) > "$R/var/lib/csf_autogroup/loghist.v3.jsonl"
+run --status --json > "$W/out/own1.eski.json" 2>/dev/null
+mcheck "sahip: olay kaydından önceki kaydın (günlükten) adresi de haritada" "grep -q '\"151.80.11\":\[\"9995\"' '$W/out/own1.eski.json'"
 mk own2; OF="$R/var/lib/csf_autogroup/owners"
 printf '151.80.7|9999|FR|ESKI-AS - Eski Sahip, FR|%s|\n' "$NOW" > "$OF"; single 151.80.7.9 sshd
 run --lookup 151.80.7.9 --json > /dev/null 2>&1
@@ -968,6 +979,8 @@ mcheck "ban altında ihlal: susturulan aralığın IP'leri olaya girmez (5 tekil
 mcheck "ban altında ihlal satırı: susturulan aralığın IP'lerinin satırı yok, ötekilerin var" "[ -z \"\$(rvrow 151.80.7.1)\" ] && rvrow 151.80.8.1 | grep -q '\"type\":\"under_ban\"'"
 mkm cvmail 1; ccfr; quiet; cvback 172800; s5; quiet
 mcheck "ban altında ihlal maili: kapsamanın adı ve kapattığı, IP satırları (e-posta sınıfı IE_REVIEW)" "mtext | grep -q 'ülke banı FR (her şey)' && mtext | grep -q '151.80.7.1 '"
+mkm cvmdry 1; ccfr; quiet; cvback 172800; s5; run --dry-run > "$W/out/cvmdry.txt" 2>&1
+mcheck "deneme turu: ban altında ihlal bildirimini gösterir; olay ve işaret yazmaz" "grep -q 'ülke banı FR (her şey)' '$W/out/cvmdry.txt' && grep -q '151.80.7.1 ' '$W/out/cvmdry.txt' && [ \"\$(uev)\" = 0 ] && [ ! -s '$R/var/lib/csf_autogroup/under.seen' ]"
 mkm cvmail0 1; echo "IE_REVIEW=0" >> "$R/app/config.env"; ccfr; quiet; cvback 172800; s5; quiet
 mcheck "IE_REVIEW=0: ban altında ihlal mail yazmaz, Geçmiş'e yine yazılır" "[ ! -e '$R/mail_calls.log' ] && [ \"\$(uev)\" = 1 ]"
 ilerle "motor kuralları bitti ($MF ihlal); ekran tablosu (render.js)"

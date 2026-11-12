@@ -367,7 +367,7 @@ full one.
 | Remove old ones | on the *Old* filter: remove every block ban older than the old-block limit |
 | Mute | hide an item from review for 7/30/90 days or indefinitely (its emails, Slack messages and History records stop too, also for addresses inside a muted range), from a Needs review row's **⋯** or the IP card; *Muted* and the IP card show who muted it and when; change the duration or unmute under *Muted*, unmute from the IP card too. Muting does not touch bans or lfd; "ignore" in the panel only ever means CSF's own ignore (csf.ignore, IGNORE_ALLOW) |
 | IPs | a block's IPs and ban reasons, as recorded in the event log |
-| Dry run | show the ban and notification decisions a run would make; changes nothing, sends nothing (list refreshes and Needs review records are skipped) |
+| Dry run | show the ban and notification decisions a run would make; changes nothing, sends nothing (list refreshes are skipped; Needs review notices are shown but not recorded) |
 | Run now | run immediately instead of waiting for cron |
 
 Manual actions are logged as `MANUAL (user): …` and appear on the History tab.

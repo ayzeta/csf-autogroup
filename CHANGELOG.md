@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.15.100 — 2026-11-12
+
+- A dry run now shows the Needs review notices too (violation from an allowed
+  IP, open service, violation under a ban). It still writes nothing: no History
+  record, no email, and the next real run reports them as usual.
+- History: entries taken from the plugin log (older than the event log) show
+  the owner as well, and their IP rows say "reason not recorded" instead of
+  "Other". The IP table of a block ban shows each IP's owner.
+- Range card: "last ban" is shown only for a time that comes from the ban
+  history. For an allowed or ignored IP the time of lfd's last record was
+  labelled as a ban.
+- Rented-server rule: "Web closed" also requires UDP 443 when the server
+  listens for HTTP/3, and "DNS closed" requires UDP 53, as the engine decides
+  it. A rule closing only the TCP ports was shown as closing the service.
+- A reason or owner name containing a quotation mark is no longer cut at the
+  mark in the range card and the weekly summary.
+- A block that is banned temporarily again after its watch period ran out is
+  shown as watched right away, not only after the run finishes.
+- Settings: an invalid entry in the "everything" provider list shows its error
+  next to the list. A long list description (up to 120 letters in any
+  alphabet) is accepted. The stored rented-server port list may be as long as
+  the provider one.
+- install.sh accepts only minute fields cron accepts (`*/1`–`*/59`, `0`–`59`).
+
 ## 1.15.99 — 2026-11-12
 
 From a walk through the wide desktop layout and every Settings section.

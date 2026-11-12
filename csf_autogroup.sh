@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.99"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.100"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -951,7 +951,7 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
             done
             return 0 ;;
         SRC_LABELS)               # panelin başlık sözlüğü: listeleri etkilemez, yalnız biçimi denetlenir
-            local x n=0 re='^(cl|svc):[A-Za-z0-9._-]{1,60}(:d)?=[A-Za-z0-9%._~-]{1,600}$'; CFG_VAL=""
+            local x n=0 re='^(cl|svc):[A-Za-z0-9._-]{1,60}(:d)?=[A-Za-z0-9%._~-]{1,1100}$'; CFG_VAL=""
             for x in $v; do
                 n=$((n + 1))
                 if [ "$n" -gt 300 ] || ! [[ "$x" =~ $re ]]; then CFG_ERR=$(m "$M_CFG_BAD" "$k" "$x" "tür:ad=başlık"); return 1; fi
@@ -1170,7 +1170,7 @@ ev() {           # TYPE CIDR [anahtar=HAZIR_JSON ...]
 # hangi servise, son 24 saatte kaç kez, tür (b ban işlemiyor / i lfd yoksaydı / y yoksayılıyor / s sunucu IP'si),
 # izin ya da yoksayma kaynağı, lfd'nin son sebebi. Deneme turu yazmaz. Gün damgası allowviol.seen dosyasında.
 allow_viol_events() {
-    [ -n "$LFD_LOG" ] && [ "$DRY" != 1 ] || return 0
+    [ -n "$LFD_LOG" ] || return 0     # deneme turu da hesaplar ve bildirimi gösterir; olay ve gün işareti yazmaz
     local seenf="$(dirname "$SAYAC_FILE")/allowviol.seen" i ip k src kind sj rj kt
     local -a new=(); local -A SEEN=(); local -A CLSM=(); AV_MAIL=()
     [ -r "$seenf" ] && while read -r ip k; do [ "$k" = "$TODAY" ] && SEEN[$ip]=1; done < "$seenf"
@@ -1198,7 +1198,7 @@ allow_viol_events() {
         AV_MAIL+=("   - $ip  $avh  ${avo:+[$avo]  }$avw")   # mail (IE_REVIEW) ve Slack (IC_REVIEW)
         new+=("$ip")
     done
-    { for ip in "${!SEEN[@]}"; do printf '%s %s\n' "$ip" "$TODAY"; done; for ip in "${new[@]}"; do printf '%s %s\n' "$ip" "$TODAY"; done; } > "$seenf" 2>/dev/null
+    [ "$DRY" = 1 ] || { for ip in "${!SEEN[@]}"; do printf '%s %s\n' "$ip" "$TODAY"; done; for ip in "${new[@]}"; do printf '%s %s\n' "$ip" "$TODAY"; done; } > "$seenf" 2>/dev/null
 }
 pb_load() {      # eklentinin kısmi banları (csf.deny gelişmiş satırları; bölünmüş olanlar tek kayıt) → PB_P portlar, PB_S servis,
     local pl re_d='- ([A-Z][a-z]{2} [A-Z][a-z]{2} +[0-9]{1,2} [0-9:]{8} [0-9]{4})[[:space:]]*$'   # PB_X ek portlar, PB_D tarih
@@ -1214,7 +1214,7 @@ pb_load() {      # eklentinin kısmi banları (csf.deny gelişmiş satırları; 
 # Açık servis: kısmi ban yalnız seçilen servisleri kapatıyor, bandan sonra açık kalan servislere blok (/24) ya da ağ eşiği kadar
 # ihlal geldi. Kontrol edilecekler'deki satır (part_open) da her turda yeniden hesaplanır; burada aralık başına günde bir olay.
 part_open_events() {
-    [ "$DRY" != 1 ] || return 0
+    # deneme turu da hesaplar ve bildirimi gösterir; olay (ev) ve gün işareti yazılmaz
     local seenf="$(dirname "$SAYAC_FILE")/partopen.seen" c k pa aan aat ps
     local -a new=(); local -A SEEN=(); PO_MAIL=()
     [ -r "$seenf" ] && while read -r c k; do [ "$k" = "$TODAY" ] && SEEN[$c]=1; done < "$seenf"
@@ -1241,7 +1241,7 @@ part_open_events() {
         PO_MAIL+=("$c -> $(m "$M_POPEN_L" "$pcl" "$aan")${pos:+ ($pos)}")
         owner_lookup "${c%/*}"; [ -n "$OWN_LONG" ] && PO_MAIL+=("$(m "$M_OWNER" "$OWN_LONG")")
     done
-    { for c in "${!SEEN[@]}"; do printf '%s %s\n' "$c" "$TODAY"; done; for c in "${new[@]}"; do printf '%s %s\n' "$c" "$TODAY"; done; } > "$seenf" 2>/dev/null
+    [ "$DRY" = 1 ] || { for c in "${!SEEN[@]}"; do printf '%s %s\n' "$c" "$TODAY"; done; for c in "${new[@]}"; do printf '%s %s\n' "$c" "$TODAY"; done; } > "$seenf" 2>/dev/null
 }
 # ── Ban altında ihlal: Geçmiş'e kalıcı kayıt ─────────────────────────────────────────────────────────────────────────────
 # Kapsama (aralık banı, kısmi ban, sağlayıcı / ülke banı, kiralık liste) bir servisi kapatırken lfd o servise ihlalden yeni bir tekil
@@ -1251,7 +1251,6 @@ part_open_events() {
 # Kaynak tur kayıtları (run olayının csfr / csfr_t alanları: turun kendi yüklemeleri ve izinli servis aracınınki) ve süren tur.
 under_events() {
     UB_MAIL=(); UB_N=0
-    [ "$DRY" != 1 ] || return 0
     sgl_elig
     local seenf="$(dirname "$SAYAC_FILE")/under.seen" ip key t0 d s x nw kd nm cnt cr tb b desc
     local -A UK=() UT=() SD=() SI=()
@@ -1285,6 +1284,7 @@ under_events() {
         SD[$key]="$TODAY"; SI[$key]+="$nw"
     done < <(printf '%s\n' "${!UK[@]}" | sort)
     # işaretler yalnız yürürlükteki kapsamalar için tutulur (kapsama kalkınca defterle birlikte düşer)
+    [ "$DRY" = 1 ] && return 0          # deneme turu hesaplar ve bildirimi gösterir; olay (ev) ve işaret yazılmaz
     cov_load
     for key in "${!SD[@]}"; do [ -n "${COV_T[$key]+x}" ] && printf '%s\t%s\t%s\n' "${SD[$key]}" "${SI[$key]# }" "$key"; done > "$seenf" 2>/dev/null
     return 0
@@ -1843,7 +1843,11 @@ listed_prefixes() { # tekil ve csf.deny aralıkları dışında listelerde gör�
     ign_load; for i in "${!IGN_C[@]}"; do c="${IGN_C[i]%/*}"; echo "${c%.*}"; done
     # Geçmiş'teki olayların adresleri: listede artık durmayan adresin olayında sahip görünmüyordu (aynı ekranda listedekinin
     # olayında görünürken)
-    [ -r "$EVENTS_FILE" ] && grep -o '"cidr":"[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.' "$EVENTS_FILE" 2>/dev/null | sed 's/^"cidr":"//; s/\.$//'
+    # olay kaydından önceki işler de (günlükten çıkarılan kayıtlar, LOGHIST_FILE) Geçmiş'te aynı listede durur
+    local f
+    for f in "$EVENTS_FILE" "$LOGHIST_FILE"; do
+        [ -r "$f" ] && grep -ho '"cidr":"[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.' "$f" 2>/dev/null | sed 's/^"cidr":"//; s/\.$//'
+    done
     return 0
 }
 pending_prefixes() { # sayaçta izlenen /24 önekleri → stdout
@@ -2748,7 +2752,7 @@ blk_svc_map() {  # DOSYA → "CIDR servis": olay kaydında aralık banının day
     [ -r "$EVENTS_FILE" ] || { : > "$1"; return 0; }
     grep -E '"type":"(add24|temp24|promote|manual_ban)"' "$EVENTS_FILE" 2>/dev/null | awk "$AWK_CLS"'
         match($0, /"cidr":"[0-9.]+\/[0-9]+"/) { c = substr($0, RSTART + 8, RLENGTH - 9); delete N; b = ""; m = 0; r = $0
-            while (match(r, /"why":"[^"]*"/)) { k = cls(substr(r, RSTART + 7, RLENGTH - 8)); r = substr(r, RSTART + RLENGTH); if (k != "other" && k != "repeat") { N[k]++; if (N[k] > m) { m = N[k]; b = k } } }
+            while (match(r, /"why":"([^"\\]|\\.)*"/)) { k = cls(substr(r, RSTART + 7, RLENGTH - 8)); r = substr(r, RSTART + RLENGTH); if (k != "other" && k != "repeat") { N[k]++; if (N[k] > m) { m = N[k]; b = k } } }
             if (b != "") S[c] = b }
         END { for (c in S) print c, S[c] }' > "$1"
 }
@@ -3231,12 +3235,13 @@ loghist_build() {
     grep -aE '^\[[0-9-]{10} [0-9:]{8}\] (OK |UYARI |WARNING |BLOK BANI: |BLOCK BAN: |GEÇİCİ BLOK BANI: |TEMP BLOCK BAN: |KALICIYA ALINDI: |MADE PERMANENT: |ŞÜPHELİ AĞ: |SUSPICIOUS RANGE: |Temizlendi: |Cleaned: |ATLANDI [0-9]|SKIPPED [0-9]|Silindi tekil: |Removed single: )' |
     "$aw" -v first="$first" '
         function js(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); return "\"" s "\"" }
-        function flush() { if (cur != "") { print cur (ips != "" ? ",\"ips\":[" ips "],\"total\":" ni : "") "}"; cur = ""; ips = ""; ni = 0 } }
+        function flush() { if (cur != "") { print cur (ips != "" ? ",\"ips\":[" ips "],\"total\":" nt : "") "}"; cur = ""; ips = ""; ni = 0; nt = 0 } }
         {
             ts = substr($0, 2, 19); msg = substr($0, 23)
             t = mktime(substr(ts, 1, 4) " " substr(ts, 6, 2) " " substr(ts, 9, 2) " " substr(ts, 12, 2) " " substr(ts, 15, 2) " " substr(ts, 18, 2))
             if (t <= 0 || t >= first) next
             if (msg ~ /^(Silindi tekil|Removed single): /) {          # bir önceki grup banının silinen tekilleri
+                if (cur != "") nt++     # toplam: listelenmeyenler de sayılır (önce toplam en çok 40 görünüyordu)
                 if (cur != "" && ni < 40) { ip = msg; sub(/^[^:]*: /, "", ip); sub(/ .*/, "", ip); ips = ips (ips != "" ? "," : "") "{\"ip\":" js(ip) "}"; ni++ }
                 next
             }
@@ -3904,8 +3909,9 @@ do_status() {
         printf '"usage":{"perm":[%s,%s],"temp":[%s,%s]},' "$(num "$pc")" "$limit" "$(num "$tc")" "$tlimit"
         printf '"last_run":%s,' "${last:-null}"
         jstr "$cronm"; printf '"cron_min":%s,"runs":%s,' "$REPLY" "$runsj"
+        local wq=0; web_quic && wq=1       # panelin "Web kapalı mı" kararı motorla aynı ölçütle (UDP 443 yalnız HTTP/3 dinleniyorsa)
         local mps mpr; mail_ports smtp; mps="$REPLY"; mail_ports mread; mpr="$REPLY"; ssh_ports   # servis çiplerinin portları (sunucudan okunur)
-        printf '"svcp":{"ssh":"%s","smtp":"%s","mread":"%s"},' "$REPLY" "$mps" "$mpr"
+        printf '"svcp":{"ssh":"%s","smtp":"%s","mread":"%s","quic":%s},' "$REPLY" "$mps" "$mpr" "$wq"
         # ev_start: olay kaydının ilk satırının zamanı — panel, kaydı olmayan eski ban / izleme için "kayıt şu tarihte başladı" der
         local evs; evs=$(head -c 200 "$EVENTS_FILE" 2>/dev/null | sed -n '1s/^{"t":\([0-9]*\).*/\1/p')
         printf '"cron_interval":%s,"ev_start":%s,"daily":{"start":%s,%s},"owners":{%s},"asn_top":[%s],"blocks_top":[%s],"imunify":%s,' \
@@ -4201,10 +4207,10 @@ inside_attacks() { # CIDR → REPLY = {"ssh":12,"web":3,…}: aralıktaki IP'ler
             BEGIN { n = split(want, w, " "); for (i = 1; i <= n; i++) W[w[i]] = 1 }
             /"ips":\[\{/ && match($0, /"cidr":"[0-9.\/]+"/) { k = substr($0, RSTART + 8, RLENGTH - 9); if (k in W) L[k] = $0 }
             END { for (k in L) { s = L[k]
-                    while (match(s, /"ip":"[0-9.]+"[^}]*/)) {
+                    while (match(s, /"ip":"[0-9.]+"("([^"\\]|\\.)*"|[^"}])*/)) {     # nesnenin sonuna kadar; metin içindeki } ve \" kesmez
                         e = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
                         ip = e; sub(/^"ip":"/, "", ip); sub(/".*/, "", ip)
-                        why = ""; if (match(e, /"why":"[^"]*"/)) why = substr(e, RSTART + 7, RLENGTH - 8)
+                        why = ""; if (match(e, /"why":"([^"\\]|\\.)*"/)) why = substr(e, RSTART + 7, RLENGTH - 8)
                         print ip "|" why } } }' "$EVENTS_FILE"
         # ban geçmişi: süresi dolmuş geçici ve listeden kalkmış kalıcı banlar (şu anki banlar ve olay kaydı önce gelir, onlar kazanır)
         bl_load; printf '%s\n' "$BLV" | sort -t'|' -k3,3nr | awk -F'|' 'NF >= 5 { print $1 "|" $5 "|" $3 }'))   # en yeni kaydı önce (zamanı kartta)
@@ -7182,7 +7188,7 @@ ev_reason() {    # CIDR → REPLY = "3 IP · (sshd) Failed SSH login" (olay kayd
     local id
     REPLY=$(grep -F "\"cidr\":\"$1\"" "$EVENTS_FILE" 2>/dev/null | grep -F '"ips":[{' | tail -n 1 | awk -v f="$M_H_RSUM" '
         NR == 1 { s = $0; n = 0
-                  while (match(s, /"why":"[^"]*"/)) { w = substr(s, RSTART + 7, RLENGTH - 8); C[w]++; n++; s = substr(s, RSTART + RLENGTH) }
+                  while (match(s, /"why":"([^"\\]|\\.)*"/)) { w = substr(s, RSTART + 7, RLENGTH - 8); gsub(/\\"/, "\"", w); C[w]++; n++; s = substr(s, RSTART + RLENGTH) }
                   if (n) { b = ""; bm = 0; for (w in C) if (C[w] > bm) { bm = C[w]; b = w }; printf f, n, b }
                   exit }')
     REPLY="${REPLY/lfd - /}"
@@ -7288,7 +7294,7 @@ digest_build() { # → DG_SUBJ, DG_BODY
             /"type":"(add24|promote|manual_ban)"/ {
                 c = ""; o = ""
                 if (match($0, /"cidr":"[0-9.\/]+"/)) c = substr($0, RSTART + 8, RLENGTH - 9)
-                if (match($0, /"owner":"[^"]*"/)) o = substr($0, RSTART + 9, RLENGTH - 10)
+                if (match($0, /"owner":"([^"\\]|\\.)*"/)) { o = substr($0, RSTART + 9, RLENGTH - 10); gsub(/\\"/, "\"", o) }
                 if (match($0, /"type":"[a-z0-9_]+"/)) ty = substr($0, RSTART + 8, RLENGTH - 9)
                 print c "|" o "|" ty }' "$EVENTS_FILE" | tail -n 25)
     fi
@@ -7839,6 +7845,7 @@ for prefix in $(printf '%s\n' "${!temp_count24[@]}" | sort -V); do
                 temp_added24_body+="$(m "$M_TB24" "$prefix" "$n")$NL"
                 owner_line "${temp_ips24[$prefix]# }"; temp_added24_body+="$REPLY"; owner_kv
                 ip_lines "${temp_ips24[$prefix]}" temp 0; temp_added24_body+="$REPLY"
+                cnt_del_prefix "$prefix"       # süresi dolmuş eski satır tur sonuna kadar duruyordu: IP kartı o arada eskisini okuyup "izlenmiyor" diyordu
                 cnt_add "$prefix $(date '+%Y-%m-%d')"
                 TURN_B24[$prefix]=1; ev temp24 "${prefix}.0/24" "n=$n" "ttl=43200" "${OKV[@]}" "ips=$IPS_J"
             else

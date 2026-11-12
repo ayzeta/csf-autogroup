@@ -71,7 +71,7 @@
   var DICT = {
     tr: {
      
-      dry: 'Deneme turu', dry_h: 'Hiçbir şeyi değiştirmeden bir turun ban ve bildirim kararlarını gösterir. Liste yenileme, sağlayıcı ve kiralık liste uygulaması ve Kontrol edilecekler kayıtları (izinli IP ihlali, açık servis) deneme turunda yapılmaz.', sb_last_h: 'Tur: eklentinin banları tarayıp karar verdiği her çalışma (cron ile düzenli çalışır).', sb_fetched: 'Durum verisinin alındığı saat: {0}.', sb_updating: 'güncelleniyor…', run: 'Şimdi çalıştır', run_log: 'Tur çıktısı',
+      dry: 'Deneme turu', dry_h: 'Hiçbir şeyi değiştirmeden bir turun ban ve bildirim kararlarını gösterir. Liste yenileme ile sağlayıcı ve kiralık liste uygulaması deneme turunda yapılmaz; Kontrol edilecekler bildirimleri (izinli IP ihlali, açık servis, ban altında ihlal) gösterilir ama Geçmiş\'e yazılmaz.', sb_last_h: 'Tur: eklentinin banları tarayıp karar verdiği her çalışma (cron ile düzenli çalışır).', sb_fetched: 'Durum verisinin alındığı saat: {0}.', sb_updating: 'güncelleniyor…', run: 'Şimdi çalıştır', run_log: 'Tur çıktısı',
       upd_avail: '<b>Güncelleme var:</b> v{0} → v{1}', upd_commits: '{0} değişiklik', upd_show: 'Değişiklikleri gör', upd_hide: 'Gizle',
       upd_apply: 'Güncelle', upd_dirty: 'Sunucudaki kopyada yerel değişiklik var; güncelleme SSH üzerinden yapılmalı. Neyin değiştiğine kurulum klasöründe git status ile bakabilirsiniz.',
       upd_diverged: 'Sunucudaki kopya GitHub\'dakinden ayrılmış; güncelleme SSH üzerinden yapılmalı. Kurulum klasöründe git status ile bakabilirsiniz.',
@@ -168,7 +168,7 @@ ip_unban_lfd: 'Bu banı lfd koymuş; kaldırınca lfd aynı ihlali yeniden gör�
       blk_empty: 'csf.deny\'de CSF Auto-Group\'un eklemediği aralık yok (ya da sahipleri henüz bilinmiyor).',
       im_h: 'Imunify360\'ın bu sunucuda kendi engellediği IP\'ler (merkezi liste değil), sağlayıcıya göre; sahibi sorgulanmış {1} / {0} IP\'den sayılır. Imunify360\'ın listesi değiştirilmez.',
       im_n: '{0} IP', im_empty: 'Imunify360 yerel kara listesi boş.', asn_pban: '{0} banlı; açık servislere ihlal sürüyor', asn_pban_h: 'Bu sağlayıcı port listesiyle banlı; burada sayılan ihlaller listenin açık bıraktığı servislere. Sürerse o portları ekleyin ya da her şeyi banlayın.', asn_denied: 'CSF\'de zaten engelli',
-      asn_hint: 'Sağlayıcı banı önerisi', asn_filling: 'Sahip bilgileri toplanıyor; her turda 50 blok sorgulanır.',
+      asn_hint: 'Sağlayıcı banı önerisi', asn_filling: 'Sahip bilgileri toplanıyor; her turda bir bölümü sorgulanır.',
       asn_nolookup: 'Sahip sorgusu kapalı (Ayarlar → Kaynaklar ve yenileme).', m_asn_t: 'AS{0} sağlayıcısını toptan banlamak',
       m_asn_b: '{1} sağlayıcısında {0} ayrı blok banı var (eklentinin kendiliğinden ve elle koyduğu). İhlal sürekli bu sağlayıcıdan geliyorsa sağlayıcının (ASN) tamamını banlamak, blokları tek tek banlamaktan daha kalıcı olur.',
       m_asn_w: 'Bu, o sağlayıcıdaki meşru kullanıcıları da (ör. orada çalışan ödeme ya da izleme servislerini) engelleyebilir. Önce etkisini ölçün; adreslerini yayımlayan servisleri İzinli servislerden açık tutabilirsiniz.',
@@ -180,7 +180,7 @@ ip_unban_lfd: 'Bu banı lfd koymuş; kaldırınca lfd aynı ihlali yeniden gör�
     },
     en: {
      
-      dry: 'Dry run', dry_h: 'Shows a run\'s ban and notification decisions without changing anything. List refreshes, applying the provider and rented-server bans and the Needs review records (allowed-IP violations, open services) are skipped in a dry run.', sb_last_h: 'Run: each time the plugin scans the bans and acts on them (on a cron schedule).', sb_fetched: 'Status data fetched at {0}.', sb_updating: 'updating…', run: 'Run now', run_log: 'Run output',
+      dry: 'Dry run', dry_h: 'Shows a run\'s ban and notification decisions without changing anything. List refreshes and applying the provider and rented-server bans are skipped in a dry run; the Needs review notices (allowed-IP violations, open services, violations under a ban) are shown but not written to History.', sb_last_h: 'Run: each time the plugin scans the bans and acts on them (on a cron schedule).', sb_fetched: 'Status data fetched at {0}.', sb_updating: 'updating…', run: 'Run now', run_log: 'Run output',
       upd_avail: '<b>Update available:</b> v{0} → v{1}', upd_commits: '{0} changes', upd_show: 'View changes', upd_hide: 'Hide',
       upd_apply: 'Update', upd_dirty: 'The server copy has local changes; update over SSH. Run git status in the install folder to see what changed.',
       upd_diverged: 'The server copy has diverged from GitHub; update over SSH. Run git status in the install folder to see the state.',
@@ -277,7 +277,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       blk_empty: 'No ranges in csf.deny that CSF Auto-Group did not add (or their owners aren\'t known yet).',
       im_h: 'IPs Imunify360 blocked on this server itself (not its central list), by provider; counted from the {1} of {0} IPs whose owner has been looked up. Imunify360\'s list is not changed.',
       im_n: '{0} IPs', im_empty: 'The Imunify360 local blacklist is empty.', asn_denied: 'Already blocked in CSF', asn_pban: 'banned on {0}; violations on open services', asn_pban_h: 'This provider is banned with the port list; the violations counted here are on services that list leaves open. Add those ports or ban everything if they continue.',
-      asn_hint: 'Provider ban suggestion', asn_filling: 'Collecting owner info; 50 blocks are looked up per run.',
+      asn_hint: 'Provider ban suggestion', asn_filling: 'Collecting owner info; a part of the blocks is looked up on each run.',
       asn_nolookup: 'Owner lookups are off (Settings → Sources and refresh).', m_asn_t: 'Ban all of AS{0}',
       m_asn_b: '{1} has {0} separate block bans (added by the plugin on its own or by hand). If violations keep coming from this provider, banning the whole provider (ASN) lasts longer than banning blocks one by one.',
       m_asn_w: 'This can also block legitimate users of that provider (e.g. payment or monitoring services running there). Measure the impact first; services that publish their addresses can stay open through Allowed services.',
@@ -885,6 +885,8 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   // satırları. Önce dört tablo dört ayrı biçimde yazıyordu (biri servisi hiç yazmıyor, biri sebebi yalnız "diğer"de gösteriyordu)
   function ipWhyCell(x, accts, extra) {
     var s0 = svcOfReason(x.why), sv = x.svc && x.svc !== 'other' ? x.svc : s0;
+    // sebebi de servisi de olmayan satır (olay kaydından önceki işler: günlükte yalnız IP var) "Diğer" değil "sebebi kayıtlı değil"
+    if (!x.why && !x.svc) sv = 'norec';
     var L = [esc(s0 === 'repeat' && sv !== 'repeat' && sv !== 'other' ? svcLabel('repeat') + ' · ' + t('pb_svc', String(sv).split(',').map(svcLabel).join(', ')) : svcLabel(sv || 'other'))];
     if (whyText(x.why)) L.push('<div class="ag-muted">' + esc(whyText(x.why)) + '</div>');
     var ac = acctParts(accts, x.why).join(' · ');
@@ -895,7 +897,10 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   function ipTable(ips, total) {
     if (!ips || !ips.length) return '';
     var rows = ips.map(function (i) {
-      var own = i.asn ? '<span class="ag-own-s">' + ownerHtml(ownerOfIp(i)) + '</span>' : i.owner ? esc(shortOwner(i.owner)) : (i.res === 'kept' ? statePill('n', t('dnd_s'), t('dnd_h')) : '');
+      // sahip satırda yoksa (blok banı olaylarında IP'ler sahipsiz yazılır: hepsi aynı blokta; 40'tan sonraki IP'ler) sahip haritasından:
+      // önce bu tablolarda sütun boş kalıyordu, aynı IP başka olayın tablosunda sahibiyle görünürken
+      var oi = i.asn ? ownerOfIp(i) : i.owner ? null : ownerOf(i.ip);
+      var own = oi && oi.asn ? '<span class="ag-own-s">' + ownerHtml(oi) + '</span>' : i.owner ? esc(shortOwner(i.owner)) : (i.res === 'kept' ? statePill('n', t('dnd_s'), t('dnd_h')) : '');
       var ak = abKind(i);
       var alp = i.al != null && i.bk ? statePill('allow', t('ab_' + ak), t('ab_' + ak + (ak === 'y' && !i.al ? '_n0' : '_n'), ak === 's' ? i.ip : i.al || t('ab_src_none')), 'ag-pill-xs') + ' ' : '';
       return '<tr><td>' + cidrLink(i.ip) + (i.host ? '<div class="ag-muted ag-ip-host" title="' + esc(i.host) + '">' + esc(i.host) + '</div>' : '') + '</td>' +
@@ -2185,7 +2190,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     if (aOn) {
       asnBody = sec(t('pv_sec_provs'), t('pv_sec_provs_h'),
           '<div class="ag-addrow"><input class="ag-input ag-mono" id="ag-asn-add" placeholder="' + esc(t('pv_add_ph')) + '" autocomplete="off" spellcheck="false"><button type="button" class="ag-btn ag-btn-sm" data-act="asnaddin">' + esc(t('pv_add_btn')) + '</button></div>' +
-          (rows ? '<div class="ag-prows">' + rows + '</div>' : '') + err('ASN_LIST') +
+          (rows ? '<div class="ag-prows">' + rows + '</div>' : '') + err('ASN_LIST') + err('ASN_ALL') +
           '<div class="ag-note">' + esc(PA.geo_t ? t('pv_geo', rel(PA.geo_t)) + ' ' + geoDue(PA.geo_t) : t('pv_geo_none')) + ' ' + toLists() + '</div>' +
           // LF_IPSET=0: CSF aralıkları küme olarak tutmaz; yüklenen aralık sayısı okunamaz, Imunify yönlendirmesine karşı koruma kurulamaz
           (PA.ipset === false ? '<div class="ag-warn-t">' + esc(t((S.imunify || {}).present ? 'pv_noipset_imu' : 'pv_noipset')) + '</div>' : '')) +
@@ -4358,9 +4363,16 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     if (p.mode === 'all') return true;
     if (k === 'mout' || k === 'wout') return false;
     var P = svcTcp(k); if (!P.length) return false;
-    if (p.mode === 'legacy') return portsIn(p.tcp, P);
+    // motorun cl_svc_closed'ı gibi UDP de: DNS 53; web 443 yalnız sunucu HTTP/3 dinliyorsa (durum JSON svcp.quic = motorun web_quic'i).
+    // Önce yalnız TCP'ye bakıyordu: HTTP/3 dinleyen sunucuda yalnız TCP 80,443'ü kapatan kurala panel "Web kapalı", motor "açık" diyordu
+    var U = k === 'dns' ? [53] : k === 'web' && (S.svcp || {}).quic ? [443] : [];
+    if (p.mode === 'legacy') return portsIn(p.tcp, P) && (!U.length || portsIn(p.udp, U));
     var own = p.svc.reduce(function (a, s2) { return a.concat(svcTcp(s2)); }, []).join(',') + (xTcp(p.x) ? ',' + xTcp(p.x) : '');
-    return p.mode === 'exc' ? !portsAny(own, P) : portsIn(own, P);
+    var ownU = p.svc.reduce(function (a, s2) { return a.concat(svcUdp(s2)); }, []).concat(xUdp(p.x) ? [xUdp(p.x)] : []).join(',');
+    return p.mode === 'exc' ? !portsAny(own, P) && !(U.length && portsAny(ownU, U)) : portsIn(own, P) && (!U.length || portsIn(ownU, U));
+  }
+  function xUdp(extra) {           // ek portların UDP olanları ("443/udp" → "443")
+    return String(extra || '').split(',').filter(function (x) { return /\/udp$/.test(x); }).map(function (x) { return x.replace(/\/udp$/, ''); }).join(',');
   }
   function cpText(m, tcp, udp) {   // motorun verdiği kapsama (IP kartı, aralık penceresi): "tcp 80,443 · udp 443" / "her şey" / "her şey, açık: …"
     var p = portsName(tcp, udp);
@@ -4496,17 +4508,19 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       // aralıktaki IP'ler tek tabloda, her biri bir kez ve şu anki durumuyla: tekil / geçici banlar, ihlal edenler,
       // Kontrol edilecekler satırının ve banın / izlemenin dayandığı IP'ler
       var R = {}, order = [];
-      function addIp(x, svc, st, left) {
+      function addIp(x, svc, st, left, hist) {   // hist: IP ban geçmişinden geliyor (x.t son banının zamanı)
         if (!x || !x.ip) return;
         var r = R[x.ip]; if (!r) { r = R[x.ip] = { ip: x.ip }; order.push(x.ip); }
         if (!r.svc && svc && svc !== 'other') r.svc = svc;
         if (!r.why && x.why) r.why = x.why;
-        if (!r.t && x.t) r.t = x.t;               // ban geçmişinden gelen IP: son banının zamanı
+        // "son ban" yalnız ban geçmişinden gelen zamanla yazılır: Kontrol edilecekler satırının IP'sinde t lfd'nin son kaydıdır (izinli /
+        // yoksayılan IP hiç banlanmamış olabilir), önce o da "son ban" diye görünüyordu
+        if (hist && !r.t && x.t) r.t = x.t;
         if (st && !r.st) { r.st = st; r.left = left; }
         if (x.bk && !r.bk) { r.bk = x.bk; r.full = x.full; r.al = x.al; }   // izinli / yoksayılan / sunucu IP'si (Kontrol edilecekler satırından)
       }
       (d.sgl || []).forEach(function (x) { addIp(x, x.svc, x.temp != null ? 'temp' : 'perm', x.temp); });
-      Object.keys(d.attack_ips || {}).forEach(function (k) { (d.attack_ips[k] || []).forEach(function (x) { addIp(x, k); }); });
+      Object.keys(d.attack_ips || {}).forEach(function (k) { (d.attack_ips[k] || []).forEach(function (x) { addIp(x, k, null, null, true); }); });
       [rv, gev, pev].forEach(function (e) { ((e && e.ips) || []).forEach(function (x) { addIp(x, x.svc || svcOfReason(x.why)); }); });
       var rngs = (d.blocks || []).concat(d.others || []).filter(function (c) { return /^\d+\.\d+\.\d+\.\d+\/\d+$/.test(c); });
       function inR(ip) { var v = ipNum(ip); return rngs.some(function (c) { var lo = ipNum(c); return v >= lo && v < lo + Math.pow(2, 32 - bitsOf(c)); }); }

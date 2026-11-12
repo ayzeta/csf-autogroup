@@ -29,7 +29,7 @@ valid() {   # KEY VALUE
     case "$1" in
         MSG_LANG)   [[ "$2" =~ ^(en|tr)$ ]] ;;
         ALERT_MAIL) [ "$2" = whm ] || [[ "$2" =~ ^[A-Za-z0-9._%+-]+(@[A-Za-z0-9.-]+)?$ ]] ;;   # whm = WHM'deki iletişim adresi
-        CRON_MIN)   [[ "$2" =~ ^(\*/[0-9]{1,2}|[0-9]{1,2})$ ]] ;;
+        CRON_MIN)   [[ "$2" =~ ^(\*/([1-9]|[1-5][0-9])|[0-9]|[1-5][0-9])$ ]] ;;   # crontab dakika alanı: */1–*/59 ya da 0–59 (önce */99, 75 de geçiyordu)
     esac
 }
 ask_valid() {   # KEY PROMPT DEFAULT

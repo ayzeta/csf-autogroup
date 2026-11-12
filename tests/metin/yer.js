@@ -14,6 +14,9 @@ function dict(seg) { const o = {}; let m; re.lastIndex = 0; while ((m = re.exec(
 const TR = dict(src.slice(src.indexOf('var DICT = {'), enAt)), EN = dict(src.slice(enAt, dEnd));
 let bad = 0;
 const ph = v => [...new Set((v.match(/\{\d+\}/g) || []))].sort().join(',');
+// iki dilde aynı anahtar kümesi: yalnız birinde olan anahtar öteki dilde ham ad olarak görünür (bir kez v_self yalnız TR'deydi)
+for (const k of Object.keys(TR)) if (!(k in EN)) { bad++; console.log(`  ✗ ${k}: yalnız TR sözlüğünde`); }
+for (const k of Object.keys(EN)) if (!(k in TR)) { bad++; console.log(`  ✗ ${k}: yalnız EN sözlüğünde`); }
 for (const k of Object.keys(TR)) {
   if (!(k in EN)) continue;
   if (ph(TR[k]) !== ph(EN[k])) { bad++; console.log(`  ✗ ${k}: TR yer tutucuları [${ph(TR[k])}] ↔ EN [${ph(EN[k])}]`); }
