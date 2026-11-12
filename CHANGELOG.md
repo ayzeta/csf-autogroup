@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.15.103 — 2026-11-13
+
+- IP card: a single IP's own partial ban says "from this IP" (it said "from
+  this range").
+- Range card: a range with no ban at all no longer adds "Open for the range as
+  a whole: …" under a result that already says every service is reachable.
+
 ## 1.15.102 — 2026-11-12
 
 - History: the badge of a manual ban says its kind in words too — "Manual

@@ -72,6 +72,10 @@ window.agKardes = function (root) {
     const kap = s.split('.')[0], ac = (s.match(/\\(([^)]*)\\)\\s*açık/) || [])[1] || '';
     ac.split(/[,…]/).map(x => x.trim()).filter(x => x && new RegExp('(^|[^A-Za-zçğıöşü])' + x + '($|[^A-Za-zçğıöşü])', 'i').test(kap)).forEach(x => R.push('çelişen cümle (' + x + ' hem kapalı hem açık): ' + s.trim().slice(0, 80)));
   });
+  // "her IP bütün servislere ulaşabilir" diyen kart ayrıca tek tek servis saymaz (canlıda: banlı olmayan aralıkta "Aralığın geneline
+  // açık: Web."); tek IP'nin kendi kısmi banı "aralık" demez
+  if (/bütün servislere ulaşabilir|can reach every service/.test(tx) && /geneline açık:|Open for the range as a whole:/.test(tx)) R.push('her şey açıkken ayrıca açık servis satırı');
+  (tx.match(/Kısmi \\(bu IP\\)[^\\n]*\\n[^\\n]*\\n?[^\\n]*bu aralıktan[^\\n]*/g) || []).forEach(m => R.push('tek IP banı "aralık" diyor: ' + m.replace(/\\s+/g, ' ').slice(0, 80)));
   return R;
 };
 window.agBasliksiz = function (root) {
