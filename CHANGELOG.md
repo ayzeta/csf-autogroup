@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.15.101 — 2026-11-12
+
+- One term: the panel, emails and log say "allow list" everywhere ("whitelist"
+  and "allow list" were both used for the same thing, once in one sentence).
+  "Whitelist" is kept only where Imunify360's own list is meant.
+
 ## 1.15.100 — 2026-11-12
 
 - A dry run now shows the Needs review notices too (violation from an allowed

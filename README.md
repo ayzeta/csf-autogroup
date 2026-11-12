@@ -18,7 +18,7 @@ never auto-banned: first the range the owner announces (`/17`–`/23`), and the
   where you watch it and step in.
 - **Who is it?** — every block and IP comes with its owner (ASN, organisation,
   country) and hostname, in the page and in alert emails.
-- **Safe by default** — never bans a range that touches any CSF whitelist, and
+- **Safe by default** — never bans a range that touches any CSF allow list, and
   every manual action asks for confirmation.
 - **Email and Slack** — one HTML email per run with everything it did (block
   bans, suspicious networks, skips, limit and firewall alerts), plus Slack
@@ -45,9 +45,9 @@ CSF Auto-Group **modifies your firewall**: it bans entire `/24` subnets (256
 addresses). A threshold that's too low, or a legitimate visitor whose IP falls in
 a banned `/24`, can lock people out.
 
-- **Whitelist your own IPs** in `/etc/csf/csf.allow` (CSF allow overrides deny).
-  A `/24` that touches any CSF whitelist is never banned; see
-  [Whitelists](#whitelists).
+- **Allow list your own IPs** in `/etc/csf/csf.allow` (CSF allow overrides deny).
+  A `/24` that touches any CSF allow list is never banned; see
+  [Allow lists](#allow-lists).
 - **Start with high thresholds** and watch the page (or
   `/var/log/csf_autogroup.log`) for a few days before trusting it. *Try before
   saving* in the Settings tab shows what new thresholds would do.
@@ -125,12 +125,12 @@ settings, with no prompts. `config.env` is left untouched.
   permanent and temp lists are, each with its change over the last 7 days (the
   list cards show it once there is a run record from 7 days ago).
 - **Activity** — a daily chart of block bans, blocks made permanent, temp block
-  bans, suspicious networks and whitelist skips, for 7 or 30 days. Hover a day
+  bans, suspicious networks and allow list skips, for 7 or 30 days. Hover a day
   for its breakdown.
 - **Colors** — one meaning, one color everywhere (badges, icons, chart): red full
   ban, violet made permanent, teal temp ban, blue partial ban, amber suspicious
-  network, gray whitelist skip.
-- **Needs review** — suspicious ranges, suspicious networks and whitelist-skipped blocks from the review
+  network, gray allow list skip.
+- **Needs review** — suspicious ranges, suspicious networks and allow-list-skipped blocks from the review
   period (*Days kept in the list*, `REVIEW_DAYS`, default 7 days), as a table: why it was flagged (how many IPs hit which services),
   owner, when, and the narrowest ban that would do; clicking the IP count lists
   every IP's hostname, owner and ban reason, with what it tried in the review
@@ -208,7 +208,7 @@ settings, with no prompts. `config.env` is left untouched.
   ban when violations hit only one or two services; the remove window shows when
   and why the ban was added (and, for partial bans, violations on other services
   since then); the IP card has three parts: *This IP* (result, its own ban,
-  whitelist, ban history and what the address tried in each service,
+  allow list, ban history and what the address tried in each service,
   *Attempts*), *Wider levels* (one row each for the block, announced range,
   network, country, provider and rented-server list, with its state, how far it
   is from its threshold and its ban button) and *Who*;
@@ -223,7 +223,7 @@ settings, with no prompts. `config.env` is left untouched.
   covering `/24`, `/16` or other range (with its state, date and main ban
   reason), port-limited `csf.deny` rules for that address, and `CC_DENY` /
   `CC_DENY_PORTS` when its country or ASN is listed there. Also which list
-  whitelists it (port-only `csf.allow` rules are shown with their ports), with
+  allow lists it (port-only `csf.allow` rules are shown with their ports), with
   links to bgp.he.net and AbuseIPDB, and buttons to ban its `/24` or `/16`.
   Recently viewed IPs stay one click away. A range (`1.2.3.0/24`) opens the
   range card instead: the result and every action (ban, narrower range,
@@ -265,16 +265,16 @@ settings, with no prompts. `config.env` is left untouched.
 ### Actions
 
 Every action asks for confirmation. Risky ones (banning a `/16`, overriding a
-whitelist, removing a `do not delete` block) make you type the target.
+allow list, removing a `do not delete` block) make you type the target.
 
 A single IP can be banned from its IP card (**Ban IP**): *Everything*, permanent
 or temporary (1 hour to 7 days, both directions, CSF's temp list), or
 *Selected services* (a permanent partial line). It is refused for this
 server's own IP, an IP that is already banned or inside a permanent range ban,
-and a whitelisted IP needs a confirmation. An IP with its own ban, whoever set
+and a allowed IP needs a confirmation. An IP with its own ban, whoever set
 it, gets **Remove ban**.
 
-An IP can also be allowed from its IP card (Whitelist → **Allow…**): with no
+An IP can also be allowed from its IP card (Allow list → **Allow…**): with no
 end (a csf.allow line, with an optional note) or for 1 hour to 7 days (CSF's
 temporary allows, both directions). The allow comes before every ban; the
 rented-server lists and the ban guard pick it up right away. With no end, CSF
@@ -288,11 +288,11 @@ hour to 7 days). A timed ban does not remove what is inside the range, so the
 range is back to how it was when the time is up; it is listed as a manual ban
 with the time left.
 
-Manual bans run the same whitelist checks as automatic ones (for a `/16`, the
+Manual bans run the same allow list checks as automatic ones (for a `/16`, the
 blocks inside with single bans are checked too), including Imunify360's own
 whitelist. Manual `/24` and `/16` bans open the same window: it first lists what is inside
 the range (CSF Auto-Group block bans, single bans, temp bans, watched blocks,
-other ranges and port-limited rules), shows any whitelist overlap, and offers
+other ranges and port-limited rules), shows any allow list overlap, and offers
 **Remove covered entries** (on by default): every permanent entry inside the
 range (block bans, single bans, other ranges, `do not delete` ones included)
 leaves the permanent list and the temp bans leave the temp list; the window
@@ -336,7 +336,7 @@ removal is there to free space in the list.
   so each service gets a two-way allow rule in `csf.allow` (request and reply);
   for FTP the passive port range is added too (read from pure-ftpd / proftpd, or
   CSF's `TCP_IN`). The rules are marked and removed with the ban, and are never
-  counted as whitelist entries.
+  counted as allow list entries.
 
 Each service button shows how many IPs of the range hit it, read from the
 ban reasons LFD wrote (`(sshd)` → SSH, `(smtpauth)` / `(imapd)` → mail client,
@@ -359,7 +359,7 @@ full one.
 | Ban network (/16) | permanent `/16` ban, added as `do not delete`: from Needs review, **⋯** in Active range bans and Watched, and the IP card |
 | Ban block (/24) | permanent `/24` ban from the IP card |
 | Change ban | change what a CSF Auto-Group ban blocks (everything / selected services / everything except) |
-| Ban anyway | ban a whitelist-skipped `/24` (overrides the whitelist) |
+| Ban anyway | ban a allow-list-skipped `/24` (overrides the allow list) |
 | Make permanent | make a watched `/24` permanent right away |
 | Stop watching | forget a watched `/24` (it is then treated like any unwatched block) |
 | Restart watch | start a watched `/24`'s watch period again from today (**⋯** in Watched and the IP card) |
@@ -542,7 +542,7 @@ Lookups are plain DNS queries (`dig` or `host`) with a short timeout. Set
 protect are banned too. Alert emails end with a link to the plugin
 (`https://server:2087/ → Plugins → CSF Auto-Group`).
 
-### Whitelists
+### Allow lists
 
 Before banning a `/24` (permanent or temp), CSF Auto-Group checks it against
 every list CSF uses to say "don't block this". If **any** entry overlaps the
@@ -550,7 +550,7 @@ every list CSF uses to say "don't block this". If **any** entry overlaps the
 
 | Source | What is checked |
 |--------|-----------------|
-| `csf.allow` (+ `Include`) | IPs, CIDRs, hostnames, and port-only rules (`tcp\|in\|d=2083\|s=IP`) for a specific address or range; rules that open a port to everyone (`s=0.0.0.0/0`, anything wider than `/8`) are port rules, not whitelist entries |
+| `csf.allow` (+ `Include`) | IPs, CIDRs, hostnames, and port-only rules (`tcp\|in\|d=2083\|s=IP`) for a specific address or range; rules that open a port to everyone (`s=0.0.0.0/0`, anything wider than `/8`) are port rules, not allow list entries |
 | `csf.ignore` (+ `Include`) | IPs and CIDRs |
 | `GLOBAL_ALLOW`, `GLOBAL_IGNORE`, `DYNDNS`, temp allows (`csf -ta`) | CSF's cached lists in `/var/lib/csf` |
 | Server's own IPs | a `/24` containing one of this server's addresses |
@@ -848,7 +848,7 @@ provider's (see Provider ban).
 
 `bash tests/durum-tablosu/calistir.sh` builds every ban state (single, temp,
 watched, block and network bans — full and partial —, a range banned by another
-source, a country ban, whitelist, warnings) in a throwaway root with stand-ins
+source, a country ban, allow list, warnings) in a throwaway root with stand-ins
 for CSF and DNS, runs the engine on each, and prints which actions every panel
 screen offers in that state. It checks them against a few rules: no ban that
 would have no effect, the same label for the same action everywhere, and no

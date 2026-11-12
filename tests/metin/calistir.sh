@@ -44,6 +44,10 @@ for e in "${YASAK[@]}"; do
   [ -z "$hits" ] && continue
   bad=$((bad + 1)); echo "  ✗ «$old» yerine «$new»:"; printf '%s\n' "$hits" | cut -c1-140 | sed 's/^/      /'
 done
+# tek terim "izin listesi" / "allow list" (kullanıcı kararı 2026-11-12; önce aynı pencerede "izin listesinde … IP kartı → Beyaz liste"
+# yazıyordu). "beyaz liste" / "whitelist" yalnız Imunify360'ın kendi listesini anlatan metinde (ürünün adı) kalır.
+hits=$(texts | grep -iE "beyaz list|white-?list" | grep -v "Imunify")
+if [ -n "$hits" ]; then bad=$((bad + 1)); echo "  ✗ «beyaz liste / whitelist» yerine «izin listesi / allow list» (Imunify360'ın listesi dışında):"; printf '%s\n' "$hits" | cut -c1-140 | sed 's/^/      /'; fi
 # Türkçe panel metinlerinde CSF'in İngilizce terimi tek başına geçmez: "do not delete" yalnız "silinmez" açıklamasıyla
 tr_end=$(grep -n "^    en: {" "$JS" | head -n 1 | cut -d: -f1)
 hits=$(head -n "${tr_end:-1}" "$JS" | grep -oE "[a-z_0-9]+: '([^'\\\\]|\\\\.)*'" | grep -i "do not delete" | grep -vi "silinmez")
