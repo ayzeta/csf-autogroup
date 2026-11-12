@@ -4149,7 +4149,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       })();
       // /16'dan geniş duyurulan aralık: ağ satırının altında, kendi ban düğmesiyle (1.15.88; önce düğme yoktu, kullanıcı sordu: sağlayıcı
       // banlanabilirken onun dar bir parçası neden banlanamıyor). /16'ya eşitse ağ satırıyla aynı aralık, satır bilgi
-      if (pb && pb <= 16) { var rw = lvBan(d.pfx, pb) || { s: t('lv_none'), k: '', x: [] }; if (pb < 16) rw.btn = BT.pfx; lv.push([t('lv_pfx'), cidrLink(d.pfx), rw]); }
+      if (pb && pb < 16) { var rw = lvBan(d.pfx, pb) || { s: t('lv_none'), k: '', x: [] }; rw.btn = BT.pfx; lv.push([t('lv_pfx'), cidrLink(d.pfx), rw]); }   // /16 ise Ağ satırı o aralıktır (notu orada)
       var ccC = (d.covers || []).filter(function (c) { return (c.kind === 'cc' || c.kind === 'ccport') && !/^AS/.test(c.what); })[0];
       if (ccC) lv.push([t('lv_cc'), flag(ccC.what), { s: ccC.kind === 'cc' ? t('lv_cc_all') : t('lv_cc_ports', portsName(ccC.tcp, ccC.udp) || '—'), k: ccC.kind === 'cc' ? 'perm' : 'part', x: [] }]);
       else if (d.cc) lv.push([t('lv_cc'), flag(d.cc), { s: t('lv_cc_none'), k: '', x: [] }]);   // sağlayıcı satırı gibi: ban yokken de seviye görünür
@@ -4538,7 +4538,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       // Ağı banla), izlenen blokta "İzlemeyi yeniden başlat" yoktu, kısmi banda "Banı değiştir" yoktu. Aralık sunucunun kendi
       // adresini içeriyorsa ban önerilmez (motor da reddeder)
       var acts = objItems(cidr, rv ? rv.ips : null).filter(function (x) { return !(d.self && BAN_ACT.test(x.act)); }).map(miBtn);
-      var oa = /^AS(\d+)/.exec(d.owner || '');
+      var oo = ownerOf(cidr), oa = oo.asn ? [0, String(oo.asn)] : /^AS(\d+)/.exec(d.owner || '');
       body.innerHTML = fact(t('l_fw'), verdictH + (acts.length ? '<div class="ag-dr-acts">' + acts.join('') + '</div>' : '')) +
         (watchH ? fact(t('l_pending'), watchH) : '') +
         fact(t('s_review'), rvH) +
@@ -4732,6 +4732,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     // tam izinli IP'ye ban düğmesi yok: CSF kalıcı banı reddeder, geçici ban işlemez (önce izin kaldırılır; Beyaz liste satırında)
     o.ip = own ? '<button class="ag-btn ag-btn-sm" data-dr="unban1">' + esc(t('ip_unban')) + '</button>'
       : mb > 32 && !fullAllow(d) ? '<button class="ag-btn ag-btn-sm ag-btn-danger" data-dr="ban1">' + esc(t('ip_ban')) + '</button>' : '';
+    if (own) o.ip = selfItems(ip).filter(function (x) { return x.act === 'chg'; }).map(miBtn).join('') + o.ip;   // kendi kısmi banı: Banı değiştir (menüyle aynı)
     // üst seviyeler: her seviye satırı o öğenin KENDİ eylemlerini sunar (selfItems: öğenin liste / Geçmiş menüsüyle aynı öğeler —
     // geçici blokta Kalıcı yap ve Kaldır, izlenen blokta Kalıcı yap / İzlemeyi yeniden başlat / Unut, kısmi banda Banı değiştir).
     // Ban / kalıcı yap önerisi yalnız lvOffer o seviyeyi sunuyorsa (kapsayan tam ban kartın taze verisinden: mb)
@@ -4816,7 +4817,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     promote: function (pfx3) { return { act: 'promote', label: t('promote'), icon: 'ban', attrs: 'data-t="' + esc(pfx3) + '"' }; },
     rewatch: function (pfx3) { return { act: 'rewatch', label: t('rewatch'), icon: 'clock', attrs: 'data-t="' + esc(pfx3) + '"' }; },
     forget: function (pfx3) { return { act: 'forget', label: t('forget'), icon: 'x', attrs: 'data-t="' + esc(pfx3) + '"' }; },
-    unban: function (g) { return { act: 'unban', label: t('unban'), icon: 'x', danger: true, attrs: 'data-c="' + esc(g.cidr) + '" data-dnd="' + (g.dnd ? 1 : 0) + '" data-kind="' + esc(g.kind) + '" data-restore="' + (g.restore || 0) + '"' }; }
+    unban: function (g) { return { act: 'unban', label: t('ip_unban'), icon: 'x', danger: true, attrs: 'data-c="' + esc(g.cidr) + '" data-dnd="' + (g.dnd ? 1 : 0) + '" data-kind="' + esc(g.kind) + '" data-restore="' + (g.restore || 0) + '"' }; }
   };
   /* Üst seviye banları tek karar (G6 devamı, 1.15.90): IP kartının düğmeleri ve bütün liste menüleri (Aktif aralık banları, İzlenenler,
      Geçmiş) bunu kullanır. Hedefin (c) daha geniş seviyeleri — blok /24, duyurulan aralık (/8–/23, /16 hariç), ağ /16 — kapsayan tam ban

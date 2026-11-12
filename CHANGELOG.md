@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.15.96 — 2026-11-12
+
+Found by walking the live panel item by item after 1.15.95.
+
+- An IP with its own partial ban had *Change ban* in its row menu but not in
+  its IP card; the card has it now.
+- The same action was called *Remove* in the menus and *Remove ban* in the IP
+  card; it is *Remove ban* everywhere.
+- The range card's header could name a different provider than its own *Owner*
+  section and the list row (seen on a /20 whose blocks belong to two
+  providers); the header now uses the same source.
+- When the announced range is the /16 itself, the IP card listed the same
+  address twice (*Network* and *Announced range*); the second row is gone and
+  the network row says the announced range is the network.
+
 ## 1.15.95 — 2026-11-12
 
 The same item now offers the same actions on every screen.
