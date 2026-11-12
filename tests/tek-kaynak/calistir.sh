@@ -6,6 +6,8 @@
 #   - class="ag-cidr" (adres bağlantısı) yalnız cidrLink'te                  → cidrLink
 #   - class="ag-ctag" (kapsayan ban etiketi) yalnız coverTag'de             → coverTag
 #   - class="ag-count" (kart sayı rozeti), class="ag-pager" (sayfa çubuğu)   → countBadge, pagerHtml (1.15.85: üçü num()'suzdu)
+#   - öğe eylemi düğmesi (data-act="unban|promote|chg|ban16…") elle yazılmaz → MI.* + miBtn (objItems / selfItems; 1.15.95:
+#     aralık kartı ve IP kartı kendi düğmelerini kuruyordu, aynı geçici blok üç ekranda üç ayrı eylem sunuyordu)
 # Kullanım: calistir.sh [ag.js yolu]  (eski kodla sınamak için başka dosya verilebilir)
 set -u
 D=$(cd "$(dirname "$0")/../.." && pwd)
@@ -27,5 +29,6 @@ kural "kapsayan ban etiketi yalnız coverTag'de" "class=\"ag-ctag" "^  function 
 kural "kart sayı rozeti yalnız countBadge'de (sayı num() ile)" "class=\"ag-count" "^  function countBadge"
 kural "sağlayıcı satırı yalnız asnRow'da (1.15.87: Banlı sağlayıcılar kendi kopyasıydı)" "class=\"ag-asn-r\"" "^    return '<div class=\"ag-asn-r\">"
 kural "sayfa çubuğu yalnız pagerHtml'de (sayılar num() ile)" "class=\"ag-pager" "^    return '<div class=\"ag-pager\">"
+kural "öğe eylemi düğmesi elle yazılmaz (MI.* + miBtn: menü, aralık kartı, IP kartı aynı öğeler)" 'data-(act|dr)="(unban|promote|forget|rewatch|chg|ban|ban16|ban24|banpfx|banforce)"' 'BU_DESEN_HICBIR_SATIRA_UYMAZ'
 [ $F -eq 0 ] && echo "GEÇTİ: tek kaynak ($J)" || echo "DÜŞTÜ: $F kural"
 exit $F

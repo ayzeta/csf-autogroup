@@ -118,6 +118,14 @@ const ROL_IST = {
 };
 
 const INV = {};
+// adres bağlantısı (IP / aralık) hiçbir yerde birden çok satıra bölünmez. 1.15.93'e kadar IP listesinde yandaki metin uzunsa
+// (hedef listesi) telefonda adres "79 / .1 / 35 …" diye parçalanıyordu (canlıda kullanıcı gördü; tablo hücresinde "her yerden böl"
+// vardı, adreste "bölünmez" yoktu). Her genişlikteki her taramada denetlenir
+const BOLUNEN = [];
+async function adresBol(page, ad) {
+  const b = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-cidr')).filter(e => e.offsetWidth > 0 && e.getClientRects().length > 1).map(e => e.textContent.trim()).slice(0, 3));
+  b.forEach(x => { if (BOLUNEN.length < 8) BOLUNEN.push(ad + ' ‹' + x + '›'); });
+}
 async function rolInv(page, ad) {
   const got = await page.evaluate(([R, IST]) => {
     const out = [], ist = Object.keys(IST).join(', ');
@@ -135,6 +143,7 @@ async function rolInv(page, ad) {
   got.forEach(([role, sig, where, cls]) => { const r = INV[role] = INV[role] || {}; const s = r[sig] = r[sig] || { n: 0, w: new Set(), cls: new Set() }; s.n++; if (s.w.size < 4) s.w.add(ad + ' › ' + where); s.cls.add(cls); });
 }
 function rolRapor() {
+  check('adres bağlantısı hiçbir ekranda birden çok satıra bölünmüyor', BOLUNEN.length === 0, BOLUNEN.join(' | '));
   Object.keys(ROLES).forEach(role => {
     const r = INV[role] || {}, sigs = Object.keys(r);
     const info = sigs.map(s => `${r[s].n}× [${s}] ${Array.from(r[s].w).join('; ')} {${Array.from(r[s].cls).slice(0, 3).join(' | ')}}`).join('\n      ');
@@ -170,6 +179,7 @@ async function kartKurallari(page, ad) {
   check(`kart ${ad} · IP / aralık yazan her öğe tıklanıyor`, k.ipb.length === 0, k.ipb.slice(0, 4).join(' | '));
   check(`kart ${ad} · sütun başlıkları hücrelerle aynı hizada`, k.hiz.length === 0, k.hiz.slice(0, 4).join(' | '));
   await stRenk(page, 'kart ' + ad);
+  await adresBol(page, 'kart ' + ad);
   await rolInv(page, 'kart ' + ad);
 }
 async function layoutChecks(page, label, width) {
@@ -319,6 +329,7 @@ async function layoutChecks(page, label, width) {
     .map(e => { const tx = e.textContent.trim(), d = e.getAttribute('data-ip'); return tx === d || tx === d + '/32' ? null : tx + ' → ' + d; }).filter(Boolean));
   check(`${label} · ${width} px · adres bağlantısı yazdığı adresi açar`, lnk.length === 0, lnk.slice(0, 3).join(' | '));
   await stRenk(page, `${label} · ${width} px`);
+  await adresBol(page, label + ' ' + width);
   if (width >= 1000) await rolInv(page, label);   // masaüstü genişliği (telefonda boyutlar bilinçli küçülür; ayrı denetlenir)
 }
 const errs = [];          // sayfanın JS hataları: test yarıda düşerse de yazılır
@@ -635,7 +646,7 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     // eski "Bloğun durumu" paragrafı ve kapsayan banların karışık listesi yok
     const kd = await page.evaluate(() => { const d = document.querySelector('.ag-drawer'); if (!d) return null;
       const sec = Array.from(d.querySelectorAll('.ag-dr-sec')).map(x => x.textContent.trim());
-      const rows = Array.from(d.querySelectorAll('.ag-lv-t tbody tr')).map(tr => ({ l: tr.cells[0].textContent.trim(), c: !!tr.cells[1].querySelector('[data-ip]'), b: Array.from(tr.querySelectorAll('[data-dr]')).map(b => b.getAttribute('data-dr')).join(',') }));
+      const rows = Array.from(d.querySelectorAll('.ag-lv-t tbody tr')).map(tr => ({ l: tr.cells[0].textContent.trim(), c: !!tr.cells[1].querySelector('[data-ip]'), b: Array.from(tr.querySelectorAll('[data-act]')).map(b => b.getAttribute('data-act')).join(',') }));
       return { sec, rows, eski: /Bloğun durumu|Bu IP'yi kapsayan banlar/.test(d.innerText), th: d.querySelectorAll('.ag-lv-t thead th').length }; });
     const r24 = kd && kd.rows.filter(r => r.l === 'Blok')[0], r16 = kd && kd.rows.filter(r => r.l === 'Ağ')[0];
     check('IP kartı düzeni: Bu IP · Üst seviyeler · Kim; tabloda Blok ve Ağ satırı, aralık tıklanır, Bloğu / Ağı banla kendi satırında; eski bölümler yok',
@@ -647,7 +658,7 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     // düğmenin açtığı pencere aynı aralığı söyler (1.15.88 ilk hâlinde "198.48.0.0/12.0/24 … bloktaki 256 adres" diyordu; canlıda görüldü).
     // Onaylanmaz, Vazgeç
     if (rpw) {
-      await page.click('.ag-drawer [data-dr="banpfx"]'); await page.waitForSelector('.ag-modal', { timeout: 15000 }).catch(() => {});
+      await page.click('.ag-drawer .ag-lv-t [data-act="banpfx"]'); await page.waitForSelector('.ag-modal', { timeout: 15000 }).catch(() => {});
       const mt = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); return m ? m.innerText : ''; });
       check('IP kartı: /12 ban penceresi aralığın kendisini söyler (/24 değil, birkaç ağın tamamı)', /198\.48\.0\.0\/12 /.test(mt) && !/\/12\.0\/24|256/.test(mt) && /16 ağ|16 whole/.test(mt), mt.slice(0, 160));
       await tik(page, '.ag-modal [data-m="no"]'); await page.waitForTimeout(400);
@@ -695,7 +706,7 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     }
     // Süreli aralık banı (gerçek CSF): Bloğu banla penceresinde süre yalnız "Her şey"de; süre seçilince açıklama, kapsananlar kaldırılmaz;
     // 1 sa ile onay → kartın Blok satırı kalan süreyi gösterir → Aktif aralık banları satırı "elle · süre", ⋯ → Banı kaldır (yazarak)
-    const b24 = await page.$('.ag-drawer [data-dr="ban24"]');
+    const b24 = await page.$('.ag-drawer .ag-lv-t [data-act="ban24"]');
     if (b24) {
       await b24.click(); await page.waitForSelector('.ag-modal #ag-ttl', { timeout: 30000 }).catch(() => {});
       const rb = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); const tt = m && m.querySelector('#ag-ttl'); if (!tt) return null;

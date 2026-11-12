@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.15.95 — 2026-11-12
+
+The same item now offers the same actions on every screen.
+
+- The range card built its own buttons: a temp block ban offered only *Remove*
+  there, while its row menu offered *Make permanent* and *Ban network*; a
+  watched block had no *Restart watch*, a partial ban no *Change ban*. The card
+  now shows exactly the row menu's actions.
+- The IP card's level rows (block, announced range, network) show that item's
+  own actions, the same ones as in its row menu: *Make permanent* and *Remove*
+  for a temp block ban, *Change ban* for a partial ban, the watch actions for a
+  watched block. From below, a level is offered with the action its own row
+  uses (a temp block ban used to read *Ban block permanently* in the IP card
+  and *Make permanent* in the list).
+- After an action taken from a card succeeds, the card reopens with the new
+  state.
+- When the range an owner announces is the block (or the network) itself, the
+  IP card says so instead of silently leaving the announced-range row out.
+- An announced range that is not in any list can be banned from History too.
+- Addresses in card tables no longer break across lines on a phone when the
+  text beside them is long.
+
 ## 1.15.94 — 2026-11-12
 
 One decision for "is this single ban already covered by a wider ban".
