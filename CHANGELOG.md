@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.15.102 — 2026-11-12
+
+- History: the badge of a manual ban says its kind in words too — "Manual
+  ban", "Manual partial ban", "Manual temp ban". The colour already told them
+  apart, but all three read "Manual ban".
+- The weekly summary counts block bans, temp block bans, promotions, suspicious
+  ranges and skips the way the Activity chart does (the same block on the same
+  day once; a manual range ban is a block ban). It counted raw events, so the
+  email and the chart could show different numbers for the same week.
+- The Activity chart no longer counts a manual single-IP ban as a block ban.
+- "Violation under a ban" has its own dark, filled badge and History icon. It
+  shared the amber of a suspicious network, though it means something else: a
+  service that should be closed was reached.
+
 ## 1.15.101 — 2026-11-12
 
 - One term: the panel, emails and log say "allow list" everywhere ("whitelist"

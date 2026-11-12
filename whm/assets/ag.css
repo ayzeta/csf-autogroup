@@ -28,6 +28,7 @@
   --ag-d-prom: #7c3aed; --ag-d-prom-t: #6d28d9; --ag-d-prom-s: #f5f3ff; --ag-d-prom-l: #ddd6fe;   /* geçiciden kalıcıya alındı */
   --ag-d-temp: #0d9488; --ag-d-temp-t: #0f766e; --ag-d-temp-s: #f0fdfa; --ag-d-temp-l: #99f6e4;   /* geçici (süreli) ban */
   --ag-d-part: #2563eb; --ag-d-part-t: #1d4ed8; --ag-d-part-s: #eff6ff; --ag-d-part-l: #bfdbfe;   /* kısmi ban (yalnız seçilen servisler) */
+  --ag-d-leak: #5c1217;   /* ban altında ihlal */
   --ag-d-warn: #d97706; --ag-d-warn-t: #b45309; --ag-d-warn-s: #fffbeb; --ag-d-warn-l: #fde68a;   /* şüpheli ağ, dikkat */
   --ag-d-skip: #db2777; --ag-d-skip-t: #be185d; --ag-d-skip-s: #fdf2f8; --ag-d-skip-l: #fbcfe8;   /* izin ya da yoksayma yüzünden banlanmadı: atlandı, izinli, yoksayılan, sunucu IP'si, ban işlemiyor */
   --ag-shadow-lg: 0 20px 48px rgba(16, 24, 40, .18), 0 4px 12px rgba(16, 24, 40, .08);
@@ -184,6 +185,9 @@
 .ag-pill-part { background: var(--ag-d-part-s); color: var(--ag-d-part-t); border-color: var(--ag-d-part-l); }
 .ag-pill-skip { background: var(--ag-d-skip-s); color: var(--ag-d-skip-t); border-color: var(--ag-d-skip-l); }
 .ag-pill-dw { background: var(--ag-d-warn-s); color: var(--ag-d-warn-t); border-color: var(--ag-d-warn-l); }
+/* ban altında ihlal: kapalı olması gereken servise ulaşıldı. Öteki durumlardan ayrı, koyu ve dolu (kırmızı–siyah arası): şüpheli ağın
+   turuncusuyla aynı görünüyordu */
+.ag-pill-leak { background: var(--ag-d-leak); color: #fff; border-color: var(--ag-d-leak); }
 .ag-flag { font-family: var(--ag-mono); font-size: 10.5px; font-weight: 700; width: 22px; height: 22px; border-radius: 50%; background: #eef0f6; color: var(--ag-text-2); display: inline-flex; align-items: center; justify-content: center; flex: none; }
 
 /* ── IP list (expand) ───────────────────────────────────────────── */
@@ -255,6 +259,7 @@
 .ag-ev-ic.d-temp { background: var(--ag-d-temp-s); color: var(--ag-d-temp); }
 .ag-ev-ic.d-part { background: var(--ag-d-part-s); color: var(--ag-d-part); }
 .ag-ev-ic.d-warn { background: var(--ag-d-warn-s); color: var(--ag-d-warn); }
+.ag-ev-ic.d-leak { background: var(--ag-d-leak); color: #fff; }
 .ag-ev-ic.d-skip { background: var(--ag-d-skip-s); color: var(--ag-d-skip); }
 .ag-ev-b { flex: 1; min-width: 0; }
 .ag-ev-t { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }

@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.101"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.102"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1834,6 +1834,11 @@ deny_prefixes() {   # csf.deny'deki grupların ve tekillerin /24 önekleri (tekr
     for c in "${!SINGLE_NOTE[@]}"; do echo "${c%.*}"; done
     for i in "${!DC_TXT[@]}"; do c="${DC_TXT[i]%/*}"; echo "${c%.*}"; done
 }
+# Etkinlik sayımının tek sınıflandırıcısı (awk): olay türü + adres → A blok banı, P kalıcıya alındı, T geçici blok banı, W1 / W2 şüpheli
+# aralık / ağ, S atlandı; öteki olaylar "". Elle ban yalnız aralıksa blok banıdır (tek IP banı değil). Panelin Etkinlik grafiği (durum
+# çıktısı "daily") ve haftalık özet aynı işlevi ve aynı tekilleştirmeyi (sınıf + adres + gün) kullanır: önce özet ham olay sayıyordu,
+# aynı hafta için mail ile grafik farklı sayı veriyordu.
+AWK_EVC='function evcls(ty, c) { return (ty == "add24" || (ty == "manual_ban" && index(c, "/"))) ? "A" : ty == "promote" ? "P" : ty == "temp24" ? "T" : (ty == "warn16" || ty == "warnpfx") ? "W1" : ty == "warn16t" ? "W2" : ty == "skip_wl" ? "S" : "" }'
 listed_prefixes() { # tekil ve csf.deny aralıkları dışında listelerde görünen satırların /24 önekleri → stdout: kısmi banlar (elle /32
     # dahil; csf.deny gelişmiş satırları), geçici aralık banları (csf.tempban), susturulanlar. Sahip sorgusu (backfill_owners) ve durum
     # çıktısının sahip haritası aynı listeyi kullanır: önce ikisi de bunları atlıyordu, Aktif aralık banları / Susturulanlar'da "—"
@@ -3828,7 +3833,7 @@ do_status() {
     for di in $(seq 29 -1 0); do printf -v dd '%(%Y-%m-%d)T' $(( now - di * 86400 )); dlist+="${dlist:+,}$dd"; done   # printf %T: alt süreç yok
     [ -r "$EVENTS_FILE" ] && dfiles+=("$EVENTS_FILE")
     [ -r "$SAYAC_FILE" ] && dfiles+=("$SAYAC_FILE")
-    daily=$(printf '%s' "$ghist" | awk -v s="$dstart" -v dl="$dlist" -v evf="$EVENTS_FILE" -v syf="$SAYAC_FILE" '
+    daily=$(printf '%s' "$ghist" | awk -v s="$dstart" -v dl="$dlist" -v evf="$EVENTS_FILE" -v syf="$SAYAC_FILE" "$AWK_EVC"'
         BEGIN { nd = split(dl, D, ","); for (k = 1; k <= nd; k++) DI[D[k]] = k - 1 }
         function put(L, key, d) {
             if (d < 0 || d > 29 || ((L, key, d) in U)) return
@@ -3838,8 +3843,7 @@ do_status() {
             if (!match($0, /"t":[0-9]+/)) next; t = substr($0, RSTART + 4, RLENGTH - 4) + 0; if (t < s) next
             if (!match($0, /"type":"[a-z0-9_]+"/)) next; ty = substr($0, RSTART + 8, RLENGTH - 9)
             c = ""; if (match($0, /"cidr":"[0-9.\/]+"/)) c = substr($0, RSTART + 8, RLENGTH - 9)
-            L = (ty == "add24" || ty == "manual_ban") ? "A" : ty == "promote" ? "P" : ty == "temp24" ? "T" : \
-                ty == "warn16" || ty == "warnpfx" ? "W1" : ty == "warn16t" ? "W2" : ty == "skip_wl" ? "S" : ""
+            L = evcls(ty, c)
             if (L != "") put(L, c, int((t - s) / 86400))
             next
         }
@@ -7229,14 +7233,20 @@ digest_build() { # → DG_SUBJ, DG_BODY
     now=$(date +%s); since=$(( now - 7 * 86400 ))
     local -A C=()
     if [ -r "$EVENTS_FILE" ]; then
-        while IFS='|' read -r k a; do C[$k]="$a"; done < <(awk -v s="$since" '
+        local d0; d0=$(date -d "$(date -d "@$since" +%Y-%m-%d) 00:00" +%s 2>/dev/null) || d0=$since    # gün kovaları yerel gece yarısından (grafikle aynı)
+        while IFS='|' read -r k a; do C[$k]="$a"; done < <(awk -v s="$since" -v d0="$d0" "$AWK_EVC"'
             match($0, /"t":[0-9]+/) { t = substr($0, RSTART + 4, RLENGTH - 4) + 0 } t < s { next }
             match($0, /"type":"[a-z0-9_]+"/) { ty = substr($0, RSTART + 8, RLENGTH - 9)
-                if (ty == "warn16t" || ty == "warnpfx") ty = "warn16"
+                # blok olayları grafikteki gibi sayılır: sınıf + adres + gün bir kez (evcls)
+                cd = ""; if (match($0, /"cidr":"[0-9.\/]+"/)) cd = substr($0, RSTART + 8, RLENGTH - 9)
+                L = evcls(ty, cd)
+                if (L != "") { dk = L SUBSEP cd SUBSEP int((t - d0) / 86400); if (!(dk in U)) { U[dk] = 1; g[substr(L, 1, 1)]++ } }
+                if (ty == "add24" || ty == "promote" || ty == "temp24" || ty == "warn16" || ty == "warn16t" || ty == "warnpfx" || ty == "skip_wl") next
                 if (ty ~ /^manual_/) ty = "manual"     # panelden yapılan işlemler; ayar değişikliği (config) ayrı sayılır
                 c[ty]++
                 if (ty == "run" && p0 == "" && match($0, /"perm_used":[0-9]+/)) p0 = substr($0, RSTART + 12, RLENGTH - 12) }
-            END { for (k in c) print k "|" c[k]; print "perm0|" p0 }' "$EVENTS_FILE")
+            END { for (k in c) print k "|" c[k]; print "perm0|" p0
+                  print "add24|" (g["A"] + 0); print "promote|" (g["P"] + 0); print "temp24|" (g["T"] + 0); print "warn16|" (g["W"] + 0); print "skip_wl|" (g["S"] + 0) }' "$EVENTS_FILE")
     fi
     [ -n "${C[perm0]}" ] && perm0="${C[perm0]}"
     limit=$(num "$(conf_val DENY_IP_LIMIT)"); tlimit=$(num "$(conf_val DENY_TEMP_IP_LIMIT)")

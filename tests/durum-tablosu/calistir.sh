@@ -791,6 +791,14 @@ mcheck "saklama · süresi dolmamış kayıt varken dosya yeniden yazılmaz (yal
 
 # günlük işler: kiralık sunucu yenilemesinin sırası geldi ama çalışamadı (taklit kökte ipset yok) → gün kapanmaz, sonraki tur
 # yeniden dener; kiralık sunucu banı kapalıyken gün kapanır (önce başarısız yenileme de "yapıldı" sayılıyor, bir gün bekletiyordu)
+# haftalık özet ile Etkinlik grafiği aynı sayım (evcls + sınıf / adres / gün tekilleştirme): aynı bloğun aynı gündeki iki kaydı bir
+# kez; elle aralık banı blok banı sayılır, elle tek IP banı sayılmaz. Önce özet ham olay sayıyordu, grafik elle tek IP banını da sayıyordu
+mk dgsay; EV="$R/var/lib/csf_autogroup/events.jsonl"
+printf '{"t":%s,"type":"add24","cidr":"151.80.7.0/24","n":3}\n{"t":%s,"type":"add24","cidr":"151.80.7.0/24","n":3}\n{"t":%s,"type":"add24","cidr":"151.80.7.0/24","n":3}\n' $(( NOW - 40 )) $(( NOW - 35 )) $(( NOW - 30 )) >> "$EV"   # üç ham kayıt, tek blok banı
+printf '{"t":%s,"type":"manual_ban","cidr":"151.80.9.0/24","by":"root"}\n{"t":%s,"type":"manual_ban","cidr":"151.80.10.5","by":"root","kind":"ip"}\n{"t":%s,"type":"temp24","cidr":"151.80.11.0/24","n":3}\n' $(( NOW - 25 )) $(( NOW - 20 )) $(( NOW - 15 )) >> "$EV"
+run --digest > "$W/out/dgsay.txt" 2>&1; run --status --json > "$W/out/dgsay.json" 2>/dev/null
+mcheck "haftalık özet: blok banı sayısı grafikle aynı kuralla (2 blok banı, 1 geçici blok banı, 2 elle işlem)" "grep -q '2 blok banı · 1 geçici blok banı' '$W/out/dgsay.txt' && grep -q ' 2 elle işlem' '$W/out/dgsay.txt'"
+mcheck "Etkinlik grafiği: aynı veride bugünün blok banı 2 (elle tek IP banı sayılmaz), geçici 1" "grep -qE '\"A\":\[[0-9,]*,2\],\"T\":\[[0-9,]*,1\]' '$W/out/dgsay.json'"
 mk daily; printf '%s\n' "CLOUD_BAN=1" "CLOUD_SOURCES=aws" >> "$R/app/config.env"; quiet
 mcheck "yenileme: kiralık sunucu yenilemesi çalışamazsa .refreshed yazılmaz (sonraki tur yeniden dener)" "[ ! -e '$R/var/lib/csf_autogroup/cloud/.refreshed' ]"
 # CSF'in ASN verisi ayardaki gün kadar eskiyse yenilenir (önce find -mtime +25 kullanılıyordu: 25 gün ayarında 26. günde);
