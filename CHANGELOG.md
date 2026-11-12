@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.15.97 — 2026-11-12
+
+More from the item-by-item walk through the live panel.
+
+- *Ban IP* is in the History menu of a single address too (it was only in the
+  IP card). The address is looked up when you click, and the same check as the
+  card decides: if it cannot be banned (allowed on every port, the server's own
+  address, already banned) one window says why and offers the IP card.
+- A covering ban is named the same way everywhere: "provider ban AS…",
+  "country ban …", "rented-server list …". The IP card's result line used to
+  show the raw CSF setting name instead.
+- Settings → Notifications names violations under a ban in the review class.
+- The range card says when the blocks of a range belong to more than one
+  provider.
+- A banned provider without a known country keeps the row alignment.
+
 ## 1.15.96 — 2026-11-12
 
 Found by walking the live panel item by item after 1.15.95.

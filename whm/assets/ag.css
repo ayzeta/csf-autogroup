@@ -402,6 +402,7 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-tr-note { padding: 0 18px 9px 180px; font-size: 12px; line-height: 1.45; color: var(--ag-text-3); }
 .ag-tr-note:not(:has(div, .ag-own-n:not(:empty))) { padding-bottom: 5px; }
 .ag-tr-note .ag-row-n { margin-top: 2px; }
+.ag-flag-0 { visibility: hidden; }   /* ülkesi bilinmeyen sağlayıcı satırında bayrağın yeri: kardeş satırlar aynı hizada */
 .ag-tr-note .ag-ub-l { margin-top: 2px; }   /* satırın ek durumunun (ban altında ihlal, açık servis) açıklaması; rozeti Durum sütununda */
 /* Durum sütunu satırın bütün durumlarını taşır (rvStates): alt alta, ana durum üstte */
 .ag-tr-r .ag-td-state { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }

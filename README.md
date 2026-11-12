@@ -406,8 +406,8 @@ its own:
   `csfpost.sh` puts the rule back afterwards. Its last attempt shows in the
   state tip.
 - **Notifications** — an *Events and channels* table: five kinds of event
-  (firewall problem, list filling up, run notices, allowed-IP violations and
-  open services, weekly summary) × two channels (email, Slack), each cell on
+  (firewall problem, list filling up, run notices, allowed-IP violations /
+  open services / violations under a ban, weekly summary) × two channels (email, Slack), each cell on
   or off. Run notices are the bans, suspicious ranges and networks, skips,
   old-block removal and lists that can't be downloaded; the
   allowed-IP violation and open-service records are the allowed / ignored /

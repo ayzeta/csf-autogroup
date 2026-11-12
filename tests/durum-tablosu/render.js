@@ -107,6 +107,10 @@ for (const s of scen) {
     const h = act2(AG.itemMenu(c, { type: 'x', ips: [] }, ist)), l = act2(menus[k]);
     if (h !== l) fail(s, `${c}: liste menüsü [${l || '—'}] ile Geçmiş menüsü [${h || '—'}] farklı`);
   });
+  // K9: IP kartı "IP'yi banla" sunuyorsa Geçmiş menüsü de sunar (1.15.97'ye kadar tek IP banı yalnız karttaydı; menüde karar
+  // tıklanınca kartın sorgusuyla verilir — ipCanBan). Tersi aranmaz: menü izin / ban durumunu sorgudan önce bilemez
+  if (scr['IP kartı ' + IP].some(x => x[0] === 'ban1') && !scr['Geçmiş ' + IP].some(x => x[0] === 'ban1'))
+    fail(s, `IP kartı "IP'yi banla" sunuyor, Geçmiş menüsü sunmuyor (${IP})`);
   // K6: sunulan ban, motorun banla penceresinde "zaten banlı" diye reddediliyorsa düğme çıkmaza götürür
   const inn = {};
   for (const [k, f] of [['ban24', 'in24'], ['ban16', 'in16']]) {
