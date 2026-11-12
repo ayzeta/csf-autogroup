@@ -51,7 +51,7 @@ SVC=$(cat_of SVC_CATALOG); CLD=$(cat_of CLOUD_CATALOG)
     printf 'NOTIFY\t%s\n' all email slack
     printf 'ALERT_MAIL\t%s\n' whm root root@localhost 'admin+csf@ornek.com.tr'
     printf 'DIGEST_DAY\t%s\n' 1 7
-    printf 'THRESHOLD_24\t3\nTHRESHOLD_24_PERMANENT\t5\nTHRESHOLD_16\t5\nTHRESHOLD_TEMP_24\t3\nTHRESHOLD_TEMP_16\t5\n'
+    printf 'THRESHOLD_24\t3\nTHRESHOLD_24_PERMANENT\t5\nTHRESHOLD_16\t5\nTHRESHOLD_TEMP_24\t3\n'
     printf 'LOOKUP_TIMEOUT\t3\nSAYAC_RETENTION_DAYS\t180\nREVIEW_DAYS\t7\nLOG_KEEP_DAYS\t30\nLOG_ROTATE_MB\t10\nLOG_ROTATE_KEEP\t4\nBLOCK_EXPIRE_DAYS\t365\n'
     # yenileme ve süre ayarları (varsayılanlar ve uçlar)
     printf 'CLOUD_REFRESH_DAYS\t%s\n' 1 30; printf 'CLOUD_FAIL_DAYS\t%s\n' 3 30; printf 'SVC_REFRESH_DAYS\t%s\n' 1 7; printf 'SVC_FAIL_DAYS\t%s\n' 1 3

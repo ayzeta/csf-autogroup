@@ -350,7 +350,7 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-tbl { padding: 0; }
 .ag-tbl { container: agtbl / inline-size; }
 /* blok · durum · sahip · tekil · eklendi · menü — sabit sütunlar, hiçbir hücre komşusuna taşmaz */
-.ag-thead, .ag-tr { display: grid; grid-template-columns: 156px 164px minmax(0, 1fr) 56px 104px 36px; align-items: center; gap: 12px; padding: 0 10px 0 18px; }
+.ag-thead, .ag-tr { display: grid; grid-template-columns: 156px 132px minmax(0, 1fr) 56px 104px 36px; align-items: center; gap: 12px; padding: 0 10px 0 18px; }
 .ag-thead { height: 36px; background: #fafafb; border-bottom: 1px solid var(--ag-line-soft); }
 .ag-th { background: none; border: 0; padding: 0; text-align: left; font-size: 11.5px; font-weight: 650; color: var(--ag-text-3); text-transform: uppercase; letter-spacing: .04em; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; }
 .ag-th:hover, .ag-th.on { color: var(--ag-text); }
@@ -389,7 +389,7 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 /* izlenenler tablosu: blok · sahip · başlangıç · kalan · menü */
 .ag-tr-p { grid-template-columns: 176px minmax(0, 1fr) 92px 104px 36px; }
 @container agtbl (max-width: 760px) {
-  .ag-thead:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i), .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) { grid-template-columns: 156px 164px minmax(0, 1fr) 104px 36px; }
+  .ag-thead:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i), .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) { grid-template-columns: 156px 132px minmax(0, 1fr) 104px 36px; }
   .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) .ag-num-c, .ag-thead:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) .ag-num-c { display: none; }
 }
 .ag-thead.ag-tr-p .ag-th { cursor: default; }

@@ -1,5 +1,45 @@
 # Changelog
 
+## 1.15.99 — 2026-11-12
+
+From a walk through the wide desktop layout and every Settings section.
+
+- History shows the owner for an address that is no longer in any list too
+  (it was shown only while the address was listed).
+- Active range bans: the owner column is wider; most names were cut off.
+- Settings texts: *Days kept in the list* names every row kind (suspicious
+  ranges, violations under a ban); *Remove old block bans automatically* points
+  to the period above it, not below; the suspicious network threshold says that
+  the singles of a reported range are not counted again; the Slack batching
+  interval says where it is set.
+- The log size uses the language's decimal separator.
+- Settings history shows a custom source as "name (address)" instead of the
+  stored form.
+
+Leftovers from the text-against-code review.
+
+- Needs review no longer builds "Skipped" (/24) and "Suspicious network" (/16)
+  rows out of allowed IPs. Those rows counted an allowed IP's attempts as bans,
+  so a block the run never considered could show as "Skipped". Each allowed IP
+  has its own row ("Allowed" / "Ban has no effect") with its last record; IPs
+  under one allow range still share that range's row.
+- A rented-server list that is not selected was downloaded without its filter
+  (for AWS: every range, not only EC2), so "N offending IPs are on this list"
+  was too high. Selected and unselected lists now use the same source line.
+- An open-service row in Needs review is dated by the first violation after
+  the ban; it used to show "now" and looked new on every visit.
+- IP card: an allow line for every incoming port (`tcp|in|d=1:65535|s=IP`)
+  against a ban that only cuts incoming traffic is shown as allowed, like the
+  Needs review row already said, and names the direction.
+- IP card: when singles of a block do not count toward the block threshold
+  because their service is already blocked, the card says how many count.
+- Measure impact: a rented-server list that blocks everything is coloured as a
+  full ban, and the tooltip gives the list's rule.
+- Top providers: the bar uses the ranking weight (a block ban placed by hand
+  carries none).
+- The status band is no longer green while CSF is in testing mode.
+- `THRESHOLD_TEMP_16`, unused since 1.9.10, is gone from the settings.
+
 ## 1.15.98 — 2026-11-12
 
 - A single-IP ban placed from the panel (permanent or timed) was missing from

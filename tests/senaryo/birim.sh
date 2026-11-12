@@ -61,10 +61,17 @@ for pl in "cloudflare-ips-sayfasi.html|https://www.cloudflare.com/ips/|www.cloud
     case "$REPLY" in "$pe"*) echo "  ✓ sayfadaki bağlantı ($pf): $REPLY";; *) FAILS=$((FAILS + 1)); echo "  ✗ sayfadaki bağlantı ($pf): «$REPLY» (beklenen $pe…)";; esac
 done
 # motorun hazır listeler için ürettiği satır: varsayılan süzgeç ve desen (değiştirilmiş adres yazılınca süzgeç korunur)
-for f in cloud_urls cloud_flt cloud_link cloud_srclist; do eval "$(awk "/^$f\\(\\) \\{/{f=1} f{print} f && /^}\$/{exit}" "$REPO/csf_autogroup.sh")"; done
+for f in cloud_urls cloud_flt cloud_link cloud_srcline cloud_srclist cloud_probe; do eval "$(awk "/^$f\\(\\) \\{/{f=1} f{print} f && /^}\$/{exit}" "$REPO/csf_autogroup.sh")"; done
 N=$((N + 1)); CLOUD_SOURCES=aws,azure,gcp; CLOUD_URLS="aws|https://ornek.com/a.json"; CLOUD_EXTRA=""; cloud_srclist
 EXP=$'aws|https://ornek.com/a.json|j:service=EC2\nazure|https://www.microsoft.com/en-us/download/details.aspx?id=56519|j:name=AzureCloud|download.microsoft.com/*ServiceTags_Public_*.json\ngcp|https://www.gstatic.com/ipranges/cloud.json\n'
 if [ "$REPLY" = "$EXP" ]; then echo "  ✓ motor: hazır AWS / Azure satırı varsayılan süzgeç ve desenle"; else FAILS=$((FAILS + 1)); echo "  ✗ motor satırları: $(printf '%s' "$REPLY" | tr '\n' ' ')"; fi
+# seçili OLMAYAN hazır liste de (panelin "N ihlal eden IP bu listede" sayısı için indirilir) aynı satırla indirilir: süzgeç ve desen
+# dahil. Araç yerine SRC'yi dosyaya yazan taklit konur.
+N=$((N + 1)); PD=$(mktemp -d); mkdir -p "$PD/tools"; printf 'printf "%%s" "$SRC" > "%s/src"\n' "$PD" > "$PD/tools/cloud-ban.sh"
+SELF_DIR="$PD" CLOUD_DIR="$PD/c" LOG_FILE=/dev/null CLOUD_CATALOG="aws azure gcp" CLOUD_ACTIVE="gcp" cloud_probe
+CLOUD_SOURCES=aws,azure; cloud_srclist
+if [ -s "$PD/src" ] && [ "$(cat "$PD/src")" = "$(printf '%s' "$REPLY")" ]; then echo "  ✓ motor: seçili olmayan liste de aynı satırla indirilir (süzgeç, desen)"; else FAILS=$((FAILS + 1)); echo "  ✗ seçili olmayan liste satırları: $(tr '\n' ' ' < "$PD/src" 2>/dev/null)"; fi
+rm -rf "$PD"
 F=$((F + FAILS))
 if command -v node >/dev/null 2>&1; then
     N=$((N + 1)); r=$(node "$H/ayar-deseni.js" "$REPO/whm/assets/ag.js" 2>&1 | tail -n 1)

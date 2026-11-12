@@ -199,7 +199,9 @@ mcheck "tek portluk izin: ban öteki portlarda işler → listede yok" "[ -z \"\
 mkl aagrp; printf '151.80.7.0/25 # müşteri ağı\n' >> "$A"; lfdb 3600 151.80.7.9; lfdb 3000 151.80.7.20
 mcheck "izin aralığından 2 IP → tek 'İzinli aralık' satırı (IP'ler altında)" "rvrow 151.80.7.0/25 | grep -q '\"type\":\"allow_grp\".*\"aa\":2' && [ -z \"\$(rvrow 151.80.7.9)\" ]"
 mkl aamix; printf '151.80.7.9\n151.80.7.10\n' >> "$A"; lfdb 3600 151.80.7.9; lfdb 3000 151.80.7.10; single 151.80.7.30 sshd
-mcheck "/24'te 2 izinli + 1 izinsiz tekil (blok eşiği) → 'Atlandı', 2'si izinli" "rvrow 151.80.7.0/24 | grep -q '\"type\":\"skip_wl\".*\"aa\":2'"
+# rozet tek anlam: "Atlandı" yalnız turun eşiği dolup izin yüzünden banlamadığı blok. İzinli IP'lerin denemeleri ban sayılıp blok
+# satırı kurulmaz (1.15.99'a kadar kuruluyordu: turun hiç değerlendirmediği blok "Atlandı" görünüyordu); her izinli IP kendi satırında
+mcheck "/24'te 2 izinli + 1 izinsiz tekil: 'Atlandı' satırı kurulmaz, izinli IP'ler kendi satırında" "[ -z \"\$(rvrow 151.80.7.0/24)\" ] && rvrow 151.80.7.9 | grep -q '\"type\":\"allow_ban\"' && rvrow 151.80.7.10 | grep -q '\"type\":\"allow_ban\"'"
 mkl aaold; printf '151.80.7.9 # müşteri\n' >> "$A"; lfdb $(( 9 * 86400 )) 151.80.7.9
 mcheck "7 günden eski kayıt → listede yok" "[ -z \"\$(rvrow 151.80.7.9)\" ]"
 mkl aarot; printf '151.80.7.9 # müşteri\n' >> "$A"; lfdb 172800 151.80.7.9; mv "$R/lfd.log" "$R/lfd.log.1"; gzip -f "$R/lfd.log.1"; : > "$R/lfd.log"
@@ -333,8 +335,11 @@ mcheck "portsuz gelişmiş satır (CSF kural kurmaz) tam izin değil" "! rvrow 1
 tb1() { printf 'tcp|in|d=1:65535|s=151.80.7.9 # ofis\n' >> "$A"; printf '%s|151.80.7.9||%s|3600|lfd: (pop3d) Failed POP3 login from 151.80.7.9 (FR/France/-): 5 in the last 3600 secs\n' "$NOW" "$1" >> "$T"; }
 mkl aatin; tb1 in
 mcheck "geçici ban 'in' + tcp|in|d=1:65535: 'Ban işlemiyor' (cevaplar giden yönde serbest)" "rvrow 151.80.7.9 | grep -q '\"type\":\"allow_ban\".*\"full\":1'"
+# IP kartı Kontrol edilecekler'le aynı ölçüt (önce kart "engelli … yalnız o portu açar" diyordu, liste "Ban işlemiyor")
+mcheck "IP kartı: geçici ban 'in' + tcp|in|d=1:65535 tam izin, yönü söyler (liste satırıyla aynı karar)" "run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"wfull\":1,\"wfin\":1'"
 mkl aatio; tb1 inout
 mcheck "geçici ban 'inout' + tcp|in|d=1:65535: ban işler" "! rvrow 151.80.7.9 | grep -q '\"full\":1'"
+mcheck "IP kartı: geçici ban 'inout' + tcp|in|d=1:65535 tam izin değil" "run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"wfull\":0'"
 mkl aapin; printf 'tcp|in|d=1:65535|s=151.80.7.9 # ofis\n' >> "$A"; single 151.80.7.9 pop3d
 mcheck "kalıcı tekil + tcp|in|d=1:65535 (LF_BLOCKINONLY=0): ban işler" "! rvrow 151.80.7.9 | grep -q '\"full\":1'"
 mkl aapio; printf 'LF_BLOCKINONLY = "1"\n' >> "$R/etc/csf/csf.conf"; printf 'tcp|in|d=1:65535|s=151.80.7.9 # ofis\n' >> "$A"; single 151.80.7.9 pop3d
@@ -597,6 +602,11 @@ single 151.80.7.9 sshd; quiet --action ban24 151.80.8 --mode svc --svc web
 printf '151.80.9.0/24 9999-12-31 root %s\n' "$NOW" > "$R/var/lib/csf_autogroup/ignored"
 run --status --json > "$W/out/own1.sahip.json" 2>/dev/null
 mcheck "sahip: süresi geçmiş önbellek kaydı gösterilir; kısmi banın ve susturulanın bloğu da haritada" "grep -q '\"151.80.7\":\[\"9999\"' '$W/out/own1.sahip.json' && grep -q '\"151.80.8\":\[\"9998\"' '$W/out/own1.sahip.json' && grep -q '\"151.80.9\":\[\"9997\"' '$W/out/own1.sahip.json'"
+# Geçmiş'teki olayın adresi listede durmuyorsa da sahibi haritada (aynı ekranda listedekinin olayında sahip görünüyordu)
+printf '151.80.10|9996|FR|OLAY-AS - Olay, FR|%s|\n' "$NOW" >> "$OF"
+printf '{"t":%s,"type":"manual_unban","cidr":"151.80.10.5","by":"root"}\n' "$NOW" >> "$R/var/lib/csf_autogroup/events.jsonl"
+run --status --json > "$W/out/own1.olay.json" 2>/dev/null
+mcheck "sahip: olay kaydındaki adresin bloğu da haritada (listede durmasa da)" "grep -q '\"151.80.10\":\[\"9996\"' '$W/out/own1.olay.json'"
 mk own2; OF="$R/var/lib/csf_autogroup/owners"
 printf '151.80.7|9999|FR|ESKI-AS - Eski Sahip, FR|%s|\n' "$NOW" > "$OF"; single 151.80.7.9 sshd
 run --lookup 151.80.7.9 --json > /dev/null 2>&1
@@ -608,6 +618,11 @@ mk own3; OF="$R/var/lib/csf_autogroup/owners"
 printf '151.80.7|16276|FR|OVH - OVH SAS, FR|%s|151.80.0.0/20\n' "$NOW" > "$OF"; single 151.80.7.9 sshd
 run --lookup 151.80.7.9 --json > /dev/null 2>&1
 mcheck "sahip: IP kartı önbellekten farklı duyurulan aralık görünce de blok işaretlenir" "grep -qx '151.80.7' '$OF.stale'"
+# sağlayıcı sıralaması: durum çıktısı sıralama ağırlığını verir (panel çubuğu ondan çizer); elle konan blok banı ağırlık almaz
+mk asnw; OF="$R/var/lib/csf_autogroup/owners"
+printf '151.80.7|9999|FR|AGIR-AS - Agir, FR|%s|\n151.80.8|9999|FR|AGIR-AS - Agir, FR|%s|\n' "$NOW" "$NOW" > "$OF"
+single 151.80.7.9 sshd; quiet --action ban24 151.80.8
+mcheck "sağlayıcı sıralaması: ağırlık durum çıktısında, elle blok banı ağırlıksız (1 elle blok + 1 tekil → w 1)" "run --status --json 2>/dev/null | grep -o '\"asn_top\":\[[^]]*\]' | grep -q '\"asn\":\"9999\".*\"groups\":1,\"blocks\":0,\"singles\":1,\"w\":1,'"
 
 # Tek IP'ye izin (IP kartı, --action allow1 / unallow1): süresiz csf -a (CSF kalıcı tekil satırı siler, "do not delete" satırı
 # kalır — ölçüldü), süreli csf -ta (iki yönlü); not satıra yazılır, geçersiz not ve zaten izinli IP reddedilir; IP kartı kendi
@@ -937,6 +952,7 @@ mcheck "satır = adres: şüpheli ağ satırı varken açık servis de ikinci sa
 mcheck "ban altında ihlal satırı: aralığın başka satırı (şüpheli ağ) varken ikinci satır açılmaz, kayıt o satıra eklenir (ub: kısmi ban, 3 IP)" "rvrow 151.80.0.0/16 | grep -q '\"type\":\"warn16\".*\"ub\":{\"ck\":\"part\",\"cn\":\"151.80.0.0/16\",\"cm\":\"ports\",\"tcp\":\"80,443\",\"udp\":\"443\",\"since\":[0-9]*,\"n\":3,.*\"ips\":\[{\"ip\":\"151.80.7.1\"' && [ \$(run --status --json 2>/dev/null | grep -o '\"review\":\[.*\],\"ignored\"' | grep -o '\"cidr\":\"151.80.0.0/16\"' | wc -l) = 1 ]"
 mk cvp24; for x in 1 2 3; do single 151.80.7.$x sshd "$(pdt '-2 days')"; done; pline 151.80.7.0/24 '-1 day'; quiet
 mcheck "kısmi bandan önceki tekiller blok eşiğine sayılmaz (servisleri açık kalsa da): blok tam banlanmaz" "! grep -q '^151.80.7.0/24' '$D'"
+mcheck "IP kartı: blok sayacı eşiğe sayılan tekili de verir (3 tekil, sayılan 0; önce yalnız '3/3 · banlı değil' görünüyordu)" "run --lookup 151.80.7.1 --json 2>/dev/null | grep -q '\"blk\":{\"s\":3,[^}]*\"e\":0}'"
 for x in 4 5 6; do single 151.80.7.$x sshd "$(pdt now)"; done; quiet
 mcheck "kısmi bandan sonra açık servise gelen 3 tekil blok eşiğini doldurur: blok banlanır" "grep -q '^151.80.7.0/24' '$D'"
 mk cvban; printf '%s\n' "151.80.7.0/24 # Manually denied - $(pdt '-3 days')" >> "$D"; quiet; cvback 172800

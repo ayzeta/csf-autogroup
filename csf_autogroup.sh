@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.98"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.99"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -94,7 +94,6 @@ THRESHOLD_24_PERMANENT="${THRESHOLD_24_PERMANENT:-5}"
 THRESHOLD_16="${THRESHOLD_16:-5}"
 THRESHOLD_PFX="${THRESHOLD_PFX:-4}"          # şüpheli aralık: duyurulan aralıkta (/17–/23) bu kadar tekil, en az 2 bloktan
 THRESHOLD_TEMP_24="${THRESHOLD_TEMP_24:-3}"
-THRESHOLD_TEMP_16="${THRESHOLD_TEMP_16:-5}"
 LOOKUP="${LOOKUP:-1}"                            # 1 = hostname/owner lookups in emails
 LOOKUP_TIMEOUT="${LOOKUP_TIMEOUT:-2}"            # seconds per DNS query
 LOG_KEEP_DAYS="${LOG_KEEP_DAYS:-30}"           # yalnız logrotate yoksa (yedek yöntem): bu kadar günden eski satırlar silinir
@@ -862,11 +861,11 @@ mail() {
 
 # ── Settings: validation (panel + --config set + --dry-run --set) ──────────
 # Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
-CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST IC_REVIEW IE_REVIEW THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_PFX THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_KEEP_DAYS EVENTS_DAYS RUN_DAYS PERM_WINDOW_DAYS BANLOG_DAYS LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_MODES CLOUD_URLS CLOUD_EXTRA SRC_LABELS ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS REFRESH_HOUR OWNER_TTL_DAYS IMUNIFY_REFRESH_MIN BLOCK_ACTIVE_DAYS"
+CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST IC_REVIEW IE_REVIEW THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_PFX THRESHOLD_TEMP_24 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_KEEP_DAYS EVENTS_DAYS RUN_DAYS PERM_WINDOW_DAYS BANLOG_DAYS LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_MODES CLOUD_URLS CLOUD_EXTRA SRC_LABELS ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS REFRESH_HOUR OWNER_TTL_DAYS IMUNIFY_REFRESH_MIN BLOCK_ACTIVE_DAYS"
 PROV_KEYS="SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_MODES CLOUD_URLS CLOUD_EXTRA ENABLED"
 SVC_CATALOG="google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake microsoft365 quiccloud"
 CLOUD_CATALOG="gcp aws azure oracle digitalocean linode vultr"
-CFG_TRY_KEYS="THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_PFX THRESHOLD_TEMP_24 THRESHOLD_TEMP_16 PERM_WINDOW_DAYS LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS"
+CFG_TRY_KEYS="THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_PFX THRESHOLD_TEMP_24 PERM_WINDOW_DAYS LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS"
 logrotate_write() { # [MB] [ARŞİV] → /etc/logrotate.d/csf_autogroup (geçici dosya + mv)
     local mb="${1:-$LOG_ROTATE_MB}" keep="${2:-$LOG_ROTATE_KEEP}" tmp
     [ -d "$(dirname "$LOGROTATE_CONF")" ] && command -v logrotate >/dev/null 2>&1 || return 1
@@ -894,7 +893,7 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
             CFG_ERR=$(m "$M_CFG_BAD" "$k" "$v" "$M_CFG_EMAIL"); return 1 ;;
         THRESHOLD_24|THRESHOLD_TEMP_24) lo=2; hi=50 ;;
         THRESHOLD_24_PERMANENT) lo=2; hi=100 ;;
-        THRESHOLD_16|THRESHOLD_TEMP_16|THRESHOLD_PFX) lo=2; hi=500 ;;
+        THRESHOLD_16|THRESHOLD_PFX) lo=2; hi=500 ;;
         LOOKUP_TIMEOUT) lo=1; hi=10 ;;
         SAYAC_RETENTION_DAYS) lo=7; hi=730 ;;
         REVIEW_DAYS) lo=1; hi=90 ;;
@@ -1842,6 +1841,9 @@ listed_prefixes() { # tekil ve csf.deny aralıkları dışında listelerde gör�
     pb_load; for c in "${!PB_P[@]}"; do c="${c%/*}"; echo "${c%.*}"; done
     tb_load; for i in "${TB_RI[@]}"; do c="${TB_A[i]%/*}"; echo "${c%.*}"; done
     ign_load; for i in "${!IGN_C[@]}"; do c="${IGN_C[i]%/*}"; echo "${c%.*}"; done
+    # Geçmiş'teki olayların adresleri: listede artık durmayan adresin olayında sahip görünmüyordu (aynı ekranda listedekinin
+    # olayında görünürken)
+    [ -r "$EVENTS_FILE" ] && grep -o '"cidr":"[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.' "$EVENTS_FILE" 2>/dev/null | sed 's/^"cidr":"//; s/\.$//'
     return 0
 }
 pending_prefixes() { # sayaçta izlenen /24 önekleri → stdout
@@ -3595,14 +3597,15 @@ do_status() {
     fi
 
     prof review_sayac
-    # İzinli ama saldıran IP'ler: her saldırgan en geniş tutan grupta bir kez görünür — izin kaydı (aralıksa ve içinden en az 2 IP
-    # saldırıyorsa: karar o kayıt hakkında), /24 (izinli + izinsiz tekil, blok eşiği: "Atlandı" satırı), /16 (şüpheli ağ ölçütü),
-    # kalanlar tek IP. /24 ve /16 satırları normal uyarılarla aynı tür (aynı öneri ve düğmeler), içinde "aa" = izinli saldırgan sayısı.
+    # İzinli ama ihlal eden IP'ler: izin kaydı bir aralıksa ve içinden en az 2 IP ihlal ediyorsa o kaydın satırında (karar o kayıt
+    # hakkında), kalanlar kendi satırında ("İzinli" / "Ban işlemiyor"). 1.15.99'a kadar izinli IP'ler ayrıca /24 ("Atlandı") ve /16
+    # ("Şüpheli ağ") satırlarında da toplanıyordu; ölçütü turunki değildi (izinli IP'nin denemesi ban sayılıyor, sahip ve duyurulan
+    # aralık yok): turun hiç banlamayacağı blok "Atlandı", hiç bildirmeyeceği ağ "Şüpheli ağ" görünüyordu. Rozet tek anlam taşır.
     allow_atk_load $(( now - REVIEW_DAYS * 86400 ))
     prof rv_aa_load
     cls_map < <(for aai in "${!AA_IP[@]}"; do printf 'aa%s|%s\n' "$aai" "${AA_R[aai]}"; done)
     pa "aa · cls izinli"
-    local -A AAG=() AAU=() RS24=() RS16=() RSI=()
+    local -A AAG=() AAU=()
     local aai aaw aac aaj aap aaq aal aalc="" aat aan aak aax
     local -a aaa
     # bir saldırgan tek satırda: önceki uyarı satırlarının (olay kaydındaki Atlandı / Şüpheli ağ) IP listesinde olan izinli
@@ -3611,26 +3614,15 @@ do_status() {
     for aaj in "${review[@]}"; do while read -r aaq; do RVIP[$aaq]=1; done < <(grep -oE '"ip":"[0-9.]+"' <<< "$aaj" | cut -d'"' -f4); done
     for aai in "${!AA_IP[@]}"; do [ -n "${RVIP[${AA_IP[aai]}]}" ] && AAU[$aai]=1; done
     pa "aa · önceki satırlar"
-    # izinsiz tekiller (kalıcı + geçici) /24 ve /16'ya göre: karışık grupların sayımı için — turun eşiklerinin saydığı küme
-    # (sgl_elig; önce geçicide yalnız pencere okunuyor, kalıcıya alınmış ya da aralık banının içinde kalanlar da giriyordu)
     sgl_elig
-    for aai in "${!SGL_E[@]}"; do RSI[$aai]="${SGL_E[$aai]}"; done
-    pa "aa · izinsiz tekiller"
-    for aai in "${!AA_IP[@]}"; do unset "RSI[${AA_IP[aai]}]"; done
-    for aai in "${!RSI[@]}"; do RS24[${aai%.*}]+=" $aai"; RS16[${aai%.*.*}]+=" $aai"; done
-    cls_map < <(for aai in "${!RSI[@]}"; do printf 'rs%s|%s\n' "$aai" "${RSI[$aai]//|/ }"; done)
-    pa "aa · cls izinsiz"; pc "aa izinsiz tekil" "${#RSI[@]}"; pc "aa izinli IP" "${#AA_IP[@]}"
-    rv_add() {   # TÜR CIDR WL_ETİKETİ "izinli indisleri" "izinsiz IP'ler" EK_JSON
+    pa "aa · izinsiz tekiller"; pc "aa izinli IP" "${#AA_IP[@]}"
+    rv_add() {   # TÜR CIDR WL_ETİKETİ "izinli indisleri" - EK_JSON  (5. parametre kullanılmıyor: izinsiz tekilli karışık grup satırı kalktı)
         local js="" x n=0 nb=0 t=0 aa=0 bl=" " tl=0
         # satırın zamanı (İşaretlendi) = kontrol süresindeki İLK kayıt; IP listesindeki t son kayıt (satır notunda "Son kayıt: … (ne zaman)").
         # Satır, izinli IP'lerin son kaydı pencerede kaldıkça durur: düşme anı = en son kayıt + REVIEW_DAYS ("drop"; panel bunu yazar —
         # önce satırın ilk kaydından hesaplıyordu, geçmiş bir tarih yazarken satır listede duruyordu)
         for x in $4; do n=$((n + 1)); aa=$((aa + 1)); { [ "$t" -eq 0 ] || [ "${AA_T0[x]:-${AA_T[x]}}" -lt "$t" ]; } && t=${AA_T0[x]:-${AA_T[x]}}; [ "${AA_T[x]:-0}" -gt "$tl" ] && tl=${AA_T[x]}; [[ "$bl" == *" ${AA_IP[x]%.*} "* ]] || bl+="${AA_IP[x]%.*} "; done
         aa_ipj $4; js="$REPLY"
-        for x in $5; do n=$((n + 1)); [[ "$bl" == *" ${x%.*} "* ]] || bl+="${x%.*} "
-            short_reason "${RSI[$x]}" "$x"; jstr "$REPLY"; local w="$REPLY"; local v="${CLSM[rs$x]:-other}"
-            jstr "${OWN_L[${x%.*}]}"; js+="${js:+,}{\"ip\":\"$x\",\"host\":\"\",\"why\":$w,\"svc\":\"$v\",\"owner\":$REPLY,\"asn\":\"${OWN_A[${x%.*}]}\",\"cc\":\"${OWN_C[${x%.*}]}\",\"pfx\":\"${OWN_P[${x%.*}]}\"}"
-        done
         set -f; local -a ba=($bl); set +f; nb=${#ba[@]}
         local cmj=""; [ -n "${aalc:-}" ] && { jstr "$aalc"; cmj=",\"wlc\":$REPLY"; }   # izin satırındaki yorum
         jstr "$3"
@@ -3648,32 +3640,6 @@ do_status() {
         for aai in "${aaa[@]}"; do AAU[$aai]=1; done
     done
     pa "aa · a) izin kaydı"
-    # b) /24: izinli + izinsiz tekiller blok eşiğinde (blok banı izin yüzünden zaten atlanır → "Atlandı")
-    local -A A24=() A16=()
-    for aai in "${!AA_IP[@]}"; do [ -n "${AAU[$aai]}" ] || A24[${AA_IP[aai]%.*}]+=" $aai"; done
-    for aap in "${!A24[@]}"; do
-        read -r -a aaa <<< "${A24[$aap]}"; aaq=$(printf '%s\n' ${RS24[$aap]} | grep -c .)
-        [ $(( ${#aaa[@]} + aaq )) -ge "$THRESHOLD_24" ] || continue
-        aac="$aap.0/24"; [ -n "${seen[$aac]}" ] && continue; ign_covers "$aac" && continue
-        cidr_range "$aac" && perm_covers "$R_LO" "$R_HI" && continue
-        seen[$aac]=1; aal="${WL_TXT[${AA_W[${aaa[0]}]}]}"; aalc="${WL_CM[${AA_W[${aaa[0]}]}]}"; [ "${AA_W[${aaa[0]}]}" -ge 0 ] || { aal=""; aalc=""; }
-        rv_add skip_wl "$aac" "$aal" "${aaa[*]}" "${RS24[$aap]}" ""; aalc=""
-        for aai in "${aaa[@]}"; do AAU[$aai]=1; done
-    done
-    pa "aa · b) /24"
-    # c) /16: şüpheli ağ ölçütü (eşik kadar saldırgan, en az 2 blok)
-    for aai in "${!AA_IP[@]}"; do [ -n "${AAU[$aai]}" ] || A16[${AA_IP[aai]%.*.*}]+=" $aai"; done
-    for aap in "${!A16[@]}"; do
-        read -r -a aaa <<< "${A16[$aap]}"; aaq=$(printf '%s\n' ${RS16[$aap]} | grep -c .)
-        [ $(( ${#aaa[@]} + aaq )) -ge "$THRESHOLD_16" ] || continue
-        [ "$(printf '%s\n' ${RS16[$aap]} $(for aai in "${aaa[@]}"; do echo "${AA_IP[aai]}"; done) | sed 's/\.[0-9]*$//' | sort -u | grep -c .)" -ge 2 ] || continue
-        aac="$aap.0.0/16"; [ -n "${seen[$aac]}" ] && continue; ign_covers "$aac" && continue
-        cidr_range "$aac" && perm_covers "$R_LO" "$R_HI" && continue
-        seen[$aac]=1; aal=""; aalc=""; [ "${AA_W[${aaa[0]}]}" -ge 0 ] && { aal="${WL_TXT[${AA_W[${aaa[0]}]}]}"; aalc="${WL_CM[${AA_W[${aaa[0]}]}]}"; }
-        rv_add warn16 "$aac" "$aal" "${aaa[*]}" "${RS16[$aap]}" ",\"perm\":null"; aalc=""
-        for aai in "${aaa[@]}"; do AAU[$aai]=1; done
-    done
-    pa "aa · c) /16"
     # d) kalanlar tek IP
     for aai in "${!AA_IP[@]}"; do
         [ -n "${AAU[$aai]}" ] && continue
@@ -3716,7 +3682,7 @@ do_status() {
         part_thr "$aac"; [ "$aan" -ge "$REPLY" ] || continue
         ign_covers "$aac" && continue
         pws="\"svc\":\"${PB_S[$aac]}\",\"extra\":\"${PB_X[$aac]}\",\"since\":$pjs,\"n\":$aan,\"last\":$ATK_LAST"
-        rv_attach "$aac" po "$pws" || { seen[$aac]=1; review+=("{\"t\":$now,\"type\":\"part_open\",\"cidr\":\"$aac\",$pws}"); }
+        rv_attach "$aac" po "$pws" || { seen[$aac]=1; review+=("{\"t\":$(( ATK_FIRST > 0 ? ATK_FIRST : now )),\"type\":\"part_open\",\"cidr\":\"$aac\",$pws}"); }
         rtext+=("$(printf '%-18s %s · %s' "$aac" "part_open" "$aan")")
     done
     # Ban altında ihlal (cov_decide "under"; sgl_elig → SGL_U): bir kapsama servisi kapatırken sonradan banlanan tekiller. Aralık
@@ -3818,10 +3784,10 @@ do_status() {
     asn_top 500                    # tam liste (panel kısa gösterir, ister genişletir)
     local tops=() a nm cc g bl sg den cl sv la dj
     if [ -n "$ASN_TOP" ]; then
-        while IFS='|' read -r a nm cc g bl sg den cl cs sv la; do
-            [[ "$la" =~ ^[0-9]+$ ]] || la=0; [[ "$cl" =~ ^[0-9]+$ ]] || cl=0; dj=false; [ "$den" = 1 ] && dj=true   # satır başına alt süreç yok
+        while IFS='|' read -r a nm cc g bl sg den cl cs sv la aw; do
+            [[ "$la" =~ ^[0-9]+$ ]] || la=0; [[ "$aw" =~ ^[0-9]+$ ]] || aw=0; [[ "$cl" =~ ^[0-9]+$ ]] || cl=0; dj=false; [ "$den" = 1 ] && dj=true   # satır başına alt süreç yok
             jstr "${AWHY[$a]:-}"; local wj="$REPLY"
-            jstr "$nm"; tops+=("{\"asn\":\"$a\",\"name\":$REPLY,\"why\":$wj,\"cs\":\"$cs\",\"svc\":\"$sv\",\"last\":$la,\"cc\":\"$cc\",\"groups\":$g,\"blocks\":$bl,\"singles\":$sg,\"cloud\":$cl,\"denied\":$dj}")
+            jstr "$nm"; tops+=("{\"asn\":\"$a\",\"name\":$REPLY,\"why\":$wj,\"cs\":\"$cs\",\"svc\":\"$sv\",\"last\":$la,\"cc\":\"$cc\",\"groups\":$g,\"blocks\":$bl,\"singles\":$sg,\"w\":$aw,\"cloud\":$cl,\"denied\":$dj}")
         done <<< "$ASN_TOP"
     fi
     prof asn_top
@@ -3829,7 +3795,7 @@ do_status() {
     prof asn_top_blocks
     local btops=()
     if [ -n "$ASN_TOP" ]; then
-        while IFS='|' read -r a nm cc g bl sg den cl cs sv la; do
+        while IFS='|' read -r a nm cc g bl sg den cl cs sv la aw; do
             [[ "$cl" =~ ^[0-9]+$ ]] || cl=0; dj=false; [ "$den" = 1 ] && dj=true
             jstr "${AWHY[$a]:-}"; local wj="$REPLY"
             jstr "$nm"; btops+=("{\"asn\":\"$a\",\"name\":$REPLY,\"why\":$wj,\"cs\":\"$cs\",\"cc\":\"$cc\",\"groups\":$g,\"blocks\":$bl,\"singles\":$sg,\"cloud\":$cl,\"denied\":$dj}")
@@ -3931,9 +3897,9 @@ do_status() {
         printf '"review_prev":%s,"review_win":{%s},' "$(num "$rprev")" "$rwin"
         printf '"enabled":%s,' "$([ "$ENABLED" = 0 ] && echo false || echo true)"
         printf '"health":{"csf":"%s","lfd":"%s","lfd_age":%s},"expire":{"days":%s,"auto":%s},"repeat_min":%s,' "$H_CSF" "$H_LFD" "${H_LFDAGE:--1}" "$(num "$BLOCK_EXPIRE_DAYS")" "$([ "$BLOCK_EXPIRE_AUTO" = 1 ] && echo true || echo false)" "$(num "$REPEAT16_MIN")"
-        printf '"config":{"t24":%s,"t24p":%s,"t16":%s,"tpfx":%s,"tt24":%s,"tt16":%s,"retention":%s,"review_days":%s,"lookup":%s,"svc_fail":%s,"cloud_fail":%s,"active_days":%s},' \
+        printf '"config":{"t24":%s,"t24p":%s,"t16":%s,"tpfx":%s,"tt24":%s,"retention":%s,"review_days":%s,"lookup":%s,"svc_fail":%s,"cloud_fail":%s,"active_days":%s},' \
             "$(num "$THRESHOLD_24")" "$(num "$THRESHOLD_24_PERMANENT")" "$(num "$THRESHOLD_16")" "$(num "$THRESHOLD_PFX")" "$(num "$THRESHOLD_TEMP_24")" \
-            "$(num "$THRESHOLD_TEMP_16")" "$(num "$SAYAC_RETENTION_DAYS")" "$(num "$REVIEW_DAYS")" "$([ "$LOOK_INIT" = 1 ] && echo true || echo false)" \
+            "$(num "$SAYAC_RETENTION_DAYS")" "$(num "$REVIEW_DAYS")" "$([ "$LOOK_INIT" = 1 ] && echo true || echo false)" \
             "$(num "$SVC_FAIL_DAYS")" "$(num "$CLOUD_FAIL_DAYS")" "$(num "$BLOCK_ACTIVE_DAYS")"
         printf '"usage":{"perm":[%s,%s],"temp":[%s,%s]},' "$(num "$pc")" "$limit" "$(num "$tc")" "$tlimit"
         printf '"last_run":%s,' "${last:-null}"
@@ -4192,6 +4158,7 @@ part_thr() {     # CIDR|IP → REPLY = kısmi banı yetmeyen aralığın eşiği
 attack_json() {  # LO HI [SONRA_EPOCH ATLANACAK_SERVİSLER] < "ip|sebep[|e:epoch]" → REPLY = {"ssh":12,…}
     # her IP bir kez; SONRA verilirse yalnız o zamandan sonra konan banlar (tekilde nottaki tarih, geçicide epoch).
     # ATK_LAST = sayılan banların en yenisinin zamanı (epoch; bilinmiyorsa 0) — Kontrol edilecekler'in düşme tarihi için
+    # ATK_FIRST = sayılan banların en eskisinin zamanı (0: hiçbirinin zamanı bilinmiyor) — açık servis satırının İşaretlendi zamanı
     local sk=0
     [ -n "$3" ] && [ "$3" != 0 ] && sk=$(LC_ALL=C date -d "@$3" +%Y%m%d%H%M%S 2>/dev/null || echo 0)
     REPLY=$(awk -F'|' -v lo="$1" -v hi="$2" -v se="${3:-0}" -v sk="$sk" -v skip=",${4}," -v ex="$INEFF_S" "$AWK_CLS"'
@@ -4202,10 +4169,13 @@ attack_json() {  # LO HI [SONRA_EPOCH ATLANACAK_SERVİSLER] < "ip|sebep[|e:epoch
             S[$1] = 1; k = cls($2); if (index(skip, "," k ",")) next; C[k]++
             if ($3 ~ /^e:/) t = substr($3, 3) + 0
             else { d = sprintf("%.0f", datekey($2)); t = (d + 0 > 0) ? mktime(substr(d, 1, 4) " " substr(d, 5, 2) " " substr(d, 7, 2) " " substr(d, 9, 2) " " substr(d, 11, 2) " " substr(d, 13, 2)) : 0 }
-            if (t > L) L = t }
-        END { o = ""; for (k in C) o = o (o == "" ? "" : ",") "\"" k "\":" C[k]; print "{" o "}|" (L + 0) }')
+            if (t > L) L = t
+            if (t > 0 && (F1 == 0 || t < F1)) F1 = t }
+        END { o = ""; for (k in C) o = o (o == "" ? "" : ",") "\"" k "\":" C[k]; print "{" o "}|" (F1 + 0) "|" (L + 0) }')
     ATK_LAST="${REPLY##*|}"; REPLY="${REPLY%|*}"
+    ATK_FIRST="${REPLY##*|}"; REPLY="${REPLY%|*}"
     [[ "$ATK_LAST" =~ ^[0-9]+$ ]] || ATK_LAST=0
+    [[ "$ATK_FIRST" =~ ^[0-9]+$ ]] || ATK_FIRST=0
     [ -n "$REPLY" ] || REPLY="{}"
 }
 inside_attacks() { # CIDR → REPLY = {"ssh":12,"web":3,…}: aralıktaki IP'lerin ban sebeplerinden servis başına saldıran IP
@@ -4569,7 +4539,7 @@ do_lookup() {
         done
         # izin bütün portları açıyor mu: motorun ölçütü (wl_full_idx; ineff ve izinli saldırgan sayımıyla aynı). Panel ban / izin
         # düğmelerini ve sonucu buna göre çizer (önce etiketten kendisi tahmin ediyordu: Imunify etiketini tam izin sayıyordu)
-        o+=",\"wfull\":$([ "$wff" = 1 ] && echo 1 || echo 0)"
+        if [ "$wff" = 3 ] && [ "$wle" = in_ok ]; then o+=",\"wfull\":1,\"wfin\":1"; else o+=",\"wfull\":$([ "$wff" = 1 ] && echo 1 || echo 0)"; fi
         [ -n "$ign_t" ] && o+=",\"ign_t\":$ign_t"
         # IP'nin kendi izni (panelden kaldırılabilen): csf.allow'daki kendi satırı ve geçici izin (kalan saniye)
         local al_l al_t
@@ -4599,7 +4569,9 @@ do_lookup() {
             o+=",\"pbl\":[$pbj]"
         fi
         local bold=(${ipsold24[$bp]:-})     # kalıcı tekil penceresinden eski (eşiğe sayılmayan) tekiller
-        o+=",\"blk\":{\"s\":${count24[$bp]:-0},\"o\":${#bold[@]},\"t\":$btc,\"ts\":$THRESHOLD_24,\"tt\":$THRESHOLD_TEMP_24,\"pw\":$PERM_WINDOW_DAYS}"
+        # "e": eşiğe sayılan tekil (turun sayımı: servisi zaten kapalı olanlar düşülür); tekil yoksa hesaplanmaz
+        local bel=${count24[$bp]:-0}; [ "$bel" -gt 0 ] && { open_count SINGLE_NOTE ${ips24[$bp]}; bel=$REPLY; }
+        o+=",\"blk\":{\"s\":${count24[$bp]:-0},\"o\":${#bold[@]},\"t\":$btc,\"ts\":$THRESHOLD_24,\"tt\":$THRESHOLD_TEMP_24,\"pw\":$PERM_WINDOW_DAYS,\"e\":$bel}"
         # ağ (/16): turun şüpheli ağ sayımının kendisi (net_count). Eşik THRESHOLD_16 ve en az 2 farklı blok
         # basamaklar turunkiyle aynı (net_count): ağda bu IP'nin sahibinin tekilleri ve alt birimleri (u: duyurulan aralık ya da blok),
         # duyurulan aralıkta (/17–/23) aralığın tekilleri ve blokları; h = bugün basamağı tutuyor mu
@@ -5178,16 +5150,23 @@ cloud_label() {  # KAYNAK → REPLY = görünen ad
         x-*--*) local r="${1#x-}"; cloud_label "${r%%--*}"; REPLY="$REPLY · ${r#*--}" ;;
         x-*) REPLY="${1#x-}" ;; *) REPLY="$1" ;; esac
 }
+cloud_srcline() { # HAZIR_LİSTE_ADI → REPLY = araca verilecek "ad|adres[|süzgeç[|desen]]" satırı (adresi yoksa boş). Tek kurucu:
+    # cloud_srclist (seçili listeler) ve cloud_probe (seçili olmayanlar) aynı satırı verir. Önce cloud_probe süzgeçsiz ve desensiz
+    # indiriyordu: AWS'de bütün ip-ranges (CloudFront, S3…) sayılıyor, "N ihlal eden IP bu listede" sayısı şişiyordu
+    local IFS=$' \t\n' x="$1" u d df dl
+    cloud_urls "$x"; [ -n "$REPLY" ] || { REPLY=""; return 0; }; d="$REPLY"; cloud_flt "$x"; df="$REPLY"; cloud_link "$x"; dl="$REPLY"
+    u=$(printf '%s\n' $CLOUD_URLS | grep -m1 "^$x|" | cut -d'|' -f2-)   # "adres[|süzgeç[|desen]]"; yazılmayan alan varsayılan
+    case "$u" in
+        *"|"*"|"*) REPLY="$x|$u" ;;
+        *"|"*) REPLY="$x|$u${dl:+|$dl}" ;;
+        *) [ -n "$df$dl" ] && REPLY="$x|${u:-$d}|${df:--}${dl:+|$dl}" || REPLY="$x|${u:-$d}" ;;
+    esac
+    return 0
+}
 cloud_srclist() { # → REPLY = araca verilecek "ad|adres" satırları (panelde değiştirilmiş adres önce)
-    local IFS=$' \t\n' x u d df dl o=""
+    local IFS=$' \t\n' x o=""
     for x in ${CLOUD_SOURCES//,/ }; do
-        cloud_urls "$x"; [ -n "$REPLY" ] || continue; d="$REPLY"; cloud_flt "$x"; df="$REPLY"; cloud_link "$x"; dl="$REPLY"
-        u=$(printf '%s\n' $CLOUD_URLS | grep -m1 "^$x|" | cut -d'|' -f2-)   # "adres[|süzgeç[|desen]]"; yazılmayan alan varsayılan
-        case "$u" in
-            *"|"*"|"*) o+="$x|$u"$'\n' ;;
-            *"|"*) o+="$x|$u${dl:+|$dl}"$'\n' ;;
-            *) [ -n "$df$dl" ] && o+="$x|${u:-$d}|${df:--}${dl:+|$dl}"$'\n' || o+="$x|${u:-$d}"$'\n' ;;
-        esac
+        cloud_srcline "$x"; [ -n "$REPLY" ] && o+="$REPLY"$'\n'
     done
     for x in $CLOUD_EXTRA; do o+="x-${x%%|*}|${x#*|}"$'\n'; done      # kendi listeleriniz
     REPLY="$o"
@@ -5236,13 +5215,11 @@ cloud_enforce() { # FORCE(1 = listeleri şimdi indir) → bulut listesi banını
     return 0
 }
 cloud_probe() {  # seçili olmayan hazır listeleri indir (CSF'e yazılmaz): panel "olay kaydında N saldırgan bu listede" der
-    local IFS=$' \t\n' tool="$SELF_DIR/tools/cloud-ban.sh" x u o=""
+    local IFS=$' \t\n' tool="$SELF_DIR/tools/cloud-ban.sh" x o=""
     [ -r "$tool" ] || return 0
     for x in $CLOUD_CATALOG; do
         [[ " $CLOUD_ACTIVE " == *" $x "* ]] && continue
-        cloud_urls "$x"; [ -n "$REPLY" ] || continue
-        u=$(printf '%s\n' $CLOUD_URLS | grep -m1 "^$x|" | cut -d'|' -f2-)
-        o+="$x|${u:-$REPLY}"$'\n'
+        cloud_srcline "$x"; [ -n "$REPLY" ] && o+="$REPLY"$'\n'
     done
     [ -n "$o" ] || return 0
     mkdir -p "$CLOUD_DIR/probe" && SRC="$o" CACHE="$CLOUD_DIR/probe" LOG_FILE="$LOG_FILE" NOAPPLY=1 timeout 300 bash "$tool" >/dev/null 2>&1 9>&-
@@ -7105,7 +7082,7 @@ asn_top() {      # [N] [evidence|blocks] → ASN_TOP satırları: "ASN|KURUM|CC|
 }
 asn_top_sort() { # N evidence|blocks → ASN_TOP (asn_top'un hesapladığı ASN_ROWS'tan; durum çıktısı iki sıralamayı tek hesaptan alır)
     ASN_TOP=$(printf '%s\n' "$ASN_ROWS" | awk 'NF' | if [ "$2" = blocks ]; then awk -F'|' '$5 > 0' | sort -t'|' -k5,5nr; else sort -t'|' -k10,10nr -k5,5nr; fi \
-         | cut -d'|' -f1-9,11,12 | awk -v n="$1" 'NR <= n')   # head değil: bkz. SIGPIPE notu (alan 10 = sıralama ağırlığı, atılır)
+         | awk -F'|' -v OFS='|' -v n="$1" 'NR <= n { print $1, $2, $3, $4, $5, $6, $7, $8, $9, $11, $12, $10 }')   # head değil: bkz. SIGPIPE notu; son alan sıralama ağırlığı
 }
 
 # ── Imunify360: sunucunun KENDİ kara listesi (scope local, purpose drop) ────
@@ -7366,7 +7343,7 @@ digest_build() { # → DG_SUBJ, DG_BODY
     DG_BODY+="$M_DG_TOP$NL"
     asn_top 5
     if [ -n "$ASN_TOP" ]; then
-        while IFS='|' read -r a owner k b bl line den cl cs sv la; do
+        while IFS='|' read -r a owner k b bl line den cl cs sv la aw; do
             DG_BODY+="$(m "$M_DG_TOPL" "AS$a" "${owner:0:44}" "$(asn_parts "$b" "$bl" "$line")")$NL"   # kurum adı ülkeyle bitiyor
             h_esc "$owner"; hi=$((hi + 1))
             hr+="<tr$([ $((hi % 2)) = 0 ] && echo ' bgcolor="#f7f8fa" style="background:#f7f8fa;"')><td style=\"padding:8px 8px 8px 18px;\"><b style=\"font-family:$H_MONO;color:#4338ca;\">AS$a</b> $REPLY</td>"
@@ -7492,7 +7469,7 @@ do_config() {
                 o="{\"ok\":true,\"values\":{"
                 i=0
                 for k in $CFG_KEYS; do jstr "$(cfg_value "$k")"; o+="$([ $i -gt 0 ] && echo ,)\"$k\":$REPLY"; i=1; done
-                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"whm\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"NOTIFY\":\"all\",\"IC_FIREWALL\":\"1\",\"IC_LISTFULL\":\"1\",\"IC_RUN\":\"1\",\"IC_DIGEST\":\"1\",\"IE_FIREWALL\":\"1\",\"IE_LISTFULL\":\"1\",\"IE_RUN\":\"1\",\"IE_DIGEST\":\"1\",\"IC_REVIEW\":\"1\",\"IE_REVIEW\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_PFX\":\"4\",\"THRESHOLD_TEMP_24\":\"3\",\"THRESHOLD_TEMP_16\":\"5\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_KEEP_DAYS\":\"30\",\"EVENTS_DAYS\":\"180\",\"RUN_DAYS\":\"31\",\"PERM_WINDOW_DAYS\":\"90\",\"BANLOG_DAYS\":\"90\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"BLOCK_EXPIRE_DAYS\":\"365\",\"BLOCK_ACTIVE_DAYS\":\"30\",\"OWNER_TTL_DAYS\":\"30\",\"IMUNIFY_REFRESH_MIN\":\"60\",\"CLOUD_REFRESH_DAYS\":\"1\",\"CLOUD_FAIL_DAYS\":\"3\",\"SVC_REFRESH_DAYS\":\"1\",\"SVC_FAIL_DAYS\":\"3\",\"GEO_REFRESH_DAYS\":\"25\",\"REFRESH_HOUR\":\"4\",\"BLOCK_EXPIRE_AUTO\":\"0\",\"CRON_MIN\":\"*/10\"}"
+                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"whm\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"NOTIFY\":\"all\",\"IC_FIREWALL\":\"1\",\"IC_LISTFULL\":\"1\",\"IC_RUN\":\"1\",\"IC_DIGEST\":\"1\",\"IE_FIREWALL\":\"1\",\"IE_LISTFULL\":\"1\",\"IE_RUN\":\"1\",\"IE_DIGEST\":\"1\",\"IC_REVIEW\":\"1\",\"IE_REVIEW\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_PFX\":\"4\",\"THRESHOLD_TEMP_24\":\"3\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_KEEP_DAYS\":\"30\",\"EVENTS_DAYS\":\"180\",\"RUN_DAYS\":\"31\",\"PERM_WINDOW_DAYS\":\"90\",\"BANLOG_DAYS\":\"90\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"BLOCK_EXPIRE_DAYS\":\"365\",\"BLOCK_ACTIVE_DAYS\":\"30\",\"OWNER_TTL_DAYS\":\"30\",\"IMUNIFY_REFRESH_MIN\":\"60\",\"CLOUD_REFRESH_DAYS\":\"1\",\"CLOUD_FAIL_DAYS\":\"3\",\"SVC_REFRESH_DAYS\":\"1\",\"SVC_FAIL_DAYS\":\"3\",\"GEO_REFRESH_DAYS\":\"25\",\"REFRESH_HOUR\":\"4\",\"BLOCK_EXPIRE_AUTO\":\"0\",\"CRON_MIN\":\"*/10\"}"
                 ALERT_MAIL=whm mail_to; jstr "$REPLY"; o+=",\"whm_contact\":$REPLY"
                 slack_url; o+=",\"slack\":$([ -n "$REPLY" ] && echo true || echo false)"
                 # lfd'nin geçici ban süreleri (saniye; en kısa ve en uzun): LF_TRIGGER açıksa LF_TRIGGER_PERM, değilse açık
