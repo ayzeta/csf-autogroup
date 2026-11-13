@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.15.105 — 2026-11-13
+
+- `csf-autogroup lookup IP` shows a rented-server list under its own name with
+  what its rule closes. It was printed as "CC_DENY <list name>", as if the
+  address were in a country or provider ban.
+- The same output says "Allow list" (it still said "Whitelist"), and messages
+  name what a rented-server rule closes by service ("Web"), as the panel does.
+
 ## 1.15.104 — 2026-11-13
 
 Found by producing a violation under a ban on a real CSF and opening the panel

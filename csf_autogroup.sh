@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.104"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.105"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -467,7 +467,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_S_NONE="yok"; M_S_DAYSLEFT="%s gün kaldı"; M_S_TTL="geçici ban %s kaldı"
   M_L_HOST="Hostname"; M_L_FWD="ileri yönde doğrulandı"; M_L_NOFWD="ileri yönde doğrulanamadı"
   M_L_OWNER="Sahibi"; M_L_PREFIX="Duyurulan blok"; M_L_REG="Kayıt"; M_L_DENY="csf.deny"
-  M_L_TEMP="Geçici liste"; M_L_WL="Beyaz liste"; M_L_PENDING="İzleniyor"; M_L_IGN="Susturuldu"; M_L_ACCT="Denemeler"
+  M_L_TEMP="Geçici liste"; M_L_WL="İzin listesi"; M_L_CLOUD="Kiralık liste"; M_L_PENDING="İzleniyor"; M_L_IGN="Susturuldu"; M_L_ACCT="Denemeler"
   M_H_NOREASON="geçici ban (günlükte sebep yok)"
   M_CFG_BAD="Geçersiz değer: %s = %s (%s olmalı)"
   M_CFG_RANGE="%s ile %s arası bir tam sayı"
@@ -747,7 +747,7 @@ else
   M_S_NONE="none"; M_S_DAYSLEFT="%s days left"; M_S_TTL="temp ban %s left"
   M_L_HOST="Hostname"; M_L_FWD="forward-confirmed"; M_L_NOFWD="not forward-confirmed"
   M_L_OWNER="Owner"; M_L_PREFIX="Announced prefix"; M_L_REG="Registry"; M_L_DENY="csf.deny"
-  M_L_TEMP="Temp list"; M_L_WL="Whitelist"; M_L_PENDING="Watched"; M_L_IGN="Muted"; M_L_ACCT="Attempts"
+  M_L_TEMP="Temp list"; M_L_WL="Allow list"; M_L_CLOUD="Rented-server list"; M_L_PENDING="Watched"; M_L_IGN="Muted"; M_L_ACCT="Attempts"
   M_H_NOREASON="temp ban (no reason in the log)"
   M_CFG_BAD="Invalid value: %s = %s (must be %s)"
   M_CFG_RANGE="a whole number from %s to %s"
@@ -4624,6 +4624,10 @@ do_lookup() {
         case "$cv" in
             *'"kind":"cidr"'*)   printf '  %-18s %s\n' "$M_L_DENY" "$(printf '%s' "$cv" | sed -n 's/.*"line":"\(.*\)"\(,"open":.*\)\{0,1\}}$/\1/p')" ;;
             *'"kind":"port"'*)   printf '  %-18s %s\n' "$M_L_PORT" "$(printf '%s' "$cv" | sed -n 's/.*"line":"\(.*\)"}$/\1/p')" ;;
+            # kiralık liste: kendi adıyla ve kuralıyla (önce aşağıdaki genel dala düşüp "CC_DENY azure" diye yazılıyordu). Kural yalnız
+            # gelen yeni bağlantıya uygulanır; sunucunun o adrese giden bağlantısını kesmez
+            *'"kind":"cloud"'*)  cloud_label "$(printf '%s' "$cv" | sed -n 's/.*"what":"\([^"]*\)".*/\1/p')"; local cln="$REPLY"
+                                 cl_text "$(printf '%s' "$cv" | sed -n 's/.*"what":"\([^"]*\)".*/\1/p')"; printf '  %-18s %s\n' "$M_L_CLOUD" "$cln · $REPLY" ;;
             *'"kind":"ccport"'*) printf '  %-18s %s\n' "$M_L_CCP" "$(printf '%s' "$cv" | sed -n 's/.*"what":"\([^"]*\)".*"tcp":"\([^"]*\)".*/\1 · tcp \2/p')" ;;
             *)                   printf '  %-18s %s\n' "$M_L_CCD" "$(printf '%s' "$cv" | sed -n 's/.*"what":"\([^"]*\)".*/\1/p')" ;;
         esac
@@ -5420,7 +5424,7 @@ cl_desc() {      # AD → REPLY = JSON alanları: "mode","tcp","udp" (exc'te tcp
 }
 cl_text() {      # AD → REPLY = iletilerde kuralın kapattığı: "TCP 80, 443 · UDP 443" / "her şey" / "her şey, açık kalan: TCP 80"
     local p; cl_pol "$1"
-    p="${CP_T:+TCP ${CP_T//,/, }}${CP_T:+${CP_U:+ · }}${CP_U:+UDP ${CP_U//,/, }}"
+    ports_names "$CP_T" "$CP_U"; p="$REPLY"          # servis adıyla (panel ve cov_text ile aynı)
     case "$CP_K" in all) REPLY="$M_CL_ALL" ;; exc) REPLY=$(m "$M_CL_EXC" "${p:--}") ;; svc) REPLY="$p" ;; *) REPLY="$M_CL_NONE" ;; esac
 }
 cloud_has() {    # IP → 0: etkin bir bulut listesinde (REPLY = kaynak adı)

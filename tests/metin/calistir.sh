@@ -35,7 +35,7 @@ YASAK=(
 # kullanıcıya görünen metinler: ag.js sözlüğündeki 'anahtar: "metin"' değerleri ve motorun M_* değişkenleri
 texts() {
   grep -oE "[a-z_0-9]+: '([^'\\\\]|\\\\.)*'" "$JS"
-  grep -oE '^ *M_[A-Z0-9_]+="[^"]*"' "$SH"
+  grep -oE 'M_[A-Z0-9_]+="[^"]*"' "$SH"   # satırdaki bütün tanımlar (önce yalnız satır başındaki: aynı satırdaki sonrakiler denetim dışıydı)
 }
 bad=0
 for e in "${YASAK[@]}"; do
