@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.15.107 — 2026-11-13
+
+- IP rows of a repeat ban no longer say it twice ("repeat-banned · Repeat ban
+  (PERMBLOCK): …"): the service says repeat-banned, the reason continues from
+  there. In emails and in the panel tables.
+- Suspicious range email: the introduction explains what an announced range
+  is instead of "/17-/23" in brackets, which read as the size of the range
+  listed below it.
+
 ## 1.15.106 — 2026-11-13
 
 - An IP that lfd ignores (csf.ignore and the like, or the server's own

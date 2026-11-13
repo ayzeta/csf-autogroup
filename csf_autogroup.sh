@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.106"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.107"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -290,7 +290,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_WARNPFX="ŞÜPHELİ ARALIK: %s - %s IP (%s kalıcı, %s geçici), %s farklı blok - elle bakın"
   M_WARNPFX_B="%s -> %s IP (%s kalıcı, %s geçici), %s farklı bloktan"
   M_MAILPFX_SUBJ="%s şüpheli aralık"
-  M_MAILPFX_BODY="Aşağıdaki duyurulan aralıklarda (sahibinin internete duyurduğu /17–/23) birçok bloktan tekil ban (kalıcı ve geçici) birikti.\nAralık banlanmadı; elle bakmanız önerilir (panelde: Duyurulan aralığı banla):"
+  M_MAILPFX_BODY="Aşağıdaki duyurulan aralıklarda birçok bloktan tekil ban (kalıcı ve geçici) birikti. Duyurulan aralık, sahibinin internete tek parça duyurduğu ağdır; bloktan (/24) geniş, ağdan (/16) dar olanlar (/17–/23) bildirilir.\nAralık banlanmadı; elle bakmanız önerilir (panelde: Duyurulan aralığı banla):"
   M_AVIOL="İzinli IP'den ihlal (Geçmiş'e yazıldı): %s → %s, son 24 saatte %s kez"
   M_POPEN="Açık servis (Geçmiş'e yazıldı): %s kısmi banından sonra açık kalan servislere %s IP ihlal etti"
   M_AVIOL_SUBJ="%s izinli IP'den ihlal"; M_AVIOL_BODY="lfd'nin ban eşiğine ulaşan ama banlanmayan ya da banı işlemeyen IP'ler (izinli, yoksayılan ya da sunucunun kendi adresi); IP başına günde bir kez:"
@@ -572,7 +572,7 @@ else
   M_WARNPFX="SUSPICIOUS RANGE: %s - %s IPs (%s permanent, %s temp), %s distinct blocks - review manually"
   M_WARNPFX_B="%s -> %s IPs (%s permanent, %s temp) across %s distinct blocks"
   M_MAILPFX_SUBJ="%s suspicious range(s)"
-  M_MAILPFX_BODY="Single bans (permanent and temp) have piled up across several blocks of the following announced ranges (the /17-/23 its owner announces on the internet).\nThe range was not banned; manual review recommended (in the panel: Ban announced range):"
+  M_MAILPFX_BODY="Single bans (permanent and temp) have piled up across several blocks of the following announced ranges. An announced range is a network its owner announces on the internet as one piece; those wider than a block (/24) and narrower than a network (/16), that is /17-/23, are reported.\nThe range was not banned; manual review recommended (in the panel: Ban announced range):"
   M_AVIOL="Violation from allowed IP (recorded in History): %s → %s, %s times in the last 24 hours"
   M_POPEN="Open service (recorded in History): after the partial ban on %s, %s IPs hit the services it leaves open"
   M_AVIOL_SUBJ="%s violations from allowed IPs"; M_AVIOL_BODY="IPs that reached lfd's ban threshold but were not banned or whose ban does not work (allowed, ignored or the server's own address); once per IP per day:"
@@ -1963,7 +1963,10 @@ ip_line() {      # IP NOTE WITH_OWNER(0|1) → REPLY = "   - IP  hostname  [ASN 
         svc_names "${PERM_CLS[$1]}"; svt+=" · $(m "$M_PB_SVC" "$REPLY")"
         IPJ+=",\"svc\":\"${PERM_CLS[$1]}\""      # panel aynı bilgiyi gösterir (önce yalnız mail metnindeydi)
     fi
-    [ -n "$why" ] && why="$svt · $why" || why="$svt"
+    # tekrar banda sebep "Tekrar ban (PERMBLOCK): …" diye başlar, servis adı zaten "tekrar banlanan": yalnız devamı yazılır (panelin
+    # ipWhyCell'i ile aynı; olay kaydındaki metin değişmez — panel tekrar banı o sözcükle tanır)
+    local wd="$why"; [ "$sv" = repeat ] && [[ "$wd" =~ ^(Tekrar\ ban|Repeat\ ban)\ \(PERMBLOCK\)[[:space:]]*[:–-]?[[:space:]]*(.*)$ ]] && wd="${BASH_REMATCH[2]}"
+    [ -n "$wd" ] && why="$svt · $wd" || why="$svt"
     acct_text "$1" "$why"; [ -n "$REPLY" ] && why+="${why:+ · }$REPLY"
     [ -n "${ACCTM[$1]}" ] && IPJ+=",\"acct\":${ACCTM[$1]}"
     IPJ+="}"

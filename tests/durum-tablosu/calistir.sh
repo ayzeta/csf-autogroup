@@ -318,6 +318,11 @@ mcheck "aynı veride AG_PROF=1 ile deneme turu da hatasız (date ve epoch saatle
 mk permwhy; printf 'WARN16_151.80 %s\n' "$(date -d '-3 days' +%F)" >> "$C"; for x in 7.1 7.2 8.1 8.2; do single 151.80.$x sshd; done
 printf '%s\n' "151.80.9.1 # lfd: (PERMBLOCK) 151.80.9.1 (FR/France/-) has had more than 3 temp blocks in the last 86400 secs - $DT" >> "$D"
 mcheck "PERMBLOCK tekili: 'son 24 saat içinde en az 4 geçici ban aldı, kalıcıya alındı'" "run --status --json 2>/dev/null | grep -q '\"ip\":\"151.80.9.1\",\"host\":\"\",\"why\":\"Tekrar ban (PERMBLOCK): son 24 saat içinde en az 4 geçici ban aldı, kalıcıya alındı\"'"
+# tekrar banın mail / Slack satırı aynı şeyi iki kez söylemez: servis "tekrar banlanan", sebep oradan devam eder (önce "tekrar banlanan ·
+# Tekrar ban (PERMBLOCK): son …"). Olay kaydındaki sebep metni değişmez (panel tekrar banı o sözcükle tanır; yukarıdaki kural).
+mkm permmail 1; for x in 1 2; do single 151.80.7.$x sshd; done
+printf '%s\n' "151.80.7.3 # lfd: (PERMBLOCK) 151.80.7.3 (FR/France/-) has had more than 3 temp blocks in the last 86400 secs - $DT" >> "$D"; quiet
+mcheck "tekrar ban maili: 'tekrar banlanan · son 24 saat içinde …', 'Tekrar ban (PERMBLOCK)' yinelenmez; olay kaydında metin tam" "mtext | grep -q '151.80.7.3 .*tekrar banlanan · son 24 saat içinde en az 4 geçici ban aldı' && ! mtext | grep -q 'tekrar banlanan · Tekrar ban' && grep -q '\"ip\":\"151.80.7.3\"[^}]*\"why\":\"Tekrar ban (PERMBLOCK): son 24 saat' '$R/var/lib/csf_autogroup/events.jsonl'"
 # "*SSH login*" başarılı giriş bildirimi (izinli IP'den), saldırı değil: listeye girmez
 mkl aassh; printf '151.80.7.9 # ofis\n' >> "$A"; lfdl 600 "*SSH login* from 151.80.7.9 into the root account using password authentication - ignored"
 mcheck "'*SSH login*' bildirimi (başarılı giriş) izinli saldırgan sayılmaz" "[ -z \"\$(rvrow 151.80.7.9)\" ]"
