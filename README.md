@@ -412,7 +412,8 @@ its own:
   old-block removal and lists that can't be downloaded; the
   allowed-IP violation and open-service records are the allowed / ignored /
   server-IP, open-service and violation-under-a-ban rows of *Needs review*,
-  sent once per IP, range or ban per day (a violation under a ban only when
+  sent once per IP, range or ban per day (an ignored IP only once its failed
+  attempts reach lfd's own threshold within `LF_INTERVAL`; a violation under a ban only when
   a new IP shows up) and never for what you muted. Both go by email at the end
   of the run and on Slack collected into at most one message per
   `SLACK_BATCH_MIN` minutes (default 60; a list that can't be downloaded goes

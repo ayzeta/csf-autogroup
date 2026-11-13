@@ -321,6 +321,18 @@ mcheck "PERMBLOCK tekili: 'son 24 saat içinde en az 4 geçici ban aldı, kalıc
 # "*SSH login*" başarılı giriş bildirimi (izinli IP'den), saldırı değil: listeye girmez
 mkl aassh; printf '151.80.7.9 # ofis\n' >> "$A"; lfdl 600 "*SSH login* from 151.80.7.9 into the root account using password authentication - ignored"
 mcheck "'*SSH login*' bildirimi (başarılı giriş) izinli saldırgan sayılmaz" "[ -z \"\$(rvrow 151.80.7.9)\" ]"
+# yoksayılan IP'de lfd'nin eşiği: lfd yoksaydığı IP'yi saymaz, her hatalı giriş için bir "- ignored" satırı yazar (lfd.pl 16.33). Kayıt ve
+# bildirim, satırlar lfd'nin sayım penceresinde (LF_INTERVAL) eşiğine (LF_TRIGGER ya da uygulamanın LF_*'ı) ulaşınca oluşur — izinli IP'de
+# lfd'nin eşikte banlamasıyla aynı ölçüt. Önce tek yanlış şifre satır açıp bildirim atıyordu (kullanıcının kendi IP'si, csf.ignore)
+mkthr() { mkl "$1"; printf '%s\n' 'LF_TRIGGER = "10"' 'LF_INTERVAL = "3600"' >> "$R/etc/csf/csf.conf"; printf '151.80.7.9 # ofis\n' >> "$A"; }
+mkthr aathr1; lfdl 600 "Failed cPanel login from 151.80.7.9 - ignored"; quiet
+mcheck "yoksayılan IP: tek hatalı giriş (eşik 10) satır açmaz, olay ve bildirim yazmaz" "[ -z \"\$(rvrow 151.80.7.9)\" ] && ! grep -q '\"type\":\"allow_viol\"' '$R/var/lib/csf_autogroup/events.jsonl' 2>/dev/null"
+mkthr aathr10; for x in 1 2 3 4 5 6 7 8 9 10; do lfdl $(( 300 * x )) "Failed cPanel login from 151.80.7.9 - ignored"; done; quiet
+mcheck "yoksayılan IP: pencere içinde 10 hatalı giriş → satır (10 kayıt) ve olay" "rvrow 151.80.7.9 | grep -qE '\"(cnt|n)\":10[,}]' && grep -q '\"type\":\"allow_viol\",\"cidr\":\"151.80.7.9\"' '$R/var/lib/csf_autogroup/events.jsonl'"
+mkthr aathrs; for x in 1 2 3 4 5 6 7 8 9 10; do lfdl $(( 1200 * x )) "Failed cPanel login from 151.80.7.9 - ignored"; done
+mcheck "yoksayılan IP: 10 hatalı giriş ama pencereye (3600 sn) en çok 4'ü sığıyor → satır yok" "[ -z \"\$(rvrow 151.80.7.9)\" ]"
+mkl aathru; printf '%s\n' 'LF_TRIGGER = "0"' 'LF_CPANEL = "2"' 'LF_SSHD = "5"' >> "$R/etc/csf/csf.conf"; printf '151.80.7.9 # ofis\n' >> "$A"; lfdl 600 "Failed cPanel login from 151.80.7.9 - ignored"; lfdl 500 "Failed SSH login from 151.80.7.9 - ignored"; lfdl 400 "Failed cPanel login from 151.80.7.9 - ignored"
+mcheck "yoksayılan IP: LF_TRIGGER kapalıyken uygulamanın eşiği (cPanel 2 → satır; SSH 5'e tek kayıt yetmez ama satır cPanel'den açılır)" "[ -n \"\$(rvrow 151.80.7.9)\" ]"
 # csf.allow satırındaki yorum kaynağın yanında
 mkl aacm; printf '151.80.7.9 # ofis\n' >> "$A"; lfdb 3600 151.80.7.9
 mcheck "csf.allow yorumu satırda (wlc) ve IP listesinde (al)" "rvrow 151.80.7.9 | grep -q '\"wl\":\"csf.allow: 151.80.7.9\",\"wlc\":\"ofis\".*\"al\":\"csf.allow: 151.80.7.9 (ofis)\"'"

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.15.106 — 2026-11-13
+
+- An IP that lfd ignores (csf.ignore and the like, or the server's own
+  address) is reported only when its failed attempts reach lfd's own ban
+  threshold within `LF_INTERVAL` (`LF_TRIGGER`, or the service's `LF_*`
+  setting). lfd does not count an ignored IP and logs every attempt, so a
+  single mistyped password opened a Needs review row and sent a notice, while
+  an allowed IP was reported only at the threshold.
+
 ## 1.15.105 — 2026-11-13
 
 - `csf-autogroup lookup IP` shows a rented-server list under its own name with

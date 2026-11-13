@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.105"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.106"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -293,7 +293,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_MAILPFX_BODY="Aşağıdaki duyurulan aralıklarda (sahibinin internete duyurduğu /17–/23) birçok bloktan tekil ban (kalıcı ve geçici) birikti.\nAralık banlanmadı; elle bakmanız önerilir (panelde: Duyurulan aralığı banla):"
   M_AVIOL="İzinli IP'den ihlal (Geçmiş'e yazıldı): %s → %s, son 24 saatte %s kez"
   M_POPEN="Açık servis (Geçmiş'e yazıldı): %s kısmi banından sonra açık kalan servislere %s IP ihlal etti"
-  M_AVIOL_SUBJ="%s izinli IP'den ihlal"; M_AVIOL_BODY="lfd kuralına takılan ama banlanmayan ya da banı işlemeyen IP'ler (izinli, yoksayılan ya da sunucunun kendi adresi); IP başına günde bir kez:"
+  M_AVIOL_SUBJ="%s izinli IP'den ihlal"; M_AVIOL_BODY="lfd'nin ban eşiğine ulaşan ama banlanmayan ya da banı işlemeyen IP'ler (izinli, yoksayılan ya da sunucunun kendi adresi); IP başına günde bir kez:"
   M_AV_N="%s kez"; M_AV_SRC="kayıt: %s"; M_AV_LAST="son: %s (%s)"
   # günlüklerde denenenler (acct_text; panelde ac_*)
   M_ACCT_mail="denenen posta hesapları: %s"; M_ACCT_ssh="denenen SSH kullanıcıları: %s"; M_ACCT_ftp="denenen FTP hesapları: %s"
@@ -575,7 +575,7 @@ else
   M_MAILPFX_BODY="Single bans (permanent and temp) have piled up across several blocks of the following announced ranges (the /17-/23 its owner announces on the internet).\nThe range was not banned; manual review recommended (in the panel: Ban announced range):"
   M_AVIOL="Violation from allowed IP (recorded in History): %s → %s, %s times in the last 24 hours"
   M_POPEN="Open service (recorded in History): after the partial ban on %s, %s IPs hit the services it leaves open"
-  M_AVIOL_SUBJ="%s violations from allowed IPs"; M_AVIOL_BODY="IPs that tripped an lfd rule but were not banned or whose ban does not work (allowed, ignored or the server's own address); once per IP per day:"
+  M_AVIOL_SUBJ="%s violations from allowed IPs"; M_AVIOL_BODY="IPs that reached lfd's ban threshold but were not banned or whose ban does not work (allowed, ignored or the server's own address); once per IP per day:"
   M_AV_N="%s times"; M_AV_SRC="entry: %s"; M_AV_LAST="last: %s (%s)"
   M_ACCT_mail="mail accounts tried: %s"; M_ACCT_ssh="SSH users tried: %s"; M_ACCT_ftp="FTP accounts tried: %s"
   M_ACCT_cp="cPanel/WHM logins tried: %s"; M_ACCT_htp="web password users tried: %s"; M_ACCT_web="targets: %s"; M_ACCT_N="failed"; M_ACCT_NW="blocked"
@@ -6567,10 +6567,35 @@ cls_map() {      # stdin "anahtar|sebep" → CLSM[anahtar] = servis (tek awk; IP
     local k c
     while IFS='|' read -r k c; do [ -n "$k" ] && CLSM[$k]="$c"; done < <(LC_ALL=C awk -F'|' "$AWK_CLS"' { k = $1; r = substr($0, length($1) + 2); print k "|" cls(r) }')
 }
-aa_days() {      # DOSYA… → stdout "ip|k|gün|sayı|son|sebep|ilk" (k: b = banlandı ama izinli olabilir, i = yoksayıldı)
+aa_trig() {      # → REPLY = lfd'nin hatalı giriş eşikleri, awk'a verilecek biçimde: "iv=SANİYE all=N" (LF_TRIGGER > 0: bütün uygulamalar
+    # birlikte sayılır) ya da "iv=SANİYE sshd=N ftpd=N …" (uygulama başına). lfd.pl 16.33'ten ölçüldü: sayım penceresi LF_INTERVAL
+    # (60'tan küçükse 300), eşik LF_TRIGGER ya da uygulamanın LF_* ayarı (cpanel / whm / webmail → LF_CPANEL).
+    local iv k v out
+    iv=$(num "$(conf_val LF_INTERVAL)"); [ "$iv" -ge 60 ] || iv=300
+    out="iv=$iv"; v=$(num "$(conf_val LF_TRIGGER)")
+    if [ "$v" -gt 0 ]; then out+=" all=$v"
+    else for k in SSHD FTPD HTACCESS CXS MODSEC BIND SUHOSIN CPANEL SMTPAUTH EXIMSYNTAX QOS SYMLINK POP3D IMAPD; do out+=" ${k,,}=$(num "$(conf_val "LF_$k")")"; done; fi
+    REPLY="$out"
+}
+aa_days() {      # DOSYA… → stdout "ip|k|gün|sayı|son|sebep|ilk|eşik" (k: b = banlandı ama izinli olabilir, i = yoksayıldı)
+    # eşik (8. alan): b satırında hep 1 (lfd zaten eşikte banlar). i satırında lfd saymaz, her hatalı giriş için bir "- ignored"
+    # satırı yazar; burada lfd'nin kendi ölçütü uygulanır: satırlar sayım penceresi (LF_INTERVAL) içinde eşiğe (aa_trig) ulaştıysa 1
+    # ("yoksayılmasaydı lfd banlardı"). Önce tek satır kayıt ve bildirim açıyordu: izinli IP'de eşik beklenirken yoksayılan IP'de tek
+    # yanlış şifre bildirim oluyordu (kullanıcı 2026-11-13). Sebebi tanınmayan satır (uygulaması bilinmiyor) eskisi gibi sayılır.
+    local AAT; aa_trig; AAT="$REPLY"
     # "*SSH login*" başarılı giriş bildirimidir (LF_SSH_EMAIL_ALERT; izinli IP için "- ignored" ile biter), saldırı değil
     { for f in "$@"; do zcat -f "$f" 2>/dev/null; done; } | LC_ALL=C grep -E '\*Blocked in csf\*| - ignored[[:space:]]*$' | LC_ALL=C grep -vF '*SSH login*' |
-    LC_ALL=C awk -v now="$(date +%s)" -v Y="$(date +%Y)" '
+    LC_ALL=C awk -v now="$(date +%s)" -v Y="$(date +%Y)" -v trig="$AAT" '
+        BEGIN { n = split(trig, a, " "); for (i = 1; i <= n; i++) { split(a[i], b, "="); TG[b[1]] = b[2] + 0 } }
+        function app(r) {      # lfd sebep metni → uygulama (RegexMain.pm 16.33)
+            if ("all" in TG) return "all"
+            if (r ~ /cxs mod_security/) return "cxs"; if (r ~ /mod_security/) return "modsec"
+            if (r ~ /Failed SSH login/) return "sshd"; if (r ~ /Failed FTP login/) return "ftpd"
+            if (r ~ /Failed web page login/) return "htaccess"; if (r ~ /Failed cPanel login/) return "cpanel"
+            if (r ~ /Failed SMTP AUTH login/) return "smtpauth"; if (r ~ /Exim syntax errors/) return "eximsyntax"
+            if (r ~ /POP3/) return "pop3d"; if (r ~ /IMAP/) return "imapd"; if (r ~ /^bind /) return "bind"
+            if (r ~ /Suhosin/) return "suhosin"; if (r ~ /mod_qos/) return "qos"; if (r ~ /symlink/) return "symlink"
+            return "" }
         { m = (index("JanFebMarAprMayJunJulAugSepOctNovDec", $1) + 2) / 3; split($3, c, ":")
           ts = mktime(Y " " m " " $2 " " c[1] " " c[2] " " c[3]); if (ts > now + 86400) ts = mktime((Y - 1) " " m " " $2 " " c[1] " " c[2] " " c[3])
           if (ts <= 0) next
@@ -6578,8 +6603,16 @@ aa_days() {      # DOSYA… → stdout "ip|k|gün|sayı|son|sebep|ilk" (k: b = b
           if (!match(g, /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/)) next; ip = substr(g, RSTART, RLENGTH)
           k = (g ~ / - ignored[ \t]*$/) ? "i" : "b"; d = strftime("%Y%m%d", ts)
           r = g; sub(/ (from|by) [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+.*$/, "", r); gsub(/\|/, " ", r)
-          K = ip "|" k "|" d; N[K]++; if (ts >= T[K]) { T[K] = ts; R[K] = r }; if (!(K in T0) || ts < T0[K]) T0[K] = ts }
-        END { for (K in N) print K "|" N[K] "|" T[K] "|" R[K] "|" T0[K] }'
+          K = ip "|" k "|" d; N[K]++; if (ts >= T[K]) { T[K] = ts; R[K] = r }; if (!(K in T0) || ts < T0[K]) T0[K] = ts
+          if (k == "b") H[K] = 1
+          else { ap = app(r)
+                 if (ap == "" || !(TG[ap] > 0)) H[K] = 1     # uygulama tanınmadı ya da eşiği csf.conf içinde yok: ölçüt bilinmiyor, gizlenmez
+                 else { q = ip SUBSEP ap; QT[q, ++QN[q]] = ts } } }
+        # pencere sayımı sonda, zamana göre sıralı: satırlar dosyada her zaman artan sırada olmayabilir (birden çok dosya, test verisi)
+        END { for (q in QN) { split(q, qa, SUBSEP); n = QN[q]; delete A; for (i = 1; i <= n; i++) A[i] = QT[q, i]; n = asort(A); h = 1
+                  for (i = 1; i <= n; i++) { while (A[i] - A[h] > TG["iv"]) h++
+                      if (i - h + 1 >= TG[qa[2]]) H[qa[1] "|i|" strftime("%Y%m%d", A[i])] = 1 } }
+              for (K in N) print K "|" N[K] "|" T[K] "|" R[K] "|" T0[K] "|" (H[K] + 0) }'
 }
 AA_IP=(); AA_K=(); AA_N=(); AA_T=(); AA_R=(); AA_W=(); AA_F=(); AA_T0=()
 allow_atk_load() {  # SINCE_EPOCH → AA_* (IP başına: k, olay sayısı, son zaman, son sebep, izin kaydı indisi, tam izin mi, ilk zaman)
@@ -6599,7 +6632,8 @@ allow_atk_load() {  # SINCE_EPOCH → AA_* (IP başına: k, olay sayısı, son z
     dir=$(dirname "$LFD_LOG"); base=$(basename "$LFD_LOG"); day0=$(date -d "@$since" +%Y%m%d)
     cache="$(dirname "$SAYAC_FILE")/allowatk.cache"
     while IFS= read -r f; do [ "$f" = "$LFD_LOG" ] || rot+=("$f"); done < <(find "$dir" -maxdepth 1 -name "$base*" -newermt "@$since" -printf '%T@ %p\n' 2>/dev/null | sort -n | cut -d' ' -f2-)
-    sig="2.$(for f in "${rot[@]}"; do stat -c '%n %s %Y' "$f" 2>/dev/null; done | cksum | cut -d' ' -f1)"   # 2.: satır biçimi (ilk zaman alanı)
+    aa_trig      # 3.: satır biçimi (eşik alanı); eşikler değişince önbellek yeniden kurulur
+    sig="3.$( { echo "$REPLY"; for f in "${rot[@]}"; do stat -c '%n %s %Y' "$f" 2>/dev/null; done; } | cksum | cut -d' ' -f1)"
     if [ "${#rot[@]}" -gt 0 ] && { [ ! -r "$cache" ] || [ "$(head -n 1 "$cache")" != "$sig" ]; }; then
         { echo "$sig"; aa_days "${rot[@]}"; } > "$cache.tmp" 2>/dev/null && mv -f "$cache.tmp" "$cache"
     fi
@@ -6628,13 +6662,14 @@ allow_atk_load() {  # SINCE_EPOCH → AA_* (IP başına: k, olay sayısı, son z
         # ff 3: CSF içinde duran işlemeyen ban (Z, yönüyle ineff_load seçti) ya da lfd banları yalnız gelen yönü kesiyorsa (f3) tam izin
         function pick(ix, fx) { if (fx == 3) fx = (f3 || z) ? 1 : 0; if (fx == 2) { if (h2 < 0 || ix < h2) h2 = ix } else if (fx == 1) { if (h1 < 0 || ix < h1) h1 = ix }; if (h0 < 0 || ix < h0) h0 = ix }
         $1 == "Z" { K = $2 "|b"; ZT[K] = $3 + 0; ZR[K] = $4; next }     # CSF içindeki işlemeyen ban (aa_ineff_rows)
-        { K = $1 "|" $2; N[K] += $4; if ($5 >= T[K]) { T[K] = $5; R[K] = $6 }; if (!(K in T0) || $7 + 0 < T0[K]) T0[K] = $7 + 0 }
+        { K = $1 "|" $2; N[K] += $4; if ($5 >= T[K]) { T[K] = $5; R[K] = $6 }; if (!(K in T0) || $7 + 0 < T0[K]) T0[K] = $7 + 0; if ($8 + 0) HT[K] = 1 }
         END { for (K in ZT) if (!(K in N)) { N[K] = 1; T[K] = ZT[K]; R[K] = ZR[K]; T0[K] = ZT[K] }   # lfd günlüğünde kaydı yoksa
               for (K in N) { split(K, f, "|"); v = v4(f[1]); h2 = -1; h1 = -1; h0 = -1; k = int(v / 65536); z = (K in ZT)
                 for (i = 1; i <= BN[k]; i++) if (v >= BL[k, i] && v <= BH[k, i]) pick(BI[k, i], BF[k, i])
                 for (i = 1; i <= nw; i++) if (v >= XL[i] && v <= XH[i]) pick(XI[i], XF[i])
                 if (h2 >= 0) { hit = h2; full = 2 } else if (h1 >= 0) { hit = h1; full = 1 } else { hit = h0; full = 0 }   # kendi adresi önce
                 if (f[2] == "b" && full < 1) continue    # banlandı ve izinli değil: ban işliyor
+                if (f[2] == "i" && !(K in HT)) continue  # yoksayıldı ama lfd eşiğine ulaşmadı (aa_days): kayıt da bildirim de yok
                 print f[1] "|" f[2] "|" N[K] "|" T[K] "|" hit "|" full "|" R[K] "|" T0[K] } }' | sort -t'|' -k4,4nr | awk -F'|' '!($1 in S) { S[$1] = 1; print }')
     for i in "${!AA_IP[@]}"; do      # listelerde olmayan yoksayma: kaynağı lfd'nin sırasıyla bul
         AA_S[i]=""
