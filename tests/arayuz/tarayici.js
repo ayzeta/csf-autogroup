@@ -709,6 +709,31 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
         await page.waitForSelector('.ag-drawer [data-dr="allow1"]', { timeout: 60000 }).catch(() => {});
         check('izin: İzni kaldır sonrası kart yeniden "İzin ver…" gösterir', !!(await page.$('.ag-drawer [data-dr="allow1"]')));
       }
+      // kart kapatıldıktan sonra biten eylem kartı yeniden açmaz (canlıda: arka arkaya IP'lere 1 sa izin verirken bir önceki IP'nin kartı
+      // yenisinin üstüne geliyordu — istek sunucuda sürerken kart kapatılmış, cevap gelince eski kart açılıyordu). İstek bilerek geciktirilir
+      if (await page.$('.ag-drawer [data-dr="allow1"]')) {
+        const gec = async route => { if (/(^|&)name=allow1(&|$)/.test(route.request().postData() || '')) await new Promise(r => setTimeout(r, 2500)); return route.fallback(); };
+        await page.route('**/api.php', gec);
+        await page.click('.ag-drawer [data-dr="allow1"]'); await page.waitForSelector('.ag-modal [data-m="ok"]', { timeout: 8000 }).catch(() => {});
+        const cevap = page.waitForResponse(r => /(^|&)name=allow1(&|$)/.test(r.request().postData() || ''), { timeout: 60000 }).catch(() => null);
+        await page.click('.ag-modal [data-ttl="3600"]'); await page.click('.ag-modal [data-m="ok"]');
+        await page.waitForTimeout(300);
+        await page.evaluate(() => { const x = document.querySelector('.ag-drawer [data-dr="x"]'); if (x) x.click(); });
+        // eylemin sonucu durum yenilemesinden SONRA döner (doAction → refresh): kart, varsa, o yenilemeden sonra açılır. İlk sürüm yalnız eylem
+        // cevabını bekliyordu; eski panelle de geçti, hatayı yakalamıyordu
+        const yenile = cevap.then(() => page.waitForResponse(r => /^a=status(&|$)/.test(r.request().postData() || ''), { timeout: 60000 }).catch(() => null));
+        await cevap; await yenile; await page.waitForTimeout(2000);
+        check('izin: kart kapatıldıktan sonra biten izin, kartı yeniden açmaz', !(await page.$('.ag-drawer')));
+        await page.unroute('**/api.php', gec);
+        // geri al: kartı aç, izni kaldır (sonraki adımlar izinsiz IP bekler)
+        await page.fill('#ag-lk-ip', '198.51.100.77'); await page.press('#ag-lk-ip', 'Enter');
+        await page.waitForSelector('.ag-drawer [data-dr="unallow1"]', { timeout: 60000 }).catch(() => {});
+        if (await page.$('.ag-drawer [data-dr="unallow1"]')) {
+          await page.click('.ag-drawer [data-dr="unallow1"]'); await page.waitForSelector('.ag-modal [data-m="ok"]', { timeout: 8000 }).catch(() => {});
+          await page.click('.ag-modal [data-m="ok"]');
+          await page.waitForSelector('.ag-drawer [data-dr="allow1"]', { timeout: 60000 }).catch(() => {});
+        }
+      }
     }
     // Süreli aralık banı (gerçek CSF): Bloğu banla penceresinde süre yalnız "Her şey"de; süre seçilince açıklama, kapsananlar kaldırılmaz;
     // 1 sa ile onay → kartın Blok satırı kalan süreyi gösterir → Aktif aralık banları satırı "elle · süre", ⋯ → Banı kaldır (yazarak)

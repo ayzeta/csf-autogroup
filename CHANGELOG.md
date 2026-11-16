@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.15.108 — 2026-11-16
+
+- IP and range cards: when an action started from a card (allow, ban, change
+  ban, remove) finishes after the card was closed, the card is no longer
+  opened again. Allowing several IPs one after another brought the previous
+  IP's card back on top of the next one.
+
 ## 1.15.107 — 2026-11-13
 
 - IP rows of a repeat ban no longer say it twice ("repeat-banned · Repeat ban

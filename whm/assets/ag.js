@@ -4020,6 +4020,10 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
 
   /* ── IP kartı (sağ panel) ──────────────────────────────────────── */
   function fact(label, value) { return value ? '<div class="ag-fact"><div class="ag-fact-l">' + esc(label) + '</div><div class="ag-fact-v">' + value + '</div></div>' : ''; }
+  // eylem bitince kartı yeni durumla yeniden aç — YALNIZ kart hâlâ açıksa. İstek sunucuda saniyeler sürebilir (csf -ta, csf -r); kullanıcı
+  // o arada kartı kapatıp başka IP'ye geçtiyse eski kart yeniden açılmaz (önce açılıyordu: arka arkaya izin verirken bir önceki IP'nin
+  // kartı yenisinin üstüne geliyordu). IP kartı, aralık kartı ve kart içi bütün eylem yolları bunu kullanır
+  function drRefresh(dr, close, reopen) { if (!dr.isConnected) return; close(); reopen(); }
   function drAct(ev, close, reopen) {   // kart içindeki data-act düğmesi → ACTIONS (kart sayfa gövdesinde, $app dinleyicisinin dışında)
     var a = ev.target.closest('[data-act]');
     if (!a || a.disabled || !ACTIONS[a.getAttribute('data-act')]) return false;
@@ -4030,7 +4034,8 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     // kart kapanır, eylem çalışır
     if (BAN_ACT.test(name) || name === 'chg') {
       var r = ACTIONS[name](a);
-      if (r && typeof r.then === 'function') r.then(function (x) { if (x && x.ok) { close(); if (reopen) reopen(); } });
+      var dr0 = a.closest('.ag-drawer');
+      if (r && typeof r.then === 'function') r.then(function (x) { if (x && x.ok && dr0) drRefresh(dr0, close, reopen); });
       return true;
     }
     close(); ACTIONS[name](a);
@@ -4070,9 +4075,9 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       if (b && /^(svcexc|ban1|unban1|allow1|unallow1)$/.test(b.getAttribute('data-dr')) && waitFresh(b.getAttribute('data-dr'))) return;
       if (b && /^(ban1|unban1|allow1|unallow1)$/.test(b.getAttribute('data-dr')) && dr._d) {
         var dk = b.getAttribute('data-dr');
-        ({ ban1: ipBan, unban1: ipUnban, allow1: ipAllow, unallow1: ipUnallow })[dk](ip, dr._d).then(function (r) { if (r && r.ok) { close(); openDrawer(ip); } });
+        ({ ban1: ipBan, unban1: ipUnban, allow1: ipAllow, unallow1: ipUnallow })[dk](ip, dr._d).then(function (r) { if (r && r.ok) drRefresh(dr, close, function () { openDrawer(ip); }); });
       }   // IP kartının ban ve izin düğmeleri de bekler
-      if (b && b.getAttribute('data-dr') === 'svcexc') svcExclude(ip, b.getAttribute('data-n')).then(function (ok) { if (ok) { close(); openDrawer(ip); } });
+      if (b && b.getAttribute('data-dr') === 'svcexc') svcExclude(ip, b.getAttribute('data-n')).then(function (ok) { if (ok) drRefresh(dr, close, function () { openDrawer(ip); }); });
     });
     api('lookup', { ip: ip }).then(function (d) {
       var body = dr.querySelector('#ag-dr-b'); if (!body) return;
