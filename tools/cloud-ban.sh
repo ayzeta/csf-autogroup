@@ -252,7 +252,8 @@ apply() {        # son listelerle ipset'i doldur, zinciri kur (değişmiş olsa 
 }
 
 case "${1:-}" in
-    --apply) apply; exit $? ;;
+    # --apply yalnız csfpost.sh'tan gelir (CSF her yüklemede çalıştırır): zamanı eklentinin "CSF yeniden yüklendi" kaydına
+    --apply) date +%s >> "$(dirname "$CACHE")/csfpost.times" 2>/dev/null; apply; exit $? ;;
     # her turda (eklenti): kural yerinde ve Imunify'dan önce mi; sıra bozulmuşsa düzelt. csf.allow değiştiyse 3 döner
     # (muafiyetler yeniden kurulmalı: --sync)
     --check) M -L "$CHAIN" -n >/dev/null 2>&1 || exit 1; order_fix || exit 1

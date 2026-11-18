@@ -378,7 +378,7 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
       const mute = c => (j.ignored || []).some(g => g.cidr === c), d0 = j.now - 5 * 86400, d1 = j.now - 2 * 86400;
       const uip = (ip, w, s) => ({ ip: ip, host: '', why: w, svc: s, t: d1, owner: '', asn: '', cc: '', pfx: '' });
       j.review = j.review || [];
-      if (!mute('198.51.100.200')) j.review.push({ t: d1, type: 'under_ban', cidr: '198.51.100.200', ck: 'cl', cn: 'aws', cm: 'svc', tcp: '80,443', udp: '443', since: d0, n: 1, last: d1, csfr: 1, total: 1,
+      if (!mute('198.51.100.200')) j.review.push({ t: d1, type: 'under_ban', cidr: '198.51.100.200', ck: 'cl', cn: 'aws', cm: 'svc', tcp: '80,443', udp: '443', since: d0, n: 1, last: d1, csfr: 1, cr_t: d1 - 240, cr_iv: 60, cdn: 1, cdn_s: 'www.site-c.example (other)', total: 1,
         ips: [uip('198.51.100.200', 'mod_security (id:2008) triggered', 'web')] });
       if (!mute('198.18.0.0/16')) j.review.push({ t: d1 - 60, type: 'warn16', cidr: '198.18.0.0/16', n: 5, perm: 5, temp: 0, subnets: 3, wl: '', total: 5,
         ips: ['198.18.7.1', '198.18.7.2', '198.18.8.1', '198.18.8.2', '198.18.9.1'].map(ip => uip(ip, '(sshd) Failed SSH login', 'ssh')),
@@ -574,7 +574,8 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
         b: b ? tx(b.querySelector('.ag-td-state')) + ' | ' + tx(b.querySelector('.ag-ub-l')) : 'yok',
         nb: document.querySelectorAll('.ag-item[data-row="198.18.0.0/16"]').length };
     });
-    check('ban altında ihlal satırı: rozet ve not (kapatan: kiralık liste AWS, kapattığı Web, csf -r)', /^(Ban altında ihlal|Violation under a ban) \| .*AWS.*\(.*Web.*\).*csf -r/.test(ub.a), ub.a);
+    check('ban altında ihlal satırı: rozet ve not (kapatan: kiralık liste AWS, kapattığı Web; sebepler: CSF yeniden yüklenmesi + kiralık liste yalnız yeni bağlantı, CDN arkasındaki site ve "other" çevrilmiş)',
+      /^(Ban altında ihlal|Violation under a ban) \| .*AWS.*\(.*Web.*\).*(CSF yeniden yüklendi|CSF was reloaded).*(kiralık liste kuralı yalnız yeni|rented-server rule cuts new).*(CDN arkasında: www\.site-c\.example \(başka adres\)|behind a CDN: www\.site-c\.example \(another address\))/.test(ub.a), ub.a);
     check('ban altında ihlal eki: şüpheli ağ satırının Durum sütununda ikinci rozet, notta açıklaması (2 IP, kısmi ban), tek satır', /^(Şüpheli ağ|Suspicious network) ?(Ban altında ihlal|Violation under a ban) \| (Ban altında ihlal|Violation under a ban): 2 IP/.test(ub.b) && ub.nb === 1, ub.b + ' · satır ' + ub.nb);
     // tek kural (rvStates): satırın bütün durumları Durum sütununda rozet; not bölümü yalnız açıklama — rozet taşımaz
     const np = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-tbl .ag-tr-note [data-st], .ag-tbl .ag-tr-note .ag-pill')).map(e => e.textContent.trim()).join(', '));

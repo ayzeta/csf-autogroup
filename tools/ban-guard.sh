@@ -1,10 +1,11 @@
 #!/bin/bash
 # CSF Auto-Group — yönlendirilen bağlantılarda CSF'in porta bağlı banlarını koru.
 #
-# Imunify360, gri / splash / captcha listesindeki adreslerin web ve cPanel trafiğini (80, 443, 2082–2096) nat'ta kendi
-# WebShield portlarına çevirir ve INPUT zincirinin başındaki kendi zincirinde, CSF'ten ÖNCE kabul eder. Port bakan
-# banlar (csf.deny'deki kısmi banlar "tcp|in|d=80,443|s=…", CC_DENY_PORTS'taki sağlayıcı / ülke banları) yönlendirilen
-# bağlantıda 52223/52224'ü gördüğü için eşleşmez: böyle banlı bir adres JavaScript doğrulamasını geçince sitelere
+# Imunify360 bazı trafiği nat'ta kendi WebShield portlarına çevirir ve INPUT zincirinin başındaki kendi zincirinde,
+# CSF'ten ÖNCE kabul eder: cPanel'in 2082 ve 2083'ünü HER adres için (sunucuda ölçüldü: 2082 → 52230,
+# 2083 → 52229), web ve öteki cPanel portlarını (80, 443, 2086–2096) yalnız gri / splash / captcha listesindeki adresler
+# için. Port bakan banlar (csf.deny'deki kısmi banlar "tcp|in|d=80,443|s=…", CC_DENY_PORTS'taki sağlayıcı / ülke banları)
+# yönlendirilen bağlantıda WebShield portunu gördüğü için eşleşmez: böyle banlı bir adres JavaScript doğrulamasını geçince sitelere
 # ulaşabiliyordu (sunucuda ölçüldü 2026-10-10, tools/ban-leak.sh). Tam banlar (kalıcı, geçici, blok, "her şey") bundan
 # etkilenmez: port bakmazlar ve Imunify yalnız bağlantının ilk paketini kabul eder, sonrakiler CSF'te düşer.
 #
@@ -144,7 +145,9 @@ hook_del() {
     log "csfpost.sh'tan satır kaldırıldı"
 }
 case "${1:-}" in
-    --apply) apply; exit $? ;;
+    # --apply yalnız csfpost.sh'tan gelir (CSF her yüklemede çalıştırır): zamanı eklentinin "CSF yeniden yüklendi" kaydına
+    # (ban altında ihlalin sebebi; dışarıdan yapılan csf -r / csf -ra da böyle görünür)
+    --apply) date +%s >> "$(dirname "$STATE")/csfpost.times" 2>/dev/null; apply; exit $? ;;
     --sync) hook_add; apply; exit $? ;;
     # her turda: kural yerinde ve önde mi (sıra bozulmuşsa düzelt); kaynaklar değiştiyse 3 (yeniden kur)
     --check) have "$CHAIN" || exit 1; grep -qF "$MARK" "$POST" 2>/dev/null || exit 1; order_fix || exit 1

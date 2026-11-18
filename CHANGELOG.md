@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.15.109 — 2026-11-18
+
+- *Violation under a ban* now says why it happened when the cause is known,
+  in the panel, the email and Slack alike: CSF was reloaded within lfd's
+  counting window before the ban (with the time of the reload), or the site
+  the IP hit is behind a CDN. Reloads done by hand (`csf -r`, `csf -ra`) are
+  now seen too: CSF runs `csfpost.sh` on every reload and the plugin's lines
+  there record the time. Before, only the plugin's own reloads at the very
+  moment of the ban were noticed.
+- Documentation (With Imunify360, `tools/ban-guard.sh`): Imunify360 redirects
+  cPanel's ports 2082 and 2083 for every address, not only for addresses on
+  its grey, splash-screen or captcha lists.
+
 ## 1.15.108 — 2026-11-16
 
 - IP and range cards: when an action started from a card (allow, ban, change

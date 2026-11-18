@@ -1004,6 +1004,31 @@ mcheck "ban altında ihlal satırı: aralık banında aralık başına tek satı
 mk cvtmp; printf '%s\n' "$(( NOW - 3 * 86400 ))|151.80.7.0/24||inout|864000|csf_autogroup: temp block 151.80.7.0/24" >> "$T"; quiet; cvback 172800
 printf '%s|151.80.7.9||in|3600|lfd: (sshd) Failed SSH login from 151.80.7.9\n' "$(date +%s)" >> "$T"; quiet
 mcheck "ban altında ihlal: geçici aralık banının içinde sonradan geçici banlanan tekil → olay (geçici aralık banı), csf -r yok (0)" "grep -q '\"type\":\"under_ban\",\"cidr\":\"151.80.7.0/24\",\"ck\":\"temp\".*\"n\":1,\"csfr\":0,' \"\$(EVF)\""
+# Sebep: CSF yeniden yüklenmesi. CSF her yüklemede csfpost.sh'ı çalıştırır; ban koruması / kiralık liste aracının --apply'ı zamanı
+# csfpost.times'a yazar (dışarıdan yapılan csf -r / csf -ra da). Banın lfd sayım penceresindeki (LF_INTERVAL) yükleme söylenir.
+CR4=$(( $(date +%s) - 240 ))
+mk cvcsfp; printf '%s\n' "151.80.7.0/24 # Manually denied - $(pdt '-3 days')" >> "$D"; quiet; cvback 172800
+echo "$CR4" > "$R/var/lib/csf_autogroup/csfpost.times"; single 151.80.7.9 sshd "$(pdt now)"; quiet
+mcheck "ban altında ihlal sebebi: dışarıdan yapılan CSF yüklemesi (csfpost.times, 4 dk önce) olayda zamanı ve sayım penceresiyle; Kontrol satırında da" "grep -q '\"type\":\"under_ban\",\"cidr\":\"151.80.7.0/24\".*\"csfr\":1,\"cr_t\":$CR4,\"cr_iv\":60,' \"\$(EVF)\" && rvrow 151.80.7.0/24 | grep -q '\"csfr\":1,\"cr_t\":$CR4,\"cr_iv\":60,'"
+mk cvcsfp2; printf '%s\n' "151.80.7.0/24 # Manually denied - $(pdt '-3 days')" >> "$D"; quiet; cvback 172800
+echo "$(( $(date +%s) - 7200 ))" > "$R/var/lib/csf_autogroup/csfpost.times"; single 151.80.7.9 sshd "$(pdt now)"; quiet
+mcheck "ban altında ihlal sebebi: sayım penceresinden (LF_INTERVAL 3600) eski yükleme sebep sayılmaz (csfr 0)" "grep -q '\"type\":\"under_ban\",\"cidr\":\"151.80.7.0/24\".*\"csfr\":0,\"cr_t\":0,' \"\$(EVF)\""
+# Sebep: CDN arkasındaki site. Banın sebebi olan ModSecurity satırının sitesi cdn_sites'ta → ban o istekleri kesemez
+cvcdn() {
+    printf '%s\n' 'CC_DENY_PORTS = "FR"' 'CC_DENY_PORTS_TCP = "80,443"' 'CC_DENY_PORTS_UDP = "443"' "MODSEC_LOG = \"$R/error_log\"" >> "$R/etc/csf/csf.conf"
+    printf '%s\n' "#t|$(date +%s)" 'site-c.example|www.site-c.example|192.0.2.80|Cloudflare' > "$R/var/lib/csf_autogroup/cdn_sites"
+    quiet; cvback 172800
+    printf '%s\n' "[$DTA] [error] [client 151.80.7.1] ModSecurity: Access denied with code 403 (phase 2). Pattern match \"x\" at ARGS. [file \"/etc/x.conf\"] [line \"1\"] [id \"1302\"] [msg \"WP LOGIN\"] [hostname \"www.site-c.example\"] [uri \"/wp-login.php\"] [unique_id \"a\"]" >> "$R/error_log"
+    single 151.80.7.1 mod_security "$(pdt now)"; single 151.80.8.1 mod_security "$(pdt now)"; quiet
+}
+mk cvcdn; cvcdn
+mcheck "ban altında ihlal sebebi: hedeflenen site CDN arkasında (cdn_sites) → olayda kaç IP ve site; CDN'siz IP sayılmaz" "grep -q '\"type\":\"under_ban\",\"ck\":\"cc\".*\"n\":2,.*\"cdn\":1,\"cdn_s\":\"www.site-c.example (Cloudflare)\"' \"\$(EVF)\""
+mcheck "ban altında ihlal satırı: aynı CDN sebebi Kontrol edilecekler satırında (IP başına)" "rvrow 151.80.7.1 | grep -q '\"cdn\":1,\"cdn_s\":\"www.site-c.example (Cloudflare)\"' && rvrow 151.80.8.1 | grep -q '\"cdn\":0,'"
+mkm cvcdnm 1; cvcdn
+mcheck "ban altında ihlal maili: CDN sebebi satırı (panelle aynı alanlardan)" "mtext | grep -q '1 IP: hedeflediği site CDN arkasında: www.site-c.example (Cloudflare);'"
+mkm cvcsfm 1; printf '%s\n' "151.80.7.0/24 # Manually denied - $(pdt '-3 days')" >> "$D"; quiet; cvback 172800
+echo "$CR4" > "$R/var/lib/csf_autogroup/csfpost.times"; single 151.80.7.9 sshd "$(pdt now)"; quiet
+mcheck "ban altında ihlal maili: CSF yeniden yüklenme sebebi saatiyle" "mtext | grep -q \"1 IP: banından önceki 60 dk içinde CSF yeniden yüklendi (en son \$(date -d @$CR4 '+%d.%m %H:%M'))\""
 mk cvign; ccfr; quiet; cvback 172800; s5; quiet --action ignore 151.80.7.0/24 0; quiet
 mcheck "ban altında ihlal: susturulan aralığın IP'leri olaya girmez (5 tekilin 2'si susturulmuş /24'te → 3 IP)" "grep -q '\"type\":\"under_ban\",\"ck\":\"cc\".*\"n\":3,' \"\$(EVF)\""
 mcheck "ban altında ihlal satırı: susturulan aralığın IP'lerinin satırı yok, ötekilerin var" "[ -z \"\$(rvrow 151.80.7.1)\" ] && rvrow 151.80.8.1 | grep -q '\"type\":\"under_ban\"'"

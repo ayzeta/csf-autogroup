@@ -172,9 +172,13 @@ settings, with no prompts. `config.env` is left untouched.
   An IP that lfd banned for a service a ban already closes (a range ban, a
   partial ban, a provider or country ban, a rented-server list) shows as
   *Violation under a ban*: one row per range for range bans, one row per IP
-  for the wider ones, naming the ban that closes the service and since when,
-  and saying so if `csf -r` was running when the IP was banned (the firewall
-  is open briefly while rules reload).
+  for the wider ones, naming the ban that closes the service and since when.
+  It also names the cause when one is found: CSF was reloaded within lfd's
+  counting window (`LF_INTERVAL`) before the ban, by the plugin or by hand
+  (`csf -r`, `csf -ra`; the firewall is open for a few seconds while it
+  reloads, and the rented-server rule cuts new connections only, so a
+  connection opened meanwhile stays up), or the site the IP hit is behind a
+  CDN (the firewall sees the CDN, not the visitor).
   Every row says the latest date it drops off the list by itself if nothing new comes:
   the review period (*Days kept in the list*, default 7 days) after its last attempt,
   warning or violation. Rows are re-checked against today's data and drop earlier
@@ -566,11 +570,12 @@ answering, the block is retried on the next run instead of being banned.
 
 ### With Imunify360
 
-Imunify360 puts its own chain at the top of `INPUT`. For addresses on its grey,
-splash-screen or captcha lists it redirects web and cPanel traffic (80, 443,
-2082–2096) to its WebShield ports and accepts it before CSF's rules. Bans that
-look at the port then no longer match, because the connection now goes to
-52223/52224. These are the partial bans (web only), provider and country bans
+Imunify360 puts its own chain at the top of `INPUT` and redirects some traffic
+to its WebShield ports in the `nat` table, where it is accepted before CSF's
+rules. cPanel's plain ports 2082 and 2083 are redirected for every address;
+web and the other cPanel ports (80, 443, 2086–2096) only for addresses on its
+grey, splash-screen or captcha lists. Bans that look at the port then no longer
+match, because the connection now goes to a WebShield port. These are the partial bans (web only), provider and country bans
 with the port list (`CC_DENY_PORTS`), and the rented-server lists. A banned
 address that passes the WebShield check (a real browser does) could still open
 the sites. Full bans (single IPs, blocks, "everything") are not affected: CSF

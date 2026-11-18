@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.108"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.109"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -307,7 +307,10 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_POPEN_SUBJ="%s açık servis"; M_POPEN_BODY="Kısmi banın açık bıraktığı servislere eşik kadar ihlal geldi; banı değiştirip onları da kapatabilirsiniz:"; M_POPEN_L="kapalı: %s · açık servislere %s IP ihlal etti"
   M_UNDER="Ban altında ihlal (Geçmiş'e yazıldı): %s altında %s yeni IP"
   M_UNDER_SUBJ="%s ban altında ihlal"; M_UNDER_BODY="Bir ban ihlal edilen servisi kapatırken lfd'nin sonradan banladığı IP'ler (eşiklere sayılmaz); ban başına günde bir kez, yalnız yeni IP'ler:"
-  M_UNDER_L="%s · başlangıç %s -> %s yeni IP"; M_UNDER_CSFR="   %s IP'nin ban anında csf -r çalışıyordu (kurallar yüklenirken güvenlik duvarı kısa süre açık kalır)"
+  M_UNDER_L="%s · başlangıç %s -> %s yeni IP"; M_UNDER_CSFR="   %s IP: banından önceki %s dk içinde CSF yeniden yüklendi (en son %s); yüklenirken güvenlik duvarı birkaç saniye açık kalır%s"
+  M_UNDER_CSFR_CL="; kiralık liste kuralı yalnız yeni bağlantıyı keser, o arada açılan bağlantı sürer"
+  M_UNDER_CDN="   %s IP: hedeflediği site CDN arkasında: %s; güvenlik duvarı ziyaretçiyi değil CDN'i görür, ban bu istekleri kesemez"
+  M_CDN_OTHER="başka adres"
   M_UK_ban="aralık banı %s"; M_UK_temp="geçici aralık banı %s"; M_UK_part="kısmi ban %s"; M_UK_asn="sağlayıcı banı %s"; M_UK_cc="ülke banı %s"; M_UK_cl="kiralık liste %s"
   M_DG_RV="Son 7 günün kontrol kayıtları: %s izinli IP'den ihlal kaydı · %s açık servis kaydı · %s ban altında ihlal kaydı"
   M_MAIL16_BODY="Aşağıdaki ağlarda (/16) birçok bloktan tekil ban (kalıcı ve geçici) birikti. Ağ banlanmadı;\nelle bakmanız önerilir:"
@@ -587,7 +590,10 @@ else
   M_POPEN_SUBJ="%s open services"; M_POPEN_BODY="The services a partial ban leaves open took violations up to the threshold; change the ban to close them too:"; M_POPEN_L="closed: %s · %s IPs hit the open services"
   M_UNDER="Violation under a ban (recorded in History): under %s, %s new IPs"
   M_UNDER_SUBJ="%s violations under a ban"; M_UNDER_BODY="IPs lfd banned later although a ban already closed the service they hit (not counted towards thresholds); once per ban per day, new IPs only:"
-  M_UNDER_L="%s · since %s -> %s new IPs"; M_UNDER_CSFR="   csf -r was running when %s of these IPs were banned (the firewall is open briefly while rules reload)"
+  M_UNDER_L="%s · since %s -> %s new IPs"; M_UNDER_CSFR="   %s IPs: CSF was reloaded in the %s min before their ban (last at %s); the firewall is open for a few seconds while it reloads%s"
+  M_UNDER_CSFR_CL="; the rented-server rule cuts new connections only, so a connection opened meanwhile stays up"
+  M_UNDER_CDN="   %s IPs: the site they hit is behind a CDN: %s; the firewall sees the CDN, not the visitor, so the ban cannot cut these requests"
+  M_CDN_OTHER="another address"
   M_UK_ban="range ban %s"; M_UK_temp="temporary range ban %s"; M_UK_part="partial ban %s"; M_UK_asn="provider ban %s"; M_UK_cc="country ban %s"; M_UK_cl="rented-server list %s"
   M_DG_RV="Review records of the last 7 days: %s allowed-IP violation records · %s open-service records · %s violation-under-a-ban records"
   M_MAIL16_BODY="Single bans (permanent and temp) have piled up across several blocks of the following networks (/16). The network was not banned;\nmanual review recommended:"
@@ -1252,7 +1258,8 @@ part_open_events() {
 under_events() {
     UB_MAIL=(); UB_N=0
     sgl_elig
-    local seenf="$(dirname "$SAYAC_FILE")/under.seen" ip key t0 d s x nw kd nm cnt cr tb b desc
+    local seenf="$(dirname "$SAYAC_FILE")/under.seen" ip key t0 d s x nw kd nm cnt cr crt cd cds q tb b desc
+    csfr_trim
     local -A UK=() UT=() SD=() SI=()
     for ip in "${!SGL_U[@]}"; do t0="${SGL_U[$ip]%%|*}"; key="${SGL_U[$ip]#*|}"; UK[$key]+=" $ip"; UT[$key]="$t0"; done
     [ -r "$seenf" ] && while IFS=$'\t' read -r d s x; do [ -n "$x" ] && { SD[$x]="$d"; SI[$x]="$s"; }; done < "$seenf"
@@ -1261,13 +1268,14 @@ under_events() {
         [ -n "$key" ] || continue
         kd="${key%%:*}"; nm="${key#*:}"; nm="${nm%%|*}"
         case "$kd" in ban|temp|part) ign_covers "$nm" && continue ;; esac     # susturulan aralık: olay ve bildirim yok
-        nw=""; cnt=0; cr=0
+        nw=""; cnt=0; cr=0; crt=0; cd=0; cds=""
         for ip in $(printf '%s\n' ${UK[$key]} | sort -V); do
             [[ " ${SI[$key]} " == *" $ip "* ]] && continue
             ign_covers "$ip" && continue
             nw+=" $ip"; cnt=$((cnt + 1))
-            if [ -n "${SINGLE_NOTE[$ip]+x}" ]; then tb="${SGL_T[$ip]:-0}"; else tb="${TEL_T[$ip]:-0}"; fi
-            csfr_hit "$tb" && cr=$((cr + 1))
+            if [ -n "${SINGLE_NOTE[$ip]+x}" ]; then tb="${SGL_T[$ip]:-0}"; q="${SINGLE_NOTE[$ip]}"; else tb="${TEL_T[$ip]:-0}"; q="${TEL_NOTE[$ip]}"; fi
+            csfr_hit "$tb" && { cr=$((cr + 1)); [ "$REPLY" -gt "$crt" ] && crt=$REPLY; }
+            cdn_hit "$ip" "$q" && { cd=$((cd + 1)); [[ ", $cds, " == *", $REPLY, "* ]] || cds+="${cds:+, }$REPLY"; }
         done
         [ "$cnt" -gt 0 ] || continue
         [ "${SD[$key]}" = "$TODAY" ] && continue                             # kapsama başına günde bir: kalanlar yarın
@@ -1276,10 +1284,14 @@ under_events() {
         cov_parts "$key"; jstr "$nm"; b="$REPLY"
         case "$kd" in ban|temp|part) d="$nm" ;; *) d="" ;; esac
         # alanlar Kontrol edilecekler satırıyla aynı: ck tür, cn ad, cm kip, tcp / udp kapattığı portlar, since kapsamanın başlangıcı
-        ev under_ban "$d" "ck=\"$kd\"" "cn=$b" "cm=\"$CVM\"" "tcp=\"$CVT\"" "udp=\"$CVU\"" "since=$t0" "n=$cnt" "csfr=$cr" "total=$IPS_TOTAL" "ips=$IPS_J"
+        # sebepler (ikisi de ölçülen olay; mail, Slack ve panel aynı alanlardan): csfr / cr_t / cr_iv — banın sayım penceresinde CSF
+        # yeniden yüklendi (kaç IP, en son yükleme, pencere dk); cdn / cdn_s — hedeflenen site CDN arkasında (kaç IP, "site (kim)")
+        jstr "$cds"
+        ev under_ban "$d" "ck=\"$kd\"" "cn=$b" "cm=\"$CVM\"" "tcp=\"$CVT\"" "udp=\"$CVU\"" "since=$t0" "n=$cnt" "csfr=$cr" "cr_t=$crt" "cr_iv=$(( CW_IV / 60 ))" "cdn=$cd" "cdn_s=$REPLY" "total=$IPS_TOTAL" "ips=$IPS_J"
         log "$(m "$M_UNDER" "$desc" "$cnt")"
         UB_MAIL+=("$(m "$M_UNDER_L" "$desc" "$(date -d "@$t0" '+%d.%m %H:%M')" "$cnt")")
-        [ "$cr" -gt 0 ] && UB_MAIL+=("$(m "$M_UNDER_CSFR" "$cr")")
+        [ "$cr" -gt 0 ] && UB_MAIL+=("$(m "$M_UNDER_CSFR" "$cr" "$(( CW_IV / 60 ))" "$(date -d "@$crt" '+%d.%m %H:%M')" "$([ "$kd" = cl ] && printf '%s' "$M_UNDER_CSFR_CL")")")
+        [ "$cd" -gt 0 ] && UB_MAIL+=("$(m "$M_UNDER_CDN" "$cd" "${cds//(other)/($M_CDN_OTHER)}")")
         UB_MAIL+=("${x%$NL}"); UB_N=$((UB_N + cnt))
         SD[$key]="$TODAY"; SI[$key]+="$nw"
     done < <(printf '%s\n' "${!UK[@]}" | sort)
@@ -3030,21 +3042,66 @@ cov_parts() {    # ANAHTAR → CVK tür (ban|temp|part|asn|cc|cl), CVN ad (CIDR,
         part) CVU="${CVT#,}"; CVU="${CVU%,}"; CVT="${CVM#,}"; CVT="${CVT%,}"; CVM=ports ;;     # part:CIDR|,tcp,|,udp,
     esac
 }
-# Banın anında csf -r çalışıyor muydu: yükleme sırasında güvenlik duvarı kısa süre açık kalır (ölçüldü, CSF 16.33: ~2,7 sn). Kaynak tur
-# kayıtları (run olayının csfr / csfr_t alanları: turun kendi yüklemeleri ve izinli servis aracınınki), turun içindeyken süren tur da.
-# Pencere: turun başından sonuna, iki yanda 1 dk pay (lfd banı denemelerden sonra yazar).
-CW_LO=(); CW_HI=(); CW_OK=""
-csfr_wins() {    # → CW_LO / CW_HI (son 400 tur kaydından)
+# CSF yeniden yüklenmesi ban altında ihlalin sebebi mi: yükleme sırasında güvenlik duvarı kısa süre açık kalır (ölçüldü, CSF 16.33:
+# csf -r ~2,7 sn, csf -ra ~4 sn) ve yalnız yeni bağlantıya bakan kural (kiralık liste, ban koruması) o arada açılmış bağlantıyı sonradan
+# kesmez (sunucuda ölçüldü 2026-11-17: Oracle adresi csf -ra sırasında bağlandı, aynı bağlantıdan 4,5 dk istek geldi, sonra lfd banladı).
+# Kaynaklar: (1) CSFR_TIMES — CSF her yüklemede csfpost.sh'ı çalıştırır, ban koruması ve kiralık liste aracının oradaki --apply'ı
+# zamanı yazar: dışarıdan yapılan csf -r / csf -ra da görünür (lfd.log yalnız -ra'yı yazar, ölçüldü); (2) tur kayıtları (run olayının
+# csfr / csfr_t alanları; bu işaretten önceki sürümlerin kayıtları), turun içindeyken süren tur da.
+# Eşleşme: yükleme, banın lfd sayım penceresinde (LF_INTERVAL; lfd banı o penceredeki denemelerden verir) ya da bandan sonraki 1 dk içinde.
+CSFR_TIMES="${CSFR_TIMES:-$(dirname "$SAYAC_FILE")/csfpost.times}"
+CW_LO=(); CW_HI=(); CW_OK=""; CW_IV=3600
+csfr_wins() {    # → CW_LO / CW_HI (yükleme pencereleri), CW_IV (lfd sayım penceresi, sn)
     [ -n "$CW_OK" ] && return 0; CW_OK=1; CW_LO=(); CW_HI=()
     local a b now; printf -v now '%(%s)T' -1
+    CW_IV=$(conf_val LF_INTERVAL); [[ "$CW_IV" =~ ^[0-9]+$ ]] || CW_IV=3600; [ "$CW_IV" -lt 60 ] && CW_IV=300
     while read -r a b; do CW_LO+=("$a"); CW_HI+=("$b"); done < <(grep -F '"type":"run"' "$EVENTS_FILE" 2>/dev/null | tail -n 400 | awk '
         function f(k,  v) { v = 0; if (match($0, "\"" k "\":[0-9]+")) v = substr($0, RSTART + length(k) + 3, RLENGTH - length(k) - 3) + 0; return v }
-        { t = f("t"); if (t && f("csfr") + f("csfr_t") > 0) print t - f("dur") - 60, t + 60 }')
-    [ "${RUN_MODE:-0}" = 1 ] && [ "${CSF_TN[-r]:-0}" -gt 0 ] && { CW_LO+=("$(( ${RUN_T0:-$now} - 60 ))"); CW_HI+=("$(( now + 60 ))"); }
+        { t = f("t"); if (t && f("csfr") + f("csfr_t") > 0) print t - f("dur"), t }')
+    # csfpost.sh yüklemenin sonunda çalışır: güvenlik duvarı ondan önceki birkaç saniye açıktı (10 sn pay)
+    [ -r "$CSFR_TIMES" ] && while read -r a; do [[ "$a" =~ ^[0-9]+$ ]] && { CW_LO+=("$(( a - 10 ))"); CW_HI+=("$a"); }; done < <(tail -n 1000 "$CSFR_TIMES")
+    [ "${RUN_MODE:-0}" = 1 ] && [ "${CSF_TN[-r]:-0}" -gt 0 ] && { CW_LO+=("${RUN_T0:-$now}"); CW_HI+=("$now"); }
     return 0
 }
-csfr_hit() {     # EPOCH → 0: o an csf -r çalıştıran bir turun penceresinde
-    local i; for i in "${!CW_LO[@]}"; do [ "$1" -ge "${CW_LO[i]}" ] && [ "$1" -le "${CW_HI[i]}" ] && return 0; done; return 1
+csfr_hit() {     # BAN_EPOCH → 0 ve REPLY = banın sayım penceresindeki (ya da 1 dk sonrasındaki) en son yüklemenin zamanı
+    local i r=0 lo=$(( $1 - CW_IV )) hi=$(( $1 + 60 ))
+    [ "$1" -gt 0 ] || return 1
+    for i in "${!CW_LO[@]}"; do
+        [ "${CW_HI[i]}" -ge "$lo" ] && [ "${CW_LO[i]}" -le "$hi" ] && [ "${CW_HI[i]}" -gt "$r" ] && r=${CW_HI[i]}
+    done
+    REPLY=$r; [ "$r" -gt 0 ]
+}
+csfr_trim() {    # tur: yükleme işaretlerinden yalnız Kontrol edilecekler penceresi (+1 gün) kalır
+    [ -s "$CSFR_TIMES" ] && [ "$DRY" != 1 ] || return 0
+    local cut; cut=$(( $(date +%s) - (REVIEW_DAYS + 1) * 86400 ))
+    awk -v c="$cut" '$1 + 0 >= c' "$CSFR_TIMES" > "$CSFR_TIMES.tmp" 2>/dev/null && cat "$CSFR_TIMES.tmp" > "$CSFR_TIMES"; rm -f "$CSFR_TIMES.tmp"
+}
+# CDN arkasındaki site: banın sebebi olan web isteklerinin (ModSecurity "Access denied" satırlarındaki ad, acct_all) hedeflediği site
+# CDN_FILE'da (tools/cdn-sites.sh) ise güvenlik duvarı ziyaretçiyi değil CDN'i görür: ban o istekleri kesemez.
+CDN_OK=""; declare -A CDN_M=()
+cdn_hit() {      # IP SEBEP → 0 ve REPLY = "site (kim)" (ilk eşleşen; kim cdn-sites.sh'ın yazdığı gibi, "other" dahil)
+    local p h s rid="" k; REPLY=""
+    if [ -z "$CDN_OK" ]; then
+        CDN_OK=1
+        [ -r "$CDN_FILE" ] && while IFS='|' read -r s h _ k; do
+            [ "$s" = "#t" ] || [ -z "$s" ] && continue
+            { [ -z "${CDN_M[$s]}" ] || [ "${CDN_M[$s]}" = other ]; } && CDN_M[$s]="$k"
+            { [ -z "${CDN_M[$h]}" ] || [ "${CDN_M[$h]}" = other ]; } && CDN_M[$h]="$k"
+        done < "$CDN_FILE"
+    fi
+    [ "${#CDN_M[@]}" -gt 0 ] || return 1
+    acct_need "$1"; [ -n "${ACCTW[$1]}" ] || return 1
+    [[ "$2" =~ (id:|ModSecurity\ )([0-9]+) ]] && rid="${BASH_REMATCH[2]}"
+    local -a PA=(); IFS=$'\036' read -r -a PA <<< "${ACCTW[$1]}"
+    for p in "${PA[@]}"; do
+        [ -n "$p" ] || continue; [ -n "$rid" ] && [ "${p%%:*}" != "$rid" ] && continue
+        h="${p#*:}"; h="${h%% *}"; [[ "$h" == */* ]] && continue; h="${h,,}"
+        for s in "$h" "${h#www.}"; do
+            [ -n "${CDN_M[$s]}" ] || continue
+            REPLY="$s (${CDN_M[$s]})"; return 0      # kim ham ("other" gösterimde çevrilir: mail M_CDN_OTHER, panel im_cdn_other)
+        done
+    done
+    return 1
 }
 # ── Ağ (/16) sayımı: TEK HESAP (tur uyarısı, Kontrol edilecekler, IP kartı) ─────────────────────────────────────────────
 # Sayılan tekiller: kalıcı tekiller (izinli — ban işlemeyen — ve kalıcı tekil penceresinden eski olanlar hariç) ve geçici eşiğin
@@ -3722,17 +3779,19 @@ do_status() {
     # udp, since, n, csfr, ips; ek: last (son ban). Aynı adresin başka satırı varsa (şüpheli ağ, açık servis) ikinci satır açılmaz
     # (panelde satır = adres): aynı alanlar o satıra "ub" nesnesi olarak eklenir, panel ikinci rozeti ve notu oradan çizer.
     sgl_elig; csfr_wins
-    local uip ukey ut urk uj uq usv ubj uri; local -A URK=() URI=() URT=() URL=() URC=()
+    local uip ukey ut urk uj uq usv ubj uri; local -A URK=() URI=() URT=() URL=() URC=() URR=() UCD=() UCS=()
     for uip in "${!SGL_U[@]}"; do
         ukey="${SGL_U[$uip]#*|}"; cov_parts "$ukey"
-        if [ -n "${SINGLE_NOTE[$uip]+x}" ]; then ut="${SGL_T[$uip]:-0}"; else ut="${TEL_T[$uip]:-0}"; fi
+        if [ -n "${SINGLE_NOTE[$uip]+x}" ]; then ut="${SGL_T[$uip]:-0}"; uq="${SINGLE_NOTE[$uip]}"; else ut="${TEL_T[$uip]:-0}"; uq="${TEL_NOTE[$uip]}"; fi
         [ "$ut" -ge "$rvwin" ] || continue
         ign_covers "$uip" && continue
         case "$CVK" in ban|temp|part) urk="$CVN"; ign_covers "$urk" && continue ;; *) urk="$uip" ;; esac
         URK[$urk]="${SGL_U[$uip]}"; URI[$urk]+=" $uip"
         { [ -z "${URT[$urk]}" ] || [ "$ut" -lt "${URT[$urk]}" ]; } && URT[$urk]=$ut
         [ "$ut" -gt "${URL[$urk]:-0}" ] && URL[$urk]=$ut
-        csfr_hit "$ut" && URC[$urk]=$(( ${URC[$urk]:-0} + 1 ))
+        # sebepler olayla (under_events) aynı işlevlerden: CSF yeniden yüklenmesi, CDN arkasındaki site
+        csfr_hit "$ut" && { URC[$urk]=$(( ${URC[$urk]:-0} + 1 )); [ "$REPLY" -gt "${URR[$urk]:-0}" ] && URR[$urk]=$REPLY; }
+        cdn_hit "$uip" "$uq" && { UCD[$urk]=$(( ${UCD[$urk]:-0} + 1 )); [[ ", ${UCS[$urk]}, " == *", $REPLY, "* ]] || UCS[$urk]+="${UCS[$urk]:+, }$REPLY"; }
     done
     for urk in $(printf '%s\n' "${!URK[@]}" | sort -V); do
         [ -n "$urk" ] || continue
@@ -3744,8 +3803,8 @@ do_status() {
             short_reason "$uq" "$uip"; jstr "$REPLY"; uq="$REPLY"; jstr "${OWN_L[${uip%.*}]}"
             uj+="${uj:+,}{\"ip\":\"$uip\",\"host\":\"\",\"why\":$uq,\"svc\":\"$usv\",\"t\":$ut,\"owner\":$REPLY,\"asn\":\"${OWN_A[${uip%.*}]}\",\"cc\":\"${OWN_C[${uip%.*}]}\",\"pfx\":\"${OWN_P[${uip%.*}]}\"}"
         done
-        jstr "$CVN"
-        ubj="\"ck\":\"$CVK\",\"cn\":$REPLY,\"cm\":\"$CVM\",\"tcp\":\"$CVT\",\"udp\":\"$CVU\",\"since\":${URK[$urk]%%|*},\"n\":$aan,\"last\":${URL[$urk]},\"csfr\":${URC[$urk]:-0},\"total\":$aan,\"ips\":[$uj]"
+        jstr "${UCS[$urk]}"; uri="$REPLY"; jstr "$CVN"
+        ubj="\"ck\":\"$CVK\",\"cn\":$REPLY,\"cm\":\"$CVM\",\"tcp\":\"$CVT\",\"udp\":\"$CVU\",\"since\":${URK[$urk]%%|*},\"n\":$aan,\"last\":${URL[$urk]},\"csfr\":${URC[$urk]:-0},\"cr_t\":${URR[$urk]:-0},\"cr_iv\":$(( CW_IV / 60 )),\"cdn\":${UCD[$urk]:-0},\"cdn_s\":$uri,\"total\":$aan,\"ips\":[$uj]"
         # adresin satırı varsa ona eklenir ("seen" olup satırı düşmüş adres kendi satırını alır)
         rv_attach "$urk" ub "$ubj" || { seen[$urk]=1; review+=("{\"t\":${URT[$urk]},\"type\":\"under_ban\",\"cidr\":\"$urk\",$ubj}"); }
         rtext+=("$(printf '%-18s %s · %s' "$urk" "under_ban" "$aan")")
