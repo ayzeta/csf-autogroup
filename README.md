@@ -850,6 +850,33 @@ rented-server list (event log, single bans in `csf.deny` and the temp list).
 Clicking that number opens the box's **details**, the same window as a
 provider's (see Provider ban).
 
+## Temporary-ban check for other tools
+
+Another tool on the server (for example a WHMCS self-service unblock module)
+can ask whether an IP is temporarily banned without loading the panel:
+
+    GET https://SERVER:2087/cpsessNNNN/cgi/csf_autogroup/api.php?a=tempban_check&ip=203.0.113.5
+
+It needs a WHM session of a user with the "all" privilege (the `cpsess` token,
+for example from `whmapi1 create_user_session`), like every page of the plugin.
+It only reads CSF's temporary list (`/var/lib/csf/csf.tempban`): no lock, no
+engine call, nothing written. This is the one call without the panel's CSRF
+key, because it changes nothing; every other call stays POST with the key.
+
+    {"ok":true,"blocked":true,"until":1795054000,"ports":"22",
+     "rows":[{"addr":"203.0.113.5","start":1795050400,"until":1795054000,"ports":"22","dir":"in"}]}
+
+- A row counts while it is in the file, also when its time looks past: lfd
+  removes the row and its firewall rule together. A range row that covers the
+  IP counts, and so does a row limited to ports.
+- `until` is the latest end among the rows; `ports` lists the ports when every
+  row is limited to ports, and is empty when one of them blocks everything.
+- No temporary list at all → `{"ok":true,"blocked":false,…}`. A list that
+  cannot be read → `{"ok":false,"error":"unreadable"}`, so the caller does not
+  take it as "not banned". A bad address → `{"ok":false,"error":"bad_ip"}`.
+- Versions before 1.15.110 answer this request with HTTP 405
+  `{"ok":false,"error":"POST only"}`.
+
 ## Development
 
 `bash tests/durum-tablosu/calistir.sh` builds every ban state (single, temp,
@@ -896,6 +923,11 @@ installs cPanel's CSF from GitHub or from a given `cpanel-csf` package, stubs
 the cPanel-only Perl modules, writes a test `csf.conf` and starts lfd; then
 `GERCEK=1 bash tests/senaryo/calistir.sh` runs there. Never run it on a
 server: it rewrites `csf.conf` and the firewall.
+
+`bash tests/api-uc/calistir.sh` checks the temporary-ban check call with
+sample rows taken from a real CSF temporary list (single IP, port, range,
+past-looking, several rows, missing and unreadable list) and that it writes
+nothing and calls no engine. Needs root and php.
 
 `bash tests/metin/calistir.sh` checks that every concept keeps one name in the
 panel, mails and log: old or duplicate names listed in the script fail it.

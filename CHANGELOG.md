@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.15.110 — 2026-11-19
+
+- New read-only call for other tools on the server: `api.php?a=tempban_check&ip=…`
+  (GET, WHM session) says whether an IP is in CSF's temporary list, until when
+  and on which ports, reading `csf.tempban` directly. Meant for self-service
+  unblock modules that otherwise ask `csf.cgi`. See "Temporary-ban check for
+  other tools" in the README.
+
 ## 1.15.109 — 2026-11-18
 
 - *Violation under a ban* now says why it happened when the cause is known,

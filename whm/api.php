@@ -4,20 +4,14 @@
  * CSF Auto-Group — WHM eklentisi JSON uçları.
  * Shebang, kurulumda sunucudaki gerçek PHP yoluna göre yeniden yazılır.
  *
- * Her uç: WHM + root + "all" yetkisi (ag_guard) ve POST + CSRF (ag_csrf_check).
+ * Her uç: WHM + root + "all" yetkisi (ag_guard) ve POST + CSRF (ag_csrf_check). Tek istisna tempban_check: yalnız okur,
+ * GET ve CSRF anahtarsız (gerekçe işlevin başında).
  * Girdiler burada katı desenlerden geçer; script aynı kontrolü ikinci kez yapar.
  */
 
 declare(strict_types=1);
 
 require_once __DIR__ . '/lib.php';
-
-ag_input_bootstrap();
-ag_bootstrap();
-ag_guard();
-ag_csrf_check();
-
-$a = (string) ($_POST['a'] ?? '');
 
 const AG_RE_16   = '/^([0-9]{1,3})\.([0-9]{1,3})$/';
 const AG_RE_24   = '/^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$/';
@@ -37,6 +31,82 @@ function ag_valid(string $re, string $v): bool
     }
     return !isset($m[6]) || ((int) $m[6] >= 1 && (int) $m[6] <= 32);
 }
+
+/**
+ * tempban_check — "bu IP şu an geçici banlı mı" (dışarıdan çağıran: WHMCS CSF Self-Service Unblock eklentisi, sunucu tarafından
+ * create_user_session ile açılan root oturumuyla). TEK İSTİSNA: GET ve CSRF anahtarsız. CSRF denetimi durum değiştiren istekler
+ * içindir; bu uç yalnız okur (dosyaya yazmaz, kilit almaz, motoru çağırmaz, ag_bootstrap'ı da çağırmaz). Koruma yerinde: WHM'in
+ * adresteki cpsess belirteci ve ag_guard (WHM kullanıcısı, root süreç, "all" yetkisi); başka bir site cevabı okuyamaz (CORS yok).
+ * Anahtar için index.php'yi açmak (WHM başlığını çizer) her kontrole bir ağır istek eklerdi.
+ * Okuma motorun tek okuyucusuyla aynı (csf_autogroup.sh tb_load / tb_cover): satır "zaman|adres|portlar|yön|süre|yorum"; satır
+ * dosyada duruyorsa ban da duruyor (lfd satırı kuralıyla birlikte siler; ölçüldü) — süresi geçmiş görünen satır da banlı sayılır.
+ * Adres tek IP ya da aralık; IP'yi kapsayan her satır sayılır, port sınırlı satır da. until = en geç biten satırın bitişi.
+ * Dosya yoksa ban yok; dosya var ama okunamıyorsa ok:false (çağıran "ban yok" saymasın, kendi yoluna düşsün).
+ */
+function ag_tempban_check(string $ip): void
+{
+    if (!ag_valid(AG_RE_IP, $ip)) {
+        ag_json(['ok' => false, 'error' => 'bad_ip'], 400);
+    }
+    $f = (ag_env('AG_CSF_VAR') ?: '/var/lib/csf') . '/csf.tempban';    // AG_CSF_VAR: yalnız test (HTTP isteği ortam değişkeni kuramaz)
+    if (!file_exists($f)) {
+        ag_json(['ok' => true, 'blocked' => false, 'until' => null, 'ports' => '', 'rows' => []]);
+    }
+    $txt = is_file($f) && is_readable($f) ? @file_get_contents($f) : false;   // dizin de "okunamıyor" (PHP onu boş okur)
+    if ($txt === false) {
+        ag_json(['ok' => false, 'error' => 'unreadable'], 500);
+    }
+    $n = ip2long($ip);
+    $rows = [];
+    $until = null;
+    $ports = [];
+    foreach (preg_split('/\R/', $txt) as $line) {
+        $p = explode('|', $line, 6);
+        if (count($p) < 5 || $p[1] === '') {
+            continue;
+        }
+        $addr = $p[1];
+        if (strpos($addr, '/') !== false) {
+            [$net, $bits] = explode('/', $addr, 2);
+            $nl = ip2long($net);
+            if ($nl === false || !ctype_digit($bits) || (int) $bits < 0 || (int) $bits > 32) {
+                continue;
+            }
+            $mask = (int) $bits === 0 ? 0 : (~0 << (32 - (int) $bits)) & 0xFFFFFFFF;
+            if (($n & $mask) !== ($nl & $mask)) {
+                continue;
+            }
+        } elseif ($addr !== $ip) {
+            continue;
+        }
+        $t = ctype_digit($p[0]) ? (int) $p[0] : 0;
+        $s = ctype_digit($p[4]) ? (int) $p[4] : 0;
+        $end = $t + $s;
+        $until = $until === null ? $end : max($until, $end);
+        if ($p[2] !== '') {
+            $ports[] = $p[2];
+        }
+        $rows[] = ['addr' => $addr, 'start' => $t, 'until' => $end, 'ports' => $p[2], 'dir' => $p[3]];
+    }
+    // ports: port sınırlı satırların portları (virgüllü); bir satır bütün portları kapatıyorsa (portsuz) boş
+    $all = false;
+    foreach ($rows as $r) {
+        $all = $all || $r['ports'] === '';
+    }
+    ag_json(['ok' => true, 'blocked' => $rows !== [], 'until' => $until,
+             'ports' => $all ? '' : implode(',', array_unique($ports)), 'rows' => $rows]);
+}
+
+ag_input_bootstrap();
+if (strtoupper(ag_env('REQUEST_METHOD') ?: 'GET') === 'GET' && (string) ($_GET['a'] ?? '') === 'tempban_check') {
+    ag_guard();
+    ag_tempban_check(trim((string) ($_GET['ip'] ?? '')));
+}
+ag_bootstrap();
+ag_guard();
+ag_csrf_check();
+
+$a = (string) ($_POST['a'] ?? '');
 
 switch ($a) {
 
