@@ -32,5 +32,9 @@ kural "sayfa çubuğu yalnız pagerHtml'de (sayılar num() ile)" "class=\"ag-pag
 kural "öğe eylemi düğmesi elle yazılmaz (MI.* + miBtn: menü, aralık kartı, IP kartı aynı öğeler)" 'data-(act|dr)="(unban|promote|forget|rewatch|chg|ban|ban16|ban24|banpfx|banforce)"' 'BU_DESEN_HICBIR_SATIRA_UYMAZ'
 kural "kapsayan banın adı covName'den: ham CSF ayar adı (CC_DENY …) cümleye eklenmez" "'[ (]*CC_DENY(_PORTS)? '" 'BU_DESEN_HICBIR_SATIRA_UYMAZ'
 kural "olay rozetinin adı evName'den (elle ban: türü yazıda da; renk tek başına okunmuyordu)" 'statePill[(]evSt[(]e[)], t[(]' 'BU_DESEN_HICBIR_SATIRA_UYMAZ'
+# indirilen liste dosyaları (izinli servisler, kiralık listeler) doğrudan "> dosya" ile yazılmaz: geçici dosya + mv (1.15.111; başka
+# okuyucu — csfpost.sh'taki --apply ya da dışarıdan okuyan araç — "> dosya" önce boşalttığı için yazma anında boş / yarım dosya görebilir; TOOLS=dizin ile eski araçlarla sınanır)
+out=$(grep -nE "> \"\\\$old\"([^.]|\$)" "${TOOLS:-$D/tools}/services-allow.sh" "${TOOLS:-$D/tools}/cloud-ban.sh" 2>/dev/null)
+if [ -n "$out" ]; then echo "DÜŞTÜ: liste dosyası doğrudan yazılıyor (geçici dosya + mv olmalı)"; echo "$out" | head -4; F=$((F + 1)); else echo "GEÇTİ: liste dosyaları geçici dosya + mv ile yazılır"; fi
 [ $F -eq 0 ] && echo "GEÇTİ: tek kaynak ($J)" || echo "DÜŞTÜ: $F kural"
 exit $F

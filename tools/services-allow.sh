@@ -146,7 +146,9 @@ for s in "${SOURCES[@]}"; do
         # ilk başarısızlık anı (bildirim 3 günü buradan sayar; hiç başarılı indirme olmasa da)
         [ "$CHECK" = 0 ] && [ ! -s "$CACHE/$name.fail" ] && date +%s > "$CACHE/$name.fail"
     elif [ "$CHECK" = 0 ]; then
-        printf '%s\n' "$new" > "$old"; ot=$(date +%s); rm -f "$CACHE/$name.fail"
+        # geçici dosyaya yaz, sonra yer değiştir: başka bir okuyucu (dışarıdan bu listeyi okuyan araç) yarım ya da boş dosya görmesin
+        printf '%s\n' "$new" > "$old.tmp.$$" && mv -f "$old.tmp.$$" "$old" || rm -f "$old.tmp.$$"
+        ot=$(date +%s); rm -f "$CACHE/$name.fail"
     fi
     ff=$(cat "$CACHE/$name.fail" 2>/dev/null); [[ "$ff" =~ ^[0-9]+$ ]] || ff=0
     st+="$name|$n|$ot|$err|$ff"$'\n'

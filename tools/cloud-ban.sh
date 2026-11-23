@@ -280,7 +280,9 @@ while IFS= read -r s; do
         n=$prev; err="fetch"
         [ -s "$CACHE/$name.fail" ] || date +%s > "$CACHE/$name.fail"
     else
-        printf '%s\n' "$new" > "$old"; ot=$(date +%s); rm -f "$CACHE/$name.fail"
+        # geçici dosyaya yaz, sonra yer değiştir: başka bir okuyucu (csfpost.sh'taki --apply, dışarıdan okuyan araç) yarım dosya görmesin
+        printf '%s\n' "$new" > "$old.tmp.$$" && mv -f "$old.tmp.$$" "$old" || rm -f "$old.tmp.$$"
+        ot=$(date +%s); rm -f "$CACHE/$name.fail"
     fi
     ff=$(cat "$CACHE/$name.fail" 2>/dev/null); [[ "$ff" =~ ^[0-9]+$ ]] || ff=0
     st+="$name|$n|$ot|$err|$ff"$'\n'

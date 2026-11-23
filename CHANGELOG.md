@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.15.111 — 2026-11-23
+
+- Downloaded lists (allowed services, rented-server lists) are written to a
+  temporary file and then moved into place. Before, the file was emptied and
+  rewritten in place, so another reader at that moment (CSF's restart hook,
+  or an outside tool that reads the lists) could find it empty or half written.
+
 ## 1.15.110 — 2026-11-19
 
 - New read-only call for other tools on the server: `api.php?a=tempban_check&ip=…`
