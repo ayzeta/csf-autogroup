@@ -568,6 +568,18 @@ inside a banned range, but `csf.ignore` only stops LFD, so a `/24` ban would
 block those addresses. If a check can't be completed because DNS isn't
 answering, the block is retried on the next run instead of being banned.
 
+### CSF blocklists
+
+CSF can load third-party lists of bad addresses itself (`/etc/csf/csf.blocklists`:
+Spamhaus DROP, DShield, Tor exit nodes, AbuseIPDB…). lfd downloads each enabled
+list into `/var/lib/csf/csf.block.NAME` and drops incoming traffic from its
+addresses on every port; an address on the allow list still passes. The plugin
+does not manage these lists, it reads them: an address in an enabled list shows
+as *blocklist NAME* in the IP card and in *Measure impact*, and a later lfd ban
+on such an address counts as a *Violation under a ban*, not towards the
+thresholds. A list that was disabled in `csf.blocklists` is not counted, even
+though CSF leaves its downloaded file on disk.
+
 ### With Imunify360
 
 Imunify360 puts its own chain at the top of `INPUT` and redirects some traffic

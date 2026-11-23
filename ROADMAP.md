@@ -44,3 +44,13 @@ Besides email and Slack, WHM can be set up with a "Post URL" (generic webhook)
 channel, which is how services such as Discord or Microsoft Teams are usually
 connected. Each service expects its own message format, so this will only be
 added once it can be tested against the real services.
+
+## Sites behind Cloudflare
+A firewall ban cannot stop requests that reach a site through a CDN: the
+firewall sees the CDN, not the visitor. The plugin already shows which sites
+are behind a CDN and says so when a violation came through one. For sites on
+Cloudflare, CSF can also block an address in Cloudflare itself (its own
+Cloudflare integration, with an API key per account). The plan is to show,
+for an offending address that hit a Cloudflare site, whether that block is in
+place and to offer it from the same place as the server ban. This needs a
+test account and will be added once it can be tried against Cloudflare.

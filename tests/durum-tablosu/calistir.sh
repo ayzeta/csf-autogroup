@@ -6,6 +6,9 @@
 #
 #   bash tests/durum-tablosu/calistir.sh        tablo + kural sonucu
 #   bash tests/durum-tablosu/calistir.sh -q     yalnız kural sonucu (ihlal varsa çıkış kodu 1)
+#   AG_KOK=cvbkl,cvbklm bash …/calistir.sh -q   yalnız adı verilen kökler (virgüllü, * kalıbı olur: 'cv*'): yeni ya da değişen
+#       kuralı saniyeler içinde denemek için (tam koşu ~10 dk). Öteki köklerde motor çağrılmaz, kurallar atlanır; ekran tablosu
+#       (render.js) ve K7 bütün kökleri ister, atlanır. Kural tam koşuda bir kez daha koşulmadan bitmiş sayılmaz.
 #
 # Senaryolar: ağ 151.80.0.0/16, blok 151.80.7.0/24, IP 151.80.7.9 (taklit DNS'te AS16276, FR).
 H="$(cd "$(dirname "$0")" && pwd)"; REPO="$(cd "$H/../.." && pwd)"
@@ -18,9 +21,16 @@ NOW=$(date +%s); DT=$(LC_ALL=C date '+%a %b %d %H:%M:%S %Y')
 # sürer, sonuç tablosu en sonda basılır; yarıda kalan ya da takılan koşuda nerede kaldığı buradan okunur)
 PROG="${AG_ILERLEME:-/dev/null}"; : > "$PROG" 2>/dev/null || PROG=/dev/null
 ilerle() { printf '%s %s\n' "$(date +%T)" "$1" >> "$PROG"; }
+kok_on() {   # şu anki kök ($R) AG_KOK süzgecinde mi (süzgeç yoksa hepsi)
+    [ -z "${AG_KOK:-}" ] && return 0
+    local p n="${R##*/}"; for p in ${AG_KOK//,/ }; do [[ "$n" == $p ]] && return 0; done; return 1
+}
+SKIPN=0
 mk() {   # ad → temiz kök: boş listeler, sınırlar, taklit araçlar
+    R="$W/roots/$1"; D="$R/etc/csf/csf.deny"; T="$R/var/lib/csf/csf.tempban"; A="$R/etc/csf/csf.allow"; C="$R/var/lib/csf_autogroup/counter"
+    kok_on || return 0                     # süzgeç dışı kök kurulmaz
     ilerle "kök $1"
-    R="$W/roots/$1"; mkdir -p "$R/app" "$R/etc/csf" "$R/var/lib/csf" "$R/var/lib/csf_autogroup"
+    mkdir -p "$R/app" "$R/etc/csf" "$R/var/lib/csf" "$R/var/lib/csf_autogroup"
     D="$R/etc/csf/csf.deny"; T="$R/var/lib/csf/csf.tempban"; A="$R/etc/csf/csf.allow"; C="$R/var/lib/csf_autogroup/counter"
     : > "$D"; : > "$T"; : > "$C"; printf '127.0.0.1\n' > "$A"; : > "$R/etc/csf/csf.ignore"; : > "$R/etc/csf/csf.rignore"
     printf '%s\n' 'DENY_IP_LIMIT = "200"' 'DENY_TEMP_IP_LIMIT = "100"' > "$R/etc/csf/csf.conf"
@@ -30,7 +40,7 @@ mk() {   # ad → temiz kök: boş listeler, sınırlar, taklit araçlar
     printf '%s\n' "MSG_LANG=tr" "ALERT_MAIL=" "DENY_FILE=$D" "CSF_CONF=$R/etc/csf/csf.conf" "CSF_BIN=$W/bin/csf" \
         "CSF_VAR=$R/var/lib/csf" "LOG_FILE=$R/autogroup.log" "SAYAC_FILE=$C" "IMUNIFY_BIN=$W/bin/imunify360-agent" > "$R/app/config.env"
 }
-run() { env SIM_ROOT="$R" PATH="$W/bin:/usr/bin:/bin" AG_BY=root bash "$R/app/csf_autogroup.sh" "$@"; }
+run() { kok_on || return 0; env SIM_ROOT="$R" PATH="$W/bin:/usr/bin:/bin" AG_BY=root bash "$R/app/csf_autogroup.sh" "$@"; }
 single() { printf '%s\n' "$1 # lfd: ($2) Failed login from $1 (FR/France/-): 5 in the last 3600 secs - ${3:-$DT}" >> "$D"; }   # 3. parametre: tarih
 dump() {
     run --status --json > "$W/out/$1.status.json" 2>/dev/null
@@ -60,7 +70,7 @@ mk partopen;   quiet --action ban24 151.80.7 --mode svc --svc web
 
 # ── motor kuralları (ekran dışı): yazılan satırlar ve uyarılar ──
 MF=0; ML=""
-mcheck() { [ -n "$2" ] || { ML+="  ✗ motor: $1 (kuralın komutu boş)"$'\n'; MF=$((MF + 1)); return; }   # tırnak hatası sessizce geçmesin
+mcheck() { kok_on || { SKIPN=$((SKIPN + 1)); return; }; [ -n "$2" ] || { ML+="  ✗ motor: $1 (kuralın komutu boş)"$'\n'; MF=$((MF + 1)); return; }   # tırnak hatası sessizce geçmesin
     if eval "$2"; then ML+="  ✓ $1"$'\n'; ilerle "  ✓ $1"; else ML+="  ✗ motor: $1"$'\n'; MF=$((MF + 1)); ilerle "  ✗ $1"; fi; }
 R="$W/roots/b24part"
 mcheck "web kısmi banı UDP 443'ü de kapatır (HTTP/3)" "grep -q '^udp|in|d=443|s=151.80.7.0/24 ' '$R/etc/csf/csf.deny'"
@@ -122,7 +132,7 @@ lfdi() { lfdl "$1" "Failed SSH login from $2 - ignored"; }
 # sunucu IP'sinin denemeleri: durumun "accts" haritası (denemeler önbelleği; terminal IP sorgusu önbelleği kurar)
 sacct() { run --lookup 203.0.113.10 >/dev/null 2>&1; run --status --json 2>/dev/null | grep -o '"accts":{.*' | grep -o '"203\.0\.113\.10":\[[^]]*\]'; }
 rvrow() { run --status --json 2>/dev/null | grep -o '"review":\[.*\],"ignored"' | sed 's/^"review":\[//; s/,{"t":/\n{"t":/g' | grep -E "^\{\"t\":[0-9]+,\"type\":\"[a-z_0-9]+\",\"cidr\":\"$1\"" | head -n 1; }   # satır başına bir kayıt
-mkl() { mk "$1"; echo "LFD_LOG=$R/lfd.log" >> "$R/app/config.env"; : > "$R/lfd.log"; }
+mkl() { mk "$1"; kok_on || return 0; echo "LFD_LOG=$R/lfd.log" >> "$R/app/config.env"; : > "$R/lfd.log"; }
 mkl aab;  printf '151.80.7.9 # müşteri\n' >> "$A"; lfdb 3600 151.80.7.9
 mcheck "izinli IP lfd'de banlandı → 'Ban işlemiyor' (tam izin)" "rvrow 151.80.7.9 | grep -q '\"type\":\"allow_ban\".*\"bk\":\"b\".*\"full\":1'"
 # günlükte NUL bloğu (logrotate copytruncate, çökme): GNU grep "binary file matches" deyip sonraki satırları yazmıyordu → bloktan
@@ -155,7 +165,7 @@ mcheck "açık servis: tur Geçmiş'e bir olay yazar (web kısmi banından sonra
 mkl aaevd; lfdb 3600 151.80.7.9; quiet
 mcheck "izinsiz IP'nin banı işliyor: Geçmiş'e izinli ihlal olayı yazılmaz" "! grep -q '\"type\":\"allow_viol\"' '$R/var/lib/csf_autogroup/events.jsonl'"
 # e-posta sınıfları (IE_*): tur bildirimi kapalıyken blok banı mail yazmaz; liste doluyor uyarısı aynı turda yine gider, ban bölümü girmez
-mkm() { mk "$1"; sed -i 's/^ALERT_MAIL=$/ALERT_MAIL=root@test.invalid/' "$R/app/config.env"; printf '%s\n' "SENDMAIL_BIN=$W/bin/sendmail" "DIGEST=0" "IE_RUN=$2" "LFD_LOG=$R/lfd.log" >> "$R/app/config.env"; : > "$R/lfd.log"; }   # boş lfd günlüğü: makinenin gerçek lfd.log'u maile karışmasın
+mkm() { mk "$1"; kok_on || return 0; sed -i 's/^ALERT_MAIL=$/ALERT_MAIL=root@test.invalid/' "$R/app/config.env"; printf '%s\n' "SENDMAIL_BIN=$W/bin/sendmail" "DIGEST=0" "IE_RUN=$2" "LFD_LOG=$R/lfd.log" >> "$R/app/config.env"; : > "$R/lfd.log"; }   # boş lfd günlüğü: makinenin gerçek lfd.log'u maile karışmasın
 mtext() { awk '/^Content-Type: text\/plain/ { f = 1 } f && /^--/ { exit } f && !/^Content-/ && NF' "$R/mails/01.eml" | base64 -d 2>/dev/null; }   # ilk mailin düz metni
 mkm mailcat1 1; for x in 1 2 3; do single 151.80.7.$x sshd; done; quiet
 mcheck "IE_RUN=1: blok banı yazan tur bir e-posta gönderir, blok içinde" "[ \$(grep -c sendmail '$R/mail_calls.log') = 1 ] && mtext | grep -q '151.80.7.0/24'"
@@ -1029,6 +1039,27 @@ mcheck "ban altında ihlal maili: CDN sebebi satırı (panelle aynı alanlardan)
 mkm cvcsfm 1; printf '%s\n' "151.80.7.0/24 # Manually denied - $(pdt '-3 days')" >> "$D"; quiet; cvback 172800
 echo "$CR4" > "$R/var/lib/csf_autogroup/csfpost.times"; single 151.80.7.9 sshd "$(pdt now)"; quiet
 mcheck "ban altında ihlal maili: CSF yeniden yüklenme sebebi saatiyle" "mtext | grep -q \"1 IP: banından önceki 60 dk içinde CSF yeniden yüklendi (en son \$(date -d @$CR4 '+%d.%m %H:%M'))\""
+# CSF blok listesi (csf.blocklists; 1.15.113). Biçim WSL gerçek CSF 16.33'ten (2026-11-23): satır "AD|süre|en çok|adres", lfd listeyi
+# $CSF_VAR/csf.block.AD'ye satır başına IP / CIDR yazar; satır kaldırılınca dosya kalır. Önce eklenti listeyi hiç bilmiyordu: IP kartı
+# listedeki adres için "banlı değil" diyordu, sonradan gelen lfd banı eşiğe sayılıyordu.
+bkl() {   # etkin SPAMDROP (151.80.7.0/24) + yorum satırı olmuş ESKI listesinin diskte kalan dosyası (151.80.9.0/24)
+    printf '%s\n' '# Spamhaus DROP' 'SPAMDROP|86400|0|http://www.spamhaus.org/drop/drop.txt' '#ESKI|86400|0|http://example.invalid/x.txt' > "$R/etc/csf/csf.blocklists"
+    printf '%s\n' 151.80.7.0/24 > "$R/var/lib/csf/csf.block.SPAMDROP"; printf '%s\n' 151.80.9.0/24 > "$R/var/lib/csf/csf.block.ESKI"
+}
+mk cvbkl; bkl; quiet
+mcheck "blok listesi: IP kartı kapsayan banlarda CSF blok listesini adıyla verir; kapatılmış listenin diskte kalan dosyası sayılmaz" "run --lookup 151.80.7.5 --json 2>/dev/null | grep -q '{\"kind\":\"bkl\",\"what\":\"SPAMDROP\"}' && ! run --lookup 151.80.9.5 --json 2>/dev/null | grep -q '\"kind\":\"bkl\"'"
+mcheck "blok listesi: düz metin IP kartında satırı (kapalı: her şey)" "run --lookup 151.80.7.5 2>/dev/null | grep -q 'Blok listesi  *SPAMDROP · her şey'"
+mcheck "blok listesi: kapsama defterine girer (bk:SPAMDROP, her şey)" "grep -q '^bk:SPAMDROP|all|||[0-9]*\$' \"\$(CVF)\""
+mcheck "blok listesi: aralık kartı / ban penceresi (--inside) aralığın tamamı listedeyse adını verir; listeden geniş aralıkta vermez" "run --inside 151.80.7.0/24 --json 2>/dev/null | grep -q '\"bkl\":\"SPAMDROP\"' && run --inside 151.80.0.0/16 --json 2>/dev/null | grep -q '\"bkl\":\"\"'"
+run --inside 151.80.7.0/24 --json > "$W/out/bkl-inside.json" 2>/dev/null   # panel denetimi (kapsama-ad.js) bu gerçek çıktıyı çizer
+cvback 172800; single 151.80.7.9 sshd "$(pdt now)"; quiet
+mcheck "blok listesi: listedeki IP'ye sonradan gelen lfd banı ban altında ihlal (eşiğe sayılmaz), adıyla" "grep -q '\"type\":\"under_ban\",\"ck\":\"bk\",\"cn\":\"SPAMDROP\",\"cm\":\"all\".*\"ips\":\[{\"ip\":\"151.80.7.9\"' \"\$(EVF)\""
+# kaynak ayrıntısı: olay kaydında IP'si duran (ban altında ihlal olayı) ama tekil banı kalkmış adres → şu anki durumu blok listesi
+sed -i '/^151\.80\.7\.9 /d' "$D"
+mkdir -p "$R/var/lib/csf/Geo"; printf '151.80.0.0\t151.80.255.255\t16276\tFR\tOVH\n' > "$R/var/lib/csf/Geo/ip2asn-combined.tsv"   # src_rng: CSF'in ASN verisi (başlangıç, bitiş, ASN)
+mcheck "blok listesi: kaynak ayrıntısında (--src-ips) tekil banı kalkmış, listedeki IP'nin şu anki durumu blok listesi" "run --src-ips AS16276 --json 2>/dev/null | grep -q '\[\"151.80.7.9\",[^]]*\"bkl:SPAMDROP\"\]'"
+mkm cvbklm 1; bkl; quiet; cvback 172800; single 151.80.7.9 sshd "$(pdt now)"; quiet
+mcheck "blok listesi: ban altında ihlal maili kapsamanın adıyla (panelle aynı)" "mtext | grep -q 'blok listesi SPAMDROP (her şey)'"
 mk cvign; ccfr; quiet; cvback 172800; s5; quiet --action ignore 151.80.7.0/24 0; quiet
 mcheck "ban altında ihlal: susturulan aralığın IP'leri olaya girmez (5 tekilin 2'si susturulmuş /24'te → 3 IP)" "grep -q '\"type\":\"under_ban\",\"ck\":\"cc\".*\"n\":3,' \"\$(EVF)\""
 mcheck "ban altında ihlal satırı: susturulan aralığın IP'lerinin satırı yok, ötekilerin var" "[ -z \"\$(rvrow 151.80.7.1)\" ] && rvrow 151.80.8.1 | grep -q '\"type\":\"under_ban\"'"
@@ -1041,6 +1072,13 @@ mcheck "deneme turu: ban altında ihlal bildirimini gösterir; olay ve işaret y
 mkm cvmail0 1; echo "IE_REVIEW=0" >> "$R/app/config.env"; ccfr; quiet; cvback 172800; s5; quiet
 mcheck "IE_REVIEW=0: ban altında ihlal mail yazmaz, Geçmiş'e yine yazılır" "[ ! -e '$R/mail_calls.log' ] && [ \"\$(uev)\" = 1 ]"
 ilerle "motor kuralları bitti ($MF ihlal); ekran tablosu (render.js)"
+if [ -n "${AG_KOK:-}" ]; then              # süzgeçli koşu: ekran tablosu ve K7 bütün kökleri ister; yalnız süzgeçteki köklerin işleri
+    RC=0
+    [ -s "$W/out/bkl-inside.json" ] && { node "$(wp "$H/kapsama-ad.js")" "$(wp "${AG_JS:-$REPO/whm/assets/ag.js}")" "$(wp "$W/out/bkl-inside.json")" || RC=1; }
+    printf '\nMotor kuralları (süzgeç %s; %s kural süzgeç dışı, atlandı)\n%s' "$AG_KOK" "$SKIPN" "$ML"
+    [ "$MF" -gt 0 ] && { echo "$MF motor kuralı ihlali"; exit 1; }
+    exit $RC
+fi
 node "$(wp "$H/render.js")" "$(wp "$REPO/whm/assets/ag.js")" "$(wp "$W/out")" "$@"; RC=$?
 ilerle "ekran tablosu bitti (çıkış $RC); K7 durum çıktıları"
 # K7 bütün köklerde: liste satırı menüsü = Geçmiş menüsü (menu-esit.js). Yalnız listede satır doğurabilecek kökler (~4 dk)
@@ -1052,6 +1090,8 @@ for R in "$W"/roots/*; do
 done
 ilerle "K7 karşılaştırma (menu-esit.js)"
 node "$(wp "$H/menu-esit.js")" "$(wp "${AG_JS:-$REPO/whm/assets/ag.js}")" "$(wp "$W/k7")" || RC=1   # AG_JS: kuralı eski panelle sınamak için
+ilerle "kapsama adları (kapsama-ad.js)"
+node "$(wp "$H/kapsama-ad.js")" "$(wp "${AG_JS:-$REPO/whm/assets/ag.js}")" "$(wp "$W/out/bkl-inside.json")" || RC=1
 printf '\nMotor kuralları\n%s' "$ML"
 [ "$MF" -gt 0 ] && { echo "$MF motor kuralı ihlali"; exit 1; }
 exit $RC

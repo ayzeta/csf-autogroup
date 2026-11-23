@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.112"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.113"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -311,7 +311,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_UNDER_CSFR_CL="; kiralık liste kuralı yalnız yeni bağlantıyı keser, o arada açılan bağlantı sürer"
   M_UNDER_CDN="   %s IP: hedeflediği site CDN arkasında: %s; güvenlik duvarı ziyaretçiyi değil CDN'i görür, ban bu istekleri kesemez"
   M_CDN_OTHER="başka adres"
-  M_UK_ban="aralık banı %s"; M_UK_temp="geçici aralık banı %s"; M_UK_part="kısmi ban %s"; M_UK_asn="sağlayıcı banı %s"; M_UK_cc="ülke banı %s"; M_UK_cl="kiralık liste %s"
+  M_UK_ban="aralık banı %s"; M_UK_temp="geçici aralık banı %s"; M_UK_part="kısmi ban %s"; M_UK_asn="sağlayıcı banı %s"; M_UK_cc="ülke banı %s"; M_UK_cl="kiralık liste %s"; M_UK_bk="blok listesi %s"
   M_DG_RV="Son 7 günün kontrol kayıtları: %s izinli IP'den ihlal kaydı · %s açık servis kaydı · %s ban altında ihlal kaydı"
   M_MAIL16_BODY="Aşağıdaki ağlarda (/16) birçok bloktan tekil ban (kalıcı ve geçici) birikti. Ağ banlanmadı;\nelle bakmanız önerilir:"
   M_MAIL16_SUBJ="%s şüpheli ağ"
@@ -470,7 +470,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_S_NONE="yok"; M_S_DAYSLEFT="%s gün kaldı"; M_S_TTL="geçici ban %s kaldı"
   M_L_HOST="Hostname"; M_L_FWD="ileri yönde doğrulandı"; M_L_NOFWD="ileri yönde doğrulanamadı"
   M_L_OWNER="Sahibi"; M_L_PREFIX="Duyurulan blok"; M_L_REG="Kayıt"; M_L_DENY="csf.deny"
-  M_L_TEMP="Geçici liste"; M_L_WL="İzin listesi"; M_L_CLOUD="Kiralık liste"; M_L_PENDING="İzleniyor"; M_L_IGN="Susturuldu"; M_L_ACCT="Denemeler"
+  M_L_TEMP="Geçici liste"; M_L_WL="İzin listesi"; M_L_CLOUD="Kiralık liste"; M_L_BKL="Blok listesi"; M_L_PENDING="İzleniyor"; M_L_IGN="Susturuldu"; M_L_ACCT="Denemeler"
   M_H_NOREASON="geçici ban (günlükte sebep yok)"
   M_CFG_BAD="Geçersiz değer: %s = %s (%s olmalı)"
   M_CFG_RANGE="%s ile %s arası bir tam sayı"
@@ -594,7 +594,7 @@ else
   M_UNDER_CSFR_CL="; the rented-server rule cuts new connections only, so a connection opened meanwhile stays up"
   M_UNDER_CDN="   %s IPs: the site they hit is behind a CDN: %s; the firewall sees the CDN, not the visitor, so the ban cannot cut these requests"
   M_CDN_OTHER="another address"
-  M_UK_ban="range ban %s"; M_UK_temp="temporary range ban %s"; M_UK_part="partial ban %s"; M_UK_asn="provider ban %s"; M_UK_cc="country ban %s"; M_UK_cl="rented-server list %s"
+  M_UK_ban="range ban %s"; M_UK_temp="temporary range ban %s"; M_UK_part="partial ban %s"; M_UK_asn="provider ban %s"; M_UK_cc="country ban %s"; M_UK_cl="rented-server list %s"; M_UK_bk="blocklist %s"
   M_DG_RV="Review records of the last 7 days: %s allowed-IP violation records · %s open-service records · %s violation-under-a-ban records"
   M_MAIL16_BODY="Single bans (permanent and temp) have piled up across several blocks of the following networks (/16). The network was not banned;\nmanual review recommended:"
   M_MAIL16_SUBJ="%s suspicious network(s)"
@@ -753,7 +753,7 @@ else
   M_S_NONE="none"; M_S_DAYSLEFT="%s days left"; M_S_TTL="temp ban %s left"
   M_L_HOST="Hostname"; M_L_FWD="forward-confirmed"; M_L_NOFWD="not forward-confirmed"
   M_L_OWNER="Owner"; M_L_PREFIX="Announced prefix"; M_L_REG="Registry"; M_L_DENY="csf.deny"
-  M_L_TEMP="Temp list"; M_L_WL="Allow list"; M_L_CLOUD="Rented-server list"; M_L_PENDING="Watched"; M_L_IGN="Muted"; M_L_ACCT="Attempts"
+  M_L_TEMP="Temp list"; M_L_WL="Allow list"; M_L_CLOUD="Rented-server list"; M_L_BKL="Blocklist"; M_L_PENDING="Watched"; M_L_IGN="Muted"; M_L_ACCT="Attempts"
   M_H_NOREASON="temp ban (no reason in the log)"
   M_CFG_BAD="Invalid value: %s = %s (must be %s)"
   M_CFG_RANGE="a whole number from %s to %s"
@@ -2904,6 +2904,7 @@ cov_keys() {     # → stdout: şu an yürürlükteki kapsamaların defter anaht
     if [ "$CLOUD_ON" = 1 ]; then
         for x in $CLOUD_ACTIVE; do [ -r "$CLOUD_DIR/$x.txt" ] || continue; cl_pol "$x"; [ "$CP_K" = none ] || echo "cl:$x|$CP_K|$CP_T|$CP_U"; done
     fi
+    bkl_load; for x in $BKL_NAMES; do echo "bk:$x|all||"; done        # CSF blok listesi: her şeyi kapatır (gelen)
     return 0
 }
 cov_keep() {     # tur: defter bakımı — yürürlükteki her kapsama defterde durur; yeni görülenin başlangıcı şimdi (ilk kurulumda hepsinin),
@@ -2935,7 +2936,7 @@ cov_prep() {     # NOT_DİZİSİ_ADI IP… → kararın toplu hazırlığı (IP 
     [ "${#rep[@]}" -gt 0 ] && perm_cls_load "${rep[@]}"
     if [ "$COV_CCD$COV_CCP" != ",,,," ]; then geo_ips_load "${want[@]}"; for ip in "${want[@]}"; do COV_G[$ip]="${GEOI[$ip]:-}"; done
     else for ip in "${want[@]}"; do COV_G[$ip]=""; done; fi
-    cloud_prefill "${want[@]}"
+    cloud_prefill "${want[@]}"; bkl_prefill "${want[@]}"
     return 0
 }
 # cov_decide IP SEBEP [T] → REPLY = none | once | open | under; COV_KEY = kararı veren kapsamanın defter anahtarı, COV_T0 = başlangıcı.
@@ -3000,6 +3001,14 @@ cov_decide() {
                 [ -n "$und" ] || { und="$key"; ut=$st; }
             fi
         fi
+        # 6) CSF blok listesi: gelen trafiğin her portunu kapatır (giden servisleri kapatmaz)
+        case "$k" in mout|wout) ;; *)
+            if bkl_has "$ip"; then
+                key="bk:$REPLY|all||"; st="${COV_T[$key]:-$now}"
+                if [ "$t" -le $(( st + COV_PAY )) ]; then COV_KEY="$key"; COV_T0=$st; REPLY=once; return 0; fi
+                [ -n "$und" ] || { und="$key"; ut=$st; }
+            fi ;;
+        esac
     fi
     if [ -n "$und" ]; then COV_KEY="$und"; COV_T0=$ut; REPLY=under
     elif [ -n "$opn" ]; then COV_KEY="$opn"; COV_T0=$ot; REPLY=open
@@ -3033,7 +3042,7 @@ cov_text() {     # ANAHTAR → REPLY = iletilerde kapsamanın adı ve kapattığ
     esac
     v="M_UK_$CVK"; REPLY="$(m "${!v}" "$nm")${p:+ ($p)}"
 }
-cov_parts() {    # ANAHTAR → CVK tür (ban|temp|part|asn|cc|cl), CVN ad (CIDR, AS123, FR, liste adı), CVM kip (all | ports | svc | exc; ban /
+cov_parts() {    # ANAHTAR → CVK tür (ban|temp|part|asn|cc|cl|bk), CVN ad (CIDR, AS123, FR, liste adı), CVM kip (all | ports | svc | exc; ban /
     # temp'te all), CVT / CVU kapattığı TCP / UDP portları (exc'te açık kalanlar). Olay, Kontrol edilecekler satırı ve mail aynı alanları okur.
     local r="${1#*:}"
     CVK="${1%%:*}"; IFS='|' read -r CVN CVM CVT CVU <<< "$r"
@@ -4382,6 +4391,8 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
             echo "r $clo $chi" > "$cqf"; csrc=$(cloud_cover "$cqf" | awk '{ print $2; exit }'); rm -f "$cqf"
         fi
         if [ -n "$csrc" ]; then cl_pol "$csrc"; o+=",\"cloud\":\"$csrc\",\"cloud_mode\":\"$CP_K\",\"cloud_tcp\":\"$CP_T\",\"cloud_udp\":\"$CP_U\""; else o+=",\"cloud\":\"\""; fi
+        # CSF blok listesi aralığın tamamını kapsıyorsa (her şey kapalı): bilgi — ban engellenmez (liste günlük değişir, kendi ban kalıcı)
+        if bkl_range "$clo" "$chi"; then o+=",\"bkl\":\"$REPLY\""; else o+=",\"bkl\":\"\""; fi
         jstr "$WL_HIT"; o+=",\"wl\":$REPLY,\"wl_retry\":$([ "$WL_RETRY" = 1 ] && echo true || echo false)"
         jstr "$OWN_LONG"; o+=",\"owner\":$REPLY"
         cidr_range "$c" && self_overlap "$R_LO" "$R_HI"; o+=",\"self\":\"$SELF_HIT\""
@@ -4579,6 +4590,7 @@ do_lookup() {
         [[ "$ccp" == *" $w "* ]] && covers+=("4294967298|{\"kind\":\"ccport\",\"what\":\"$w\",\"tcp\":\"$cpt\",\"udp\":\"$cpu\"}")
     done
     if cloud_has "$ip"; then local cwn="$REPLY"; cl_desc "$cwn"; covers+=("4294967299|{\"kind\":\"cloud\",\"what\":\"$cwn\",$REPLY}"); fi
+    bkl_has "$ip" && covers+=("4294967300|{\"kind\":\"bkl\",\"what\":\"$REPLY\"}")    # CSF blok listesi (her port, gelen)
     cvj=$(printf '%s\n' "${covers[@]}" | grep . | sort -t'|' -k1,1n | cut -d'|' -f2- | paste -sd, -)
     if tb_cover "$n"; then                 # geçici liste: tek okuyucu (satır dosyadaysa ban duruyor; süresi dolmuşsa lfd kaldırıyor)
         local tbi=$REPLY tleft=$(( TB_E[REPLY] - now ))
@@ -4690,6 +4702,7 @@ do_lookup() {
             # gelen yeni bağlantıya uygulanır; sunucunun o adrese giden bağlantısını kesmez
             *'"kind":"cloud"'*)  cloud_label "$(printf '%s' "$cv" | sed -n 's/.*"what":"\([^"]*\)".*/\1/p')"; local cln="$REPLY"
                                  cl_text "$(printf '%s' "$cv" | sed -n 's/.*"what":"\([^"]*\)".*/\1/p')"; printf '  %-18s %s\n' "$M_L_CLOUD" "$cln · $REPLY" ;;
+            *'"kind":"bkl"'*)    printf '  %-18s %s\n' "$M_L_BKL" "$(printf '%s' "$cv" | sed -n 's/.*"what":"\([^"]*\)".*/\1/p') · $M_CL_ALL" ;;
             *'"kind":"ccport"'*) printf '  %-18s %s\n' "$M_L_CCP" "$(printf '%s' "$cv" | sed -n 's/.*"what":"\([^"]*\)".*"tcp":"\([^"]*\)".*/\1 · tcp \2/p')" ;;
             *)                   printf '  %-18s %s\n' "$M_L_CCD" "$(printf '%s' "$cv" | sed -n 's/.*"what":"\([^"]*\)".*/\1/p')" ;;
         esac
@@ -5503,6 +5516,55 @@ cloud_has() {    # IP → 0: etkin bir bulut listesinde (REPLY = kaynak adı)
     done
     return 1
 }
+# ── CSF'in blok listeleri (csf.blocklists: Spamhaus DROP, DShield, Tor …) — TEK OKUYUCU ─────────────────────────────────────────────
+# Ölçüldü (WSL gerçek CSF 16.33, 2026-11-23): satır "AD|süre|en çok|adres"; lfd listeyi $CSF_VAR/csf.block.AD'ye indirir (satır başına IP
+# ya da CIDR) ve bl_AD ipset kümesine yükler; LOCALINPUT'ta ALLOWIN ve DENYIN'den sonra, CC_DENY'den önce listenin kendi zinciri
+# (-m set --match-set bl_AD src -j DROP): listedeki adresin GELEN trafiği bütün portlarda düşer, izin listesi önce gelir. Satır
+# csf.blocklists'ten kaldırılınca dosya diskte KALIR: yalnız etkin satırların dosyaları okunur. LF_IPSET=0'daki kural biçimi ölçülmedi
+# (eklenti dosyayı okur, kümeye bakmaz). Önce eklenti bu listeleri hiç bilmiyordu: listedeki adres için IP kartı "banlı değil" diyordu.
+BKL_NAMES=""; BKL_LD=""; declare -A BKL_MEMO=()
+bkl_load() {     # → BKL_NAMES = etkin ve dosyası olan listelerin adları (boşlukla); süreç başına bir kez
+    [ -n "$BKL_LD" ] && return 0; BKL_LD=1; BKL_NAMES=""
+    local n
+    [ -r "$CSF_DIR/csf.blocklists" ] || return 0
+    for n in $(awk -F'|' '/^[[:space:]]*#/ || NF < 4 { next } { gsub(/[[:space:]]/, "", $1); if ($1 ~ /^[A-Za-z0-9_]+$/) print $1 }' "$CSF_DIR/csf.blocklists"); do
+        [ -s "$CSF_VAR/csf.block.$n" ] && BKL_NAMES+="${BKL_NAMES:+ }$n"
+    done
+    return 0
+}
+bkl_lines() {    # → stdout "lo hi ad" (etkin listelerin bütün satırları, sayı olarak): IP, aralık ve tablo okuyucularının tek kaynağı
+    local n
+    bkl_load
+    for n in $BKL_NAMES; do
+        awk -v s="$n" '$1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\/[0-9]+)?$/ { split($1, c, "/"); split(c[1], p, "."); b = (c[2] == "" ? 32 : c[2] + 0)
+            w = 2 ^ (32 - b); lo = int((((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4]) / w) * w; printf "%.0f %.0f %s\n", lo, lo + w - 1, s }' "$CSF_VAR/csf.block.$n"
+    done
+}
+bkl_prefill() {  # IP … → BKL_MEMO[ip] = IP'yi içeren ilk etkin listenin adı ya da "-" (bütün listeler tek awk geçişinde)
+    local ip x want=()
+    bkl_load
+    for ip in "$@"; do [ -n "${BKL_MEMO[$ip]+x}" ] || want+=("$ip"); done
+    [ "${#want[@]}" -gt 0 ] || return 0
+    if [ -z "$BKL_NAMES" ]; then for ip in "${want[@]}"; do BKL_MEMO[$ip]="-"; done; return 0; fi
+    while read -r ip x; do [ -n "$ip" ] && BKL_MEMO[$ip]="$x"; done < <(bkl_lines | awk -v q="${want[*]}" '
+        function v4(a,  p) { split(a, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
+        { k++; L[k] = $1 + 0; H[k] = $2 + 0; N[k] = $3 }
+        END { m = split(q, Q, " "); for (j = 1; j <= m; j++) { v = v4(Q[j]); r = "-"
+                  for (i = 1; i <= k; i++) if (v >= L[i] && v <= H[i]) { r = N[i]; break }
+                  print Q[j], r } }')
+}
+bkl_range() {    # ALT ÜST → 0: aralığın TAMAMI bir etkin listenin tek satırının içinde (REPLY = listenin adı). Aralık kartı ve ban penceresi
+    REPLY=""
+    bkl_load; [ -n "$BKL_NAMES" ] || return 1
+    REPLY=$(bkl_lines | awk -v a="$1" -v b="$2" '$1 + 0 <= a + 0 && $2 + 0 >= b + 0 { print $3; exit }')
+    [ -n "$REPLY" ]
+}
+bkl_has() {      # IP → 0: etkin bir blok listesinde (REPLY = listenin adı)
+    REPLY=""
+    [ -n "${BKL_MEMO[$1]+x}" ] || bkl_prefill "$1"
+    [ "${BKL_MEMO[$1]:--}" = "-" ] && return 1
+    REPLY="${BKL_MEMO[$1]}"
+}
 cloud_health() { # uyarı süresinden uzun süredir indirilemeyen bulut listeleri → bildirim
     local st="$CLOUD_DIR/status" n c t e f bad="" now; now=$(date +%s)
     [ "$CLOUD_BAN" = 1 ] && [ -r "$st" ] || { ic_track IC_RUN CloudFail 0 "" "" "$M_CLOUD_FAIL_OK"; return 0; }
@@ -5828,7 +5890,7 @@ do_src_ips() {   # ANAHTAR (ASnnn | cl:ad) → JSON: o sağlayıcıya / kiralık
           if (c ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) print "D\t" c "\t0\t\t" cm
           else if (c ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\/[0-9]+$/) print "C\t" c }' "$DENY_FILE" 2>/dev/null
       tb_lines | awk -F'|' '{ k = ($1 ~ /\//) ? "R" : "T"; print k "\t" $1 "\t" $2 "\t" $3 "\t" $6 }'   # dosyadaki satır = ban duruyor
-    } | awk -F'\t' -v rf="$rng" -v pc="$svm" -v af="$alw" "$AWK_CLS"'
+    } | awk -F'\t' -v rf="$rng" -v pc="$svm" -v af="$alw" -v bkf=<(bkl_lines) "$AWK_CLS"'
         function v4(x,  p) { split(x, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
         function de(x,  a, k, M, i, h) { split("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec", M, " "); k = split(x, a, /[ \t]+/)
             if (k < 4 || a[k] !~ /^[0-9][0-9][0-9][0-9]$/ || a[k - 1] !~ /^[0-9][0-9]:[0-9][0-9]:[0-9][0-9]$/) return 0
@@ -5838,7 +5900,8 @@ do_src_ips() {   # ANAHTAR (ASnnn | cl:ad) → JSON: o sağlayıcıya / kiralık
         function ina(v,  a, z, c, j) { a = 1; z = an; j = 0; while (a <= z) { c = int((a + z) / 2); if (AL[c] <= v) { j = c; a = c + 1 } else z = c - 1 }; return j && AM[j] >= v }
         BEGIN { while ((getline l < rf) > 0) { split(l, x, " "); rn++; L[rn] = x[1] + 0; h = x[2] + 0; PM[rn] = (rn == 1 || h > PM[rn - 1]) ? h : PM[rn - 1] }
                 while ((getline l < af) > 0) { split(l, x, " "); an++; AL[an] = x[1] + 0; h = x[2] + 0; AM[an] = (an == 1 || h > AM[an - 1]) ? h : AM[an - 1] }
-                while ((getline l < pc) > 0) { split(l, x, " "); PC[x[1]] = x[2] } }
+                while ((getline l < pc) > 0) { split(l, x, " "); PC[x[1]] = x[2] }
+                while ((getline l < bkf) > 0) { split(l, x, " "); bn++; BL[bn] = x[1] + 0; BH[bn] = x[2] + 0; BN[bn] = x[3] } }   # CSF blok listeleri
         $1 == "C" || $1 == "R" { split($2, q, "/"); lo = v4(q[1]); cn++; CL[cn] = lo; CH[cn] = lo + 2 ^ (32 - q[2]) - 1; CK[cn] = $1; CC[cn] = $2; next }
         { ip = $2; if (!(ip in IN)) IN[ip] = inr(v4(ip)); if (!IN[ip]) next
           t = $3 + 0; if ($1 == "D") { t = de($5); D[ip] = 1 } else if ($1 == "T") TT[ip] = 1
@@ -5847,6 +5910,7 @@ do_src_ips() {   # ANAHTAR (ASnnn | cl:ad) → JSON: o sağlayıcıya / kiralık
             for (ip in BT) { n++; v = v4(ip); st = D[ip] ? "deny" : TT[ip] ? "temp" : ""
                 if (an && ina(v)) st = "alw"
                 if (st == "") for (i = 1; i <= cn; i++) if (CL[i] <= v && CH[i] >= v) { st = (CK[i] == "C" ? "deny24:" : "temp24:") CC[i]; if (CK[i] == "C") break }
+                if (st == "") for (i = 1; i <= bn; i++) if (BL[i] <= v && BH[i] >= v) { st = "bkl:" BN[i]; break }
                 sv = cls(BW[ip]); if (sv == "repeat" && (ip in PC)) sv = PC[ip]
                 K[n] = BT[ip]; R[n] = "[" js(ip) "," js(sv) "," js(BW[ip]) "," BT[ip] "," js(BF[ip]) "," js(st) "]" }
             o = ""; m = 0
@@ -5905,6 +5969,7 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad) → son 24 saatin web günlüklerind
               [ -r "$CLOUD_DIR/$x.txt" ] && awk -F'[./]' -v s="cloud:$x" 'NF >= 4 && $1 ~ /^[0-9]+$/ { b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%.0f %.0f %s\n", lo, lo + 2 ^ (32 - b) - 1, s }' "$CLOUD_DIR/$x.txt"
           done
       fi
+      bkl_lines | awk '{ print $1, $2, "bkl:" $3 }'      # CSF blok listeleri (yalnız etkin satırlar)
     } > "$xcf"
     asn_banned; local ban="" bsince=0 bkey=""; [ -n "$n" ] && ban="${ASB[$n]:-}"   # kiralık listede sağlayıcı banı yok
     # banlıysa banın konduğu an: sağlayıcı olaylarında bu ASN'nin kesintisiz yer aldığı son dizinin ilk olayı;
@@ -7078,6 +7143,7 @@ prov_near() {    # stdin "ip|sebep|asn" → 0: her IP banlı bir sağlayıcıda 
             n=$((n + 1)); [ "${ASB[$a]}" = all ] && continue
             lab="AS$a"; pl="$tcp"
         elif cloud_has "$ip"; then ct="$REPLY"; cloud_label "$REPLY"; lab="$REPLY"; pl="cl:$ct"; n=$((n + 1))
+        elif bkl_has "$ip"; then n=$((n + 1)); continue                 # CSF blok listesi: gelen her port zaten kapalı
         else return 1; fi
         [[ ", $PN_SRC, " == *", $lab, "* ]] || PN_SRC+="${PN_SRC:+, }$lab"
         # sağlayıcının port listesi bu servisi kapatmıyorsa kiralık liste kapatıyor olabilir (ikisi birden geçerli)

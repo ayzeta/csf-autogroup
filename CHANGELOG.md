@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.15.113 — 2026-11-24
+
+- CSF's own blocklists (`csf.blocklists`: Spamhaus DROP, DShield, Tor,
+  AbuseIPDB…) are now known to the plugin. An address in an enabled list
+  shows as *blocklist NAME* (everything blocked) in the IP card, its result
+  line and *Measure impact*; a later lfd ban on it is a *Violation under a
+  ban*, in the panel, email and Slack alike. Before, the IP card said "not
+  banned" for such an address. A disabled list's file left on disk is not
+  counted. The glossary has the term.
+- The same in the other places that ask "is this address already closed":
+  the range card (a range wholly inside a blocklist is shown as fully
+  closed), the range and IP ban windows (a note says the list changes daily;
+  the ban is still offered, your own ban stays), the source details table,
+  an allowed IP's "ban has no effect" result, and the provider suggestion
+  count. Blocklists are not used to suggest removing your own bans.
+- Tests: `AG_KOK=name,…` runs only the given roots of the state table (a few
+  seconds instead of minutes).
+- Roadmap: blocking in Cloudflare for sites behind it.
+
 ## 1.15.112 — 2026-11-23
 
 - An allowed-service or rented-server list whose download was cut off is no
