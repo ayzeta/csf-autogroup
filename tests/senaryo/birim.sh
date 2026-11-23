@@ -122,6 +122,33 @@ if [ "$(cut -d'|' -f4 <<< "$i")" = timeout ] && [ "$(cut -d'|' -f5 <<< "$i")" -g
 else F=$((F + 1)); echo "  ✗ zaman aşımı işareti: iyi=«$i» kotu=«$k» (önceki ilk hata $k0)"; fi
 rfm "zaman aşımından sonra" "$TD/c/status" "cloud:0/2"
 rm -rf "$TD"
+# Yarıda kesilen indirme (1.15.112): gerçek HTTP bağlantısıyla (kesik-sunucu.py). Önceki liste 10 önek; kesik yanıt 8, yarım JSON 7 önek
+# taşıyor — ikisi de önceki listenin yarısından büyük, eski "curl | ayrıştırıcı" boru hattı bunları eksik liste olarak kabul ediyordu.
+# Şimdi curl'ün çıkış kodu ve JSON bütünlüğü denetlenir: önceki liste korunur, günlükte sebep yazar. Tam yanıt kabul edilir.
+if command -v python3 >/dev/null 2>&1; then
+    TD=$(mktemp -d); mkdir -p "$TD/c"; python3 "$H/kesik-sunucu.py" "$TD/port" & KP=$!
+    for i in 1 2 3 4 5 6 7 8 9 10; do [ -s "$TD/port" ] && break; sleep 0.3; done; KS="http://127.0.0.1:$(cat "$TD/port" 2>/dev/null)"
+    kes() {   # AD YOL BEKLENEN_SATIR GÜNLÜK_DESENİ
+        N=$((N + 1)); for i in $(seq 0 9); do echo "198.51.$((100 + i)).0/24"; done > "$TD/c/g.txt"; : > "$TD/log"
+        SRC="g|$KS/$2" CACHE="$TD/c" LOG_FILE="$TD/log" NOAPPLY=1 bash "$REPO/tools/cloud-ban.sh" >/dev/null 2>&1
+        local n; n=$(grep -c . "$TD/c/g.txt")
+        if [ "$n" = "$3" ] && { if [ "$4" = - ]; then ! grep -q korunuyor "$TD/log"; else grep -q "$4" "$TD/log"; fi; }; then echo "  ✓ indirme: $1 → liste $n satır"
+        else F=$((F + 1)); echo "  ✗ indirme: $1 → liste $n satır (beklenen $3), günlük: $(tr '\n' ' ' < "$TD/log" | cut -c1-160)"; fi
+    }
+    kes "bağlantı yarıda kesildi (8/12 önek): önceki liste korunur" kesik.json 10 "eksik aktarım"
+    kes "yarım JSON (7/12 önek, curl başarılı): önceki liste korunur" yarim.json 10 "yarım ya da bozuk JSON"
+    kes "tam yanıt kabul edilir" tam.json 12 -
+    eval "$(awk '/^fetch_to\(\) \{/{f=1} f{print} f && /^}$/{exit}' "$REPO/tools/cloud-ban.sh")"
+    N=$((N + 1))
+    if ! fetch_to "$TD/y" "$KS/yavas.json" 1 test && [ "$FETCH_ERR" = "süre aşımı (1 sn)" ] && [ ! -s "$TD/y" ]; then echo "  ✓ indirme: süre aşımı → reddedildi, dosya boş ($FETCH_ERR)"
+    else F=$((F + 1)); echo "  ✗ indirme: süre aşımı → FETCH_ERR «${FETCH_ERR:-}», dosya $(wc -c < "$TD/y" 2>/dev/null) bayt"; fi
+    # izinli servisler aynı denetimi kullanır (kendi kopyası değil): services-allow.sh fetch_to'yu cloud-ban.sh'tan alır, curl'ü doğrudan çağırmaz
+    N=$((N + 1))
+    if grep -q 'for fn in link_re page_link fetch_to' "$REPO/tools/services-allow.sh" && ! grep -qE '^[^#]*curl ' "$REPO/tools/services-allow.sh"; then
+        echo "  ✓ izinli servisler aynı tam indirme denetimini kullanır (fetch_to)"
+    else F=$((F + 1)); echo "  ✗ izinli servisler curl'ü doğrudan çağırıyor ya da fetch_to'yu almıyor"; fi
+    kill "$KP" 2>/dev/null; wait "$KP" 2>/dev/null; rm -rf "$TD"
+else echo "  - indirme denetimi atlandı (python3 yok)"; fi
 # tek tırnaklı programın (awk …) içindeki yorumda kesme işareti tırnağı kapatır; bash -n yakalamaz (dört kez oldu)
 for f in "$REPO/csf_autogroup.sh" "$REPO"/tools/*.sh; do
     N=$((N + 1)); k=$(awk -f "$(dirname "$0")/tirnak.awk" "$f" | head -n 1)

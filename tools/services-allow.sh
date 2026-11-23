@@ -115,18 +115,22 @@ for s in "${SOURCES[@]}"; do
     [[ "$flt" == *"|"* ]] && { lnk="${flt#*|}"; flt="${flt%%|*}"; }   # adres bir sayfa: listenin bağlantısını bulan desen ("-" = yok)
     [ "$lnk" = "-" ] && lnk=""
     [[ "$name" =~ ^[A-Za-z0-9._-]+$ ]] || continue
-    old="$CACHE/$name.txt"; prev=0; [ -s "$old" ] && prev=$(grep -c . "$old")
+    old="$CACHE/$name.txt"; prev=0; [ -s "$old" ] && prev=$(grep -c . "$old"); FETCH_ERR=""
     if [[ "$src" == http* ]]; then
         # Microsoft 365 kendi posta sunucuları için /13'e kadar aralık yayımlıyor (40.96.0.0/13); yalnız bu kaynakta izin verilir
         mn=16; [[ "$name" == microsoft365* ]] && mn=12
-        if [ -n "$lnk" ]; then           # sayfada desene uyan ilk bağlantı (cloud-ban.sh'ın link_re ve page_link işlevleri, aynı kural)
-            for fn in link_re page_link; do eval "$(awk "/^$fn\\(\\) \\{/{f=1} f{print} f && /^}\$/{exit}" "$(dirname "$0")/cloud-ban.sh")"; done
-            if page_link "$src" "$lnk"; then src="$REPLY"; else src=""; fi
+        # sayfadan bağlantı bulma ve tam indirme denetimi cloud-ban.sh'tan (link_re, page_link, fetch_to: aynı kural, tek yer)
+        for fn in link_re page_link fetch_to; do eval "$(awk "/^$fn\\(\\) \\{/{f=1} f{print} f && /^}\$/{exit}" "$(dirname "$0")/cloud-ban.sh")"; done
+        FETCH_ERR=""
+        if [ -n "$lnk" ]; then           # sayfada desene uyan ilk bağlantı
+            if page_link "$src" "$lnk"; then src="$REPLY"; else src=""; FETCH_ERR="sayfada bağlantı bulunamadı"; fi
         fi
-        if [[ "$src" != https://* ]]; then new=""
-        elif [ -n "$flt" ] && [ "$flt" != "-" ]; then
-            new=$(curl -fsSL --max-time 60 -A "$UA" "$src" 2>/dev/null | perl "$(dirname "$0")/src-filter.pl" "$flt" | ipv4_list "$mn")
-        else new=$(curl -fsSL --max-time 60 -A "$UA" "$src" 2>/dev/null | ipv4_list "$mn"); fi
+        raw="$CACHE/$name.dl.$$"; new=""
+        if [[ "$src" == https://* ]] && fetch_to "$raw" "$src" 60 "$UA"; then
+            if [ -n "$flt" ] && [ "$flt" != "-" ]; then new=$(perl "$(dirname "$0")/src-filter.pl" "$flt" < "$raw" | ipv4_list "$mn")
+            else new=$(ipv4_list "$mn" < "$raw"); fi
+        fi
+        rm -f "$raw"
     else
         new=$(printf '%s\n' "$src" | ipv4_list)
     fi
@@ -141,7 +145,7 @@ for s in "${SOURCES[@]}"; do
         [ "$sc" -ge 3 ] && prev=0
     else rm -f "$shr" 2>/dev/null; fi
     if [ "$n" -eq 0 ] || { [ "$prev" -gt 0 ] && [ "$n" -lt $(( prev / 2 )) ]; }; then
-        log "$name: geçerli adres alınamadı ya da beklenenden az ($n, önceki $prev; indirilemedi, boş ya da /16'dan geniş); önceki liste korunuyor"
+        log "$name: geçerli adres alınamadı ya da beklenenden az (${FETCH_ERR:+$FETCH_ERR; }$n, önceki $prev; indirilemedi, boş ya da /16'dan geniş); önceki liste korunuyor"
         new=$(cat "$old" 2>/dev/null); n=$prev; err="fetch"
         # ilk başarısızlık anı (bildirim 3 günü buradan sayar; hiç başarılı indirme olmasa da)
         [ "$CHECK" = 0 ] && [ ! -s "$CACHE/$name.fail" ] && date +%s > "$CACHE/$name.fail"

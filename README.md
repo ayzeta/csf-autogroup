@@ -772,8 +772,9 @@ Online), the site monitors UptimeRobot, Pingdom and StatusCake, and QUIC.cloud
 `csf.allow` (plain addresses, kept in an ipset); CSF checks the allow list
 first, so they pass country and provider bans, on every port. Lists are
 downloaded again as often as set under **Refresh** in the card (default every
-day, in the first run after the refresh hour, 04:00 by default); a list that fails to download, or returns far fewer
-addresses than before, keeps its previous version; ranges wider than /16 are
+day, in the first run after the refresh hour, 04:00 by default); a list that fails to download, arrives incomplete
+(the connection dropped or timed out, or the JSON is cut off), or returns far fewer
+addresses than before, keeps its previous version, and the log says why; ranges wider than /16 are
 refused (Microsoft 365: up to /12). Yandex and Facebook don't publish address lists.
 
 Google and OpenAI publish several lists, one per kind of visitor; each shows as

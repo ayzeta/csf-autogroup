@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.15.112 — 2026-11-23
+
+- An allowed-service or rented-server list whose download was cut off is no
+  longer taken as the new list. Before, a download that timed out or lost its
+  connection was still read, and if it held more than half of the previous
+  addresses it replaced the list. Now a failed transfer, or a JSON list that
+  does not parse to the end, keeps the previous list, the log says why, and
+  the usual retry and "could not download" warning follow.
+
 ## 1.15.111 — 2026-11-23
 
 - Downloaded lists (allowed services, rented-server lists) are written to a

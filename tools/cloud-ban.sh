@@ -73,14 +73,33 @@ page_link() {    # SAYFA DESEN → REPLY = sayfada desene uyan ilk bağlantı. S
              } | grep -oE "$re" | head -n 1)
     [[ "$REPLY" == https://* ]]
 }
-fetch() {        # ADRES [DESEN] → ham liste. Desen varsa adres bir sayfadır: sayfada desene uyan ilk bağlantı indirilir
-    # (Microsoft Service Tags her hafta yeni adla yayımlanır; sabit olan indirme sayfası — hazır Azure kutusu da böyle)
-    local u="$1"
-    if [ -n "${2:-}" ]; then
-        page_link "$u" "$2" || return 1
-        curl -fsSL --max-time 120 -A "$BUA" "$REPLY"; return
+fetch_to() {     # DOSYA ADRES SÜRE UA → 0 = liste TAMAMEN indi (DOSYA'da); değilse FETCH_ERR sebebi, DOSYA boş. Kiralık listeler ve
+    # izinli servisler ortak kullanır (services-allow.sh bu işlevi buradan alır). Önce "curl | ayrıştırıcı" boru hattıydı: curl'ün çıkış
+    # kodu görülmüyordu, süre aşımında ya da bağlantı koptuğunda o ana kadar gelen parça ayrıştırılıp — önceki listenin yarısından
+    # büyükse — eksik liste olarak kabul ediliyordu. Şimdi: curl sıfırdan farklı çıkarsa (HTTP hatası, süre aşımı, eksik aktarım,
+    # bağlantı kopması) indirme yok sayılır; içerik JSON ise baştan sona ayrıştırılabilmeli (yarım JSON ayrıştırılamaz).
+    local f="$1" rc
+    FETCH_ERR=""
+    curl -fsSL --max-time "$3" -A "$4" "$2" > "$f" 2>/dev/null; rc=$?
+    if [ "$rc" != 0 ]; then
+        case "$rc" in 22) FETCH_ERR="HTTP hatası" ;; 28) FETCH_ERR="süre aşımı (${3} sn)" ;; 18) FETCH_ERR="eksik aktarım" ;;
+            *) FETCH_ERR="curl çıkış kodu $rc" ;; esac
+        : > "$f"; return 1
     fi
-    curl -fsSL --max-time 60 -A "$UA" "$u"
+    if [ "$(head -c 4096 "$f" | tr -d ' \t\r\n' | head -c 1)" = "{" ] || [ "$(head -c 4096 "$f" | tr -d ' \t\r\n' | head -c 1)" = "[" ]; then
+        perl -MJSON::PP -e 'local $/; my $s = <STDIN>; JSON::PP->new->decode($s); exit 0' < "$f" 2>/dev/null ||
+            { FETCH_ERR="yarım ya da bozuk JSON"; : > "$f"; return 1; }
+    fi
+    return 0
+}
+fetch() {        # DOSYA ADRES [DESEN] → 0 = tam liste DOSYA'da (FETCH_ERR'e bak). Desen varsa adres bir sayfadır: sayfada desene uyan ilk
+    # bağlantı indirilir (Microsoft Service Tags her hafta yeni adla yayımlanır; sabit olan indirme sayfası — hazır Azure kutusu da böyle)
+    local u="$2"
+    if [ -n "${3:-}" ]; then
+        page_link "$u" "$3" || { FETCH_ERR="sayfada bağlantı bulunamadı"; : > "$1"; return 1; }
+        fetch_to "$1" "$REPLY" 120 "$BUA"; return
+    fi
+    fetch_to "$1" "$u" 60 "$UA"
 }
 hook_add() {     # csfpost.sh'a tek satır: CSF yeniden başlayınca kural geri gelsin (Imunify satırı en sonda kalır)
     local line="[ -r \"$SELF_PATH\" ] && CACHE=\"$CACHE\" LOG_FILE=\"$LOG_FILE\" bash \"$SELF_PATH\" --apply $MARK"
@@ -272,11 +291,13 @@ while IFS= read -r s; do
     [[ "$flt" == *"|"* ]] && { lnk="${flt#*|}"; flt="${flt%%|*}"; }; [ "$lnk" = "-" ] && lnk=""
     [[ "$name" =~ ^[a-z0-9-]+$ ]] || continue
     old="$CACHE/$name.txt"; prev=0; [ -s "$old" ] && prev=$(grep -c . "$old")
-    new=$(fetch "$src" "$lnk" 2>/dev/null | pick "$flt")
+    raw="$CACHE/$name.dl.$$"
+    if fetch "$raw" "$src" "$lnk"; then new=$(pick "$flt" < "$raw"); else new=""; fi
+    rm -f "$raw"
     n=$(printf '%s' "$new" | grep -c .)
     ot=$(stat -c %Y "$old" 2>/dev/null || echo 0); err=""
     if [ "$n" -eq 0 ] || { [ "$prev" -gt 0 ] && [ "$n" -lt $(( prev / 2 )) ]; }; then
-        log "$name: liste alınamadı ya da beklenenden az ($n, önceki $prev); önceki liste korunuyor"
+        log "$name: liste alınamadı ya da beklenenden az (${FETCH_ERR:+$FETCH_ERR; }$n, önceki $prev); önceki liste korunuyor"
         n=$prev; err="fetch"
         [ -s "$CACHE/$name.fail" ] || date +%s > "$CACHE/$name.fail"
     else
