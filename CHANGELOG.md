@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.15.115 — 2026-11-24
+
+- The AbuseIPDB key field no longer makes the browser's password manager
+  treat the settings page as a login form (it could fill the saved user name
+  into WHM's search box). The AbuseIPDB card now uses the same layout as the
+  other settings cards.
+
 ## 1.15.114 — 2026-11-24
 
 - AbuseIPDB in the IP card. With an API key (Settings → Server → AbuseIPDB;

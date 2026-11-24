@@ -497,15 +497,35 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
   {
     // her bölüm aynı kalıpla açılır: ilk öğe tek satır açıklama, sonra kartlar (bölümler arası geçişte içerik kaymasın)
     const secs = await page.$$eval('.ag-setnav [data-s]', L => L.map(b => b.getAttribute('data-s')));
-    const bad = [], tops = [];
+    const bad = [], tops = [], edge = [], pw = [];
     for (const s of secs) {
       await page.click(`.ag-setnav [data-s="${s}"]`); await page.waitForTimeout(400);
       const r = await page.evaluate(() => { const m = document.querySelector('.ag-setmain'); const f = m && m.firstElementChild; const n = f && f.nextElementSibling;
-        return { lead: !!(f && f.classList.contains('ag-sec-lead') && f.textContent.trim()), top: n ? Math.round(n.getBoundingClientRect().top) : -1 }; });
+        // kart içeriği kartın kenarına yapışmaz: metin, giriş kutusu, düğme kartın sol / sağ kenarından en az 12 px içeride (AbuseIPDB kartı
+        // ortak kart gövdesi olmadan yazılmıştı, metin kenara dayanıyordu — kullanıcı ekranı 1.15.114)
+        const E = [];
+        (m ? m.querySelectorAll('.ag-card') : []).forEach(function (c) {
+          const cr = c.getBoundingClientRect(); if (!cr.width) return;
+          c.querySelectorAll('input, button, select, textarea, label, p, span, a').forEach(function (x) {
+            const xr = x.getBoundingClientRect(); if (!xr.width || !xr.height || getComputedStyle(x).visibility === 'hidden') return;
+            if (!x.matches('input, button, select, textarea') && !Array.from(x.childNodes).some(function (n) { return n.nodeType === 3 && n.textContent.trim(); })) return;
+            if (xr.left - cr.left < 12 || cr.right - xr.right < 12) E.push(((c.querySelector('.ag-card-h h2') || {}).textContent || '?').trim().slice(0, 30) + ' → ' + (x.textContent || x.placeholder || x.tagName).trim().slice(0, 30) + ' ' + Math.round(xr.left - cr.left) + '/' + Math.round(cr.right - xr.right));
+          });
+        });
+        // parola alanı yok: tarayıcının parola yöneticisi sayfayı giriş formu sanıp kayıtlı kullanıcı adını WHM'in arama kutusuna yazıyordu
+        const P = Array.from(document.querySelectorAll('input[type="password"]')).map(function (x) { return x.id || x.name || '?'; });
+        return { lead: !!(f && f.classList.contains('ag-sec-lead') && f.textContent.trim()), top: n ? Math.round(n.getBoundingClientRect().top) : -1, E: E, P: P }; });
       if (!r.lead) bad.push(s + ': açıklama yok'); else tops.push(r.top);   // ilk kartın üst kenarı bölümden bölüme aynı olmalı
+      r.E.forEach(function (x) { edge.push(s + ': ' + x); }); r.P.forEach(function (x) { pw.push(s + ': ' + x); });
+      if (s === 'server') { await shot('ayar-sunucu-1280'); await page.setViewportSize({ width: 390, height: 900 }); await page.waitForTimeout(400); await shot('ayar-sunucu-390');
+        const r2 = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-setmain .ag-card')).filter(function (c) { return c.scrollWidth > c.clientWidth + 1; }).map(function (c) { return ((c.querySelector('h2') || {}).textContent || '?').trim().slice(0, 30); }));
+        r2.forEach(function (x) { edge.push('server 390: taşan kart ' + x); });
+        await page.setViewportSize({ width: 1280, height: 900 }); await page.waitForTimeout(300); }
     }
     const spread = tops.length ? Math.max(...tops) - Math.min(...tops) : 0;
     check('Ayarlar: her bölüm açıklama ile başlıyor, ilk kart aynı hizada (±24 px)', bad.length === 0 && spread <= 24, bad.join(' | ') + ' ' + tops.join(','));
+    check('Ayarlar: kart içeriği kart kenarına yapışmaz (≥12 px), telefonda kart taşmaz', edge.length === 0, edge.slice(0, 6).join(' | '));
+    check('Ayarlar: parola türünde alan yok (tarayıcı WHM arama kutusunu dolduruyordu)', pw.length === 0, pw.join(' | '));
   }
   {
     if (await tik(page, '.ag-setnav [data-s="thr"]')) await page.waitForTimeout(500);

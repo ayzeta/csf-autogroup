@@ -1384,3 +1384,7 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 /* metin içindeki IP bağlantısı (Etkisini ölç örnekleri): tablodaki IP'lerle aynı görünüm, tıklanınca IP kartı */
 .ag-iplink { color: var(--ag-accent); cursor: pointer; white-space: nowrap; text-decoration: underline; text-decoration-color: var(--ag-accent-line); text-underline-offset: 3px; }
 .ag-iplink:hover { text-decoration-color: currentColor; }
+/* AbuseIPDB anahtarı: type="password" değil (parola yöneticisi sayfayı giriş formu sanıyordu); yazılan anahtar noktalarla gizlenir */
+.ag-secret { -webkit-text-security: disc; }
+.ag-setform .ag-field > .ag-addrow { flex-wrap: wrap; justify-content: flex-end; margin: 0; }
+.ag-setform .ag-field .ag-addrow .ag-input.ag-secret { width: auto; flex: 0 1 260px; }
