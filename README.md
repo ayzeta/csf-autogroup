@@ -583,12 +583,17 @@ On the *Providers* tab, CSF blocklists are a protection layer next to rented
 servers, provider bans and allowed services: a summary tile at the top (lists
 on, addresses loaded, last download) and a card that lists every entry of
 `csf.blocklists` with its state, how many addresses are loaded and when it was
-last downloaded. A list can be turned on or off from its ⋯ menu: the plugin
-removes or adds the `#` at the start of that one line and restarts csf and lfd
+last downloaded. A list is turned on or off with the same On / Off switch as the
+other layers and saved with the Save bar (the confirmation lists the change):
+the plugin removes or adds the `#` at the start of that one line and restarts csf and lfd
 (`csf -ra`, a few seconds during which the firewall is open), and the change is
 written to the settings history. The plugin never turns a list on by itself,
 and it only turns off lists it turned on; a list you enabled by hand is shown
-as such and left alone.
+as such and left alone. Once a day, at the refresh hour, the plugin checks
+each list's source (number of addresses, HTTP code, private or reserved
+ranges) and says in the row when a source is empty, does not open or would
+also cut local networks. "Details" opens the same window as for providers:
+the offending IPs in the list and Measure impact.
 
 ### AbuseIPDB
 

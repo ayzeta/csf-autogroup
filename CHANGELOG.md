@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.15.123 — 2026-11-24
+
+- CSF blocklists are turned on and off with the same On / Off switch as the
+  other layers on the Providers tab and saved with the Save bar, instead of a
+  ⋯ menu and a window of their own. The confirmation lists the changed lists
+  and what saving does (`#` in `csf.blocklists`, `csf -ra`); a list turned on
+  by hand has its switch locked with the reason.
+- Each blocklist's source is checked once a day at the refresh hour: how many
+  addresses it gives, whether it opens (HTTP code) and whether it contains
+  private or reserved ranges. The row says when a source is empty (for example
+  a list merged into another), does not open, or would also cut local networks.
+- Blocklists have the same "Details" window as providers and rented-server
+  lists: the offending IPs in the list and, on request, Measure impact.
+- Settings test: the panel's number limits and the engine's validation, and
+  the engine's defaults and the panel's, are compared.
+
 ## 1.15.122 — 2026-11-24
 
 - AbuseIPDB settings (Settings → Server → AbuseIPDB): lookups can be turned

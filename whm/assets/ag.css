@@ -710,6 +710,12 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-deps.ag-deps-1 .ag-dep { border-top: 1px solid var(--ag-line-soft); background: none; align-items: center; }
 .ag-deps.ag-deps-1 .ag-dep:first-child { border-top: 0; }
 .ag-deps.ag-deps-1 .ag-dep:nth-child(even) { background: var(--ag-zebra); }
+/* blok listesi satırı: telefonda Açık / Kapalı çipi ve Ayrıntı ad ve açıklamanın altında (yan yana sığmıyordu, 390'da taşıyordu) */
+@media (max-width: 600px) {
+  .ag-bkl .ag-dep { flex-wrap: wrap; row-gap: 8px; }
+  .ag-bkl .ag-dep-m { flex: 1 1 calc(100% - 40px); }
+  .ag-bkl .ag-dep > .ag-chips { margin-left: 40px; }
+}
 /* satır: etiket + açıklama solda, denetim sağda */
 .ag-setform .ag-form { padding: 4px 22px 8px; }
 .ag-setform .ag-field { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 28px; align-items: center; padding: 16px 0; }

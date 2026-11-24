@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.122"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.123"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -5584,6 +5584,49 @@ bkl_conf() {
             if (c ~ /^Details:/) { det = c; sub(/^Details:[[:space:]]*/, "", det) }
             else if (d == "" && c != "" && c !~ /^(Set URLGET|Note|#|Copyright|This file|Each |Uncomment|After making|If you want|The downloaded)/) d = c }' "$CSF_DIR/csf.blocklists"
 }
+# Blok listesi yoklaması: her listenin kaynağı ne veriyor (adres sayısı, HTTP kodu, özel / ayrılmış aralık içeriyor mu). Açık
+# listede CSF'in indirdiği dosya (csf.block.AD) esas; kapalı listede adres indirilir (CSF'e yazılmaz) → BKL_PROBE_DIR/AD.txt.
+# Durum satırı AD.st: "zaman http adet özel". Günde bir (yenileme saatinde, refresh_tasks) ve panelin Ayrıntı'sı yoklanmamış listede
+# (--src-ips / --asn-impact bk:AD). Satır biçimi: satır başındaki IPv4 / CIDR (Spamhaus "a.b.c.d/n ; SBL…", düz IP listeleri; ölçüldü
+# 2026-11-24: SPAMEDROP kaynağı boş — DROP'a birleştirilmiş, MAXMIND 404, BOGON özel aralıklar). CSF'in en çok satır sınırı (mx) uygulanır.
+BKL_PROBE_DIR="$(dirname "$SAYAC_FILE")/bkl"
+bkl_probe() {    # [AD] [zorla] → yoklanmamış ya da 24 saatten eski listeler (AD verilirse yalnız o; "zorla" süreye bakmaz)
+    local only="${1:-}" force="${2:-}" on n iv mx u d det now st t tmp code f cnt priv
+    mkdir -p "$BKL_PROBE_DIR" 2>/dev/null || return 1
+    printf -v now '%(%s)T' -1
+    while IFS='|' read -r on n iv mx u d det; do
+        [ -z "$only" ] || [ "$n" = "$only" ] || continue
+        [[ "$n" =~ ^[A-Za-z0-9_]{1,25}$ ]] || continue
+        st="$BKL_PROBE_DIR/$n.st"; t=0
+        [ -r "$st" ] && read -r t _ < "$st"; [[ "$t" =~ ^[0-9]+$ ]] || t=0
+        [ -n "$force" ] || [ $(( now - t )) -ge 86400 ] || continue
+        f="$BKL_PROBE_DIR/$n.txt"
+        if [ "$on" = 1 ] && [ -s "$CSF_VAR/csf.block.$n" ]; then
+            code=200; cp -f "$CSF_VAR/csf.block.$n" "$f.tmp.$$" && mv -f "$f.tmp.$$" "$f"
+        else
+            [[ "$u" =~ ^https?://[A-Za-z0-9._~:/?#@=%+\&-]{4,500}$ ]] || { printf '%s 0 0 0\n' "$now" > "$st"; continue; }
+            tmp=$(mktemp) || return 1
+            code=$(curl -sS -L --max-time 30 --max-filesize 50000000 -o "$tmp" -w '%{http_code}' "$u" 2>/dev/null); [[ "$code" =~ ^[0-9]+$ ]] || code=0
+            if [ "$code" = 200 ]; then
+                awk -v mx="$mx" '{ sub(/^[ \t]+/, "") } match($0, /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\/[0-9]+)?/) { print substr($0, 1, RLENGTH); k++; if (mx + 0 > 0 && k >= mx + 0) exit }' "$tmp" > "$f.tmp.$$" && mv -f "$f.tmp.$$" "$f"
+            else rm -f "$f"; fi
+            rm -f "$tmp"
+        fi
+        cnt=0; priv=0
+        if [ -s "$f" ]; then
+            cnt=$(grep -c . "$f")
+            # özel / ayrılmış aralıklarla kesişen satır (BOGON gibi listeler sunucunun kendi ağını da keser): 0/8 10/8 100.64/10 127/8
+            # 169.254/16 172.16/12 192.168/16
+            priv=$(awk -F'[./]' 'NF >= 4 { b = (NF >= 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; hi = lo + 2 ^ (32 - b) - 1
+                split("0 8|10 8|100.64 10|127 8|169.254 16|172.16 12|192.168 16", R, "|")
+                for (i in R) { split(R[i], q, " "); m = split(q[1], o, "."); a = 0; for (j = 1; j <= 4; j++) a = a * 256 + (j <= m ? o[j] : 0)
+                    z = a + 2 ^ (32 - q[2]) - 1; if (lo <= z && hi >= a) { print 1; exit } } } END { }' "$f" | head -n 1)
+            [ "$priv" = 1 ] || priv=0
+        fi
+        printf '%s %s %s %s\n' "$now" "$code" "$cnt" "$priv" > "$st"
+    done < <(bkl_conf)
+    return 0
+}
 bkl_lines() {    # → stdout "lo hi ad" (etkin listelerin bütün satırları, sayı olarak): IP, aralık ve tablo okuyucularının tek kaynağı
     local n
     bkl_load
@@ -6075,6 +6118,10 @@ src_rng() {      # ANAHTAR DOSYA → DOSYA'ya sıralı "lo hi" aralıkları: sa�
             [ "${#fs[@]}" -gt 0 ] || return 4
             awk -F'[./]' 'NF >= 4 { b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%.0f %.0f\n", lo, lo + 2 ^ (32 - b) - 1 }' "${fs[@]}" |
                 sort -n -k1,1 > "$2" ;;
+        bk:*) local nm="${k#bk:}"; f="$CSF_VAR/csf.block.$nm"
+            [ -s "$f" ] || { f="$BKL_PROBE_DIR/$nm.txt"; [ -s "$f" ] || { bkl_probe "$nm" zorla >/dev/null 2>&1; [ -s "$f" ] || return 4; }; }
+            awk -F'[./]' 'NF >= 4 { b = (NF >= 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%.0f %.0f\n", lo, lo + 2 ^ (32 - b) - 1 }' "$f" |
+                sort -n -k1,1 > "$2" ;;
         *) return 2 ;;
     esac
 }
@@ -6083,7 +6130,7 @@ do_src_ips() {   # ANAHTAR (ASnnn | cl:ad) → JSON: o sağlayıcıya / kiralık
     # (zaman, nereden, sebep, servis) ve şu anki durumu: tekil kalıcı ban, geçici ban, ya da onu kapsayan aralık banı (csf.deny /
     # geçici listedeki CIDR). En yeni 500 satır; "n" hepsinin sayısı.
     local k="$1" rng svm rc
-    [[ "$k" =~ ^(AS[0-9]{1,10}|cl:[a-z0-9-]{1,63}([+][a-z0-9-]{1,63}){0,30})$ ]] || { echo '{"ok":false,"error":"bad_key"}'; return 2; }
+    [[ "$k" =~ ^(AS[0-9]{1,10}|cl:[a-z0-9-]{1,63}([+][a-z0-9-]{1,63}){0,30}|bk:[A-Za-z0-9_]{1,25})$ ]] || { echo '{"ok":false,"error":"bad_key"}'; return 2; }
     rng=$(mktemp) || return 1
     src_rng "$k" "$rng"; rc=$?
     if [ "$rc" -ne 0 ]; then rm -f "$rng"; [ "$rc" = 3 ] && echo '{"ok":false,"error":"no_asn_data"}' || echo '{"ok":false,"error":"no_list"}'; return 1; fi
@@ -6138,7 +6185,7 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad) → son 24 saatin web günlüklerind
     local a="$1" n="" dir="" d files rng rc
     [ -z "$IMP_STATES" ] || [[ "$IMP_STATES" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}(,[0-9]{1,3}(\.[0-9]{1,3}){3}){0,299}$ ]] || { echo '{"ok":false,"error":"bad_states"}'; return 2; }
     if [[ "${a^^}" =~ ^AS([0-9]{1,10})$ ]]; then a="${a^^}"; n="${BASH_REMATCH[1]}"
-    elif ! [[ "$a" =~ ^cl:[a-z0-9-]{1,63}([+][a-z0-9-]{1,63}){0,30}$ ]]; then echo '{"ok":false,"error":"bad_asn"}'; return 2; fi
+    elif ! [[ "$a" =~ ^(cl:[a-z0-9-]{1,63}([+][a-z0-9-]{1,63}){0,30}|bk:[A-Za-z0-9_]{1,25})$ ]]; then echo '{"ok":false,"error":"bad_asn"}'; return 2; fi
     for d in ${DOMLOGS:-} /var/log/apache2/domlogs /usr/local/apache/domlogs /etc/apache2/logs/domlogs; do [ -d "$d" ] && { dir="$d"; break; }; done
     rng=$(mktemp) || return 1
     src_rng "$a" "$rng"; rc=$?
@@ -6466,6 +6513,12 @@ refresh_tasks() { # her tur, her iş kendi zaman damgasıyla (ayrı cron satır�
                 OUT="$CDN_FILE" LOG_FILE="$LOG_FILE" timeout 600 bash "$SELF_DIR/tools/cdn-sites.sh" >/dev/null 2>&1
         else OUT="$CDN_FILE" LOG_FILE="$LOG_FILE" timeout 600 bash "$SELF_DIR/tools/cdn-sites.sh" --if-older 1 >/dev/null 2>&1; fi
         c1=$(head -n 1 "$CDN_FILE" 2>/dev/null); [ "$c1" != "$c0" ] && RF_JOBS+="${RF_JOBS:+,}cdn"
+    fi
+    # CSF blok listelerinin yoklaması (panelde her listenin kaynağı ne veriyor): yenileme saatinde, listeler 24 saatte bir
+    if [ -r "$CSF_DIR/csf.blocklists" ]; then
+        local bref="$BKL_PROBE_DIR/.refreshed"
+        refresh_due "$bref" 1 || bref=""
+        [ -n "$bref" ] && { bkl_probe "" zorla && { mkdir -p "$BKL_PROBE_DIR"; date +%s > "$BKL_PROBE_DIR/.refreshed"; RF_JOBS+="${RF_JOBS:+,}bkl"; }; }
     fi
     return 0
 }
@@ -7922,8 +7975,9 @@ do_config() {
                     [ -n "$bn" ] || continue; bc=0; bt=0; blm=""
                     if [ "$bon" = 1 ] && [ -s "$CSF_VAR/csf.block.$bn" ]; then bc=$(grep -c . "$CSF_VAR/csf.block.$bn"); bt=$(stat -c %Y "$CSF_VAR/csf.block.$bn")
                     elif [ "$bon" = 1 ]; then blm=$(grep -a -F "blocklist $bn " "$LFD_LOG" 2>/dev/null | tail -n 1 | sed 's/^.*lfd\[[0-9]*\]: //'); fi
+                    local pt=0 ph=0 pc=0 pp=0; [ -r "$BKL_PROBE_DIR/$bn.st" ] && read -r pt ph pc pp < "$BKL_PROBE_DIR/$bn.st"
                     jstr "$bu"; bu="$REPLY"; jstr "$bd"; bd="$REPLY"; jstr "$bdt"; bdt="$REPLY"; jstr "$blm"; blm="$REPLY"
-                    bj+="${bj:+,}{\"n\":\"$bn\",\"on\":$([ "$bon" = 1 ] && echo true || echo false),\"iv\":$biv,\"mx\":$bmx,\"url\":$bu,\"d\":$bd,\"det\":$bdt,\"c\":$bc,\"t\":$bt,\"lm\":$blm,\"mine\":$(grep -qxF "$bn" "$BKL_MINE" 2>/dev/null && echo true || echo false)}"
+                    bj+="${bj:+,}{\"n\":\"$bn\",\"on\":$([ "$bon" = 1 ] && echo true || echo false),\"iv\":$biv,\"mx\":$bmx,\"url\":$bu,\"d\":$bd,\"det\":$bdt,\"c\":$bc,\"t\":$bt,\"lm\":$blm,\"pt\":$(num "$pt"),\"ph\":$(num "$ph"),\"pc\":$(num "$pc"),\"pp\":$(num "$pp"),\"mine\":$(grep -qxF "$bn" "$BKL_MINE" 2>/dev/null && echo true || echo false)}"
                 done < <(bkl_conf)
                 o+=",\"bkl\":[$bj],\"bkl_ipset\":\"$(conf_val LF_IPSET)\",\"bkl_file\":$([ -w "$CSF_DIR/csf.blocklists" ] && echo true || echo false)"
                 # birleşik servis dosyası (Ayarlar → Kaynaklar ve yenileme): yolu, satır sayısı, son yazım; son yeniden yükleme (zaman, çıkış kodu)

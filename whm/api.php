@@ -296,7 +296,7 @@ switch ($a) {
         $key = trim((string) ($_POST['asn'] ?? ''));
         if (preg_match('/^as[0-9]{1,10}$/i', $key)) {
             $key = strtoupper($key);
-        } elseif (!preg_match('/^cl:[a-z0-9-]{1,63}(\+[a-z0-9-]{1,63}){0,30}$/', $key)) {
+        } elseif (!preg_match('/^(cl:[a-z0-9-]{1,63}(\+[a-z0-9-]{1,63}){0,30}|bk:[A-Za-z0-9_]{1,25})$/', $key)) {   // bk: CSF blok listesi
             ag_json(['ok' => false, 'error' => 'bad_asn']);
         }
         $st = trim((string) ($_POST['states'] ?? ''));   // ölçümdeki IP'lerin yalnız şu anki durumu (eylemden sonra; günlük okunmaz)

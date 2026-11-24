@@ -97,6 +97,31 @@ jk=$(grep -oE "var TRY_KEYS = \[[^]]*\]" "$REPO/whm/assets/ag.js" | grep -oE "'[
 if [ -z "$ek" ] || [ "$ek" != "$ak" ] || [ "$ek" != "$jk" ]; then
     printf 'TRY\t-\t-\tdeneme anahtarları farklı: motor [%s] · api.php [%s] · ag.js [%s]\n' "$ek" "$ak" "$jk" >> "$W/engine.out"
 fi
+# Sayı sınırları iki yerde aynı: panelin RANGES'i (kutu − / +, alan hatası) ve motorun cfg_check'i (lo / hi). Biri değişip öteki
+# kalırsa panel motorun reddettiği değeri gönderir ya da motorun kabul ettiğini engeller. 1.15.122'de beş AbuseIPDB ayarı iki yere elle
+# yazıldı; bu kural yoktu (kullanıcının açık listesi, 2026-11-24)
+rj=$(awk '/var RANGES = \{/ { f = 1 } f { print } f && /\};/ { exit }' "$REPO/whm/assets/ag.js" | grep -oE '[A-Z][A-Z0-9_]+: \[-?[0-9]+, *-?[0-9]+\]' | sed -E 's/: \[(-?[0-9]+), *(-?[0-9]+)\]/ \1 \2/' | sort -u)
+re=$(awk '/^cfg_check\(\)/ { f = 1 } f && /^}/ { exit } f' "$ENG" | grep -oE '^ +[A-Z][A-Z0-9_|]+\) lo=-?[0-9]+; hi=-?[0-9]+' |
+    sed -E 's/^ +//; s/\) lo=(-?[0-9]+); hi=(-?[0-9]+)/ \1 \2/' | awk '{ n = split($1, k, "|"); for (i = 1; i <= n; i++) print k[i], $2, $3 }' | sort -u)
+if [ -z "$rj" ] || [ -z "$re" ]; then
+    printf 'SINIR\t-\t-\tsınırlar okunamadı (ag.js RANGES %s satır, motor cfg_check %s satır)\n' "$(printf '%s' "$rj" | grep -c .)" "$(printf '%s' "$re" | grep -c .)" >> "$W/engine.out"
+else
+    diff <(printf '%s\n' "$rj") <(printf '%s\n' "$re") | grep -E '^[<>]' | sed 's/^</panel (ag.js RANGES):/; s/^>/motor (cfg_check):/' |
+        while IFS= read -r l; do printf 'SINIR\t-\t-\tyalnız %s\n' "$l"; done >> "$W/engine.out"
+fi
+# Varsayılanlar iki yerde aynı: motorun dosya başındaki ANAHTAR="${ANAHTAR:-değer}" ve --config get'in panele verdiği varsayılan listesi
+# (panel "varsayılan N" yazısını ve Ayar geçmişini buradan çizer)
+dj=$(env SIM_ROOT="$R" PATH="$W/bin:/usr/bin:/bin" AG_BY=test bash "$R/app/csf_autogroup.sh" --config get --json 2>/dev/null | grep -oE '"defaults":\{[^}]*\}' | grep -oE '"[A-Z][A-Z0-9_]+":"[^"]*"' | sed -E 's/^"([^"]+)":"(.*)"$/\1 \2/' | sort -u)
+nd=0
+while read -r k v; do
+    [ -n "$k" ] || continue
+    h=$(grep -oE "(^|[ ;])$k=\"\\\$\\{$k:-[^}]*\\}\"" "$ENG" | head -n 1 | sed -E "s/.*:-([^}]*)\\}\"$/\\1/")
+    [ -n "$h" ] || continue      # dosya başında varsayılanı başka biçimde (hesaplanan) olanlar
+    nd=$((nd + 1))
+    [ "$h" = "$v" ] || printf 'VARSAYILAN\t%s\t-\tdosya başı "%s", --config get "%s"\n' "$k" "$h" "$v" >> "$W/engine.out"
+done < <(printf '%s\n' "$dj")
+[ "$nd" -ge 20 ] || printf 'VARSAYILAN\t-\t-\tyalnız %s anahtarın varsayılanı karşılaştırılabildi: test deseni dosya başını okuyamıyor\n' "$nd" >> "$W/engine.out"
+[ -n "$dj" ] || printf 'VARSAYILAN\t-\t-\t--config get varsayılan listesi okunamadı\n' >> "$W/engine.out"
 n=$(grep -c . "$W/values.tsv"); bad=$(cat "$W/panel.out" "$W/engine.out" | grep -c .)
 if [ "$bad" -eq 0 ]; then echo "Ayar tutarlılığı: $n değerin hepsi panelden ve motordan geçiyor"; exit 0; fi
 echo "Ayar tutarlılığı: $n değerden $bad tanesi reddedildi"; cat "$W/panel.out" "$W/engine.out" | sed 's/^/  ✗ /'

@@ -568,29 +568,53 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
       await page.click('.ag-tabs [data-tab="settings"]'); await page.waitForSelector('.ag-setnav [data-s]', { timeout: 20000 }).catch(() => {});
     }
     // CSF blok listeleri (1.15.118: Sağlayıcılar sekmesinin bir katmanı; 1.15.117'de Ayarlar'daydı). Test makinesinin gerçek csf.blocklists'i:
-    // üstte katman özet kutusu (tıklanınca karta gider), kart katman bileşeniyle (pc), her liste bir satır, kapalı listenin ⋯ menüsünde
-    // "Listeyi aç"; pencere değişecek satırı ve csf -ra'yı söyler (onaylanmaz, Escape). Ayarlar'da artık yok
+    // üstte katman özet kutusu (tıklanınca karta gider), kart katman bileşeniyle (pc), her liste bir satır. 1.15.123: aç / kapa öteki
+    // katmanlarla AYNI bileşen (kullanıcı: "sağlayıcılar sayfasında bir sürü aç-kapa anahtarı var, blok listelerini farklı yapmışsın"):
+    // satırda Açık / Kapalı çipi (cfgchip, CSF_BLOCKLIST:<ad>), ⋯ menüsü ve ayrı pencere yok; tıklayınca Kaydet çubuğu, onay penceresi
+    // değişen listeyi ve csf -ra'yı söyler (onaylanmaz, Vazgeç). Ayarlar'da artık yok
     const bkSet = await page.evaluate(() => !!document.querySelector('.ag-setmain .ag-bkl'));
     check('CSF blok listeleri Ayarlar\'da yok (Sağlayıcılar sekmesinde katman)', !bkSet, '');
     await page.click('.ag-tabs [data-tab="prov"]'); await page.waitForSelector('#ag-bkl-card', { timeout: 20000 }).catch(() => {});
     const bk = await page.evaluate(() => { const c = document.querySelector('#ag-bkl-card.ag-pc'); const tl = document.querySelector('.ag-lay [data-act="laygo"][data-v="ag-bkl-card"]');
       const L = Array.from(document.querySelectorAll('.ag-lay [data-act="laygo"]')).map(b => b.getAttribute('data-v'));
-      return c ? { n: c.querySelectorAll('.ag-bkl .ag-dep').length, m: c.querySelectorAll('[data-act="menu"]').length, tile: !!tl, sira: L.join(','), how: !!c.querySelector('details.ag-how') } : null; });
-    check('Sağlayıcılar: CSF blok listeleri katmanı (özet kutusu üçüncü, kart katman bileşeniyle, her liste bir satır, menülü)',
-      !!bk && bk.tile && bk.sira === 'ag-cloud-card,ag-prov-card,ag-bkl-card,ag-svc-card' && bk.how && bk.n > 0 && bk.m > 0, JSON.stringify(bk));
+      const rows = c ? Array.from(c.querySelectorAll('.ag-bkl .ag-dep')) : [];
+      return c ? { n: rows.length, chip: rows.filter(r => r.querySelectorAll('.ag-chip[data-act="cfgchip"][data-k^="CSF_BLOCKLIST:"]').length === 2).length,
+        m: c.querySelectorAll('[data-act="menu"]').length, tile: !!tl, sira: L.join(','), how: !!c.querySelector('details.ag-how') } : null; });
+    check('Sağlayıcılar: CSF blok listeleri katmanı (özet kutusu üçüncü, kart katman bileşeniyle, her liste bir satır)',
+      !!bk && bk.tile && bk.sira === 'ag-cloud-card,ag-prov-card,ag-bkl-card,ag-svc-card' && bk.how && bk.n > 0, JSON.stringify(bk));
+    // bekçi: sekmedeki bütün aç / kapa seçimleri tek bileşen — her blok listesi satırında katmanların Açık / Kapalı çipi, ⋯ menüsü yok
+    check('Sağlayıcılar: blok listesi aç / kapa öteki katmanlarla aynı bileşen (Açık / Kapalı çipi, menü yok)', !!bk && bk.n > 0 && bk.chip === bk.n && bk.m === 0, JSON.stringify(bk));
     // kapalı listeler katlanmış bölümde (kart 15 satırla uzuyordu); açık listeler doğrudan
     const kat = await page.evaluate(() => { const d = document.querySelector('#ag-bkl-card details.ag-more2'); return d ? { open: d.open, off: d.querySelectorAll('.ag-dep').length, onv: document.querySelectorAll('#ag-bkl-card .ag-bkl:not(details .ag-bkl) .ag-dep').length } : null; });
     check('CSF blok listeleri: kapalı listeler katlanmış bölümde, başta kapalı', !!kat && !kat.open && kat.off > 0, JSON.stringify(kat));
-    if (bk && bk.m) {
+    // Ayrıntı (1.15.123): sağlayıcı / kiralık listeyle aynı pencere (ihlal eden IP'ler + Etkisini ölç); cevap taklit (kapalı listenin
+    // yoklaması internetten indirir, test ona bağlı kalmasın)
+    {
+      const bkr = async route => { const pd = route.request().postData() || '';
+        if (!/^a=src_ips/.test(pd) || !/asn=bk%3A/.test(pd)) return route.continue();
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, n: 1, ips: [['198.51.100.7', 'ssh', 'lfd: (sshd) Failed SSH login', Math.floor(Date.now() / 1000) - 3600, 'deny', 'deny']] }) }); };
+      await page.route('**/api.php*', bkr);
       await page.evaluate(() => { const d = document.querySelector('#ag-bkl-card details.ag-more2'); if (d) d.open = true; }); await page.waitForTimeout(200);
-      await page.click('#ag-bkl-card [data-act="menu"]'); await page.waitForTimeout(300);
-      const on = await page.$('#ag-bkl-card [data-act="bklon"]');
-      if (on) {
-        await on.click(); await page.waitForSelector('.ag-modal', { timeout: 5000 }).catch(() => {});
-        const mt = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); return m ? m.innerText.replace(/\s+/g, ' ') : ''; });
-        check('blok listesi aç penceresi: değişecek satır (#), csf -ra ve güvenlik duvarının birkaç saniye açık kalması', /csf\.blocklists/.test(mt) && /#/.test(mt) && /csf -ra/.test(mt) && /(birkaç saniye|a few seconds)/.test(mt), mt.slice(0, 260));
-        await page.keyboard.press('Escape'); await page.waitForTimeout(300);
-      } else check('blok listesi menüsünde "Listeyi aç" (kapalı liste)', false, 'bklon yok');
+      const bn = await page.evaluate(() => { const b = document.querySelector('#ag-bkl-card [data-act="srcinfo"][data-v^="bk:"]'); if (!b) return ''; b.click(); return b.getAttribute('data-v'); });
+      await page.waitForSelector('#ag-bkl-card #ag-srcd table', { timeout: 8000 }).catch(() => {});
+      const sd = await page.evaluate(() => { const w = document.querySelector('#ag-bkl-card #ag-srcd'); return w ? { ip: /198\.51\.100\.7/.test(w.innerText), imp: !!w.querySelector('[data-act="asnimpact"][data-v^="bk:"]'), port: /port listesi|port list/i.test(w.innerText) } : null; });
+      check('blok listesi: Ayrıntı sağlayıcı ve kiralık listeyle aynı pencereyi açar (ihlal eden IP tablosu, Etkisini ölç; port önerisi yok)', !!bn && !!sd && sd.ip && sd.imp && !sd.port, bn + ' ' + JSON.stringify(sd));
+      for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(250); await layoutChecks(page, 'blok-ayrinti', w); await shot('blok-ayrinti-' + w); }
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.evaluate(() => { const b = document.querySelector('#ag-bkl-card [data-act="srcinfo"][aria-expanded="true"]'); if (b) b.click(); }); await page.waitForTimeout(300);
+      await page.unroute('**/api.php*', bkr);
+    }
+    if (kat && kat.off) {
+      await page.evaluate(() => { const d = document.querySelector('#ag-bkl-card details.ag-more2'); if (d) d.open = true; }); await page.waitForTimeout(200);
+      const ad = await page.evaluate(() => { const b = document.querySelector('#ag-bkl-card details.ag-more2 .ag-chip[data-k^="CSF_BLOCKLIST:"][data-v="1"]:not([disabled])'); if (!b) return ''; b.click(); return b.getAttribute('data-k').slice(14); });
+      await page.waitForTimeout(400);
+      const sb = await page.evaluate(() => ({ bar: !!document.querySelector('.ag-savebar'), open: !!(document.querySelector('#ag-bkl-card details.ag-more2') || {}).open, on: !!document.querySelector('#ag-bkl-card details.ag-more2 .ag-chip.on[data-v="1"]') }));
+      await page.click('[data-act="cfgsave"]').catch(() => {}); await page.waitForSelector('.ag-modal', { timeout: 5000 }).catch(() => {});
+      const mt = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); return m ? m.innerText.replace(/\s+/g, ' ') : ''; });
+      check('blok listesi: Açık çipi taslağa yazar (Kaydet çubuğu, katlı bölüm açık kalır); onay penceresi listeyi ve csf -ra\'yı söyler', !!ad && sb.bar && sb.open && sb.on && mt.indexOf(ad) >= 0 && /csf -ra/.test(mt), ad + ' ' + JSON.stringify(sb) + ' ' + mt.slice(0, 260));
+      const cancel = await page.$('.ag-modal [data-act="cancel"], .ag-modal .ag-btn:not(.ag-btn-primary)');
+      if (cancel) await cancel.click(); else await page.keyboard.press('Escape');
+      await page.waitForTimeout(300); await page.click('[data-act="cfgdiscard"]').catch(() => {}); await page.waitForTimeout(300);
     }
     // birleşik servis dosyası 1.15.120'den beri Ayarlar'da (listenin nasıl işlediği); Sağlayıcılar'daki İzinli servisler kartında seçeneği yok
     const sxp = await page.evaluate(() => !!document.querySelector('[data-k="SVC_EXPORT"], [data-k="SVC_EXPORT_RELOAD"]'));
