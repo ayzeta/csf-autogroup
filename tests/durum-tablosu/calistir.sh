@@ -1075,7 +1075,7 @@ if kok_on && command -v python3 >/dev/null 2>&1; then
     LD="$R/listeler"; mkdir -p "$LD"; : > "$R/ls.hits"
     printf '%s\n' '; Spamhaus DROP List' '151.80.8.0/24 ; SBL1' '203.0.113.0/25 ; SBL2' '; EOF' > "$LD/drop.txt"
     printf '%s\n' '; This list has been merged into https://www.spamhaus.org/drop/drop.txt' '; EOF' > "$LD/bos.txt"
-    printf '%s\n' '# bogons' '10.0.0.0/8' '198.18.0.0/15' > "$LD/ozel.txt"
+    printf '%s\n' '# bogons' '10.0.0.0/8' '127.0.0.0/8' '198.18.0.0/15' > "$LD/ozel.txt"
     printf '%s\n' '; Spamhaus DROPv6 List' '2001:db8::/32 ; SBL3' '2001:db8:1::/48 ; SBL4' '; EOF' > "$LD/v6.txt"
     python3 "$H/liste-sunucu.py" "$R/ls.port" "$R/ls.hits" "$LD" & LSP=$!
     for i in 1 2 3 4 5 6 7 8 9 10; do [ -s "$R/ls.port" ] && break; sleep 0.3; done
@@ -1088,11 +1088,18 @@ if kok_on && command -v python3 >/dev/null 2>&1; then
 fi
 quiet
 mcheck "blok listesi yoklaması: kapalı listenin kaynağı indirilip sayılır (yorum satırları atlanır), açık listede CSF'in dosyası" "bkg DROPT | grep -q '\"ph\":200,\"pc\":2,\"pp\":0' && bkg SPAMDROP | grep -q '\"ph\":200,\"pc\":1,'"
-mcheck "blok listesi yoklaması: boş kaynak (DROP'a birleştirilmiş EDROP gibi) 0 adres, açılmayan kaynak HTTP kodu, özel aralık içeren işaretli" "bkg BOS | grep -q '\"ph\":200,\"pc\":0,' && bkg YOK | grep -q '\"ph\":404,\"pc\":0,' && bkg OZEL | grep -q '\"pc\":2,\"pp\":1'"
+mcheck "blok listesi yoklaması: boş kaynak (DROP'a birleştirilmiş EDROP gibi) 0 adres, açılmayan kaynak HTTP kodu, özel aralık içeren işaretli" "bkg BOS | grep -q '\"ph\":200,\"pc\":0,' && bkg YOK | grep -q '\"ph\":404,\"pc\":0,' && bkg OZEL | grep -q '\"pc\":3,\"pp\":1'"
 mcheck "blok listesi yoklaması: IPv6 listesi boş sayılmaz (IPv6 satırları ayrı sayılır); ayrıntısı 'IPv4 yok' der, 'indirilmedi' demez" "bkg V6 | grep -q '\"ph\":200,\"pc\":0,\"pp\":0,\"p6\":2' && run --src-ips bk:V6 --json 2>/dev/null | grep -q '\"error\":\"no_v4\"'"
 kok_on && cp "$R/ls.hits" "$R/ls.hits0"; quiet
 mcheck "blok listesi yoklaması: günde bir (ikinci turda kaynak yeniden indirilmez)" "cmp -s '$R/ls.hits0' '$R/ls.hits' && [ \"\$(grep -c drop.txt '$R/ls.hits')\" = 1 ]"
 mcheck "blok listesi ayrıntısı: bk:AD anahtarı listedeki ihlal eden IP'yi verir (kapalı liste, yoklanan dosyadan)" "run --src-ips bk:DROPT --json 2>/dev/null | grep -q '\"ok\":true,\"n\":1,\"ips\":\[\[\"151.80.8.5\"' && run --src-ips 'bk:X;id' --json 2>/dev/null | grep -q 'bad_key'"
+# Etkisini ölç: 127.0.0.0/8 ve sunucunun kendi IP'leri "sunucunun kendisi" (izinli kova); CSF bunları LOCALINPUT'a sokmaz (lo), hiçbir
+# ban kesmez — "şu an açık, ban keser" sayılmaz (BOGON'da 127.0.0.1, kullanıcının canlı ekranı)
+if kok_on; then
+    mkdir -p "$R/domlogs"; echo "DOMLOGS=$R/domlogs" >> "$R/app/config.env"; TL=$(LC_ALL=C date -d '-1 hour' '+%d/%b/%Y:%H:%M:%S +0000')
+    printf '127.0.0.1 - - [%s] "GET /.git/HEAD HTTP/1.1" 403 10 "-" "curl"\n127.0.0.1 - - [%s] "GET / HTTP/1.1" 403 10 "-" "curl"\n198.18.0.5 - - [%s] "GET / HTTP/1.1" 200 10 "-" "curl"\n' "$TL" "$TL" "$TL" > "$R/domlogs/site.test"
+fi
+mcheck "Etkisini ölç: 127.0.0.1 sunucunun kendisi (izinli kovada, açık adreslerde değil); öteki adres açık" "run --asn-impact bk:OZEL --json 2>/dev/null | grep -q '\"asvc\":{\"self\":2}' && run --asn-impact bk:OZEL --json 2>/dev/null | grep -o '\"open\":{[^}]*}' | grep -q '\"req\":1,\"ips\":1,'"
 kok_on && { kill "$LSP" 2>/dev/null; wait "$LSP" 2>/dev/null; }
 # birleşik servis dosyası (1.15.119, SVC_EXPORT): CSF'e giden izinli servis dosyası (services-allow.sh'nin yazdığı biçim: başlık, kaynak
 # yorumu, "adres # csf_autogroup: service ad") → tek dosya, yalnız değişince; yeniden yükleme komutu taklit (çağrıyı sayar)

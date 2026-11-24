@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.124"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.125"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -6206,7 +6206,13 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad) → son 24 saatin web günlüklerind
             split($1, s, "/"); split(s[1], p, "."); b = (s[2] == "" ? 32 : s[2] + 0); lo = ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4]
             printf "%.0f %.0f %s\n", lo, lo + 2 ^ (32 - b) - 1, nm }' "$SVC_OUT"
       load_whitelist >/dev/null 2>&1
-      while read -r wi wlo whi wix wff; do [ "$wff" = 1 ] || continue; [[ "${WL_TXT[wix]}" == *services.allow* ]] && continue; printf '%s %s csfallow\n' "$wlo" "$whi"; done < <(wl_ff_lines)
+      # sunucunun kendisi: kendi IP'leri (izin kaydı ff 2) ve 127.0.0.0/8 — CSF bu trafiği LOCALINPUT'a hiç sokmaz (INPUT "! -i lo";
+      # kendi IP'sine bağlantı da lo'dan girer: WSL CSF 16.33'te ölçüldü 2026-11-24), hiçbir ban kesmez. Önce "şu an açık, ban keser"
+      # sayılıyordu (BOGON'da 127.0.0.1 — LiteSpeed istemci başlığındaki IP'yi yazıyordu; kendi sağlayıcında WordPress'in kendi istekleri)
+      printf '2130706432 2147483647 self\n'
+      while read -r wi wlo whi wix wff; do
+          if [ "$wff" = 2 ]; then printf '%s %s self\n' "$wlo" "$whi"; continue; fi
+          [ "$wff" = 1 ] || continue; [[ "${WL_TXT[wix]}" == *services.allow* ]] && continue; printf '%s %s csfallow\n' "$wlo" "$whi"; done < <(wl_ff_lines)
     } | sort -n -k1,1 > "$alw"
     # etkin kiralık sunucu listeleri: web portlarını (80 ve 443) kapatıyorsa bu adreslerden gelen istekler CSF'te zaten düşer
     # (liste başına: kuralı 80 ve 443'ü kapatan listeler). Banların kapsaması için bütün etkin listeler ayrı dosyada (clfa)

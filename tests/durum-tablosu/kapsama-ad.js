@@ -3,7 +3,7 @@
 const fs = require('fs');
 let src = fs.readFileSync(process.argv[2], 'utf8');
 const tail = src.lastIndexOf('})();');
-src = src.slice(0, tail) + 'globalThis.__AG = { set: function (s, l) { S = s; LANG = l || "tr"; }, verdict: verdict, impState: impState, covName: covName, ubNote: ubNote, terms: TERMS, insideHtml: insideHtml, abuseLine: abuseLine, abuseCard: abuseCard, abuseBlkHtml: abuseBlkHtml, abuseBlkSum: abuseBlkSum, abuseHtml: abuseHtml, setCfg: function (c) { CFG = c; } };\n' + src.slice(tail);
+src = src.slice(0, tail) + 'globalThis.__AG = { set: function (s, l) { S = s; LANG = l || "tr"; }, verdict: verdict, impState: impState, covName: covName, ubNote: ubNote, terms: TERMS, insideHtml: insideHtml, abuseLine: abuseLine, abuseCard: abuseCard, abuseBlkHtml: abuseBlkHtml, abuseBlkSum: abuseBlkSum, abuseHtml: abuseHtml, impactHtml: impactHtml, setCfg: function (c) { CFG = c; } };\n' + src.slice(tail);
 const el = () => new Proxy(function () {}, { get: (t, k) => k === 'length' ? 0 : k === Symbol.toPrimitive ? () => '' : el(), apply: () => el(), set: () => true });
 globalThis.window = { AG_BOOT: {}, addEventListener() {}, location: { search: '' }, matchMedia: () => ({ matches: false, addEventListener() {} }) };
 globalThis.document = { getElementById: () => el(), querySelector: () => el(), querySelectorAll: () => [], addEventListener() {}, createElement: el, body: el(), documentElement: el(), hidden: true };
@@ -24,6 +24,17 @@ for (const L of ['tr', 'en']) {
   const n = AG.ubNote({ type: 'under_ban', ck: 'bk', cn: 'SPAMDROP', cm: 'all', tcp: '', udp: '', since: 1, n: 1 });
   ok(L + ' ban altında ihlal notu: kapsamanın adı', /SPAMDROP/.test(n.join(' ')) && !/undefined|ub_k_/.test(n.join(' ')), n.join(' | '));
   const has = i => process.argv[i] && fs.existsSync(process.argv[i]) && fs.statSync(process.argv[i]).size > 0;
+  // Etkisini ölç: başlığında sayı olan her açılır bölümün gövdesinde o sayının dökümü (liste ya da tablo) var. "İzinli servislerin
+  // aldığı cevaplar" başlıkta "48 başarılı · 4 yönlendirildi" deyip gövdede yalnız açıklama gösteriyordu (kullanıcının telefon ekranı, 1.15.124)
+  {
+    AG.setCfg({ values: { SVC_ALLOW: '1', SVC_SOURCES: 'google' }, defaults: {} });
+    const im = AG.impactHtml({ ok: true, total: 60, areq: 52, aips: 3, acodes: { '200': 48, '301': 4 }, asvc: { 'google-common': 40, 'google-special': 12 },
+      open: { req: 8, ips: 2, ok: 0, codes: { '404': 8 }, top: [['198.51.100.7', 8, 0, 'GET /x', '']] }, afails: [], fails: [], posts: [], bots: [], sites: [] }, 'AS64500', true, 'TEST-AS', true);
+    const bos = [], re = /<details class="ag-im-more"><summary><span class="ag-im-mt">([^<]*)<\/span><span class="ag-im-ms">([^<]*)<\/span><\/summary><div class="ag-im-mb">([\s\S]*?)<\/div><\/details>/g;
+    let m; while ((m = re.exec(im))) { if (/[1-9]/.test(m[2]) && !/<ul|<table/.test(m[3])) bos.push(m[1] + ' (' + m[2] + ')'); }
+    const ac = (im.match(/<summary><span class="ag-im-mt">[^<]*<\/span><span class="ag-im-ms">[^<]*48[\s\S]*?<\/details>/) || [''])[0];
+    ok(L + ' Etkisini ölç: sayılı her açılır bölümün gövdesinde dökümü var; izinli servis cevapları kod ve servis başına', bos.length === 0 && /HTTP 200[\s\S]*<b>48<\/b>/.test(ac) && /HTTP 301/.test(ac) && /<b>52<\/b>/.test(ac), bos.join(' | ') || ac.slice(0, 300));
+  }
   if (has(3)) {   // motorun gerçek --inside çıktısı (calistir.sh, blok listeli kök)
     const ih = AG.insideHtml(JSON.parse(fs.readFileSync(process.argv[3], 'utf8')), 24, '151.80.7.0/24');
     ok(L + ' ban penceresi: aralığın tamamı blok listesindeyse bilgi kutusu, ban engellenmez', /ag-infobox[^>]*>[^<]*SPAMDROP/.test(ih) && !/ag-warnbox/.test(ih), ih.slice(0, 200));

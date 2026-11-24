@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.15.125 — 2026-11-24
+
+- Measure impact: "Responses allowed services got" now lists the counts by
+  response code and by service when opened. Before, its title gave the totals
+  but the open section showed only the explanation unless a request had been
+  refused.
+- Measure impact counts requests from 127.0.0.0/8 and the server's own IPs as
+  "the server itself" instead of open addresses a ban would cut: CSF never
+  filters them (loopback traffic, including connections to the server's own
+  IP, does not enter CSF's chains). A blocklist with private ranges (such as
+  BOGON) now says it cuts connections from those addresses arriving over the
+  network card, not the server's own traffic.
+
 ## 1.15.124 — 2026-11-24
 
 - Measure impact treats CSF blocklists as lists: it no longer asks what
