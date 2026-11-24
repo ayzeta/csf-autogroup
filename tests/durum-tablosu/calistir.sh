@@ -707,7 +707,12 @@ mcheck "kip: IP kartında hariç listesi exc + açık kalan portlar, kipsiz list
 # komut satırı sorgusu (csf-autogroup lookup IP) kiralık listeyi kendi adıyla yazar; önce "CC_DENY <liste adı>" diye çıkıyordu
 mcheck "kip: düz metin sorguda kiralık liste kendi satırında (kural: her şey), CC_DENY diye değil" "run --lookup 45.32.1.1 2>/dev/null | grep -q 'Kiralık liste .*her şey' && ! run --lookup 45.32.1.1 2>/dev/null | grep -q 'CC_DENY'"
 mcheck "kip: aralık penceresi listenin kipini taşır" "run --inside 151.80.7.0/24 --json 2>/dev/null | grep -q '\"cloud\":\"gcp\",\"cloud_mode\":\"exc\",\"cloud_tcp\":\"80,443\",\"cloud_udp\":\"443\"'"
-mcheck "kip: Etkisini ölç — web'i kapatan listeler oracle ve vultr; web'i açık bırakan gcp'nin isteği 'zaten kapalı' sayılmaz (0), oracle'ınki sayılır (1)" "run --asn-impact cl:gcp --json 2>/dev/null | grep -q '\"cloud\":{\"web\":true,\"lists\":\"oracle vultr\",\"req\":0,' && run --asn-impact cl:oracle --json 2>/dev/null | grep -q '\"cloud\":{\"web\":true,\"lists\":\"oracle vultr\",\"req\":1,'"
+mcheck "kip: Etkisini ölç — web'i kapatan listeler oracle ve vultr; web'i açık bırakan gcp'nin isteği 'zaten kapalı' sayılmaz (0); ölçülen listenin (oracle) kendi adresi o kovada değil, sızıntı denetiminde (1.15.126)" "run --asn-impact cl:gcp --json 2>/dev/null | grep -q '\"cloud\":{\"web\":true,\"lists\":\"oracle vultr\",\"req\":0,' && run --asn-impact cl:oracle --json 2>/dev/null | grep -q '\"cloud\":{\"web\":true,\"lists\":\"vultr\",\"req\":0,'"
+# sızıntı denetimi (1.15.126): açık ve web'i kapatan kiralık listede liste açık görüldükten (kapsama defteri) sonra listedeki adresten
+# gelen istek "liste kesmedi" sayılır; web'i açık bırakan listede (gcp) denetim yok
+kok_on && printf 'cl:oracle|svc|80,443|443|%s\n' "$(( $(date +%s) - 7200 ))" > "$R/var/lib/csf_autogroup/covers"
+mcheck "kip: açık kiralık listede Etkisini ölç sızıntı denetimi (açık görüldükten sonra listedeki adresten istek sayılır); web'i açık bırakan listede yok" "run --asn-impact cl:oracle --json 2>/dev/null | grep -q '\"after\":{\"web\":1,\"since\":[1-9][0-9]*,\"req\":1,\"ips\":1,.*\"ban\":\"list\"' && run --asn-impact cl:gcp --json 2>/dev/null | grep -q '\"after\":{\"web\":0,'"
+kok_on && rm -f "$R/var/lib/csf_autogroup/covers"
 mcheck "kip: ayar doğrulaması (svc'de servis ya da port gerekir, bilinmeyen kip ve giden servis reddedilir)" "! run --config set 'CLOUD_MODES=gcp=svc::' >/dev/null 2>&1 && ! run --config set 'CLOUD_MODES=gcp=hepsi::' >/dev/null 2>&1 && ! run --config set 'CLOUD_MODES=gcp=svc:mout:' >/dev/null 2>&1 && run --config set 'CLOUD_MODES=gcp=svc:web,ssh:8080,30000-35000' >/dev/null 2>&1 && grep -q '^CLOUD_MODES=\"\{0,1\}gcp=svc:web,ssh:8080,30000-35000\"\{0,1\}$' '$R/app/config.env'"
 quiet --config set 'CLOUD_MODES=gcp=svc::443/udp oracle=exc:ssh:443/udp'
 mcheck "kip: ek portta /udp — yalnız UDP 443 kapatan liste ve hariç kipinde UDP 443 açık kalan liste" "run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"what\":\"gcp\",\"mode\":\"svc\",\"tcp\":\"\",\"udp\":\"443\"' && run --lookup 152.70.1.1 --json 2>/dev/null | grep -q '\"what\":\"oracle\",\"mode\":\"exc\",\"tcp\":\"22\",\"udp\":\"443\"'"
@@ -1099,6 +1104,13 @@ if kok_on; then
     mkdir -p "$R/domlogs"; echo "DOMLOGS=$R/domlogs" >> "$R/app/config.env"; TL=$(LC_ALL=C date -d '-1 hour' '+%d/%b/%Y:%H:%M:%S +0000')
     printf '127.0.0.1 - - [%s] "GET /.git/HEAD HTTP/1.1" 403 10 "-" "curl"\n127.0.0.1 - - [%s] "GET / HTTP/1.1" 403 10 "-" "curl"\n198.18.0.5 - - [%s] "GET / HTTP/1.1" 200 10 "-" "curl"\n' "$TL" "$TL" "$TL" > "$R/domlogs/site.test"
 fi
+if kok_on; then
+    mkdir -p "$R/domlogs"; grep -q '^DOMLOGS=' "$R/app/config.env" || echo "DOMLOGS=$R/domlogs" >> "$R/app/config.env"
+    TL=$(LC_ALL=C date -d '-1 hour' '+%d/%b/%Y:%H:%M:%S +0000'); TL3=$(LC_ALL=C date -d '-3 hour' '+%d/%b/%Y:%H:%M:%S +0000')
+    printf '151.80.7.9 - - [%s] "GET / HTTP/1.1" 200 10 "-" "curl"\n151.80.7.10 - - [%s] "GET / HTTP/1.1" 200 10 "-" "curl"\n' "$TL" "$TL3" > "$R/domlogs/site2.test"
+    printf 'bk:SPAMDROP|all|||%s\n' "$(( $(date +%s) - 7200 ))" >> "$R/var/lib/csf_autogroup/covers"
+fi
+mcheck "blok listesi Etkisini ölç: açık listede sızıntı denetimi (açık görüldükten sonraki istek sayılır, öncesi sayılmaz); kapalı listede yok" "run --asn-impact bk:SPAMDROP --json 2>/dev/null | grep -q '\"after\":{\"web\":1,\"since\":[1-9][0-9]*,\"req\":1,\"ips\":1,' && run --asn-impact bk:DROPT --json 2>/dev/null | grep -q '\"after\":{\"web\":0,'"
 mcheck "Etkisini ölç: 127.0.0.1 sunucunun kendisi (izinli kovada, açık adreslerde değil); öteki adres açık" "run --asn-impact bk:OZEL --json 2>/dev/null | grep -q '\"asvc\":{\"self\":2}' && run --asn-impact bk:OZEL --json 2>/dev/null | grep -o '\"open\":{[^}]*}' | grep -q '\"req\":1,\"ips\":1,'"
 kok_on && { kill "$LSP" 2>/dev/null; wait "$LSP" 2>/dev/null; }
 # birleşik servis dosyası (1.15.119, SVC_EXPORT): CSF'e giden izinli servis dosyası (services-allow.sh'nin yazdığı biçim: başlık, kaynak

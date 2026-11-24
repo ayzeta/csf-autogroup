@@ -33,6 +33,11 @@ for (const L of ['tr', 'en']) {
     const bos = [], re = /<details class="ag-im-more"><summary><span class="ag-im-mt">([^<]*)<\/span><span class="ag-im-ms">([^<]*)<\/span><\/summary><div class="ag-im-mb">([\s\S]*?)<\/div><\/details>/g;
     let m; while ((m = re.exec(im))) { if (/[1-9]/.test(m[2]) && !/<ul|<table/.test(m[3])) bos.push(m[1] + ' (' + m[2] + ')'); }
     const ac = (im.match(/<summary><span class="ag-im-mt">[^<]*<\/span><span class="ag-im-ms">[^<]*48[\s\S]*?<\/details>/) || [''])[0];
+    // açık liste (1.15.126): sızıntı denetimi liste diliyle — "liste işliyor", ban sözcüğü ve "şu an açık" yok
+    const now = Math.floor(Date.now() / 1000);
+    const il = AG.impactHtml({ ok: true, total: 2, areq: 0, ban: 'list', after: { web: 1, since: now - 7200, req: 0, ips: 0, ok: 0, last: '', late: 0, ex: [] },
+      open: { req: 2, ips: 1, ok: 0, codes: { '403': 2 }, top: [] }, fails: [], posts: [], bots: [], sites: [] }, 'bk:SPAMDROP', true, 'SPAMDROP', true).replace(/<[^>]+>/g, ' ');
+    ok(L + ' Etkisini ölç açık listede: sızıntı sonucu liste diliyle (liste işliyor; ban / şu an açık yok)', /liste işliyor|the list works/.test(il) && !/[Bb]an |şu an açık|open now/.test(il), il.replace(/\s+/g, ' ').slice(0, 260));
     ok(L + ' Etkisini ölç: sayılı her açılır bölümün gövdesinde dökümü var; izinli servis cevapları kod ve servis başına', bos.length === 0 && /HTTP 200[\s\S]*<b>48<\/b>/.test(ac) && /HTTP 301/.test(ac) && /<b>52<\/b>/.test(ac), bos.join(' | ') || ac.slice(0, 300));
   }
   if (has(3)) {   // motorun gerçek --inside çıktısı (calistir.sh, blok listeli kök)

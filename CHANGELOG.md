@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.15.126 — 2026-11-24
+
+- Measure impact checks whether an active list works: for a CSF blocklist
+  that is on, and for a rented-server list that is on and closes ports 80 and
+  443, it reports requests that still reached your sites from the list's
+  addresses after the plugin first saw the list on ("the list did not cut
+  them", with examples) or that none came ("the list works"). Before, an active
+  list was measured as if it were off. The measured rented-server list's own
+  addresses are no longer counted as "already closed" in that case.
+
 ## 1.15.125 — 2026-11-24
 
 - Measure impact: "Responses allowed services got" now lists the counts by

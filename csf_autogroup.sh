@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.125"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.126"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -6219,7 +6219,15 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad) → son 24 saatin web günlüklerind
     local clf clfa cweb=0 cwl="" x; clf=$(mktemp) && clfa=$(mktemp) || { rm -f "$rng" "$lst" "$alw" "$clf"; return 1; }
     if [ "$CLOUD_ON" = 1 ]; then
         local cwf=" " cf8 cf4
+        # ölçülen liste sızıntı denetimine giriyorsa (bütün alt listeler açık ve 80 ile 443'ü kapatıyor) kendi adresleri bu kovada
+        # sayılmaz; yalnız bir web portunu kapatan listede port port "zaten kapalı" ayrımı kalır
+        local own="" ox osub
+        if [[ "$a" == cl:* ]]; then
+            own="+${a#cl:}+"; osub="${a#cl:}"; osub="${osub//+/ }"
+            for ox in $osub; do [[ " $CLOUD_ACTIVE " == *" $ox "* ]] && cl_port_closed "$ox" tcp 80 && cl_port_closed "$ox" tcp 443 || { own=""; break; }; done
+        fi
         for x in $CLOUD_ACTIVE; do
+            [ -n "$own" ] && [[ "$own" == *"+$x+"* ]] && continue
             cf8=""; cf4=""; cl_port_closed "$x" tcp 80 && cf8=8; cl_port_closed "$x" tcp 443 && cf4=4
             [ -n "$cf8$cf4" ] && { cwl+="${cwl:+ }$x"; cwf+="$x:$cf8$cf4 "; }
         done
@@ -6260,6 +6268,27 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad) → son 24 saatin web günlüklerind
             END { print (on ? b : 0) }')
         [[ "$bsince" =~ ^[0-9]+$ ]] || bsince=0
         [ "$bsince" -gt 0 ] && bkey=$(date -d "@$bsince" +%Y%m%d%H%M%S 2>/dev/null)
+    fi
+    # liste açıksa ve web portlarını (80 ve 443) kapatıyorsa sızıntı denetimi sağlayıcı banıyla aynı hesap: listeden "açık" görünen istek
+    # liste açıldıktan sonra gelmişse liste onu kesmemiştir (izinli, CDN arkasında değil). Başlangıç kapsama defterinden (eklentinin
+    # listeyi ilk açık gördüğü an; cov_keys). CSF blok listesi her portu kapatır; kiralık listede bütün alt listeler açık ve kuralı 80 / 443'ü
+    # kapatıyorsa. Önce açık listede de "şu an açık, ban keser" yazıyordu (kullanıcı: "açıkken paket gelmiyor")
+    if [ -z "$n" ]; then
+        local lks=() lx lt lmax=0 lok=1
+        case "$a" in
+            bk:*) bkl_load; [[ " $BKL_NAMES " == *" ${a#bk:} "* ]] && lks+=("bk:${a#bk:}|all||") || lok=0 ;;
+            cl:*) [ "$CLOUD_ON" = 1 ] || lok=0
+                  local lsub="${a#cl:}"; lsub="${lsub//+/ }"
+                  for lx in $lsub; do
+                      [[ " $CLOUD_ACTIVE " == *" $lx "* ]] && cl_port_closed "$lx" tcp 80 && cl_port_closed "$lx" tcp 443 || { lok=0; break; }
+                      cl_pol "$lx"; lks+=("cl:$lx|$CP_K|$CP_T|$CP_U")
+                  done ;;
+        esac
+        if [ "$lok" = 1 ] && [ "${#lks[@]}" -gt 0 ]; then
+            ban="list"; bweb=1; cov_load
+            for lx in "${lks[@]}"; do lt="${COV_T[$lx]:-0}"; [ "$lt" = 0 ] && { lmax=0; break; }; [ "$lt" -gt "$lmax" ] && lmax=$lt; done
+            bsince=$lmax; bkey=""; [ "$bsince" -gt 0 ] && bkey=$(date -d "@$bsince" +%Y%m%d%H%M%S 2>/dev/null)
+        fi
     fi
     # liste başına kapalı servisler (",ad:servis,"): tekil ban ancak servisini o listenin kuralı kapatıyorsa "listede, zaten kapalı"
     local cok="," cs; for x in $CLOUD_ACTIVE; do for cs in web ssh ftp cp smtp mread dns; do cl_svc_closed "$x" "$cs" && cok+="$x:$cs,"; done; done
