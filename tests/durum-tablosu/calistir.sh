@@ -1076,22 +1076,45 @@ if kok_on; then
     printf 'Include %s\n' "$SVA" >> "$A"
     sva() { { printf '# güncellendi 2026-11-24 04:00 — elle düzenlemeyin, tools/services-allow.sh yeniden yazar\n'; printf '# google (https://example.invalid/g.json)\n'
               for x in "$@"; do printf '%s # csf_autogroup: service google-common\n' "$x"; done; } > "$SVA"; }
-    sva 66.249.64.0/27 203.0.113.10 66.249.64.0/27 192.0.2.8
+    sva 66.249.64.0/27 203.0.113.10 66.249.64.0/27 192.0.2.8/32 192.0.2.8
     printf '#!/bin/bash\necho "$*" >> "%s"\n' "$R/reload.log" > "$R/reload.sh"; chmod 755 "$R/reload.sh"
-    printf '%s\n' SVC_ALLOW=1 SVC_EXPORT=1 SVC_EXPORT_RELOAD=1 "SVCX_FILE=$XF" "SVCX_RELOAD_CMD=\"$R/reload.sh --graceful\"" >> "$R/app/config.env"
+    # taklit httpd -t -c: Apache mod_security2'nin lin'de ölçülen reddi ("/32" satırı; burada ayrıca işaret adresi 198.51.100.66);
+    # httpd.mode "none" = ModSecurity yüklü değil (her sınama düşer, tek adreslik dosya da)
+    printf '%s\n' '#!/bin/bash' 'f=$(printf "%s" "$3" | sed -n "s/.*@ipMatchFromFile \([^\"]*\)\".*/\1/p")' \
+        "[ \"\$(cat '$R/httpd.mode' 2>/dev/null)\" = none ] && { echo \"Invalid command 'SecRule'\"; exit 1; }" \
+        'l=$(grep -n -m1 -E "/32$|^198\.51\.100\.66$" "$f" | cut -d: -f1)' \
+        '[ -n "$l" ] && { echo "AH00526: Syntax error on line 1 of /etc/apache2/conf.d/x.conf:"; echo "Error creating rule: Could not add entry in line $l of file $f to IP list"; exit 1; }' \
+        'echo "Syntax OK"' > "$R/httpd.sh"; chmod 755 "$R/httpd.sh"
+    printf '%s\n' SVC_ALLOW=1 SVC_EXPORT=1 SVC_EXPORT_RELOAD=1 "SVCX_FILE=$XF" "SVCX_RELOAD_CMD=\"$R/reload.sh --graceful\"" "SVCX_HTTPD=$R/httpd.sh" >> "$R/app/config.env"
+    sed -i 's/^ALERT_MAIL=$/ALERT_MAIL=root@test.invalid/' "$R/app/config.env"
+    printf '%s\n' "SENDMAIL_BIN=$W/bin/sendmail" "DIGEST=0" "IE_RUN=0" "LFD_LOG=$R/lfd.log" >> "$R/app/config.env"; : > "$R/lfd.log"
     rl() { grep -c . "$R/reload.log" 2>/dev/null || echo 0; }
+    nm() { grep -c sendmail "$R/mail_calls.log" 2>/dev/null || echo 0; }
+    mtn() { awk '/^Content-Type: text\/plain/ { f = 1 } f && /^--/ { exit } f && !/^Content-/ && NF' "$R/mails/$1.eml" | base64 -d 2>/dev/null; }
+    nev() { grep -c '"type":"svcx_fail"' "$R/var/lib/csf_autogroup/events.jsonl" 2>/dev/null || echo 0; }
 fi
 quiet
-mcheck "birleşik servis dosyası: CSF'e giden adresler sıralı, tekrarsız, yorumsuz; dizin 0755, dosya 0644; yazılınca web sunucusu bir kez yeniden yüklenir" "[ \"\$(cat '$XF')\" = \"\$(printf '66.249.64.0/27\n192.0.2.8\n203.0.113.10')\" ] && [ \"\$(stat -c %a '$XF')\" = 644 ] && [ \"\$(stat -c %a \"\$(dirname '$XF')\")\" = 755 ] && [ \"\$(rl)\" = 1 ] && grep -q -- '--graceful' '$R/reload.log' && grep -q '^[0-9]* 0\$' '$R/var/lib/csf_autogroup/svcx.reload'"
+mcheck "birleşik servis dosyası: CSF'e giden adresler sıralı, tekrarsız, yorumsuz, tek IP /32'siz (Apache ModSecurity /32'yi reddediyor); dizin 0755, dosya 0644; yazılınca web sunucusu bir kez yeniden yüklenir" "[ \"\$(cat '$XF')\" = \"\$(printf '66.249.64.0/27\n192.0.2.8\n203.0.113.10')\" ] && [ \"\$(stat -c %a '$XF')\" = 644 ] && [ \"\$(stat -c %a \"\$(dirname '$XF')\")\" = 755 ] && [ \"\$(rl)\" = 1 ] && grep -q -- '--graceful' '$R/reload.log' && grep -q '^[0-9]* 0 *\$' '$R/var/lib/csf_autogroup/svcx.reload'"
 quiet
 mcheck "birleşik servis dosyası: liste değişmeyince dosya yazılmaz, yeniden yükleme yok" "[ \"\$(rl)\" = 1 ] && [ \"\$(grep -c 'Birleşik servis dosyası yazıldı' '$R/autogroup.log')\" = 1 ]"
 kok_on && sva 66.249.64.0/27 203.0.113.10 192.0.2.8 198.51.100.0/24; quiet
 mcheck "birleşik servis dosyası: liste değişince yeniden yazılır ve yeniden yüklenir" "grep -qx '198.51.100.0/24' '$XF' && [ \"\$(rl)\" = 2 ]"
 kok_on && sva 192.0.2.8; quiet
 mcheck "birleşik servis dosyası: yeni liste öncekinin yarısından azsa yazılmaz (yarım indirme muafiyeti daraltmasın), günlüğe yazılır" "[ \"\$(grep -c . '$XF')\" = 4 ] && [ \"\$(rl)\" = 2 ] && grep -q 'Birleşik servis dosyası yazılmadı: yeni liste 1 adres, öncekinin (4)' '$R/autogroup.log'"
-mcheck "birleşik servis dosyası: durum çıktısında yol, satır sayısı, son yazım ve son yeniden yükleme (panel)" "run --config get --json 2>/dev/null | grep -q '\"svcx\":{\"f\":\"$XF\",\"n\":4,\"t\":[1-9][0-9]*,\"rt\":[1-9][0-9]*,\"rc\":\"0\"}'"
+mcheck "birleşik servis dosyası: durum çıktısında yol, satır sayısı, son yazım ve son yeniden yükleme (panel)" "run --config get --json 2>/dev/null | grep -q '\"svcx\":{\"f\":\"$XF\",\"n\":4,\"t\":[1-9][0-9]*,\"rt\":[1-9][0-9]*,\"rc\":\"0\",\"ct\":[1-9][0-9]*,\"cr\":0,\"ce\":\"\",\"re\":\"\"}' && [ \"\$(nm)\" = 0 ]"
+kok_on && sva 66.249.64.0/27 203.0.113.10 192.0.2.8 198.51.100.0/24 198.51.100.66; quiet
+mcheck "birleşik servis dosyası: Apache yeni listeyi reddederse yazılmaz, önceki dosya kalır, yeniden yükleme yok; sebep günlükte ve durum çıktısında" "[ \"\$(grep -c . '$XF')\" = 4 ] && ! grep -q '198.51.100.66' '$XF' && [ \"\$(rl)\" = 2 ] && grep -q 'Apache yeni listeyi (5 adres) ModSecurity kuralında kabul etmedi.*Could not add entry' '$R/autogroup.log' && ! ls '$XF'.tmp* >/dev/null 2>&1 && run --config get --json 2>/dev/null | grep -q '\"cr\":1,\"ce\":\"Error creating rule: Could not add entry'"
+mcheck "birleşik servis dosyası: Apache'nin reddi bildirilir (IE_SVCX e-posta, Apache'nin hata satırıyla) ve Geçmiş'e yazılır" "[ \"\$(nm)\" = 1 ] && mtn 01 | grep -q 'Apache.nin yapılandırma denetiminden geçmediği için yazılmadı' && mtn 01 | grep -q 'Could not add entry' && grep -q '\"type\":\"svcx_fail\",\"k\":\"chk\",\"err\":\"Error creating rule' '$R/var/lib/csf_autogroup/events.jsonl'"
+kok_on && cp "$R/var/lib/csf_autogroup/svcx.check" "$R/ck0"; quiet
+mcheck "birleşik servis dosyası: reddedilen liste aynen gelince yeniden denenmez, aynı sorun yeniden bildirilmez" "[ \"\$(nm)\" = 1 ] && [ \"\$(nev)\" = 1 ] && cmp -s '$R/ck0' '$R/var/lib/csf_autogroup/svcx.check'"
+kok_on && { echo none > "$R/httpd.mode"; sva 66.249.64.0/27 203.0.113.10 192.0.2.8 198.51.100.0/24 198.51.100.66 198.51.100.67; }; quiet
+mcheck "birleşik servis dosyası: Apache denetimi yapılamıyorsa (ModSecurity yüklü değil: tek adreslik dosya da düşer) liste yazılır" "grep -qx '198.51.100.66' '$XF' && [ \"\$(rl)\" = 3 ]"
+kok_on && { printf '#!/bin/bash\necho "$*" >> "%s"\necho "Restart failed: httpd did not start"\nexit 3\n' "$R/reload.log" > "$R/reload.sh"; sva 66.249.64.0/27 203.0.113.10 192.0.2.8 198.51.100.0/24 198.51.100.66 198.51.100.70; }; quiet
+mcheck "birleşik servis dosyası: web sunucusu yeniden yüklenemezse bildirilir (çıkış kodu ve son çıktı satırı), Geçmiş'e ve durum çıktısına yazılır" "[ \"\$(rl)\" = 4 ] && [ \"\$(nm)\" = 2 ] && mtn 02 | grep -q 'yeniden yüklenemedi (.*reload.sh --graceful, çıkış 3): Restart failed' && grep -q '\"k\":\"rl\",\"err\":\"Restart failed: httpd did not start\",\"rc\":\"3\"' '$R/var/lib/csf_autogroup/events.jsonl' && run --config get --json 2>/dev/null | grep -q '\"rc\":\"3\".*\"re\":\"Restart failed: httpd did not start\"'"
+kok_on && { echo "IE_SVCX=0" >> "$R/app/config.env"; sva 66.249.64.0/27 203.0.113.10 192.0.2.8 198.51.100.0/24 198.51.100.66 198.51.100.71; }; quiet
+mcheck "IE_SVCX=0: birleşik dosya sorunu e-posta göndermez, Geçmiş'e yine yazılır" "[ \"\$(rl)\" = 5 ] && [ \"\$(nm)\" = 2 ] && [ \"\$(nev)\" = 3 ]"
 kok_on && { sed -i 's/^SVC_EXPORT=1$/SVC_EXPORT=0/' "$R/app/config.env"; sva 66.249.64.0/27 203.0.113.10 192.0.2.8 198.51.100.0/24 198.18.0.0/24; }; quiet
-mcheck "birleşik servis dosyası: kapalıyken yazılmaz (dosya olduğu gibi kalır)" "! grep -q '198.18.0.0/24' '$XF' && [ \"\$(rl)\" = 2 ]"
+mcheck "birleşik servis dosyası: kapalıyken yazılmaz (dosya olduğu gibi kalır)" "! grep -q '198.18.0.0/24' '$XF' && [ \"\$(rl)\" = 5 ]"
 # AbuseIPDB (1.15.114): yerel taklit uç (abuse-sunucu.py) gerçek API'nin ölçülen cevaplarını verir. Anahtar ayrı dosyada (config.env'de
 # değil), standart girdiden; panel / Geçmiş / günlük yalnız son 4 karakteri görür; sonuç IP başına 24 sa önbellekte; tur ve durum sorgu yapmaz.
 mk cvab

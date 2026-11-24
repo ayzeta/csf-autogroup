@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.15.120 — 2026-11-24
+
+- The combined services file writes single addresses without `/32`: Apache's
+  ModSecurity refused the whole list at the first `/32` line
+  (`@ipMatchFromFile`).
+- Before a new combined file replaces the old one, it is checked with Apache's
+  configuration test (when Apache is installed); a list Apache rejects is not
+  written, the previous file stays, and the reason is logged and shown in the
+  settings. A rule that reads the file can no longer break the next Apache
+  restart.
+- New notification kind "Combined services file problems" (`IE_SVCX`,
+  `IC_SVCX`, on by default) in Settings → Notifications: Apache rejecting the
+  new list or a failed web server reload goes by email and Slack once per
+  problem and into History; Slack also gets a message when it is fixed. The
+  settings card shows the reload's error line too.
+- The combined services file options moved to Settings → Sources and refresh →
+  Allowed-service lists, next to the lists' other refresh options.
+
 ## 1.15.119 — 2026-11-24
 
 - Allowed services can also be written to a single file,

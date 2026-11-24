@@ -694,10 +694,12 @@ tab. Key options:
 - `MSG_LANG` — `en` or `tr` (plugin, logs, emails and `csf.deny` comments).
 - `ALERT_MAIL` — where alert emails go: `whm` (the contact address set in WHM,
   default) or an email address.
-- `IE_FIREWALL`, `IE_LISTFULL`, `IE_RUN`, `IE_REVIEW`, `IE_DIGEST` — which
-  events go by email; `IC_FIREWALL`, `IC_LISTFULL`, `IC_RUN`, `IC_REVIEW`,
-  `IC_DIGEST` — which go to Slack (1 = on, all on by default; `*_REVIEW` =
-  allowed-IP violations and open services); `SLACK_BATCH_MIN` — run notices
+- `IE_FIREWALL`, `IE_LISTFULL`, `IE_RUN`, `IE_REVIEW`, `IE_SVCX`, `IE_DIGEST` —
+  which events go by email; `IC_FIREWALL`, `IC_LISTFULL`, `IC_RUN`, `IC_REVIEW`,
+  `IC_SVCX`, `IC_DIGEST` — which go to Slack (1 = on, all on by default;
+  `*_REVIEW` = allowed-IP violations and open services; `*_SVCX` = combined
+  services file problems: Apache rejected the new list or the web server could
+  not be reloaded, once per problem); `SLACK_BATCH_MIN` — run notices
   and review records go to Slack at most this often (default 60). `NOTIFY` (`all`, `email`, `slack`)
   is the older master switch and still works; the panel writes `all` and
   uses the per-event keys.
@@ -835,16 +837,23 @@ allowed. Use it when one address of a service keeps violating: a ban on an
 allowed address has no effect, because CSF applies allows first. The IP card,
 Needs review and History offer this in one step for such an address.
 
-**Combined file** (`SVC_EXPORT`, off by default): the same addresses CSF
-allows (exclusions left out) are also written to
-`/opt/csf-autogroup/services-all.txt`, one IPv4 address or CIDR per line, so a
-ModSecurity rule (`@ipMatchFromFile`, which takes a single file) or PHP inside
-CageFS can treat them as verified services. The file is written only when the
-list changes, and not at all when the new list has less than half of the
-previous one's lines (a failed download should not narrow it). ModSecurity
-reads the file only when it starts; with `SVC_EXPORT_RELOAD` the web server is
-reloaded with `/scripts/restartsrv_httpd --graceful` after each change. Turning
-the option off leaves the file as it is.
+**Combined services file** (`SVC_EXPORT`, off by default; Settings → Sources
+and refresh → Allowed-service lists): the same addresses CSF allows
+(exclusions left out) are also written to
+`/opt/csf-autogroup/services-all.txt`, one IPv4 address or CIDR per line
+(single addresses without `/32`, which Apache's ModSecurity rejects in an IP
+list), so a ModSecurity rule (`@ipMatchFromFile`, which takes a single file) or
+PHP inside CageFS can treat them as verified services. The file is written
+only when the list changes, and not at all when the new list has less than
+half of the previous one's lines (a failed download should not narrow it).
+When Apache is installed, the new list is first checked with Apache's
+configuration test (`httpd -t` with a temporary rule reading it); if Apache
+rejects it, the previous file stays and the reason is logged, shown in the
+settings and History and sent by email / Slack (Settings → Notifications,
+"Combined services file problems"; a failed web server reload too). ModSecurity reads the file only when it starts; with
+`SVC_EXPORT_RELOAD` the web server is reloaded with
+`/scripts/restartsrv_httpd --graceful` after each change. Turning the option
+off leaves the file as it is.
 
 The card shows when the lists were last downloaded and where each one comes
 from; a built-in source's address can be changed there if the provider moves

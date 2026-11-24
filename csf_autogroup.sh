@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.119"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.120"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -72,9 +72,9 @@ ALERT_MAIL="${ALERT_MAIL:-whm}"                  # whm = WHM'deki iletişim adre
 # Bildirim kanalları: all = WHM'de tanımlı kanalların hepsi (e-posta: bizim HTML mailimiz, adres WHM'den ·
 # Slack: WHM'deki Slack adresi) · email = yalnız e-posta · slack = yalnız Slack. IC_* = Slack'e gidecek olaylar.
 NOTIFY="${NOTIFY:-all}"
-IC_FIREWALL="${IC_FIREWALL:-1}"; IC_LISTFULL="${IC_LISTFULL:-1}"; IC_RUN="${IC_RUN:-1}"; IC_DIGEST="${IC_DIGEST:-1}"; IC_REVIEW="${IC_REVIEW:-1}"
+IC_FIREWALL="${IC_FIREWALL:-1}"; IC_LISTFULL="${IC_LISTFULL:-1}"; IC_RUN="${IC_RUN:-1}"; IC_DIGEST="${IC_DIGEST:-1}"; IC_REVIEW="${IC_REVIEW:-1}"; IC_SVCX="${IC_SVCX:-1}"
 # IE_* = e-postaya gidecek olaylar (Slack'teki IC_* ile aynı dört sınıf): güvenlik duvarı sorunu, liste doluyor, tur bildirimleri, haftalık özet
-IE_FIREWALL="${IE_FIREWALL:-1}"; IE_LISTFULL="${IE_LISTFULL:-1}"; IE_RUN="${IE_RUN:-1}"; IE_DIGEST="${IE_DIGEST:-1}"; IE_REVIEW="${IE_REVIEW:-1}"
+IE_FIREWALL="${IE_FIREWALL:-1}"; IE_LISTFULL="${IE_LISTFULL:-1}"; IE_RUN="${IE_RUN:-1}"; IE_DIGEST="${IE_DIGEST:-1}"; IE_REVIEW="${IE_REVIEW:-1}"; IE_SVCX="${IE_SVCX:-1}"
 WWWACCT_SHADOW="${WWWACCT_SHADOW:-/etc/wwwacct.conf.shadow}"   # WHM'in Slack adresi burada (CONTACTSLACK); eklentide saklanmaz
 SLACK_BATCH_MIN="${SLACK_BATCH_MIN:-60}"         # tur bildirimleri Slack'e en fazla bu kadar dakikada bir (toplanarak) gider; acil olanlar hemen
 WWWACCT_CONF="${WWWACCT_CONF:-/etc/wwwacct.conf}"
@@ -158,6 +158,7 @@ SVC_EXPORT="${SVC_EXPORT:-0}"
 SVC_EXPORT_RELOAD="${SVC_EXPORT_RELOAD:-0}"
 SVCX_FILE="${SVCX_FILE:-/opt/csf-autogroup/services-all.txt}"
 SVCX_RELOAD_CMD="${SVCX_RELOAD_CMD:-/scripts/restartsrv_httpd --graceful}"
+SVCX_HTTPD="${SVCX_HTTPD:-/usr/sbin/httpd}"   # birleşik dosyanın Apache denetimi (httpd -t -c); yoksa denetim yapılmaz
 SVC_SOURCES="${SVC_SOURCES-google}"    # virgüllü: google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake microsoft365 quiccloud
 SVC_EXTRA="${SVC_EXTRA:-}"              # boşlukla ayrılmış "ad|https://liste" ya da "ad|1.2.3.0/24"
 SVC_URLS="${SVC_URLS:-}"                # hazır kaynakların değiştirilmiş adresleri: "google-common|https://… bing|https://…"
@@ -436,6 +437,11 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_SVC_FAIL_SUBJ="izinli servis listesi indirilemiyor (%s)"
   M_SVC_FAIL_BODY="Şu izinli servis listeleri uyarı süresinden uzun süredir indirilemiyor: %s. Eski listeler kullanılıyor; adresi Sağlayıcılar → İzinli servisler → Kaynak adresleri'nden düzeltebilirsiniz."
   M_SVC_FAIL_OK="İzinli servis listeleri yeniden indirilebiliyor"
+  M_SVCX_BAD_SUBJ="birleşik servis dosyası Apache denetiminden geçmedi"
+  M_SVCX_BAD_BODY="Yeni izinli servis listesi Apache'nin yapılandırma denetiminden geçmediği için yazılmadı; önceki dosya korunuyor (%s). Apache'nin hatası: %s"
+  M_SVCX_RLF_SUBJ="web sunucusu yeniden yüklenemedi"
+  M_SVCX_RLF_BODY="Birleşik servis dosyası değişti ama web sunucusu yeniden yüklenemedi (%s, çıkış %s): %s. ModSecurity dosyayı yalnız web sunucusu başlarken okuduğu için yeni liste o zamana kadar kullanılmaz."
+  M_SVCX_OK="Birleşik servis dosyası yeniden sorunsuz yazılıyor"
   M_CFG_ASN="AS ile başlayan numaralar, virgülle (en çok 50)"
   M_CFG_PORTS="virgüllü portlar ya da aralıklar (30000:35000), en çok 50"
   M_CFG_CLM="ad=kip:servisler:portlar (kip svc, all ya da exc; svc'de servis ya da port; portlar virgüllü, aralık tireyle: 8080,30000-35000,443/udp, en çok 15), en çok 100 liste"
@@ -481,7 +487,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_L_OWNER="Sahibi"; M_L_PREFIX="Duyurulan blok"; M_L_REG="Kayıt"; M_L_DENY="csf.deny"
   M_L_TEMP="Geçici liste"; M_L_WL="İzin listesi"; M_L_CLOUD="Kiralık liste"; M_L_BKL="Blok listesi"; M_AB_LINE="puan %s/100 · %s bildirim (%s kişi) · son %s · %s"; M_AB_ERR="sorgulanamadı (HTTP %s): %s"; M_AB_BAD="AbuseIPDB anahtarı yalnız harf ve rakam olmalı (20–200 karakter)"; M_L_PENDING="İzleniyor"; M_L_IGN="Susturuldu"; M_L_ACCT="Denemeler"
   M_BKL_BAD="Liste adı ya da işlem geçersiz (beklenen: AD on|off)"; M_BKL_NONE="%s listesi csf.blocklists dosyasında yok"; M_BKL_NOTMINE="%s listesini eklenti açmadı; elle açılan listeyi eklenti kapatmaz (csf.blocklists dosyasından kapatın)"; M_BKL_ON="%s blok listesi açıldı; csf ve lfd yeniden başladı, lfd listeyi indiriyor"; M_BKL_OFF="%s blok listesi kapatıldı; csf ve lfd yeniden başladı"
-  M_SVCX_WROTE="Birleşik servis dosyası yazıldı: %s adres (%s)"; M_SVCX_SHRINK="Birleşik servis dosyası yazılmadı: yeni liste %s adres, öncekinin (%s) yarısından az (%s)"; M_SVCX_FAIL="Birleşik servis dosyası yazılamadı (%s)"; M_SVCX_RELOAD="Web sunucusu yeniden yüklendi: %s"; M_SVCX_RELOADF="Web sunucusu yeniden yüklenemedi: %s (çıkış %s): %s"
+  M_SVCX_WROTE="Birleşik servis dosyası yazıldı: %s adres (%s)"; M_SVCX_SHRINK="Birleşik servis dosyası yazılmadı: yeni liste %s adres, öncekinin (%s) yarısından az (%s)"; M_SVCX_FAIL="Birleşik servis dosyası yazılamadı (%s)"; M_SVCX_RELOAD="Web sunucusu yeniden yüklendi: %s"; M_SVCX_RELOADF="Web sunucusu yeniden yüklenemedi: %s (çıkış %s): %s"; M_SVCX_BAD="Birleşik servis dosyası yazılmadı: Apache yeni listeyi (%s adres) ModSecurity kuralında kabul etmedi, önceki dosya korunuyor (%s): %s"
   M_H_NOREASON="geçici ban (günlükte sebep yok)"
   M_CFG_BAD="Geçersiz değer: %s = %s (%s olmalı)"
   M_CFG_RANGE="%s ile %s arası bir tam sayı"
@@ -721,6 +727,11 @@ else
   M_SVC_FAIL_SUBJ="allowed service list can't be downloaded (%s)"
   M_SVC_FAIL_BODY="These allowed service lists haven't downloaded for longer than the warning period: %s. The old lists are still used; fix the address under Providers → Allowed services → Source addresses."
   M_SVC_FAIL_OK="Allowed service lists download again"
+  M_SVCX_BAD_SUBJ="combined services file failed the Apache test"
+  M_SVCX_BAD_BODY="The new allowed services list was not written because it failed Apache's configuration test; the previous file is kept (%s). Apache's error: %s"
+  M_SVCX_RLF_SUBJ="web server could not be reloaded"
+  M_SVCX_RLF_BODY="The combined services file changed but the web server could not be reloaded (%s, exit %s): %s. ModSecurity reads the file only when the web server starts, so the new list is not used until then."
+  M_SVCX_OK="The combined services file is written without problems again"
   M_CFG_ASN="numbers starting with AS, comma separated (at most 50)"
   M_CFG_PORTS="comma separated ports or ranges (30000:35000), at most 50"
   M_CFG_CLM="name=mode:services:ports (mode svc, all or exc; svc needs a service or a port; ports comma separated, ranges with a dash: 8080,30000-35000,443/udp, at most 15), at most 100 lists"
@@ -766,7 +777,7 @@ else
   M_L_OWNER="Owner"; M_L_PREFIX="Announced prefix"; M_L_REG="Registry"; M_L_DENY="csf.deny"
   M_L_TEMP="Temp list"; M_L_WL="Allow list"; M_L_CLOUD="Rented-server list"; M_L_BKL="Blocklist"; M_AB_LINE="score %s/100 · %s reports (%s users) · last %s · %s"; M_AB_ERR="could not query (HTTP %s): %s"; M_AB_BAD="The AbuseIPDB key must be letters and digits only (20–200 characters)"; M_L_PENDING="Watched"; M_L_IGN="Muted"; M_L_ACCT="Attempts"
   M_BKL_BAD="Invalid list name or action (expected: NAME on|off)"; M_BKL_NONE="List %s is not in csf.blocklists"; M_BKL_NOTMINE="List %s was not turned on by the plugin; the plugin does not turn off a list you turned on by hand (turn it off in csf.blocklists)"; M_BKL_ON="Blocklist %s turned on; csf and lfd restarted, lfd is downloading the list"; M_BKL_OFF="Blocklist %s turned off; csf and lfd restarted"
-  M_SVCX_WROTE="Combined services file written: %s addresses (%s)"; M_SVCX_SHRINK="Combined services file not written: the new list has %s addresses, less than half of the previous %s (%s)"; M_SVCX_FAIL="Combined services file could not be written (%s)"; M_SVCX_RELOAD="Web server reloaded: %s"; M_SVCX_RELOADF="Web server reload failed: %s (exit %s): %s"
+  M_SVCX_WROTE="Combined services file written: %s addresses (%s)"; M_SVCX_SHRINK="Combined services file not written: the new list has %s addresses, less than half of the previous %s (%s)"; M_SVCX_FAIL="Combined services file could not be written (%s)"; M_SVCX_RELOAD="Web server reloaded: %s"; M_SVCX_RELOADF="Web server reload failed: %s (exit %s): %s"; M_SVCX_BAD="Combined services file not written: Apache did not accept the new list (%s addresses) in a ModSecurity rule, the previous file is kept (%s): %s"
   M_H_NOREASON="temp ban (no reason in the log)"
   M_CFG_BAD="Invalid value: %s = %s (must be %s)"
   M_CFG_RANGE="a whole number from %s to %s"
@@ -880,7 +891,7 @@ mail() {
 
 # ── Settings: validation (panel + --config set + --dry-run --set) ──────────
 # Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
-CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST IC_REVIEW IE_REVIEW THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_PFX THRESHOLD_TEMP_24 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_KEEP_DAYS EVENTS_DAYS RUN_DAYS PERM_WINDOW_DAYS BANLOG_DAYS LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_MODES CLOUD_URLS CLOUD_EXTRA SRC_LABELS ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS REFRESH_HOUR OWNER_TTL_DAYS IMUNIFY_REFRESH_MIN BLOCK_ACTIVE_DAYS SVC_EXPORT SVC_EXPORT_RELOAD"
+CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST IC_REVIEW IE_REVIEW IC_SVCX IE_SVCX THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_PFX THRESHOLD_TEMP_24 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_KEEP_DAYS EVENTS_DAYS RUN_DAYS PERM_WINDOW_DAYS BANLOG_DAYS LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_MODES CLOUD_URLS CLOUD_EXTRA SRC_LABELS ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS REFRESH_HOUR OWNER_TTL_DAYS IMUNIFY_REFRESH_MIN BLOCK_ACTIVE_DAYS SVC_EXPORT SVC_EXPORT_RELOAD"
 PROV_KEYS="SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_MODES CLOUD_URLS CLOUD_EXTRA ENABLED"
 SVC_CATALOG="google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake microsoft365 quiccloud"
 CLOUD_CATALOG="gcp aws azure oracle digitalocean linode vultr"
@@ -900,7 +911,7 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
         MSG_LANG) opts="tr en" ;;
         LOOKUP) opts="0 1" ;;
         CRON_MIN) opts="*/5 */10 */15 */30 0" ;;
-        DIGEST|IC_FIREWALL|IC_LISTFULL|IC_RUN|IC_DIGEST|IE_FIREWALL|IE_LISTFULL|IE_RUN|IE_DIGEST|IC_REVIEW|IE_REVIEW) opts="0 1" ;;
+        DIGEST|IC_FIREWALL|IC_LISTFULL|IC_RUN|IC_DIGEST|IE_FIREWALL|IE_LISTFULL|IE_RUN|IE_DIGEST|IC_REVIEW|IE_REVIEW|IC_SVCX|IE_SVCX) opts="0 1" ;;
         NOTIFY) opts="all email slack" ;;
         DIGEST_DAY) opts="1 2 3 4 5 6 7" ;;
         ALERT_MAIL)
@@ -5871,10 +5882,17 @@ svc_enforce() {  # FORCE(1 = listeleri şimdi yenile) → izinli servisleri kur 
     fi
     return 0
 }
+# svcx_httpd_ok DOSYA: Apache yapılandırması bu dosyayı okuyan geçici bir ModSecurity kuralıyla sınanır (httpd -t -c; yalnız sınama,
+# çalışan sunucuya dokunmaz); çıktı stdout'a. Kural kimliği yerel aralığın (1–99.999) sonundan: sunucunun kendi kurallarıyla çakışmasın.
+svcx_httpd_ok() {
+    timeout 60 "$SVCX_HTTPD" -t -c "SecRule REMOTE_ADDR \"@ipMatchFromFile $1\" \"id:99989,phase:1,pass,nolog\"" 2>&1 9>&-
+}
 svc_export() {   # birleşik servis dosyası (SVC_EXPORT=1 ve izinli servisler açıkken): CSF'e giden son liste → SVCX_FILE, yalnız değişince
     [ "$SVC_EXPORT" = 1 ] && [ "$SVC_ALLOW" = 1 ] && [ -r "$SVC_OUT" ] || return 0
     local new n prev d tmp out rc
-    new=$(awk '$1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\/[0-9]+)?$/ { print $1 }' "$SVC_OUT" | sort -u | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n)
+    # /32 eksiz yazılır: Apache mod_security2 @ipMatchFromFile "a.b.c.d/32" satırını reddediyor (lin'de ölçüldü: AH00526
+    # "Could not add entry … to IP list"); öteki önekler aynen
+    new=$(awk '$1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\/[0-9]+)?$/ { sub(/\/32$/, "", $1); print $1 }' "$SVC_OUT" | sort -u | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n)
     n=$(printf '%s\n' "$new" | grep -c .)
     [ "$n" -gt 0 ] || return 0
     if [ -s "$SVCX_FILE" ]; then
@@ -5883,14 +5901,37 @@ svc_export() {   # birleşik servis dosyası (SVC_EXPORT=1 ve izinli servisler a
         # yarım kalan bir liste (kaynak indirilemedi, filtre boş döndü) ModSecurity muafiyetini daraltmasın: öncekinin yarısından azsa yazılmaz
         [ $(( n * 2 )) -ge "$prev" ] || { log "$(m "$M_SVCX_SHRINK" "$n" "$prev" "$SVCX_FILE")"; return 0; }
     fi
+    # Apache'nin reddettiği liste aynen geldiyse yeniden denenmez (her tur httpd -t ve aynı sorun için yeni kayıt olmasın): svcx.check
+    # satırı "zaman sonuç özet [hata]", sonuç 1 = reddedildi
+    local ck="$(dirname "$SAYAC_FILE")/svcx.check" cko kh ckt ckr ckh
+    kh=$(printf '%s\n' "$new" | cksum | tr -d ' ')
+    [ -r "$ck" ] && read -r ckt ckr ckh _ < "$ck" && [ "$ckr" = 1 ] && [ "$ckh" = "$kh" ] && return 0
     d=$(dirname "$SVCX_FILE"); mkdir -p "$d" && chmod 755 "$d" || { log "$(m "$M_SVCX_FAIL" "$SVCX_FILE")"; return 0; }
     tmp="$SVCX_FILE.tmp.$$"
-    { printf '%s\n' "$new" > "$tmp" && chmod 644 "$tmp" && mv -f "$tmp" "$SVCX_FILE"; } || { rm -f "$tmp"; log "$(m "$M_SVCX_FAIL" "$SVCX_FILE")"; return 0; }
+    { printf '%s\n' "$new" > "$tmp" && chmod 644 "$tmp"; } || { rm -f "$tmp"; log "$(m "$M_SVCX_FAIL" "$SVCX_FILE")"; return 0; }
+    # Apache denetimi (httpd ve ModSecurity varsa): yeni liste @ipMatchFromFile'a verilip yapılandırma sınanır; geçmezse önceki dosya
+    # kalır (bir kural bu dosyayı okuyorsa bozuk liste Apache'nin sonraki yeniden başlatılışını kırardı). Aynı sınama tek adreslik dosyayla
+    # da geçmiyorsa (ModSecurity yüklü değil, yapılandırma zaten bozuk) denetim yapılamıyor demektir, liste yazılır.
+    if [ -x "$SVCX_HTTPD" ]; then
+        if ! cko=$(svcx_httpd_ok "$tmp"); then
+            printf '127.0.0.1\n' > "$tmp.b"
+            if svcx_httpd_ok "$tmp.b" >/dev/null; then
+                rm -f "$tmp" "$tmp.b"
+                cko=$(printf '%s' "$cko" | grep -a . | tail -n 1 | tr -d '\r' | cut -c1-300)
+                printf '%s 1 %s %s\n' "$(date +%s)" "$kh" "$cko" > "$ck"
+                log "$(m "$M_SVCX_BAD" "$n" "$SVCX_FILE" "$cko")"; return 0
+            fi
+            rm -f "$tmp.b"
+        fi
+        printf '%s 0 %s\n' "$(date +%s)" "$kh" > "$ck"
+    else rm -f "$ck"      # httpd yok (kaldırıldı): eski bir red kaydı sorun olarak kalmasın
+    fi
+    mv -f "$tmp" "$SVCX_FILE" || { rm -f "$tmp"; log "$(m "$M_SVCX_FAIL" "$SVCX_FILE")"; return 0; }
     log "$(m "$M_SVCX_WROTE" "$n" "$SVCX_FILE")"
     if [ "$SVC_EXPORT_RELOAD" = 1 ]; then
         # komut ertelenirse ("Restarts are currently deferred") bekleyip yeniden dener: zaman aşımı geniş (ölçülen birkaç saniye)
         out=$(timeout 180 $SVCX_RELOAD_CMD 2>&1 9>&-); rc=$?
-        printf '%s %s\n' "$(date +%s)" "$rc" > "$(dirname "$SAYAC_FILE")/svcx.reload"
+        printf '%s %s %s\n' "$(date +%s)" "$rc" "$(printf '%s' "$out" | grep -a . | tail -n 1 | tr -d '\r' | cut -c1-300)" > "$(dirname "$SAYAC_FILE")/svcx.reload"
         if [ "$rc" = 0 ]; then log "$(m "$M_SVCX_RELOAD" "$SVCX_RELOAD_CMD")"; else log "$(m "$M_SVCX_RELOADF" "$SVCX_RELOAD_CMD" "$rc" "$(printf '%s' "$out" | tail -n 1)")"; fi
     fi
     return 0
@@ -6325,6 +6366,27 @@ svc_health() {   # izinli servis kaynaklarından uyarı süresinden uzun süredi
         jstr "$bad"; ev svc_fail "" "names=$REPLY"; log "$(m "$M_SVC_FAIL_BODY" "$bad")"
     fi
     ic_track IC_RUN SvcFail "$([ -n "$bad" ] && echo 1 || echo 0)" "$(m "$M_SVC_FAIL_SUBJ" "$bad")" "$(m "$M_SVC_FAIL_BODY" "$bad")" "$M_SVC_FAIL_OK"
+    return 0
+}
+svcx_health() {  # birleşik servis dosyası: Apache reddi / web sunucusu yeniden yüklenemedi → bildirim (IE_SVCX e-posta, IC_SVCX Slack) ve
+    # Geçmiş; her sorun (denetim ya da yeniden yükleme anı) bir kez bildirilir, svcx.told'da tutulur. Düzelince Slack'e "düzeldi".
+    local d kt=0 kr=0 ke="" rt=0 rc=0 re="" key="" subj="" body="" f; d=$(dirname "$SAYAC_FILE"); f="$d/svcx.told"
+    if [ "$SVC_EXPORT" = 1 ] && [ "$SVC_ALLOW" = 1 ]; then
+        [ -r "$d/svcx.check" ] && read -r kt kr _ ke < "$d/svcx.check"
+        [ -r "$d/svcx.reload" ] && read -r rt rc re < "$d/svcx.reload"
+    fi
+    if [ "$kr" = 1 ]; then
+        key="c$kt"; subj="$M_SVCX_BAD_SUBJ"; body=$(m "$M_SVCX_BAD_BODY" "$SVCX_FILE" "$ke")
+    elif [[ "$rc" =~ ^[0-9]+$ ]] && [ "$rc" != 0 ]; then
+        key="r$rt"; subj="$M_SVCX_RLF_SUBJ"; body=$(m "$M_SVCX_RLF_BODY" "$SVCX_RELOAD_CMD" "$rc" "$re")
+    fi
+    if [ -n "$key" ] && ! grep -qxF "$key" "$f" 2>/dev/null; then
+        mail_add "$subj" "$body" bad IE_SVCX ic
+        echo "$key" > "$f"
+        local k; if [ "${key:0:1}" = c ]; then k=chk; else k=rl; fi
+        jstr "${ke:-$re}"; ev svcx_fail "" "k=\"$k\"" "err=$REPLY" "rc=\"${rc//[^0-9]/}\""
+    fi
+    ic_track IC_SVCX SvcxFail "$([ -n "$key" ] && echo 1 || echo 0)" "$subj" "$body" "$M_SVCX_OK"
     return 0
 }
 refresh_due() {  # DOSYA GÜN → 0: yenileme zamanı (dosyada son yenilemenin epoch'u; yoksa hemen); her turda denetlenir
@@ -7832,7 +7894,7 @@ do_config() {
                 o="{\"ok\":true,\"values\":{"
                 i=0
                 for k in $CFG_KEYS; do jstr "$(cfg_value "$k")"; o+="$([ $i -gt 0 ] && echo ,)\"$k\":$REPLY"; i=1; done
-                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"whm\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"NOTIFY\":\"all\",\"IC_FIREWALL\":\"1\",\"IC_LISTFULL\":\"1\",\"IC_RUN\":\"1\",\"IC_DIGEST\":\"1\",\"IE_FIREWALL\":\"1\",\"IE_LISTFULL\":\"1\",\"IE_RUN\":\"1\",\"IE_DIGEST\":\"1\",\"IC_REVIEW\":\"1\",\"IE_REVIEW\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_PFX\":\"4\",\"THRESHOLD_TEMP_24\":\"3\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_KEEP_DAYS\":\"30\",\"EVENTS_DAYS\":\"180\",\"RUN_DAYS\":\"31\",\"PERM_WINDOW_DAYS\":\"90\",\"BANLOG_DAYS\":\"90\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"BLOCK_EXPIRE_DAYS\":\"365\",\"BLOCK_ACTIVE_DAYS\":\"30\",\"OWNER_TTL_DAYS\":\"30\",\"IMUNIFY_REFRESH_MIN\":\"60\",\"CLOUD_REFRESH_DAYS\":\"1\",\"CLOUD_FAIL_DAYS\":\"3\",\"SVC_REFRESH_DAYS\":\"1\",\"SVC_FAIL_DAYS\":\"3\",\"GEO_REFRESH_DAYS\":\"25\",\"REFRESH_HOUR\":\"4\",\"BLOCK_EXPIRE_AUTO\":\"0\",\"SVC_EXPORT\":\"0\",\"SVC_EXPORT_RELOAD\":\"0\",\"CRON_MIN\":\"*/10\"}"
+                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"whm\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"NOTIFY\":\"all\",\"IC_FIREWALL\":\"1\",\"IC_LISTFULL\":\"1\",\"IC_RUN\":\"1\",\"IC_DIGEST\":\"1\",\"IE_FIREWALL\":\"1\",\"IE_LISTFULL\":\"1\",\"IE_RUN\":\"1\",\"IE_DIGEST\":\"1\",\"IC_REVIEW\":\"1\",\"IE_REVIEW\":\"1\",\"IC_SVCX\":\"1\",\"IE_SVCX\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_PFX\":\"4\",\"THRESHOLD_TEMP_24\":\"3\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_KEEP_DAYS\":\"30\",\"EVENTS_DAYS\":\"180\",\"RUN_DAYS\":\"31\",\"PERM_WINDOW_DAYS\":\"90\",\"BANLOG_DAYS\":\"90\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"BLOCK_EXPIRE_DAYS\":\"365\",\"BLOCK_ACTIVE_DAYS\":\"30\",\"OWNER_TTL_DAYS\":\"30\",\"IMUNIFY_REFRESH_MIN\":\"60\",\"CLOUD_REFRESH_DAYS\":\"1\",\"CLOUD_FAIL_DAYS\":\"3\",\"SVC_REFRESH_DAYS\":\"1\",\"SVC_FAIL_DAYS\":\"3\",\"GEO_REFRESH_DAYS\":\"25\",\"REFRESH_HOUR\":\"4\",\"BLOCK_EXPIRE_AUTO\":\"0\",\"SVC_EXPORT\":\"0\",\"SVC_EXPORT_RELOAD\":\"0\",\"CRON_MIN\":\"*/10\"}"
                 ALERT_MAIL=whm mail_to; jstr "$REPLY"; o+=",\"whm_contact\":$REPLY"
                 # AbuseIPDB: anahtarın kendisi panele gitmez — yalnız tanımlı mı, son 4 karakteri, bugünkü sorgu sayısı
                 local akt="" atd atb; abuse_key && akt="${REPLY: -4}"; abuse_today; atd=$REPLY; abuse_btoday; atb=$REPLY
@@ -7848,9 +7910,10 @@ do_config() {
                     bj+="${bj:+,}{\"n\":\"$bn\",\"on\":$([ "$bon" = 1 ] && echo true || echo false),\"iv\":$biv,\"mx\":$bmx,\"url\":$bu,\"d\":$bd,\"det\":$bdt,\"c\":$bc,\"t\":$bt,\"lm\":$blm,\"mine\":$(grep -qxF "$bn" "$BKL_MINE" 2>/dev/null && echo true || echo false)}"
                 done < <(bkl_conf)
                 o+=",\"bkl\":[$bj],\"bkl_ipset\":\"$(conf_val LF_IPSET)\",\"bkl_file\":$([ -w "$CSF_DIR/csf.blocklists" ] && echo true || echo false)"
-                # birleşik servis dosyası (Sağlayıcılar → İzinli servisler): yolu, satır sayısı, son yazım; son yeniden yükleme (zaman, çıkış kodu)
-                local xr=0 xc=""; [ -r "$(dirname "$SAYAC_FILE")/svcx.reload" ] && read -r xr xc < "$(dirname "$SAYAC_FILE")/svcx.reload"
-                jstr "$SVCX_FILE"; o+=",\"svcx\":{\"f\":$REPLY,\"n\":$(num "$(grep -c . "$SVCX_FILE" 2>/dev/null)"),\"t\":$(num "$(stat -c %Y "$SVCX_FILE" 2>/dev/null)"),\"rt\":$(num "$xr"),\"rc\":\"${xc//[^0-9]/}\"}"
+                # birleşik servis dosyası (Ayarlar → Kaynaklar ve yenileme): yolu, satır sayısı, son yazım; son yeniden yükleme (zaman, çıkış kodu)
+                local xr=0 xc="" xe=""; [ -r "$(dirname "$SAYAC_FILE")/svcx.reload" ] && read -r xr xc xe < "$(dirname "$SAYAC_FILE")/svcx.reload"
+                local kt=0 kr=0 ke=""; [ -r "$(dirname "$SAYAC_FILE")/svcx.check" ] && read -r kt kr _ ke < "$(dirname "$SAYAC_FILE")/svcx.check"
+                jstr "$SVCX_FILE"; o+=",\"svcx\":{\"f\":$REPLY,\"n\":$(num "$(grep -c . "$SVCX_FILE" 2>/dev/null)"),\"t\":$(num "$(stat -c %Y "$SVCX_FILE" 2>/dev/null)"),\"rt\":$(num "$xr"),\"rc\":\"${xc//[^0-9]/}\",\"ct\":$(num "$kt"),\"cr\":$(num "$kr")"; jstr "$ke"; o+=",\"ce\":$REPLY"; jstr "$xe"; o+=",\"re\":$REPLY}"
                 slack_url; o+=",\"slack\":$([ -n "$REPLY" ] && echo true || echo false)"
                 # lfd'nin geçici ban süreleri (saniye; en kısa ve en uzun): LF_TRIGGER açıksa LF_TRIGGER_PERM, değilse açık
                 # her tetikleyicinin (LF_X > 0) LF_X_PERM'i; 1 kalıcı demek, yalnız 1'den büyükler geçici süredir
@@ -8120,7 +8183,7 @@ pa "turn artık temizliği"; [ "$DRY" = 1 ] || limit_watch         # CSF sınır
 pa "turn sınır izleme"; [ "$DRY" = 1 ] || proto_fix           # eski kısmi ban / istisnalara eksik UDP 443 (HTTP/3)
 pa "turn UDP 443"; [ "$DRY" = 1 ] || { svc_enforce 0; svc_export; asn_enforce; cloud_enforce 0; cloud_on_calc; hits_update; guard_update; }   # izinli servisler, sağlayıcı banı, bulut listeleri: istenen durum CSF'te mi
 pa "turn servis/sağlayıcı/bulut zorlama"; [ "$DRY" = 1 ] || { refresh_tasks; geo_refresh; }; CR_OK=""   # günde bir: servis izin listeleri, CSF'in ASN verisi; kiralık listeler yenilenmiş olabilir: aralık önbelleği yeniden denetlensin
-pa "turn günlük işler"; [ "$DRY" = 1 ] || { svc_health; cloud_health; }   # indirilemeyen izinli servis / bulut listesi: bildirim
+pa "turn günlük işler"; [ "$DRY" = 1 ] || { svc_health; cloud_health; svcx_health; }   # indirilemeyen izinli servis / bulut listesi: bildirim
 pa "turn sağlık"; cov_keep            # kapsama defteri: zorlamadan sonra yürürlükte olan her kapsama, ilk görüldüğü anla (kararlar buradan okur)
 pa "turn kapsama defteri"
 

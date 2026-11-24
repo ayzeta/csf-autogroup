@@ -555,18 +555,22 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
         await page.keyboard.press('Escape'); await page.waitForTimeout(300);
       } else check('blok listesi menüsünde "Listeyi aç" (kapalı liste)', false, 'bklon yok');
     }
-    // birleşik servis dosyası (1.15.119): İzinli servisler kartının bölümü; test makinesinde izinli servisler kapalı → taslakta açılır,
-    // bölüm ve yeniden yükleme seçeneği görünür, Vazgeç ile taslak atılır (kaydedilmez)
-    await page.click('#ag-svc-card [data-act="cfgchip"][data-k="SVC_ALLOW"][data-v="1"]').catch(() => {}); await page.waitForTimeout(400);
-    const sx0 = await page.evaluate(() => { const c = document.querySelector('#ag-svc-card'); return c ? { exp: !!c.querySelector('[data-k="SVC_EXPORT"]'), rl: !!c.querySelector('[data-k="SVC_EXPORT_RELOAD"]') } : null; });
-    await page.click('#ag-svc-card [data-act="cfgchip"][data-k="SVC_EXPORT"][data-v="1"]').catch(() => {}); await page.waitForTimeout(400);
-    const sx1 = await page.evaluate(() => { const c = document.querySelector('#ag-svc-card'); return c ? { rl: !!c.querySelector('[data-k="SVC_EXPORT_RELOAD"]'), yol: /services-all\.txt/.test(c.innerText), not: /restartsrv_httpd --graceful/.test(c.innerText) } : null; });
-    check('İzinli servisler: birleşik dosya bölümü (açınca yeniden yükleme seçeneği, dosya yolu, ne zaman yeniden yüklendiği)', !!sx0 && sx0.exp && !sx0.rl && !!sx1 && sx1.rl && sx1.yol && sx1.not, JSON.stringify([sx0, sx1]));
+    // birleşik servis dosyası 1.15.120'den beri Ayarlar'da (listenin nasıl işlediği); Sağlayıcılar'daki İzinli servisler kartında seçeneği yok
+    const sxp = await page.evaluate(() => !!document.querySelector('[data-k="SVC_EXPORT"], [data-k="SVC_EXPORT_RELOAD"]'));
+    check('birleşik servis dosyası seçenekleri Sağlayıcılar sekmesinde yok (Ayarlar → Kaynaklar ve yenileme)', !sxp, 'Sağlayıcılar\'da SVC_EXPORT');
+    // sonraki denetimler Ayarlar'da sürer
+    await page.click('.ag-tabs [data-tab="settings"]'); await page.waitForSelector('.ag-setnav [data-s]', { timeout: 20000 }).catch(() => {}); await page.waitForTimeout(300);
+    // birleşik servis dosyası (1.15.120): Ayarlar → Kaynaklar ve yenileme → İzinli servis listeleri kartı; test makinesinde izinli servisler
+    // kapalı → açınca "Sağlayıcılar'da kapalı" notu; yeniden yükleme seçeneği dosya kapalıyken soluk; Vazgeç ile taslak atılır
+    if (await tik(page, '.ag-setnav [data-s="src"]')) await page.waitForTimeout(500);
+    const sxc = '.ag-card:has([data-k="SVC_EXPORT"])';
+    const sx0 = await page.evaluate((q) => { const c = document.querySelector(q); return c ? { rl: !!c.querySelector('.ag-bagli.off [data-k="SVC_EXPORT_RELOAD"]'), ref: !!c.querySelector('[data-k="SVC_REFRESH_DAYS"]') } : null; }, sxc);
+    await page.click(sxc + ' [data-act="cfgchip"][data-k="SVC_EXPORT"][data-v="1"]').catch(() => {}); await page.waitForTimeout(400);
+    const sx1 = await page.evaluate((q) => { const c = document.querySelector(q); return c ? { rl: !!c.querySelector('.ag-bagli:not(.off) [data-k="SVC_EXPORT_RELOAD"]'), yol: /services-all\.txt/.test(c.innerText), not: /restartsrv_httpd --graceful/.test(c.innerText), nosvc: /(Sağlayıcılar sekmesinde kapalı|off on the Providers tab)/.test(c.innerText) } : null; }, sxc);
+    check('Ayarlar: birleşik servis dosyası izinli servis listelerinin kartında (yenileme ayarlarıyla; açınca yeniden yükleme seçeneği etkin, dosya yolu, izinli servisler kapalı notu)', !!sx0 && sx0.rl && sx0.ref && !!sx1 && sx1.rl && sx1.yol && sx1.not && sx1.nosvc, JSON.stringify([sx0, sx1]));
     for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(250); await layoutChecks(page, 'svc-birlesik', w); await shot('svc-birlesik-' + w); }
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.click('[data-act="cfgdiscard"]').catch(() => {}); await page.waitForTimeout(400);
-    // sonraki denetimler Ayarlar'da sürer
-    await page.click('.ag-tabs [data-tab="settings"]'); await page.waitForSelector('.ag-setnav [data-s]', { timeout: 20000 }).catch(() => {}); await page.waitForTimeout(300);
   }
   {
     if (await tik(page, '.ag-setnav [data-s="thr"]')) await page.waitForTimeout(500);
@@ -594,8 +598,10 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
   {
     // Bildirim: olay × kanal tablosu — 5 olay (1.15.4: Kontrol edilecekler bulguları) × 2 kanal; hücre tıklanınca kaydet çubuğu çıkar, geri tıklanınca taslak temiz; telefonda sığar
     if (await tik(page, '.ag-setnav [data-s="notify"]')) await page.waitForTimeout(500);
+    // 1.15.120: 6 olay (birleşik servis dosyası sorunları); her satırda iki kanal hücresi
     const cells = await page.$$('.ag-evm .ag-chk');
-    check('Bildirim: olay × kanal tablosu 10 hücre', cells.length === 10, String(cells.length));
+    const evRows = await page.$$eval('.ag-evm tbody tr', r => r.length).catch(() => 0);
+    check('Bildirim: olay × kanal tablosu 6 olay × 2 kanal', evRows === 6 && cells.length === 12, evRows + ' satır, ' + cells.length + ' hücre');
     if (cells.length === 10) {
       const sel = '.ag-evm .ag-chk[data-k="IE_RUN"]';
       const p0 = await page.getAttribute(sel, 'aria-pressed');
