@@ -85,6 +85,16 @@ if [ -f csf_autogroup.sh ] && grep -q "case 'abuse_key'" "$W/api.php"; then
     ok "abuse_key: boş anahtar kaldırır" "printf '%s' \"\$BODY\" | grep -q '\"ok\":true' && [ ! -e '$W/st/abuseipdb/key' ]"
     post "a=abuse_key&key=APIANAHTAR0123456789abcdQRST"
     ok "abuse_key: CSRF anahtarı olmadan reddedilir" "printf '%s' \"\$BODY\" | grep -q '\"error\":\"session\"' && [ ! -e '$W/st/abuseipdb/key' ]"
+    # abuse_block (1.15.116): aralık kartı düğmesi; /16–/31 dışı ve bozuk giriş motora gitmeden reddedilir, geçerli giriş motora
+    # gider (anahtar yok → motorun "nokey" cevabı); CSRF'siz istek reddedilir
+    post "a=abuse_block&cidr=158.101.136.0/24&csrf=$TOK"
+    ok "abuse_block: geçerli aralık motora gider (anahtarsız: nokey)" "printf '%s' \"\$BODY\" | grep -q '\"error\":\"nokey\"'"
+    post "a=abuse_block&cidr=158.0.0.0/8&csrf=$TOK"
+    ok "abuse_block: /16'dan geniş aralık reddedilir" "printf '%s' \"\$BODY\" | grep -q '\"error\":\"bad_input\"'"
+    post "a=abuse_block&cidr=158.101.136.0%2F24%3Bid&csrf=$TOK"
+    ok "abuse_block: bozuk giriş reddedilir" "printf '%s' \"\$BODY\" | grep -q '\"error\":\"bad_input\"'"
+    post "a=abuse_block&cidr=158.101.136.0/24"
+    ok "abuse_block: CSRF anahtarı olmadan reddedilir" "printf '%s' \"\$BODY\" | grep -q '\"error\":\"session\"'"
 fi
 
 echo "api-uc: $PASS geçti, $FAIL düştü"

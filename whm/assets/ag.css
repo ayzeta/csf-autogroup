@@ -1386,5 +1386,10 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-iplink:hover { text-decoration-color: currentColor; }
 /* AbuseIPDB anahtarı: type="password" değil (parola yöneticisi sayfayı giriş formu sanıyordu); yazılan anahtar noktalarla gizlenir */
 .ag-secret { -webkit-text-security: disc; }
+/* etiket + durum rozeti + bugünkü sorgu sayısı: dar kartta etiket bölünmesin ("API / anahtarı"; canlı, 371 px), sığmayan alt satıra */
+.ag-ab-f > .ag-field-l { flex-wrap: wrap; row-gap: 4px; }
+.ag-ab-f > .ag-field-l label { white-space: nowrap; }
+/* AbuseIPDB puan rozeti kısa ve bölünmez: kart içindeki uzun rozetleri saran kural ("100/ 100", 390 px) buna uygulanmaz */
+.ag-drawer .ag-fact-v .ag-pill.ag-ab-sc, .ag-pill.ag-ab-sc { white-space: nowrap; }
 .ag-setform .ag-field > .ag-addrow { flex-wrap: wrap; justify-content: flex-end; margin: 0; }
 .ag-setform .ag-field .ag-addrow .ag-input.ag-secret { width: auto; flex: 0 1 260px; }

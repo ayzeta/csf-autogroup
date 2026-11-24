@@ -135,6 +135,13 @@ switch ($a) {
         }
         ag_json(ag_run_json(['--lookup', $ip, '--json'], 45));
 
+    case 'abuse_block':                             // aralık kartı düğmesi: AbuseIPDB blok sorgusu (ağ adresiyle /16–/31; motor da denetler)
+        $cidr = trim((string) ($_POST['cidr'] ?? ''));
+        if (!preg_match('/^([0-9]{1,3}\.){3}[0-9]{1,3}\/(1[6-9]|2[0-9]|3[01])$/', $cidr)) {
+            ag_json(['ok' => false, 'error' => 'bad_input']);
+        }
+        ag_json(ag_run_json(['--abuse-block', $cidr], 30));
+
     case 'events':                                  // Geçmiş sekmesi: olay kaydından bir sayfa
         $m = (string) ($_POST['m'] ?? 'latest');
         if (!in_array($m, ['latest', 'after', 'before'], true)) {

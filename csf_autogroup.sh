@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.115"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.116"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -200,6 +200,7 @@ while [ $# -gt 0 ]; do
         --inside)  MODE=inside ;;
         --asn-impact) MODE=asnimpact ;;
         --src-ips) MODE=srcips ;;
+        --abuse-block) MODE=abuseblk ;;   # aralık kartındaki düğme: AbuseIPDB blok sorgusu (/16–/31; kart açılınca sorulmaz)
         --prov-apply) MODE=prov ;;
         --keep)    CLEAN=0 ;;
         --restore) RESTORE=1 ;;
@@ -355,7 +356,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_EXP_LINE="%s -> %s gün önce eklenmişti"
   M_EXP_LOG="ESKİ BLOK KALDIRILDI: %s (%s gün)"
   M_EXP_FAIL="HATA eski blok kaldırılamadı: %s"
-  M_EXP_ACTIVE="Eski blok kaldırılmadı: %s hâlâ deneniyor (son deneme %s gün önce)"
+  M_EXP_ACTIVE="Eski blok kaldırılmadı: %s hâlâ deneniyor, son deneme %s gün önce geldi"
   M_A_EXPIRED="%s eski blok banı kaldırıldı"
   M_A_EXPNONE="Kaldırılacak eski blok banı yok"
   M_DG_UPD="Yeni sürüm var: v%s → v%s. Eklentideki Güncelle düğmesiyle ya da update.sh ile kurulabilir."
@@ -4395,6 +4396,8 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
         if bkl_range "$clo" "$chi"; then o+=",\"bkl\":\"$REPLY\""; else o+=",\"bkl\":\"\""; fi
         jstr "$WL_HIT"; o+=",\"wl\":$REPLY,\"wl_retry\":$([ "$WL_RETRY" = 1 ] && echo true || echo false)"
         jstr "$OWN_LONG"; o+=",\"owner\":$REPLY"
+        # AbuseIPDB: kart açılınca SORULMAZ (blok sorgusu günde 100); anahtar varsa abk, önbellekte sonuç varsa abuse (düğme sorar)
+        if abuse_key; then abuse_btoday; o+=",\"abk\":true,\"abt\":$REPLY"; abuse_block "$c" cache && o+=",\"abuse\":$REPLY"; fi
         cidr_range "$c" && self_overlap "$R_LO" "$R_HI"; o+=",\"self\":\"$SELF_HIT\""
         jarr "${IN_BLK[@]}"; o+=",\"blocks\":$REPLY"
         jarr "${IN_OTH[@]}"; o+=",\"others\":$REPLY"
@@ -5616,6 +5619,51 @@ abuse_text() {   # JSON (abuse_check) → REPLY = düz metin satırı: "puan 100
     if [[ "$j" == *'"err"'* ]]; then REPLY=$(m "$M_AB_ERR" "$(f code)" "$(f err)"); return; fi
     REPLY=$(m "$M_AB_LINE" "$(f s)" "$(f r)" "$(f u)" "$(f l | cut -c1-10)" "$(f ut)")
     [ "$(f tor)" = true ] && REPLY+=" · Tor"
+}
+# Aralık (blok) sorgusu: check-block ucu. Belge (docs.abuseipdb.com, 2026-11-24 okundu): GET network=CIDR, maxAgeInDays (standart planda
+# en çok 30), standart planda en geniş /24 (Basic /20, Premium /16; aşınca 402), günde 100 blok sorgusu (tek IP sorgusundan ayrı sayaç).
+# Cevap data{networkAddress, netmask, minAddress, maxAddress, numPossibleHosts, addressSpaceDesc, reportedAddress[{ipAddress, numReports,
+# mostRecentReport, abuseConfidenceScore, countryCode}]}; bloğun kendi puanı yok. GERÇEK CEVAPLA ÖLÇÜLMEDİ (anahtar sunucuda): ayrıştırıcı
+# alan yoksa boş / 0 kabul eder; reportedAddress dizi değilse hata sayılır. Yalnız aralık kartındaki düğme sorar (--abuse-block);
+# kart açılınca yalnız önbellek okunur (abuse_block CIDR cache). Önbellek 24 saat, hata 10 dk, sayaç count.blk.
+ABUSE_BAPI="${ABUSE_BAPI:-https://api.abuseipdb.com/api/v2/check-block}"
+abuse_block() {  # CIDR [cache] → 0 ve REPLY = {"net","n","mx","ips":[{"ip","r","s","l","cc"}],"t"} ya da {"err","code","t"}; anahtar yoksa / önbellekte yoksa 1
+    local net="$1" only="${2:-}" k f c e now h body code
+    abuse_key || return 1; k="$REPLY"
+    [[ "$net" =~ ^([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/([0-9]+)$ ]] || return 1
+    [ "${BASH_REMATCH[2]}" -ge 16 ] && [ "${BASH_REMATCH[2]}" -le 31 ] || return 1
+    f="blk-${BASH_REMATCH[1]}-${BASH_REMATCH[2]}"; c="$ABUSE_DIR/c/$f.json"; e="$ABUSE_DIR/c/$f.err"
+    printf -v now '%(%s)T' -1
+    if [ -s "$c" ] && [ $(( now - $(stat -c %Y "$c" 2>/dev/null || echo 0) )) -lt 86400 ]; then REPLY=$(cat "$c"); return 0; fi
+    if [ -s "$e" ] && [ $(( now - $(stat -c %Y "$e" 2>/dev/null || echo 0) )) -lt 600 ]; then REPLY=$(cat "$e"); return 0; fi
+    [ "$only" = cache ] && return 1
+    mkdir -p "$ABUSE_DIR/c" 2>/dev/null; chmod 700 "$ABUSE_DIR" 2>/dev/null
+    h=$(mktemp "$ABUSE_DIR/h.XXXXXX") || return 1; chmod 600 "$h"
+    printf 'Key: %s\nAccept: application/json\n' "$k" > "$h"
+    body=$(curl -sS --max-time 15 -G "$ABUSE_BAPI" --data-urlencode "network=$net" -d maxAgeInDays=30 -H @"$h" -w '\n%{http_code}' 2>/dev/null)
+    rm -f "$h"
+    code="${body##*$'\n'}"; body="${body%$'\n'*}"; [[ "$code" =~ ^[0-9]+$ ]] || code=0
+    abuse_btoday; printf '%s %s\n' "$(date +%F)" "$(( REPLY + 1 ))" > "$ABUSE_DIR/count.blk" 2>/dev/null
+    REPLY=$(printf '%s' "$body" | perl -MJSON::PP -e '
+        local $/; my $in = <STDIN>; my ($code, $now, $net) = @ARGV; my $J = JSON::PP->new->canonical;
+        my $d = eval { $J->decode($in) };
+        if ($code == 200 && ref $d eq "HASH" && ref $d->{data} eq "HASH" && ref $d->{data}{reportedAddress} eq "ARRAY") {
+            my @a = map { { ip => $_->{ipAddress} // "", r => ($_->{numReports} // 0) + 0, s => ($_->{abuseConfidenceScore} // 0) + 0,
+                l => $_->{mostRecentReport} // "", cc => $_->{countryCode} // "" } } grep { ref $_ eq "HASH" && ($_->{ipAddress} // "") =~ /^[0-9.]+$/ } @{ $d->{data}{reportedAddress} };
+            @a = sort { $b->{s} <=> $a->{s} || $b->{r} <=> $a->{r} || $a->{ip} cmp $b->{ip} } @a;
+            my $mx = 0; for (@a) { $mx = $_->{s} if $_->{s} > $mx }
+            my $n = scalar @a; splice(@a, 256) if @a > 256;
+            print $J->encode({ net => $net, n => $n, mx => $mx + 0, ips => \@a, t => $now + 0 }) }
+        else { my $m = (ref $d eq "HASH" && ref $d->{errors} eq "ARRAY" && ref $d->{errors}[0] eq "HASH") ? ($d->{errors}[0]{detail} // "") : "";
+            print $J->encode({ err => $m, code => $code + 0, t => $now + 0 }) }' "$code" "$now" "$net" 2>/dev/null)
+    [ -n "$REPLY" ] || REPLY="{\"err\":\"\",\"code\":$code,\"t\":$now}"
+    if [[ "$REPLY" == *'"err"'* ]]; then printf '%s' "$REPLY" > "$e.tmp.$$" && mv -f "$e.tmp.$$" "$e"
+    else printf '%s' "$REPLY" > "$c.tmp.$$" && mv -f "$c.tmp.$$" "$c"; rm -f "$e"; fi
+    return 0
+}
+abuse_btoday() { # → REPLY = bugün yapılan blok sorgusu sayısı
+    local d="" n=0; [ -r "$ABUSE_DIR/count.blk" ] && read -r d n < "$ABUSE_DIR/count.blk"
+    [ "$d" = "$(date +%F)" ] && [[ "$n" =~ ^[0-9]+$ ]] && REPLY=$n || REPLY=0
 }
 bkl_has() {      # IP → 0: etkin bir blok listesinde (REPLY = listenin adı)
     REPLY=""
@@ -7734,8 +7782,8 @@ do_config() {
                 o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"whm\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"NOTIFY\":\"all\",\"IC_FIREWALL\":\"1\",\"IC_LISTFULL\":\"1\",\"IC_RUN\":\"1\",\"IC_DIGEST\":\"1\",\"IE_FIREWALL\":\"1\",\"IE_LISTFULL\":\"1\",\"IE_RUN\":\"1\",\"IE_DIGEST\":\"1\",\"IC_REVIEW\":\"1\",\"IE_REVIEW\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_PFX\":\"4\",\"THRESHOLD_TEMP_24\":\"3\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_KEEP_DAYS\":\"30\",\"EVENTS_DAYS\":\"180\",\"RUN_DAYS\":\"31\",\"PERM_WINDOW_DAYS\":\"90\",\"BANLOG_DAYS\":\"90\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"BLOCK_EXPIRE_DAYS\":\"365\",\"BLOCK_ACTIVE_DAYS\":\"30\",\"OWNER_TTL_DAYS\":\"30\",\"IMUNIFY_REFRESH_MIN\":\"60\",\"CLOUD_REFRESH_DAYS\":\"1\",\"CLOUD_FAIL_DAYS\":\"3\",\"SVC_REFRESH_DAYS\":\"1\",\"SVC_FAIL_DAYS\":\"3\",\"GEO_REFRESH_DAYS\":\"25\",\"REFRESH_HOUR\":\"4\",\"BLOCK_EXPIRE_AUTO\":\"0\",\"CRON_MIN\":\"*/10\"}"
                 ALERT_MAIL=whm mail_to; jstr "$REPLY"; o+=",\"whm_contact\":$REPLY"
                 # AbuseIPDB: anahtarın kendisi panele gitmez — yalnız tanımlı mı, son 4 karakteri, bugünkü sorgu sayısı
-                local akt="" atd; abuse_key && akt="${REPLY: -4}"; abuse_today; atd=$REPLY
-                o+=",\"abuse\":{\"set\":$([ -n "$akt" ] && echo true || echo false),\"tail\":\"$akt\",\"today\":$atd}"
+                local akt="" atd atb; abuse_key && akt="${REPLY: -4}"; abuse_today; atd=$REPLY; abuse_btoday; atb=$REPLY
+                o+=",\"abuse\":{\"set\":$([ -n "$akt" ] && echo true || echo false),\"tail\":\"$akt\",\"today\":$atd,\"btoday\":$atb}"
                 slack_url; o+=",\"slack\":$([ -n "$REPLY" ] && echo true || echo false)"
                 # lfd'nin geçici ban süreleri (saniye; en kısa ve en uzun): LF_TRIGGER açıksa LF_TRIGGER_PERM, değilse açık
                 # her tetikleyicinin (LF_X > 0) LF_X_PERM'i; 1 kalıcı demek, yalnız 1'den büyükler geçici süredir
@@ -7882,6 +7930,11 @@ prov_resolve     # "auto" ayarlar: CSF'te elle kurulmuş sağlayıcı banı / iz
 case "$MODE" in
     status) LOG_MODE=quiet; do_status; exit $? ;;
     lookup) LOG_MODE=quiet; do_lookup "${ARGS[0]}"; exit $? ;;
+    abuseblk) LOG_MODE=quiet                     # CIDR ağ adresiyle (aralık kartının gönderdiği biçim); anahtar yoksa nokey
+        abuse_key || { echo '{"ok":false,"error":"nokey"}'; exit 1; }
+        cidr_range "${ARGS[0]:-}" && [[ "${ARGS[0]}" == */* ]] && [ "${ARGS[0]#*/}" -ge 16 ] && [ "${ARGS[0]#*/}" -le 31 ] &&
+            ip2int "${ARGS[0]%/*}" && [ "$REPLY" -eq "$R_LO" ] || { echo '{"ok":false,"error":"bad_input"}'; exit 2; }
+        abuse_block "${ARGS[0]}"; echo "{\"ok\":true,\"abuse\":$REPLY}"; exit 0 ;;
     events) LOG_MODE=quiet; do_events "${ARGS[0]}" "${ARGS[1]}" "${ARGS[2]}"; exit $? ;;
     inside) LOG_MODE=quiet; do_inside "${ARGS[0]}"; exit $? ;;
     asnimpact) LOG_MODE=quiet; do_asn_impact "${ARGS[0]}"; exit $? ;;

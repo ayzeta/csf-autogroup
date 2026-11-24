@@ -663,6 +663,53 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
       await page.keyboard.press('Escape'); await page.waitForTimeout(300);
     }
   }
+  // AbuseIPDB aralık sorgusu (1.15.116): test makinesinde anahtar yok → aralık kartı cevabına anahtar bilgisi (abk) eklenir, blok
+  // sorgusunun cevabı taklit edilir (14 adres: 12'si görünür, "hepsini göster"). Kart açılınca sorgu GİTMEZ; düğmeyle bir kez
+  if (await page.$('#ag-lk-ip')) {
+    const ABR = []; for (let i = 1; i <= 14; i++) ABR.push({ ip: '198.51.100.' + i, r: 30 - i, s: i === 3 ? 100 : 40, l: '2026-11-2' + (i % 9) + 'T08:00:00+00:00', cc: 'US' });
+    ABR.sort((a, b) => b.s - a.s || b.r - a.r);
+    let abCalls = 0;
+    const abr = async route => {
+      const pd = route.request().postData() || '';
+      if (/^a=abuse_block/.test(pd)) { abCalls++; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, abuse: { net: '198.51.100.0/24', n: 14, mx: 100, ips: ABR, t: Math.floor(Date.now() / 1000) - 5 } }) }); }
+      if (/^a=inside/.test(pd)) {
+        let r; try { r = await route.fetch(); } catch (e) { return; }
+        let j = null; try { j = await r.json(); } catch (e) { return route.fulfill({ response: r }); }
+        if (j && j.ok) { j.abk = true; j.abt = 3; }
+        return route.fulfill({ status: r.status(), contentType: 'application/json', body: JSON.stringify(j) });
+      }
+      return route.fallback();
+    };
+    await page.route('**/api.php', abr);
+    await page.fill('#ag-lk-ip', '198.51.100.0/24'); await page.press('#ag-lk-ip', 'Enter');
+    await page.waitForSelector('.ag-drawer .ag-verdict', { timeout: 30000 }).catch(() => {});
+    const q0 = await page.evaluate(() => !!document.querySelector('.ag-drawer #ag-ab-blk [data-dr="abq"]'));
+    check('AbuseIPDB aralık: kart açılınca sorgu gitmez, "AbuseIPDB\'de sor" düğmesi var', q0 && abCalls === 0, 'düğme ' + q0 + ', istek ' + abCalls);
+    if (q0) {
+      await page.click('.ag-drawer [data-dr="abq"]');
+      await page.waitForSelector('.ag-drawer .ag-ab-t', { timeout: 10000 }).catch(() => {});
+      const ab = await page.evaluate(() => { const b = document.querySelector('.ag-drawer #ag-ab-blk'); if (!b) return null;
+        const rows = Array.from(b.querySelectorAll('.ag-ab-t tbody tr')).filter(r => !r.hidden);
+        return { n: rows.length, first: rows[0] ? rows[0].cells[0].textContent.trim() : '', link: !!(rows[0] && rows[0].querySelector('[data-ip]')), all: !!b.querySelector('[data-dr="aball"]'), txt: b.innerText.split('\n')[0] }; });
+      check('AbuseIPDB aralık: düğmeyle tek istek; özet, puana göre ilk 12 adres, IP kartına bağlı, "hepsini göster"', !!ab && abCalls === 1 && ab.n === 12 && ab.first === '198.51.100.3' && ab.link && ab.all && /14/.test(ab.txt) && /100\/100/.test(ab.txt), JSON.stringify(ab) + ' istek ' + abCalls);
+      await page.click('.ag-drawer [data-dr="aball"]').catch(() => {}); await page.waitForTimeout(200);
+      const n2 = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-drawer .ag-ab-t tbody tr')).filter(r => !r.hidden).length);
+      check('AbuseIPDB aralık: "hepsini göster" 14 adres', n2 === 14, String(n2));
+      for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(250); await layoutChecks(page, 'aralik-abuse', w); await shot('aralik-abuse-' + w);
+        // puan rozeti tek satır ("100/ 100" diye bölünmez; ilk sürümde 390 px'te bölünüyordu)
+        const bol = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-drawer .ag-ab-t .ag-pill')).filter(p => p.getClientRects().length > 1 || p.getBoundingClientRect().height > 26).map(p => p.textContent));
+        check(`AbuseIPDB aralık: puan rozeti bölünmez (${w} px)`, bol.length === 0, bol.slice(0, 4).join(' | '));
+      }
+      await page.setViewportSize({ width: 1280, height: 900 });
+    }
+    await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('.ag-drawer'), null, { timeout: 5000 }).catch(() => {});
+    await page.fill('#ag-lk-ip', '198.51.0.0/16'); await page.press('#ag-lk-ip', 'Enter');
+    await page.waitForSelector('.ag-drawer .ag-verdict', { timeout: 30000 }).catch(() => {});
+    const w16 = await page.evaluate(() => { const b = document.querySelector('.ag-drawer #ag-ab-blk'); return b ? { btn: !!b.querySelector('[data-dr="abq"]'), t: b.innerText } : null; });
+    check('AbuseIPDB aralık: /24\'ten geniş aralıkta düğme yok, standart planın sınırını söyler', !!w16 && !w16.btn && /\/24/.test(w16.t) && abCalls === 1, JSON.stringify(w16));
+    await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('.ag-drawer'), null, { timeout: 5000 }).catch(() => {});
+    await page.unroute('**/api.php', abr);
+  }
   // Kontrol edilecekler satırları çoğunlukla aralık (aralık kartı açılır); tek IP banı IP sorgula'dan banlı olmayan bir IP'de sınanır
   if (!ipBanSinandi && await page.$('#ag-lk-ip')) {
     await page.fill('#ag-lk-ip', '198.51.100.77'); await page.press('#ag-lk-ip', 'Enter');

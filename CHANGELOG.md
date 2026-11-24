@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.15.116 — 2026-11-24
+
+- AbuseIPDB in the range card: a `/24` or narrower range can be checked with
+  the "Check on AbuseIPDB" button (block check: reported addresses of the last
+  30 days with score, reports and last report). The card does not ask by
+  itself (100 block checks a day on a free account); answers are cached for a
+  day and the range's ban window shows the cached summary. Settings shows the
+  day's IP and block check counts.
+- The glossary no longer has a second, outdated AbuseIPDB entry saying the
+  plugin does not query AbuseIPDB.
+- IP card: the AbuseIPDB part shows the score as a coloured badge (grey 0,
+  orange 1–49, red 50+) with the reports next to it and the last report and
+  usage type below; the extra "Open in AbuseIPDB" link is gone (the card's
+  footer already links there). The "last report" text showed a stray `{1}`
+  because two panel texts had the same name; the panel check now fails on
+  duplicated text names.
+- IP card levels: the counts say what they are counting towards ("to be
+  banned: permanent singles 1/3", "for a suspicious-network notice: 1/5 bans
+  from this provider, in at least 2 separate ranges (now 1)").
+- Turkish texts that ended without a verb (for example "… daha önce.") were
+  rewritten; a text check keeps them out.
+
 ## 1.15.115 — 2026-11-24
 
 - The AbuseIPDB key field no longer makes the browser's password manager

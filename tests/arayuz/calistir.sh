@@ -27,7 +27,12 @@ printf '{"t":%s,"type":"run","dur":3,"arayuz_testi":1}\n{"t":%s,"type":"run","du
     $((NOWT - 120)) $((NOWT - 60)) >> "$EVF"
 # susturulmuş bir IP (sahibi tarayici.js enjekte eder): Susturulanlar satırı iki satırlı (adres + sahip) her ekranda denetlensin.
 # Önce test başında susturma yoktu; masaüstünde satırın kenara yapışması (1.15.87, kullanıcı ekranı) testte hiç çizilmedi. Sonda silinir
-IGF=/var/lib/csf_autogroup/ignored; printf '192.0.2.77 9999-12-31 root %s\n' "$((NOWT - 86400))" >> "$IGF"
+IGF=/var/lib/csf_autogroup/ignored
+# önceki koşunun yarıda kalan susturmaları (Sustur akışı testin enjekte ettiği satırları susturur, kaldırma adımına gelmeden düşerse
+# kalır): sonraki koşuda o satırlar enjekte edilmez, onlara bağlı kurallar zincirleme düşüyordu (2026-11-24, 198.51.100.200). Yalnız
+# testin belgeleme adresleri (198.51.100.0/24, 198.18.0.0/15, 192.0.2.0/24) silinir
+[ -f "$IGF" ] && sed -i -E '/^(198\.51\.100\.|198\.1[89]\.|192\.0\.2\.)/d' "$IGF"
+printf '192.0.2.77 9999-12-31 root %s\n' "$((NOWT - 86400))" >> "$IGF"
 cleanup() { [ -n "${PHPPID:-}" ] && kill "$PHPPID" 2>/dev/null; rm -rf "$W"; sed -i '/"arayuz_testi":1/d' "$EVF"; sed -i '/^192\.0\.2\.77 /d' "$IGF"; }
 trap cleanup EXIT
 # panelin kopyası: shebang satırları kalkar (cPanel'in PHP yolu), version.json install.sh'nin yazdığı biçimde

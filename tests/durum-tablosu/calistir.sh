@@ -1068,7 +1068,9 @@ if kok_on && command -v python3 >/dev/null 2>&1; then
     python3 "$H/abuse-sunucu.py" "$R/ab.port" "$R/ab.hits" "$ABK" & ABP=$!
     for i in 1 2 3 4 5 6 7 8 9 10; do [ -s "$R/ab.port" ] && break; sleep 0.3; done
     echo "ABUSE_API=http://127.0.0.1:$(cat "$R/ab.port")/check" >> "$R/app/config.env"
-    abh() { grep -c . "$R/ab.hits"; }
+    echo "ABUSE_BAPI=http://127.0.0.1:$(cat "$R/ab.port")/check-block" >> "$R/app/config.env"
+    abh() { grep -c -v / "$R/ab.hits"; }   # tek IP sorguları
+    abb() { grep -c / "$R/ab.hits"; }      # blok sorguları (ağ adresi "/" taşır)
     if [ -n "${AG_ABDUMP:-}" ]; then   # ölçüm: kurallar yazılmadan önce gerçek çıktılar (AG_ABDUMP=dosya)
         { echo "== anahtarsız lookup"; run --lookup 158.101.136.233 --json; echo; echo "hits $(abh)"
           echo "== anahtar kaydı"; printf '%s\n' "$ABK" | run --config abuse-key --json; echo; ls -l "$R/var/lib/csf_autogroup/abuseipdb/"
@@ -1087,16 +1089,24 @@ if kok_on && command -v python3 >/dev/null 2>&1; then
     else
         AF="$R/var/lib/csf_autogroup/abuseipdb"
         mcheck "AbuseIPDB: anahtar yokken IP kartında alan yok, sorgu gitmez, hata basılmaz" "[ -z \"\$(run --lookup 158.101.136.233 --json 2>&1 >/dev/null)\" ] && ! run --lookup 158.101.136.233 --json 2>/dev/null | grep -q '\"abuse\"' && [ \"\$(abh)\" = 0 ]"
+        mcheck "AbuseIPDB: anahtar yokken aralık kartında alan yok, blok sorgusu nokey" "! run --inside 158.101.136.0/24 --json 2>/dev/null | grep -q '\"abk\"' && run --abuse-block 158.101.136.0/24 2>/dev/null | grep -q '\"error\":\"nokey\"' && [ \"\$(abb)\" = 0 ]"
         printf '%s\n' "$ABK" | run --config abuse-key --json >/dev/null 2>&1
         mcheck "AbuseIPDB: anahtar standart girdiden ayrı dosyaya (0600), config.env'e yazılmaz" "[ \"\$(stat -c %a '$AF/key')\" = 600 ] && grep -q '^$ABK\$' '$AF/key' && ! grep -q '$ABK' '$R/app/config.env'"
         mcheck "AbuseIPDB: ayarlar (--config get), Geçmiş ve günlük anahtarı değil yalnız son 4 karakterini taşır" "run --config get --json 2>/dev/null | grep -q '\"abuse\":{\"set\":true,\"tail\":\"WXYZ\"' && ! run --config get --json 2>/dev/null | grep -q '$ABK' && grep -q '\"changes\":\[{\"key\":\"ABUSEIPDB_KEY\",\"from\":\"\",\"to\":\"…WXYZ\"}\]' \"\$(EVF)\" && ! grep -q '$ABK' \"\$(EVF)\" '$R/autogroup.log'"
         mcheck "AbuseIPDB: IP kartı gerçek cevabın alanlarıyla (puan, bildirim, kişi, son bildirim, kullanım türü)" "run --lookup 158.101.136.233 --json 2>/dev/null | grep -q '\"abuse\":{\"dom\":\"oracleemaildelivery.com\",\"isp\":\"Oracle Public Cloud\",\"l\":\"2026-11-23T17:56:20+00:00\",\"r\":426,\"s\":100,\"t\":[0-9]*,\"tor\":false,\"u\":231,\"ut\":\"Data Center/Web Hosting/Transit\",\"wl\":false}'"
         run --lookup 158.101.136.233 --json > "$W/out/abuse-lookup.json" 2>/dev/null   # panel denetimi (kapsama-ad.js) bu gerçek çıktıyı çizer
-        mcheck "AbuseIPDB: aynı IP önbellekten (iki kart açılışı, bir istek); bugünkü sorgu sayısı 1" "[ \"\$(abh)\" = 1 ] && run --config get --json 2>/dev/null | grep -q '\"today\":1}'"
+        mcheck "AbuseIPDB: aynı IP önbellekten (iki kart açılışı, bir istek); bugünkü sorgu sayısı 1" "[ \"\$(abh)\" = 1 ] && run --config get --json 2>/dev/null | grep -q '\"today\":1,'"
         mcheck "AbuseIPDB: düz metin IP kartı satırı" "run --lookup 158.101.136.233 2>/dev/null | grep -q '^  AbuseIPDB  *puan 100/100 · 426 bildirim (231 kişi) · son 2026-11-23 · Data Center/Web Hosting/Transit\$'"
         mcheck "AbuseIPDB: özel adres sorulmaz" "! run --lookup 192.168.1.5 --json 2>/dev/null | grep -q '\"abuse\"' && [ \"\$(abh)\" = 1 ]"
         quiet; run --status --json >/dev/null 2>&1
-        mcheck "AbuseIPDB: tur ve durum çıktısı (toplu listeler) sorgu yapmaz" "[ \"\$(abh)\" = 1 ]"
+        mcheck "AbuseIPDB: tur ve durum çıktısı (toplu listeler) sorgu yapmaz" "[ \"\$(abh)\" = 1 ] && [ \"\$(abb)\" = 0 ]"
+        # aralık (blok) sorgusu 1.15.116: kart açılınca sorulmaz (günde 100), düğme --abuse-block; cevap belgedeki alanlarla (taklit)
+        mcheck "AbuseIPDB aralık: kart açılınca sorulmaz, anahtar bilgisi (abk) ve bugünkü blok sayısı var, sonuç yok" "run --inside 158.101.136.0/24 --json 2>/dev/null | grep -q '\"abk\":true,\"abt\":0,' && ! run --inside 158.101.136.0/24 --json 2>/dev/null | grep -q '\"abuse\"' && [ \"\$(abb)\" = 0 ]"
+        mcheck "AbuseIPDB aralık: düğme sorusu bildirilen adresler puana göre sıralı, sayı ve en yüksek puanla" "run --abuse-block 158.101.136.0/24 2>/dev/null | grep -q '{\"ok\":true,\"abuse\":{\"ips\":\[{\"cc\":\"JP\",\"ip\":\"158.101.136.233\",\"l\":\"2026-11-23T17:56:20+00:00\",\"r\":631,\"s\":100},{\"cc\":\"JP\",\"ip\":\"158.101.136.9\",\"l\":\"2026-11-22T10:00:00+00:00\",\"r\":17,\"s\":40},{\"cc\":\"JP\",\"ip\":\"158.101.136.7\",[^]]*\],\"mx\":100,\"n\":3,\"net\":\"158.101.136.0/24\",\"t\":[0-9]*}}' && [ \"\$(abb)\" = 1 ]"
+        run --inside 158.101.136.0/24 --json > "$W/out/abuse-inside.json" 2>/dev/null   # panel denetimi (kapsama-ad.js) aralık kartını bu çıktıyla çizer
+        mcheck "AbuseIPDB aralık: ikinci soru ve kart önbellekten (istek yok); kart sonucu gösterir; ayarlarda bugün 1 blok" "run --abuse-block 158.101.136.0/24 >/dev/null 2>&1; [ \"\$(abb)\" = 1 ] && grep -q '\"abt\":1,\"abuse\":{\"ips\"' '$W/out/abuse-inside.json' && run --config get --json 2>/dev/null | grep -q '\"btoday\":1}' && [ \"\$(abh)\" = 1 ]"
+        mcheck "AbuseIPDB aralık: bildirimsiz aralık n 0; ağ adresi olmayan / /16'dan geniş giriş reddedilir (istek yok)" "run --abuse-block 198.51.100.0/24 2>/dev/null | grep -q '\"ips\":\[\],\"mx\":0,\"n\":0,' && run --abuse-block 158.101.136.5/24 2>/dev/null | grep -q '\"error\":\"bad_input\"' && run --abuse-block 158.0.0.0/8 2>/dev/null | grep -q '\"error\":\"bad_input\"' && [ \"\$(abb)\" = 2 ]"
+        mcheck "AbuseIPDB aralık: planın sınırını aşan ağ 402 (kod ve AbuseIPDB'nin metni), hata önbellekte" "run --abuse-block 158.101.128.0/20 2>/dev/null | grep -q '\"abuse\":{\"code\":402,\"err\":\"The network parameter' && run --abuse-block 158.101.128.0/20 >/dev/null 2>&1; [ \"\$(abb)\" = 3 ]"
         mcheck "AbuseIPDB: geçersiz anahtar reddedilir (eski anahtar durur)" "printf '%s\n' 'kötü anahtar!' | run --config abuse-key --json 2>/dev/null | grep -q '\"ok\":false,\"code\":2' && grep -q '^$ABK\$' '$AF/key'"
         printf '%s\n' 'YANLISANAHTAR0123456789xx' | run --config abuse-key --json >/dev/null 2>&1
         mcheck "AbuseIPDB: yanlış anahtarda gerçek 401 hatası IP kartında (kod ve AbuseIPDB'nin metni)" "run --lookup 158.101.136.234 --json 2>/dev/null | grep -q '\"abuse\":{\"code\":401,\"err\":\"Authentication failed. Your API key is either missing, incorrect, or revoked.'"
@@ -1119,7 +1129,7 @@ mcheck "IE_REVIEW=0: ban altında ihlal mail yazmaz, Geçmiş'e yine yazılır" 
 ilerle "motor kuralları bitti ($MF ihlal); ekran tablosu (render.js)"
 if [ -n "${AG_KOK:-}" ]; then              # süzgeçli koşu: ekran tablosu ve K7 bütün kökleri ister; yalnız süzgeçteki köklerin işleri
     RC=0
-    { [ -s "$W/out/bkl-inside.json" ] || [ -s "$W/out/abuse-lookup.json" ]; } && { node "$(wp "$H/kapsama-ad.js")" "$(wp "${AG_JS:-$REPO/whm/assets/ag.js}")" "$(wp "$W/out/bkl-inside.json")" "$(wp "$W/out/abuse-lookup.json")" || RC=1; }
+    { [ -s "$W/out/bkl-inside.json" ] || [ -s "$W/out/abuse-lookup.json" ]; } && { node "$(wp "$H/kapsama-ad.js")" "$(wp "${AG_JS:-$REPO/whm/assets/ag.js}")" "$(wp "$W/out/bkl-inside.json")" "$(wp "$W/out/abuse-lookup.json")" "$(wp "$W/out/abuse-inside.json")" || RC=1; }
     printf '\nMotor kuralları (süzgeç %s; %s kural süzgeç dışı, atlandı)\n%s' "$AG_KOK" "$SKIPN" "$ML"
     [ "$MF" -gt 0 ] && { echo "$MF motor kuralı ihlali"; exit 1; }
     exit $RC
@@ -1136,7 +1146,7 @@ done
 ilerle "K7 karşılaştırma (menu-esit.js)"
 node "$(wp "$H/menu-esit.js")" "$(wp "${AG_JS:-$REPO/whm/assets/ag.js}")" "$(wp "$W/k7")" || RC=1   # AG_JS: kuralı eski panelle sınamak için
 ilerle "kapsama adları (kapsama-ad.js)"
-node "$(wp "$H/kapsama-ad.js")" "$(wp "${AG_JS:-$REPO/whm/assets/ag.js}")" "$(wp "$W/out/bkl-inside.json")" "$(wp "$W/out/abuse-lookup.json")" || RC=1
+node "$(wp "$H/kapsama-ad.js")" "$(wp "${AG_JS:-$REPO/whm/assets/ag.js}")" "$(wp "$W/out/bkl-inside.json")" "$(wp "$W/out/abuse-lookup.json")" "$(wp "$W/out/abuse-inside.json")" || RC=1
 printf '\nMotor kuralları\n%s' "$ML"
 [ "$MF" -gt 0 ] && { echo "$MF motor kuralı ihlali"; exit 1; }
 exit $RC
