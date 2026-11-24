@@ -40,7 +40,7 @@ class H(http.server.BaseHTTPRequestHandler):
         ip = (q.get("ipAddress") or q.get("network") or [""])[0]
         good = self.headers.get("Key") == KEY and self.headers.get("Accept") == "application/json"
         with open(HITS, "a") as f:
-            f.write("%s %s\n" % (ip, "ok" if good else "bad"))
+            f.write("%s %s %s\n" % (ip, "ok" if good else "bad", (q.get("maxAgeInDays") or [""])[0]))
         if good and u.path.endswith("/check-block"):
             code, b = block(ip)
             body = b.encode(); self.send_response(code)

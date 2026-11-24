@@ -596,9 +596,9 @@ With an AbuseIPDB API key (Settings → Server → AbuseIPDB; a free account
 allows 1,000 checks a day) the IP card asks AbuseIPDB about the address when
 you open it and shows its confidence score, how many reports and reporters
 it has, the last report and the usage type; the ban window shows the same
-line. Answers are cached for a day, private and local addresses are never
-sent, and the runs and list screens never ask, so the daily limit is only
-used by cards you open. The score is shown for your decision; the plugin
+line. Answers are cached (24 hours by default), private and local addresses
+are never sent, and the runs and list screens never ask, so the daily limit is
+only used by cards you open. The score is shown for your decision; the plugin
 does not ban on it. The key is stored in its own root-only file (not in
 `config.env`), is handed to the engine on standard input, and only its last
 four characters appear in the panel, the log and the settings history.
@@ -608,12 +608,21 @@ button. It uses AbuseIPDB's block check and lists the addresses in the
 range that were reported in the last 30 days, with their score, number of
 reports and last report, plus how many there are and the highest score (a
 range has no score of its own). A free account has 100 block checks a day,
-so the card never asks by itself when it opens; the answer is cached for a
-day and also shown in the range's ban window. AbuseIPDB's standard plan
+so the card never asks by itself when it opens; the answer is cached like an
+IP's and also shown in the range's ban window. AbuseIPDB's standard plan
 checks ranges up to `/24`, so wider ranges show no button. AbuseIPDB has no
 check by provider (ASN) or country, so provider and country views have no
 AbuseIPDB part. The score is shown as a badge coloured by its value: grey for
 0, orange for 1–49 and red for 50 and above.
+
+Once a key is saved the card shows it masked (last four characters) with
+"Change" and "Remove key", and five settings: `ABUSE_ON` turns lookups off
+without removing the key; `ABUSE_CACHE_H` (default 24, 1–168) is how many
+hours an answer is kept; `ABUSE_IP_MAX` (default 1000) and `ABUSE_BLK_MAX`
+(default 100) are the daily IP and block lookup limits, after which no new
+lookup is sent and the card says the limit is reached (the counter resets on
+the server's calendar day); `ABUSE_MAX_AGE` (default 90, 1–365) is how many
+days of reports count — block lookups use at most 30, the free plan's limit.
 
 ### With Imunify360
 

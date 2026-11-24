@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.15.122 — 2026-11-24
+
+- AbuseIPDB settings (Settings → Server → AbuseIPDB): lookups can be turned
+  off without removing the key (`ABUSE_ON`); how long an answer is kept
+  (`ABUSE_CACHE_H`, 24 hours by default); daily IP and block lookup limits
+  (`ABUSE_IP_MAX` 1000, `ABUSE_BLK_MAX` 100), after which no new lookup is
+  sent and the cards say the limit is reached; and how many days of reports
+  count (`ABUSE_MAX_AGE`, 90; block lookups at most 30). Before, the cache
+  and the report period were fixed and the limits were only counted.
+- A saved AbuseIPDB key is shown masked in its own box, with "Change" and
+  "Remove key", instead of a badge next to an empty box.
+
+## 1.15.121 — 2026-11-24
+
+- After saving a setting that is applied to the firewall right away (allowed
+  services, the combined services file, provider ban, rented-server lists,
+  exclusions, resume), the settings are read again once applying has finished.
+  Before, they were read while it was still running, so cards such as the
+  combined services file kept showing the old "last written" time until the
+  page was reloaded.
+- Excluding an address from the allowed services no longer leaves the panel
+  stuck in "working" when the apply request fails.
+
 ## 1.15.120 — 2026-11-24
 
 - The combined services file writes single addresses without `/32`: Apache's

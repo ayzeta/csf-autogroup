@@ -1401,4 +1401,13 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 /* AbuseIPDB puan rozeti kısa ve bölünmez: kart içindeki uzun rozetleri saran kural ("100/ 100", 390 px) buna uygulanmaz */
 .ag-drawer .ag-fact-v .ag-pill.ag-ab-sc, .ag-pill.ag-ab-sc { white-space: nowrap; }
 .ag-setform .ag-field > .ag-addrow { flex-wrap: wrap; justify-content: flex-end; margin: 0; }
-.ag-setform .ag-field .ag-addrow .ag-input.ag-secret { width: auto; flex: 0 1 260px; }
+.ag-setform .ag-field .ag-addrow #ag-abkey { width: auto; flex: 0 1 260px; min-width: 0; }
+/* kayıtlı anahtar: maskeli kutu, Değiştir ve Anahtarı kaldır tek satırda; kutu kalan yere göre daralır (alanın sağ sütunu ~340 px) */
+.ag-setform .ag-field .ag-addrow:has(#ag-abkey[readonly]) { flex-wrap: nowrap; }
+.ag-setform .ag-field .ag-addrow #ag-abkey[readonly] { flex: 1 1 110px; }
+.ag-setform .ag-field .ag-addrow:has(#ag-abkey[readonly]) .ag-btn { flex: 0 0 auto; white-space: nowrap; }
+/* telefonda üçü sığmaz: kutu kendi satırında tam genişlik (maskenin son 4 karakteri kesilmesin), düğmeler altında */
+@media (max-width: 600px) {
+  .ag-setform .ag-field .ag-addrow:has(#ag-abkey[readonly]) { flex-wrap: wrap; justify-content: flex-start; }
+  .ag-setform .ag-field .ag-addrow #ag-abkey[readonly] { flex: 1 1 100%; }
+}

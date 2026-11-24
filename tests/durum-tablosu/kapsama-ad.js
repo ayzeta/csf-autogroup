@@ -34,10 +34,18 @@ for (const L of ['tr', 'en']) {
     // IP kartının bölümü (1.15.116): puan renkli rozet (100 → kırmızı), bildirimler yanında, ayrıntı altında; ikinci AbuseIPDB bağlantısı yok
     const ah = AG.abuseHtml(d.abuse);
     ok(L + ' AbuseIPDB IP kartı: puan kırmızı rozet, bildirim satırı, ayrıntı alt satırda, bağlantı yok', /ag-pill-bad[^>]*>[^<]*100\/100/.test(ah) && /426/.test(ah) && /ag-muted[^>]*>[^<]*Data Center/.test(ah) && !/<a |href=|\{\d\}|undefined/.test(ah), ah);
-    AG.setCfg({ abuse: { set: true, tail: 'WXYZ', today: 1, btoday: 2 } });
-    const ac = AG.abuseCard(function (i, ti, h, inner) { return '<section>' + inner + '</section>'; });
+    const AV = { ABUSE_ON: '1', ABUSE_CACHE_H: '24', ABUSE_IP_MAX: '1000', ABUSE_BLK_MAX: '100', ABUSE_MAX_AGE: '90' };
+    const crd = function (i, ti, h, inner) { return '<section>' + inner + '</section>'; };
+    AG.setCfg({ abuse: { set: false }, values: AV, defaults: AV });
+    const a0 = AG.abuseCard(crd);
     // 1.15.115: alan parola türünde DEĞİL (parola yöneticisi WHM arama kutusunu dolduruyordu); yazılan anahtar CSS ile gizli (.ag-secret)
-    ok(L + ' AbuseIPDB ayar kartı: anahtar alanı parola türünde değil, gizli; yalnız son 4 karakter; bugünkü IP ve blok sorgusu', /type="text" id="ag-abkey"[^>]*ag-secret[^>]*autocomplete="off"/.test(ac) && !/type="password"/.test(ac) && /…WXYZ/.test(ac) && !/TESTANAHTAR/.test(ac) && /\b1\b[^<]*\b2\b/.test(ac), ac.slice(0, 300));
+    ok(L + ' AbuseIPDB ayar kartı (anahtar yok): yazılabilir alan parola türünde değil, gizli; ayar alanları yok', /type="text" id="ag-abkey"[^>]*ag-secret[^>]*autocomplete="off"/.test(a0) && !/type="password"/.test(a0) && !/readonly/.test(a0) && !/ABUSE_CACHE_H/.test(a0), a0.slice(0, 300));
+    AG.setCfg({ abuse: { set: true, tail: 'WXYZ', today: 1, btoday: 2 }, values: AV, defaults: AV });
+    const ac = AG.abuseCard(crd);
+    // 1.15.122: kayıtlı anahtar kutunun içinde maskeli (son 4 karakter), salt okunur; Değiştir / Anahtarı kaldır; beş ayar alanı
+    ok(L + ' AbuseIPDB ayar kartı (anahtar var): kutuda maskeli anahtar (yalnız son 4), salt okunur, Değiştir; bugünkü sorgular; açma / kapama ve dört ayar', /id="ag-abkey"[^>]*readonly[^>]*value="•+WXYZ"/.test(ac) && !/ag-secret/.test(ac) && !/TESTANAHTAR/.test(ac) && /data-act="abuseedit" data-v="1"/.test(ac) && /data-act="abuseclr"/.test(ac) && /\b1\b[^<]*\b2\b/.test(ac) && /data-k="ABUSE_ON"/.test(ac) && ['ABUSE_CACHE_H', 'ABUSE_IP_MAX', 'ABUSE_BLK_MAX', 'ABUSE_MAX_AGE'].every(k => ac.indexOf('data-cfg="' + k + '"') >= 0) && !/undefined|k_ABUSE|h_ABUSE/.test(ac), ac.slice(0, 400));
+    const lim = AG.abuseLine({ lim: 1000, n: 1000, t: 1 });
+    ok(L + ' AbuseIPDB: günlük sınır satırı (sayı ve sınır, ayarın yeri)', /1\.000\/1\.000|1,000\/1,000/.test(lim) && /Ayarlar|Settings/.test(lim) && !/undefined|\{\d\}/.test(lim), lim);
   }
   if (has(5)) {   // AbuseIPDB aralık kartı: motorun --inside çıktısı (blok sorgusu önbellekte; taklit uç belgedeki alanlarla)
     const d = JSON.parse(fs.readFileSync(process.argv[5], 'utf8')), h = AG.abuseBlkHtml(d, 24);

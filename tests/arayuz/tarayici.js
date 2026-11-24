@@ -530,6 +530,43 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     check('Ayarlar: her bölüm açıklama ile başlıyor, ilk kart aynı hizada (±24 px)', bad.length === 0 && spread <= 24, bad.join(' | ') + ' ' + tops.join(','));
     check('Ayarlar: kart içeriği kart kenarına yapışmaz (≥12 px), telefonda kart taşmaz', edge.length === 0, edge.slice(0, 6).join(' | '));
     check('Ayarlar: parola türünde alan yok (tarayıcı WHM arama kutusunu dolduruyordu)', pw.length === 0, pw.join(' | '));
+    // AbuseIPDB kayıtlı anahtar (1.15.122, kullanıcı: "anahtar kayıtlıysa kutuda olsun"): test makinesinde anahtar yok → ayar cevabı
+    // "kayıtlı" taklit edilir. Kutuda maskeli anahtar (salt okunur), Değiştir ile boş yazılabilir kutu + Vazgeç; beş ayar; iki genişlikte düzen
+    {
+      const cfr = async route => {
+        const pd = route.request().postData() || '';
+        if (!/^a=config_get/.test(pd)) return route.continue();
+        let r; try { r = await route.fetch(); } catch (e) { return; }
+        let j = null; try { j = await r.json(); } catch (e) { return route.fulfill({ response: r }); }
+        if (j && j.ok) j.abuse = Object.assign({}, j.abuse || {}, { set: true, tail: 'WXYZ', today: 3, btoday: 1 });
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(j) });
+      };
+      await page.route('**/api.php*', cfr);
+      await page.click('.ag-tabs [data-tab="overview"]').catch(() => {}); await page.waitForTimeout(300);
+      await page.click('.ag-tabs [data-tab="settings"]'); await page.waitForSelector('.ag-setnav [data-s]', { timeout: 20000 }).catch(() => {});
+      if (await tik(page, '.ag-setnav [data-s="server"]')) await page.waitForSelector('#ag-abkey', { timeout: 10000 }).catch(() => {});
+      const k0 = await page.evaluate(() => { const i = document.getElementById('ag-abkey'); const c = i && i.closest('.ag-card');
+        return i ? { ro: i.readOnly, v: i.value, sec: i.classList.contains('ag-secret'), edit: !!(c && c.querySelector('[data-act="abuseedit"][data-v="1"]')), clr: !!(c && c.querySelector('[data-act="abuseclr"]')),
+          on: !!(c && c.querySelector('[data-k="ABUSE_ON"]')), f: ['ABUSE_CACHE_H', 'ABUSE_IP_MAX', 'ABUSE_BLK_MAX', 'ABUSE_MAX_AGE'].filter(k => c && c.querySelector('[data-cfg="' + k + '"]')).length } : null; });
+      check('AbuseIPDB: kayıtlı anahtar kutuda maskeli ve salt okunur, Değiştir ve Anahtarı kaldır, açma / kapama ve dört ayar', !!k0 && k0.ro && /^•+WXYZ$/.test(k0.v) && !k0.sec && k0.edit && k0.clr && k0.on && k0.f === 4, JSON.stringify(k0));
+      // masaüstünde kutu ve iki düğmesi tek satırda (maskeli kutu genişlik kuralının dışında kalınca "Anahtarı kaldır" alta düşüyordu)
+      const row = await page.evaluate(() => { const i = document.getElementById('ag-abkey'), r = i && i.closest('.ag-addrow');
+        return r ? Array.from(r.children).map(x => Math.round(x.getBoundingClientRect().top)) : null; });
+      check('AbuseIPDB: 1280 px\'te anahtar kutusu, Değiştir ve Anahtarı kaldır aynı satırda', !!row && row.length === 3 && Math.max(...row) - Math.min(...row) <= 6, JSON.stringify(row));
+      for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(300); await layoutChecks(page, 'abuse-kayitli', w); await shot('abuse-kayitli-' + w);
+        // maskeli anahtar kesilmez (son 4 karakter anahtarı tanıtan tek parça; 390'da kutu daralıp "••••••••WX" kalıyordu)
+        const cut = await page.evaluate(() => { const i = document.getElementById('ag-abkey'); return i ? { sw: i.scrollWidth, cw: i.clientWidth } : null; });
+        check(`AbuseIPDB: ${w} px'te maskeli anahtar kutuya sığar (son 4 karakter kesilmez)`, !!cut && cut.sw <= cut.cw + 1, JSON.stringify(cut)); }
+      await page.setViewportSize({ width: 1280, height: 900 }); await page.waitForTimeout(200);
+      await page.click('[data-act="abuseedit"][data-v="1"]').catch(() => {}); await page.waitForTimeout(300);
+      const k1 = await page.evaluate(() => { const i = document.getElementById('ag-abkey'); return i ? { ro: i.readOnly, v: i.value, sec: i.classList.contains('ag-secret'), focus: document.activeElement === i, back: !!document.querySelector('[data-act="abuseedit"][data-v="0"]') } : null; });
+      await page.click('[data-act="abuseedit"][data-v="0"]').catch(() => {}); await page.waitForTimeout(300);
+      const k2 = await page.evaluate(() => { const i = document.getElementById('ag-abkey'); return i ? i.readOnly : null; });
+      check('AbuseIPDB: Değiştir boş, gizli, odaklı yazılabilir kutu açar; Vazgeç maskeli hâle döner', !!k1 && !k1.ro && k1.v === '' && k1.sec && k1.focus && k1.back && k2 === true, JSON.stringify([k1, k2]));
+      await page.unroute('**/api.php*', cfr);
+      await page.click('.ag-tabs [data-tab="overview"]').catch(() => {}); await page.waitForTimeout(300);
+      await page.click('.ag-tabs [data-tab="settings"]'); await page.waitForSelector('.ag-setnav [data-s]', { timeout: 20000 }).catch(() => {});
+    }
     // CSF blok listeleri (1.15.118: Sağlayıcılar sekmesinin bir katmanı; 1.15.117'de Ayarlar'daydı). Test makinesinin gerçek csf.blocklists'i:
     // üstte katman özet kutusu (tıklanınca karta gider), kart katman bileşeniyle (pc), her liste bir satır, kapalı listenin ⋯ menüsünde
     // "Listeyi aç"; pencere değişecek satırı ve csf -ra'yı söyler (onaylanmaz, Escape). Ayarlar'da artık yok

@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.120"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.122"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -131,6 +131,9 @@ PLUGIN_DIR="${PLUGIN_DIR:-/usr/local/cpanel/whostmgr/docroot/cgi/csf_autogroup}"
 CDN_FILE="${CDN_FILE:-$(dirname "$SAYAC_FILE")/cdn_sites}"          # CDN arkasındaki siteler (tools/cdn-sites.sh, günde bir)
 OWNERS_FILE="${OWNERS_FILE:-$(dirname "$SAYAC_FILE")/owners}"      # /24 → ASN önbelleği (30 gün)
 OWNER_TTL_DAYS="${OWNER_TTL_DAYS:-30}"
+# AbuseIPDB (anahtar ayrı dosyada): kullanılsın mı, sonuç kaç saat saklanır, günlük sorgu sınırları (ücretsiz plan 1.000 IP / 100 blok),
+# raporların kaç günlüğü sayılır (blok sorgusunda ücretsiz plan en çok 30)
+ABUSE_ON="${ABUSE_ON:-1}"; ABUSE_CACHE_H="${ABUSE_CACHE_H:-24}"; ABUSE_IP_MAX="${ABUSE_IP_MAX:-1000}"; ABUSE_BLK_MAX="${ABUSE_BLK_MAX:-100}"; ABUSE_MAX_AGE="${ABUSE_MAX_AGE:-90}"
 BACKFILL_MAX="${BACKFILL_MAX:-50}"      # her turda en fazla bu kadar /24'ün sahibi sorgulanır
 IMUNIFY_BIN="${IMUNIFY_BIN:-$(command -v imunify360-agent 2>/dev/null)}"   # yoksa Imunify kısmı atlanır
 RESTORE_DIR="${RESTORE_DIR:-$(dirname "$SAYAC_FILE")/restore}"   # elle banın kaldırdığı kalıcı satırlar (ban kaldırılırken geri yüklenebilir)
@@ -485,7 +488,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_S_NONE="yok"; M_S_DAYSLEFT="%s gün kaldı"; M_S_TTL="geçici ban %s kaldı"
   M_L_HOST="Hostname"; M_L_FWD="ileri yönde doğrulandı"; M_L_NOFWD="ileri yönde doğrulanamadı"
   M_L_OWNER="Sahibi"; M_L_PREFIX="Duyurulan blok"; M_L_REG="Kayıt"; M_L_DENY="csf.deny"
-  M_L_TEMP="Geçici liste"; M_L_WL="İzin listesi"; M_L_CLOUD="Kiralık liste"; M_L_BKL="Blok listesi"; M_AB_LINE="puan %s/100 · %s bildirim (%s kişi) · son %s · %s"; M_AB_ERR="sorgulanamadı (HTTP %s): %s"; M_AB_BAD="AbuseIPDB anahtarı yalnız harf ve rakam olmalı (20–200 karakter)"; M_L_PENDING="İzleniyor"; M_L_IGN="Susturuldu"; M_L_ACCT="Denemeler"
+  M_L_TEMP="Geçici liste"; M_L_WL="İzin listesi"; M_L_CLOUD="Kiralık liste"; M_L_BKL="Blok listesi"; M_AB_LINE="puan %s/100 · %s bildirim (%s kişi) · son %s · %s"; M_AB_LIM="bugünkü sorgu sınırı doldu (%s/%s)"; M_AB_ERR="sorgulanamadı (HTTP %s): %s"; M_AB_BAD="AbuseIPDB anahtarı yalnız harf ve rakam olmalı (20–200 karakter)"; M_L_PENDING="İzleniyor"; M_L_IGN="Susturuldu"; M_L_ACCT="Denemeler"
   M_BKL_BAD="Liste adı ya da işlem geçersiz (beklenen: AD on|off)"; M_BKL_NONE="%s listesi csf.blocklists dosyasında yok"; M_BKL_NOTMINE="%s listesini eklenti açmadı; elle açılan listeyi eklenti kapatmaz (csf.blocklists dosyasından kapatın)"; M_BKL_ON="%s blok listesi açıldı; csf ve lfd yeniden başladı, lfd listeyi indiriyor"; M_BKL_OFF="%s blok listesi kapatıldı; csf ve lfd yeniden başladı"
   M_SVCX_WROTE="Birleşik servis dosyası yazıldı: %s adres (%s)"; M_SVCX_SHRINK="Birleşik servis dosyası yazılmadı: yeni liste %s adres, öncekinin (%s) yarısından az (%s)"; M_SVCX_FAIL="Birleşik servis dosyası yazılamadı (%s)"; M_SVCX_RELOAD="Web sunucusu yeniden yüklendi: %s"; M_SVCX_RELOADF="Web sunucusu yeniden yüklenemedi: %s (çıkış %s): %s"; M_SVCX_BAD="Birleşik servis dosyası yazılmadı: Apache yeni listeyi (%s adres) ModSecurity kuralında kabul etmedi, önceki dosya korunuyor (%s): %s"
   M_H_NOREASON="geçici ban (günlükte sebep yok)"
@@ -775,7 +778,7 @@ else
   M_S_NONE="none"; M_S_DAYSLEFT="%s days left"; M_S_TTL="temp ban %s left"
   M_L_HOST="Hostname"; M_L_FWD="forward-confirmed"; M_L_NOFWD="not forward-confirmed"
   M_L_OWNER="Owner"; M_L_PREFIX="Announced prefix"; M_L_REG="Registry"; M_L_DENY="csf.deny"
-  M_L_TEMP="Temp list"; M_L_WL="Allow list"; M_L_CLOUD="Rented-server list"; M_L_BKL="Blocklist"; M_AB_LINE="score %s/100 · %s reports (%s users) · last %s · %s"; M_AB_ERR="could not query (HTTP %s): %s"; M_AB_BAD="The AbuseIPDB key must be letters and digits only (20–200 characters)"; M_L_PENDING="Watched"; M_L_IGN="Muted"; M_L_ACCT="Attempts"
+  M_L_TEMP="Temp list"; M_L_WL="Allow list"; M_L_CLOUD="Rented-server list"; M_L_BKL="Blocklist"; M_AB_LINE="score %s/100 · %s reports (%s users) · last %s · %s"; M_AB_LIM="daily query limit reached (%s/%s)"; M_AB_ERR="could not query (HTTP %s): %s"; M_AB_BAD="The AbuseIPDB key must be letters and digits only (20–200 characters)"; M_L_PENDING="Watched"; M_L_IGN="Muted"; M_L_ACCT="Attempts"
   M_BKL_BAD="Invalid list name or action (expected: NAME on|off)"; M_BKL_NONE="List %s is not in csf.blocklists"; M_BKL_NOTMINE="List %s was not turned on by the plugin; the plugin does not turn off a list you turned on by hand (turn it off in csf.blocklists)"; M_BKL_ON="Blocklist %s turned on; csf and lfd restarted, lfd is downloading the list"; M_BKL_OFF="Blocklist %s turned off; csf and lfd restarted"
   M_SVCX_WROTE="Combined services file written: %s addresses (%s)"; M_SVCX_SHRINK="Combined services file not written: the new list has %s addresses, less than half of the previous %s (%s)"; M_SVCX_FAIL="Combined services file could not be written (%s)"; M_SVCX_RELOAD="Web server reloaded: %s"; M_SVCX_RELOADF="Web server reload failed: %s (exit %s): %s"; M_SVCX_BAD="Combined services file not written: Apache did not accept the new list (%s addresses) in a ModSecurity rule, the previous file is kept (%s): %s"
   M_H_NOREASON="temp ban (no reason in the log)"
@@ -891,7 +894,7 @@ mail() {
 
 # ── Settings: validation (panel + --config set + --dry-run --set) ──────────
 # Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
-CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST IC_REVIEW IE_REVIEW IC_SVCX IE_SVCX THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_PFX THRESHOLD_TEMP_24 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_KEEP_DAYS EVENTS_DAYS RUN_DAYS PERM_WINDOW_DAYS BANLOG_DAYS LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_MODES CLOUD_URLS CLOUD_EXTRA SRC_LABELS ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS REFRESH_HOUR OWNER_TTL_DAYS IMUNIFY_REFRESH_MIN BLOCK_ACTIVE_DAYS SVC_EXPORT SVC_EXPORT_RELOAD"
+CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST IC_REVIEW IE_REVIEW IC_SVCX IE_SVCX THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_PFX THRESHOLD_TEMP_24 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_KEEP_DAYS EVENTS_DAYS RUN_DAYS PERM_WINDOW_DAYS BANLOG_DAYS LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_MODES CLOUD_URLS CLOUD_EXTRA SRC_LABELS ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS REFRESH_HOUR OWNER_TTL_DAYS IMUNIFY_REFRESH_MIN BLOCK_ACTIVE_DAYS SVC_EXPORT SVC_EXPORT_RELOAD ABUSE_ON ABUSE_CACHE_H ABUSE_IP_MAX ABUSE_BLK_MAX ABUSE_MAX_AGE"
 PROV_KEYS="SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_MODES CLOUD_URLS CLOUD_EXTRA ENABLED"
 SVC_CATALOG="google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake microsoft365 quiccloud"
 CLOUD_CATALOG="gcp aws azure oracle digitalocean linode vultr"
@@ -911,7 +914,7 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
         MSG_LANG) opts="tr en" ;;
         LOOKUP) opts="0 1" ;;
         CRON_MIN) opts="*/5 */10 */15 */30 0" ;;
-        DIGEST|IC_FIREWALL|IC_LISTFULL|IC_RUN|IC_DIGEST|IE_FIREWALL|IE_LISTFULL|IE_RUN|IE_DIGEST|IC_REVIEW|IE_REVIEW|IC_SVCX|IE_SVCX) opts="0 1" ;;
+        DIGEST|IC_FIREWALL|IC_LISTFULL|IC_RUN|IC_DIGEST|IE_FIREWALL|IE_LISTFULL|IE_RUN|IE_DIGEST|IC_REVIEW|IE_REVIEW|IC_SVCX|IE_SVCX|ABUSE_ON) opts="0 1" ;;
         NOTIFY) opts="all email slack" ;;
         DIGEST_DAY) opts="1 2 3 4 5 6 7" ;;
         ALERT_MAIL)
@@ -940,6 +943,10 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
         GEO_REFRESH_DAYS) lo=7; hi=90 ;;
         REFRESH_HOUR) opts="off 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23" ;;
         OWNER_TTL_DAYS) lo=1; hi=180 ;;
+        ABUSE_CACHE_H) lo=1; hi=168 ;;
+        ABUSE_IP_MAX) lo=1; hi=100000 ;;
+        ABUSE_BLK_MAX) lo=1; hi=10000 ;;
+        ABUSE_MAX_AGE) lo=1; hi=365 ;;
         IMUNIFY_REFRESH_MIN) lo=10; hi=1440 ;;
         BLOCK_ACTIVE_DAYS) lo=1; hi=365 ;;
         SVC_ALLOW|ASN_BAN|CLOUD_BAN|ENABLED|SVC_EXPORT|SVC_EXPORT_RELOAD) opts="0 1" ;;
@@ -4420,7 +4427,7 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
         jstr "$WL_HIT"; o+=",\"wl\":$REPLY,\"wl_retry\":$([ "$WL_RETRY" = 1 ] && echo true || echo false)"
         jstr "$OWN_LONG"; o+=",\"owner\":$REPLY"
         # AbuseIPDB: kart açılınca SORULMAZ (blok sorgusu günde 100); anahtar varsa abk, önbellekte sonuç varsa abuse (düğme sorar)
-        if abuse_key; then abuse_btoday; o+=",\"abk\":true,\"abt\":$REPLY"; abuse_block "$c" cache && o+=",\"abuse\":$REPLY"; fi
+        if abuse_on; then abuse_btoday; o+=",\"abk\":true,\"abt\":$REPLY,\"abm\":$ABUSE_BLK_MAX,\"abc\":$ABUSE_CACHE_H"; abuse_block "$c" cache && o+=",\"abuse\":$REPLY"; fi
         cidr_range "$c" && self_overlap "$R_LO" "$R_HI"; o+=",\"self\":\"$SELF_HIT\""
         jarr "${IN_BLK[@]}"; o+=",\"blocks\":$REPLY"
         jarr "${IN_OTH[@]}"; o+=",\"others\":$REPLY"
@@ -5609,7 +5616,8 @@ bkl_range() {    # ALT ÜST → 0: aralığın TAMAMI bir etkin listenin tek sat
 # ve son 4 karakterini taşır. Anahtar curl'e komut satırıyla değil başlık dosyasıyla verilir (-H @dosya; ps'te görünmez; curl 7.55+,
 # WSL 7.76'da ölçüldü). Sorgu yalnız IP'yi gönderir. Cevap (ölçüldü 2026-11-23, lin, 158.101.136.233): data{ipAddress, isPublic,
 # ipVersion, isWhitelisted, abuseConfidenceScore, countryCode, usageType, isp, domain, hostnames[], isTor, totalReports,
-# numDistinctUsers, lastReportedAt}; hatada errors[{detail, status}] (401 ölçüldü). Sonuç IP başına 24 saat önbellekte; hata 10 dk.
+# numDistinctUsers, lastReportedAt}; hatada errors[{detail, status}] (401 ölçüldü). Sonuç IP başına ABUSE_CACHE_H saat önbellekte; hata 10 dk;
+# günde ABUSE_IP_MAX sorgudan sonra sorulmaz ({"lim","n","t"}, önbelleğe yazılmaz); ABUSE_ON=0 iken hiç sorulmaz.
 # Tur, durum çıktısı, mail ve Slack sorgu yapmaz (ücretsiz kota günde 1.000 sorgu): toplu listelerde itibar gösterilmez.
 ABUSE_DIR="$(dirname "$SAYAC_FILE")/abuseipdb"
 ABUSE_API="${ABUSE_API:-https://api.abuseipdb.com/api/v2/check}"
@@ -5617,21 +5625,26 @@ abuse_key() {    # → REPLY = anahtar (geçerliyse); yoksa 1
     REPLY=""; [ -r "$ABUSE_DIR/key" ] && REPLY=$(tr -d ' \t\r\n' < "$ABUSE_DIR/key")   # yokken "< dosya" yönlendirme hatası basmasın
     [[ "$REPLY" =~ ^[A-Za-z0-9]{20,200}$ ]] || { REPLY=""; return 1; }
 }
+abuse_on() {     # → 0: AbuseIPDB kullanılıyor (anahtar tanımlı ve ABUSE_ON=1); REPLY = anahtar
+    abuse_key && [ "$ABUSE_ON" = 1 ]
+}
 abuse_today() {  # → REPLY = bugün yapılan sorgu sayısı
     local d="" n=0; [ -r "$ABUSE_DIR/count" ] && read -r d n < "$ABUSE_DIR/count"
     [ "$d" = "$(date +%F)" ] && [[ "$n" =~ ^[0-9]+$ ]] && REPLY=$n || REPLY=0
 }
 abuse_check() {  # IP → 0 ve REPLY = JSON nesnesi {"s","r","u","l","ut","isp","dom","tor","wl","t"} ya da {"err","code","t"}; anahtar yoksa 1
     local ip="$1" k c="$ABUSE_DIR/c/$1.json" e="$ABUSE_DIR/c/$1.err" now h body code
-    abuse_key || return 1; k="$REPLY"
+    abuse_on || return 1; k="$REPLY"
     [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
     printf -v now '%(%s)T' -1
-    if [ -s "$c" ] && [ $(( now - $(stat -c %Y "$c" 2>/dev/null || echo 0) )) -lt 86400 ]; then REPLY=$(cat "$c"); return 0; fi
+    if [ -s "$c" ] && [ $(( now - $(stat -c %Y "$c" 2>/dev/null || echo 0) )) -lt $(( ABUSE_CACHE_H * 3600 )) ]; then REPLY=$(cat "$c"); return 0; fi
     if [ -s "$e" ] && [ $(( now - $(stat -c %Y "$e" 2>/dev/null || echo 0) )) -lt 600 ]; then REPLY=$(cat "$e"); return 0; fi
+    # günlük sınır (ABUSE_IP_MAX): dolunca sorulmaz, önbelleğe yazılmaz (sınır yükselince ya da ertesi gün sorulur)
+    abuse_today; [ "$REPLY" -lt "$ABUSE_IP_MAX" ] || { REPLY="{\"lim\":$ABUSE_IP_MAX,\"n\":$REPLY,\"t\":$now}"; return 0; }
     mkdir -p "$ABUSE_DIR/c" 2>/dev/null; chmod 700 "$ABUSE_DIR" 2>/dev/null
     h=$(mktemp "$ABUSE_DIR/h.XXXXXX") || return 1; chmod 600 "$h"
     printf 'Key: %s\nAccept: application/json\n' "$k" > "$h"
-    body=$(curl -sS --max-time 8 -G "$ABUSE_API" --data-urlencode "ipAddress=$ip" -d maxAgeInDays=90 -H @"$h" -w '\n%{http_code}' 2>/dev/null)
+    body=$(curl -sS --max-time 8 -G "$ABUSE_API" --data-urlencode "ipAddress=$ip" -d "maxAgeInDays=$ABUSE_MAX_AGE" -H @"$h" -w '\n%{http_code}' 2>/dev/null)
     rm -f "$h"
     code="${body##*$'\n'}"; body="${body%$'\n'*}"; [[ "$code" =~ ^[0-9]+$ ]] || code=0
     abuse_today; printf '%s %s\n' "$(date +%F)" "$(( REPLY + 1 ))" > "$ABUSE_DIR/count" 2>/dev/null
@@ -5657,6 +5670,7 @@ abuse_text() {   # JSON (abuse_check) → REPLY = düz metin satırı: "puan 100
     local j="$1" f
     f() { printf '%s' "$j" | sed -n "s/.*\"$1\":\(\"\([^\"]*\)\"\|\([0-9a-z]*\)\).*/\2\3/p"; }
     if [[ "$j" == *'"err"'* ]]; then REPLY=$(m "$M_AB_ERR" "$(f code)" "$(f err)"); return; fi
+    if [[ "$j" == *'"lim"'* ]]; then REPLY=$(m "$M_AB_LIM" "$(f n)" "$(f lim)"); return; fi
     REPLY=$(m "$M_AB_LINE" "$(f s)" "$(f r)" "$(f u)" "$(f l | cut -c1-10)" "$(f ut)")
     [ "$(f tor)" = true ] && REPLY+=" · Tor"
 }
@@ -5668,24 +5682,26 @@ abuse_text() {   # JSON (abuse_check) → REPLY = düz metin satırı: "puan 100
 # kart açılınca yalnız önbellek okunur (abuse_block CIDR cache). Önbellek 24 saat, hata 10 dk, sayaç count.blk.
 ABUSE_BAPI="${ABUSE_BAPI:-https://api.abuseipdb.com/api/v2/check-block}"
 abuse_block() {  # CIDR [cache] → 0 ve REPLY = {"net","n","mx","ips":[{"ip","r","s","l","cc"}],"t"} ya da {"err","code","t"}; anahtar yoksa / önbellekte yoksa 1
-    local net="$1" only="${2:-}" k f c e now h body code
-    abuse_key || return 1; k="$REPLY"
+    local net="$1" only="${2:-}" k f c e now h body code age
+    abuse_on || return 1; k="$REPLY"
     [[ "$net" =~ ^([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/([0-9]+)$ ]] || return 1
     [ "${BASH_REMATCH[2]}" -ge 16 ] && [ "${BASH_REMATCH[2]}" -le 31 ] || return 1
     f="blk-${BASH_REMATCH[1]}-${BASH_REMATCH[2]}"; c="$ABUSE_DIR/c/$f.json"; e="$ABUSE_DIR/c/$f.err"
     printf -v now '%(%s)T' -1
-    if [ -s "$c" ] && [ $(( now - $(stat -c %Y "$c" 2>/dev/null || echo 0) )) -lt 86400 ]; then REPLY=$(cat "$c"); return 0; fi
+    if [ -s "$c" ] && [ $(( now - $(stat -c %Y "$c" 2>/dev/null || echo 0) )) -lt $(( ABUSE_CACHE_H * 3600 )) ]; then REPLY=$(cat "$c"); return 0; fi
     if [ -s "$e" ] && [ $(( now - $(stat -c %Y "$e" 2>/dev/null || echo 0) )) -lt 600 ]; then REPLY=$(cat "$e"); return 0; fi
     [ "$only" = cache ] && return 1
+    abuse_btoday; [ "$REPLY" -lt "$ABUSE_BLK_MAX" ] || { REPLY="{\"lim\":$ABUSE_BLK_MAX,\"n\":$REPLY,\"t\":$now}"; return 0; }
+    age=$ABUSE_MAX_AGE; [ "$age" -gt 30 ] && age=30          # ücretsiz planda blok sorgusu en çok 30 gün (belge)
     mkdir -p "$ABUSE_DIR/c" 2>/dev/null; chmod 700 "$ABUSE_DIR" 2>/dev/null
     h=$(mktemp "$ABUSE_DIR/h.XXXXXX") || return 1; chmod 600 "$h"
     printf 'Key: %s\nAccept: application/json\n' "$k" > "$h"
-    body=$(curl -sS --max-time 15 -G "$ABUSE_BAPI" --data-urlencode "network=$net" -d maxAgeInDays=30 -H @"$h" -w '\n%{http_code}' 2>/dev/null)
+    body=$(curl -sS --max-time 15 -G "$ABUSE_BAPI" --data-urlencode "network=$net" -d "maxAgeInDays=$age" -H @"$h" -w '\n%{http_code}' 2>/dev/null)
     rm -f "$h"
     code="${body##*$'\n'}"; body="${body%$'\n'*}"; [[ "$code" =~ ^[0-9]+$ ]] || code=0
     abuse_btoday; printf '%s %s\n' "$(date +%F)" "$(( REPLY + 1 ))" > "$ABUSE_DIR/count.blk" 2>/dev/null
     REPLY=$(printf '%s' "$body" | perl -MJSON::PP -e '
-        local $/; my $in = <STDIN>; my ($code, $now, $net) = @ARGV; my $J = JSON::PP->new->canonical;
+        local $/; my $in = <STDIN>; my ($code, $now, $net, $age) = @ARGV; my $J = JSON::PP->new->canonical;
         my $d = eval { $J->decode($in) };
         if ($code == 200 && ref $d eq "HASH" && ref $d->{data} eq "HASH" && ref $d->{data}{reportedAddress} eq "ARRAY") {
             my @a = map { { ip => $_->{ipAddress} // "", r => ($_->{numReports} // 0) + 0, s => ($_->{abuseConfidenceScore} // 0) + 0,
@@ -5693,9 +5709,9 @@ abuse_block() {  # CIDR [cache] → 0 ve REPLY = {"net","n","mx","ips":[{"ip","r
             @a = sort { $b->{s} <=> $a->{s} || $b->{r} <=> $a->{r} || $a->{ip} cmp $b->{ip} } @a;
             my $mx = 0; for (@a) { $mx = $_->{s} if $_->{s} > $mx }
             my $n = scalar @a; splice(@a, 256) if @a > 256;
-            print $J->encode({ net => $net, n => $n, mx => $mx + 0, ips => \@a, t => $now + 0 }) }
+            print $J->encode({ net => $net, n => $n, mx => $mx + 0, d => $age + 0, ips => \@a, t => $now + 0 }) }
         else { my $m = (ref $d eq "HASH" && ref $d->{errors} eq "ARRAY" && ref $d->{errors}[0] eq "HASH") ? ($d->{errors}[0]{detail} // "") : "";
-            print $J->encode({ err => $m, code => $code + 0, t => $now + 0 }) }' "$code" "$now" "$net" 2>/dev/null)
+            print $J->encode({ err => $m, code => $code + 0, t => $now + 0 }) }' "$code" "$now" "$net" "$age" 2>/dev/null)
     [ -n "$REPLY" ] || REPLY="{\"err\":\"\",\"code\":$code,\"t\":$now}"
     if [[ "$REPLY" == *'"err"'* ]]; then printf '%s' "$REPLY" > "$e.tmp.$$" && mv -f "$e.tmp.$$" "$e"
     else printf '%s' "$REPLY" > "$c.tmp.$$" && mv -f "$c.tmp.$$" "$c"; rm -f "$e"; fi
@@ -7894,7 +7910,7 @@ do_config() {
                 o="{\"ok\":true,\"values\":{"
                 i=0
                 for k in $CFG_KEYS; do jstr "$(cfg_value "$k")"; o+="$([ $i -gt 0 ] && echo ,)\"$k\":$REPLY"; i=1; done
-                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"whm\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"NOTIFY\":\"all\",\"IC_FIREWALL\":\"1\",\"IC_LISTFULL\":\"1\",\"IC_RUN\":\"1\",\"IC_DIGEST\":\"1\",\"IE_FIREWALL\":\"1\",\"IE_LISTFULL\":\"1\",\"IE_RUN\":\"1\",\"IE_DIGEST\":\"1\",\"IC_REVIEW\":\"1\",\"IE_REVIEW\":\"1\",\"IC_SVCX\":\"1\",\"IE_SVCX\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_PFX\":\"4\",\"THRESHOLD_TEMP_24\":\"3\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_KEEP_DAYS\":\"30\",\"EVENTS_DAYS\":\"180\",\"RUN_DAYS\":\"31\",\"PERM_WINDOW_DAYS\":\"90\",\"BANLOG_DAYS\":\"90\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"BLOCK_EXPIRE_DAYS\":\"365\",\"BLOCK_ACTIVE_DAYS\":\"30\",\"OWNER_TTL_DAYS\":\"30\",\"IMUNIFY_REFRESH_MIN\":\"60\",\"CLOUD_REFRESH_DAYS\":\"1\",\"CLOUD_FAIL_DAYS\":\"3\",\"SVC_REFRESH_DAYS\":\"1\",\"SVC_FAIL_DAYS\":\"3\",\"GEO_REFRESH_DAYS\":\"25\",\"REFRESH_HOUR\":\"4\",\"BLOCK_EXPIRE_AUTO\":\"0\",\"SVC_EXPORT\":\"0\",\"SVC_EXPORT_RELOAD\":\"0\",\"CRON_MIN\":\"*/10\"}"
+                o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"whm\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"NOTIFY\":\"all\",\"IC_FIREWALL\":\"1\",\"IC_LISTFULL\":\"1\",\"IC_RUN\":\"1\",\"IC_DIGEST\":\"1\",\"IE_FIREWALL\":\"1\",\"IE_LISTFULL\":\"1\",\"IE_RUN\":\"1\",\"IE_DIGEST\":\"1\",\"IC_REVIEW\":\"1\",\"IE_REVIEW\":\"1\",\"IC_SVCX\":\"1\",\"IE_SVCX\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_PFX\":\"4\",\"THRESHOLD_TEMP_24\":\"3\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_KEEP_DAYS\":\"30\",\"EVENTS_DAYS\":\"180\",\"RUN_DAYS\":\"31\",\"PERM_WINDOW_DAYS\":\"90\",\"BANLOG_DAYS\":\"90\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"BLOCK_EXPIRE_DAYS\":\"365\",\"BLOCK_ACTIVE_DAYS\":\"30\",\"OWNER_TTL_DAYS\":\"30\",\"ABUSE_ON\":\"1\",\"ABUSE_CACHE_H\":\"24\",\"ABUSE_IP_MAX\":\"1000\",\"ABUSE_BLK_MAX\":\"100\",\"ABUSE_MAX_AGE\":\"90\",\"IMUNIFY_REFRESH_MIN\":\"60\",\"CLOUD_REFRESH_DAYS\":\"1\",\"CLOUD_FAIL_DAYS\":\"3\",\"SVC_REFRESH_DAYS\":\"1\",\"SVC_FAIL_DAYS\":\"3\",\"GEO_REFRESH_DAYS\":\"25\",\"REFRESH_HOUR\":\"4\",\"BLOCK_EXPIRE_AUTO\":\"0\",\"SVC_EXPORT\":\"0\",\"SVC_EXPORT_RELOAD\":\"0\",\"CRON_MIN\":\"*/10\"}"
                 ALERT_MAIL=whm mail_to; jstr "$REPLY"; o+=",\"whm_contact\":$REPLY"
                 # AbuseIPDB: anahtarın kendisi panele gitmez — yalnız tanımlı mı, son 4 karakteri, bugünkü sorgu sayısı
                 local akt="" atd atb; abuse_key && akt="${REPLY: -4}"; abuse_today; atd=$REPLY; abuse_btoday; atb=$REPLY
@@ -8085,6 +8101,7 @@ case "$MODE" in
     lookup) LOG_MODE=quiet; do_lookup "${ARGS[0]}"; exit $? ;;
     abuseblk) LOG_MODE=quiet                     # CIDR ağ adresiyle (aralık kartının gönderdiği biçim); anahtar yoksa nokey
         abuse_key || { echo '{"ok":false,"error":"nokey"}'; exit 1; }
+        [ "$ABUSE_ON" = 1 ] || { echo '{"ok":false,"error":"abuse_off"}'; exit 1; }
         cidr_range "${ARGS[0]:-}" && [[ "${ARGS[0]}" == */* ]] && [ "${ARGS[0]#*/}" -ge 16 ] && [ "${ARGS[0]#*/}" -le 31 ] &&
             ip2int "${ARGS[0]%/*}" && [ "$REPLY" -eq "$R_LO" ] || { echo '{"ok":false,"error":"bad_input"}'; exit 2; }
         abuse_block "${ARGS[0]}"; echo "{\"ok\":true,\"abuse\":$REPLY}"; exit 0 ;;

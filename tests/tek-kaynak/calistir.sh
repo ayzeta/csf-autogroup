@@ -32,6 +32,10 @@ kural "sayfa çubuğu yalnız pagerHtml'de (sayılar num() ile)" "class=\"ag-pag
 kural "öğe eylemi düğmesi elle yazılmaz (MI.* + miBtn: menü, aralık kartı, IP kartı aynı öğeler)" 'data-(act|dr)="(unban|promote|forget|rewatch|chg|ban|ban16|ban24|banpfx|banforce)"' 'BU_DESEN_HICBIR_SATIRA_UYMAZ'
 kural "kapsayan banın adı covName'den: ham CSF ayar adı (CC_DENY …) cümleye eklenmez" "'[ (]*CC_DENY(_PORTS)? '" 'BU_DESEN_HICBIR_SATIRA_UYMAZ'
 kural "olay rozetinin adı evName'den (elle ban: türü yazıda da; renk tek başına okunmuyordu)" 'statePill[(]evSt[(]e[)], t[(]' 'BU_DESEN_HICBIR_SATIRA_UYMAZ'
+# uygulama adımı (prov_apply) bitince ayarlar yeniden okunur (1.15.121): kayıttan hemen sonraki okuma uygulamanın yazdıklarını görmüyordu,
+# Ayarlar kartı (birleşik dosyanın son yazımı) sayfa yenilenene kadar eski kalıyordu. Her prov_apply cevabının başarı ve hata işleyicisi CFG'yi boşaltır.
+out=$(awk '/api\(.prov_apply.\)\.then\(/ { s = $0; for (i = 1; i <= 8 && (getline l) > 0; i++) s = s "\n" l; n = gsub(/CFG = null/, "&", s); if (n < 2) printf "  %d: %s\n", NR, substr($0, 1, 120) }' "$J")
+if [ -n "$out" ]; then echo "DÜŞTÜ: prov_apply bitince ayarlar yeniden okunmuyor (CFG = null başarıda ve hatada)"; echo "$out" | head -4; F=$((F + 1)); else echo "GEÇTİ: prov_apply bitince ayarlar yeniden okunur"; fi
 # indirilen liste dosyaları (izinli servisler, kiralık listeler) doğrudan "> dosya" ile yazılmaz: geçici dosya + mv (1.15.111; başka
 # okuyucu — csfpost.sh'taki --apply ya da dışarıdan okuyan araç — "> dosya" önce boşalttığı için yazma anında boş / yarım dosya görebilir; TOOLS=dizin ile eski araçlarla sınanır)
 out=$(grep -nE "> \"\\\$old\"([^.]|\$)" "${TOOLS:-$D/tools}/services-allow.sh" "${TOOLS:-$D/tools}/cloud-ban.sh" 2>/dev/null)
