@@ -579,7 +579,9 @@ impact*, and a later lfd ban on such an address counts as a *Violation under a
 ban*, not towards the thresholds. A list that was disabled in `csf.blocklists`
 is not counted, even though CSF leaves its downloaded file on disk.
 
-Settings → Sources and refresh → *CSF blocklists* lists every entry of
+On the *Providers* tab, CSF blocklists are a protection layer next to rented
+servers, provider bans and allowed services: a summary tile at the top (lists
+on, addresses loaded, last download) and a card that lists every entry of
 `csf.blocklists` with its state, how many addresses are loaded and when it was
 last downloaded. A list can be turned on or off from its ⋯ menu: the plugin
 removes or adds the `#` at the start of that one line and restarts csf and lfd
@@ -832,6 +834,17 @@ allowed lists even when a list contains them; the rest of the list stays
 allowed. Use it when one address of a service keeps violating: a ban on an
 allowed address has no effect, because CSF applies allows first. The IP card,
 Needs review and History offer this in one step for such an address.
+
+**Combined file** (`SVC_EXPORT`, off by default): the same addresses CSF
+allows (exclusions left out) are also written to
+`/opt/csf-autogroup/services-all.txt`, one IPv4 address or CIDR per line, so a
+ModSecurity rule (`@ipMatchFromFile`, which takes a single file) or PHP inside
+CageFS can treat them as verified services. The file is written only when the
+list changes, and not at all when the new list has less than half of the
+previous one's lines (a failed download should not narrow it). ModSecurity
+reads the file only when it starts; with `SVC_EXPORT_RELOAD` the web server is
+reloaded with `/scripts/restartsrv_httpd --graceful` after each change. Turning
+the option off leaves the file as it is.
 
 The card shows when the lists were last downloaded and where each one comes
 from; a built-in source's address can be changed there if the provider moves

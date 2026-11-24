@@ -1135,6 +1135,10 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 
 /* ── Sağlayıcılar sekmesi: katman kutuları ve aynı kalıpta kartlar ── */
 .ag-lay { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 20px; }
+/* dört katman (CSF blok listeleri, csf.blocklists varsa): geniş ekranda 4 sütun, ortada 2×2 (3+1 dengesiz dizilmesin), dar ekranda tek */
+.ag-lay:has(> :nth-child(4)) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1250px) { .ag-lay:has(> :nth-child(4)) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 900px) { .ag-lay:has(> :nth-child(4)) { grid-template-columns: 1fr; } }   /* :has özgüllüğü genel ≤900 kuralını eziyordu */
 .ag-lay-i { display: block; min-width: 0; width: 100%; padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; border-radius: var(--ag-radius); }
 .ag-lay-i, .ag-lay-i * { text-decoration: none !important; }
 .ag-lay-i:hover .ag-kpi { border-color: var(--ag-accent-line); }

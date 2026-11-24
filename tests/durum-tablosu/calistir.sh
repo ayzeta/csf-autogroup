@@ -1068,6 +1068,30 @@ mcheck "blok listesi: elle açılmış listeyi eklenti kapatmaz (dosya ve CSF'e 
 mcheck "blok listesi: aç → satır başındaki # kalkar, eklentinin listesine girer, csf -ra, Geçmiş'e 0 → 1" "run --config blocklist ESKI on --json 2>/dev/null | grep -q '\"ok\":true' && grep -q '^ESKI|86400|0|' '$R/etc/csf/csf.blocklists' && grep -qx ESKI '$R/var/lib/csf_autogroup/bkl.mine' && grep -q 'csf -ra' '$R/csf_calls.log' && grep -q '\"key\":\"CSF_BLOCKLIST:ESKI\",\"from\":\"0\",\"to\":\"1\"' \"\$(EVF)\""
 mcheck "blok listesi: eklentinin açtığı kapatılır (# geri gelir, listeden çıkar, Geçmiş'e 1 → 0); ikinci kapatma değişiklik yok" "run --config blocklist ESKI off --json 2>/dev/null | grep -q '\"ok\":true' && grep -q '^#ESKI|' '$R/etc/csf/csf.blocklists' && ! grep -qx ESKI '$R/var/lib/csf_autogroup/bkl.mine' && grep -q '\"key\":\"CSF_BLOCKLIST:ESKI\",\"from\":\"1\",\"to\":\"0\"' \"\$(EVF)\" && run --config blocklist ESKI off --json 2>/dev/null | grep -q '\"ok\":true,\"code\":0'"
 mcheck "blok listesi: olmayan liste ve bozuk ad reddedilir, dosya değişmez" "cp '$R/etc/csf/csf.blocklists' '$W/out/bk0'; run --config blocklist YOK on --json 2>/dev/null | grep -q '\"code\":2' && run --config blocklist 'X;id' on --json 2>/dev/null | grep -q '\"code\":2' && cmp -s '$W/out/bk0' '$R/etc/csf/csf.blocklists'"
+# birleşik servis dosyası (1.15.119, SVC_EXPORT): CSF'e giden izinli servis dosyası (services-allow.sh'nin yazdığı biçim: başlık, kaynak
+# yorumu, "adres # csf_autogroup: service ad") → tek dosya, yalnız değişince; yeniden yükleme komutu taklit (çağrıyı sayar)
+mk cvsvx
+if kok_on; then
+    SVA="$R/etc/csf/csf_autogroup.services.allow"; XF="$R/opt/csf-autogroup/services-all.txt"
+    printf 'Include %s\n' "$SVA" >> "$A"
+    sva() { { printf '# güncellendi 2026-11-24 04:00 — elle düzenlemeyin, tools/services-allow.sh yeniden yazar\n'; printf '# google (https://example.invalid/g.json)\n'
+              for x in "$@"; do printf '%s # csf_autogroup: service google-common\n' "$x"; done; } > "$SVA"; }
+    sva 66.249.64.0/27 203.0.113.10 66.249.64.0/27 192.0.2.8
+    printf '#!/bin/bash\necho "$*" >> "%s"\n' "$R/reload.log" > "$R/reload.sh"; chmod 755 "$R/reload.sh"
+    printf '%s\n' SVC_ALLOW=1 SVC_EXPORT=1 SVC_EXPORT_RELOAD=1 "SVCX_FILE=$XF" "SVCX_RELOAD_CMD=\"$R/reload.sh --graceful\"" >> "$R/app/config.env"
+    rl() { grep -c . "$R/reload.log" 2>/dev/null || echo 0; }
+fi
+quiet
+mcheck "birleşik servis dosyası: CSF'e giden adresler sıralı, tekrarsız, yorumsuz; dizin 0755, dosya 0644; yazılınca web sunucusu bir kez yeniden yüklenir" "[ \"\$(cat '$XF')\" = \"\$(printf '66.249.64.0/27\n192.0.2.8\n203.0.113.10')\" ] && [ \"\$(stat -c %a '$XF')\" = 644 ] && [ \"\$(stat -c %a \"\$(dirname '$XF')\")\" = 755 ] && [ \"\$(rl)\" = 1 ] && grep -q -- '--graceful' '$R/reload.log' && grep -q '^[0-9]* 0\$' '$R/var/lib/csf_autogroup/svcx.reload'"
+quiet
+mcheck "birleşik servis dosyası: liste değişmeyince dosya yazılmaz, yeniden yükleme yok" "[ \"\$(rl)\" = 1 ] && [ \"\$(grep -c 'Birleşik servis dosyası yazıldı' '$R/autogroup.log')\" = 1 ]"
+kok_on && sva 66.249.64.0/27 203.0.113.10 192.0.2.8 198.51.100.0/24; quiet
+mcheck "birleşik servis dosyası: liste değişince yeniden yazılır ve yeniden yüklenir" "grep -qx '198.51.100.0/24' '$XF' && [ \"\$(rl)\" = 2 ]"
+kok_on && sva 192.0.2.8; quiet
+mcheck "birleşik servis dosyası: yeni liste öncekinin yarısından azsa yazılmaz (yarım indirme muafiyeti daraltmasın), günlüğe yazılır" "[ \"\$(grep -c . '$XF')\" = 4 ] && [ \"\$(rl)\" = 2 ] && grep -q 'Birleşik servis dosyası yazılmadı: yeni liste 1 adres, öncekinin (4)' '$R/autogroup.log'"
+mcheck "birleşik servis dosyası: durum çıktısında yol, satır sayısı, son yazım ve son yeniden yükleme (panel)" "run --config get --json 2>/dev/null | grep -q '\"svcx\":{\"f\":\"$XF\",\"n\":4,\"t\":[1-9][0-9]*,\"rt\":[1-9][0-9]*,\"rc\":\"0\"}'"
+kok_on && { sed -i 's/^SVC_EXPORT=1$/SVC_EXPORT=0/' "$R/app/config.env"; sva 66.249.64.0/27 203.0.113.10 192.0.2.8 198.51.100.0/24 198.18.0.0/24; }; quiet
+mcheck "birleşik servis dosyası: kapalıyken yazılmaz (dosya olduğu gibi kalır)" "! grep -q '198.18.0.0/24' '$XF' && [ \"\$(rl)\" = 2 ]"
 # AbuseIPDB (1.15.114): yerel taklit uç (abuse-sunucu.py) gerçek API'nin ölçülen cevaplarını verir. Anahtar ayrı dosyada (config.env'de
 # değil), standart girdiden; panel / Geçmiş / günlük yalnız son 4 karakteri görür; sonuç IP başına 24 sa önbellekte; tur ve durum sorgu yapmaz.
 mk cvab

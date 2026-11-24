@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.15.119 — 2026-11-24
+
+- Allowed services can also be written to a single file,
+  `/opt/csf-autogroup/services-all.txt` (Providers → Allowed services →
+  Combined file, off by default): the same addresses CSF allows, one per line,
+  for a ModSecurity `@ipMatchFromFile` rule or PHP. Written only when it
+  changes, never shrunk to less than half at once; optionally the web server is
+  reloaded gracefully after a change, because ModSecurity reads the file only
+  at start.
+
+## 1.15.118 — 2026-11-24
+
+- The *CSF blocklists* card moved from Settings to the *Providers* tab, where
+  it sits with the other protection layers (rented servers, provider bans,
+  allowed services) and has its own summary tile at the top. Lists that are
+  on are shown directly, lists that are off are folded under "Lists that are
+  off". The tab's introduction and the allowed-services summary now speak of
+  all layers.
+
 ## 1.15.117 — 2026-11-24
 
 - Settings → Sources and refresh: a *CSF blocklists* card lists every entry of

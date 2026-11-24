@@ -244,7 +244,9 @@ async function layoutChecks(page, label, width) {
   check(`${label} · ${width} px · tarih ham (YYYY-AA-GG / GG.AA.YYYY) yazılmıyor`, iso.length === 0, iso.slice(0, 3).join(' | '));
   // tıklanan iki öğe üst üste binmez (dar ekranda sığmayan düğmenin yanındakinin üstüne taşması)
   const lapB = await page.evaluate(() => {
-    const E = Array.from(document.querySelectorAll('#ag-app button, #ag-app a, #ag-app input, #ag-app select, #ag-app .ag-chip')).filter(e => e.offsetWidth > 0);
+    // kapalı <details> içindeki öğeler çizilmez ama Chromium'da ölçü kutusu kalır (offsetWidth > 0, konumu özet satırının üstü): sayılmaz
+    // (1.15.118 CSF blok listelerinin "Kapalı listeler" bölümü; ⋯ düğmeleri aşağıdaki düğmelerle "biniyor" görünüyordu)
+    const E = Array.from(document.querySelectorAll('#ag-app button, #ag-app a, #ag-app input, #ag-app select, #ag-app .ag-chip')).filter(e => e.offsetWidth > 0 && !e.closest('details:not([open]) > :not(summary)'));
     const R = E.map(e => e.getBoundingClientRect()), out = [];
     for (let i = 0; i < E.length && out.length < 4; i++) for (let j = i + 1; j < E.length; j++) {
       if (E[i].contains(E[j]) || E[j].contains(E[i])) continue;
@@ -253,7 +255,9 @@ async function layoutChecks(page, label, width) {
       // kaydet çubuğu bilerek içeriğin üstünde yüzer (position: fixed): altındaki düğmeyle binmesi yerleşim hatası değil
       if ([E[i], E[j]].filter(e => e.closest('.ag-savebar')).length === 1) continue;
       const a = R[i], b = R[j];
-      if (a.left < b.right - 2 && b.left < a.right - 2 && a.top < b.bottom - 2 && b.top < a.bottom - 2) { out.push(E[i].textContent.trim().slice(0, 15) + ' ↔ ' + E[j].textContent.trim().slice(0, 15)); break; }
+      // yazısız öğe (⋯ menüsü, simge düğmesi) sınıfı ve data-act'ıyla adlandırılır: yalnız boş "↔ Kapalı" bulguyu tanıtmıyordu
+      const nm = e => (e.textContent.trim().slice(0, 15) || ((e.getAttribute('data-act') || e.tagName.toLowerCase()) + '.' + String(e.className || '').split(' ')[0])) + '@' + Math.round(e.getBoundingClientRect().top);
+      if (a.left < b.right - 2 && b.left < a.right - 2 && a.top < b.bottom - 2 && b.top < a.bottom - 2) { out.push(nm(E[i]) + ' ↔ ' + nm(E[j])); break; }
     }
     return out;
   });
@@ -526,14 +530,24 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     check('Ayarlar: her bölüm açıklama ile başlıyor, ilk kart aynı hizada (±24 px)', bad.length === 0 && spread <= 24, bad.join(' | ') + ' ' + tops.join(','));
     check('Ayarlar: kart içeriği kart kenarına yapışmaz (≥12 px), telefonda kart taşmaz', edge.length === 0, edge.slice(0, 6).join(' | '));
     check('Ayarlar: parola türünde alan yok (tarayıcı WHM arama kutusunu dolduruyordu)', pw.length === 0, pw.join(' | '));
-    // CSF blok listeleri kartı (1.15.117; test makinesinin gerçek csf.blocklists'i): her liste bir satır, kapalı listenin ⋯ menüsünde "Listeyi
-    // aç"; pencere değişecek satırı ve csf -ra'yı söyler (onaylanmaz, Escape)
-    await page.click('.ag-setnav [data-s="src"]'); await page.waitForTimeout(500);
-    const bk = await page.evaluate(() => { const c = document.querySelector('.ag-bklcard'); return c ? { n: c.querySelectorAll('.ag-dep').length, m: c.querySelectorAll('[data-act="menu"]').length } : null; });
-    check('Ayarlar → Kaynaklar: CSF blok listeleri kartı, her liste bir satır, menülü', !!bk && bk.n > 0 && bk.m > 0, JSON.stringify(bk));
+    // CSF blok listeleri (1.15.118: Sağlayıcılar sekmesinin bir katmanı; 1.15.117'de Ayarlar'daydı). Test makinesinin gerçek csf.blocklists'i:
+    // üstte katman özet kutusu (tıklanınca karta gider), kart katman bileşeniyle (pc), her liste bir satır, kapalı listenin ⋯ menüsünde
+    // "Listeyi aç"; pencere değişecek satırı ve csf -ra'yı söyler (onaylanmaz, Escape). Ayarlar'da artık yok
+    const bkSet = await page.evaluate(() => !!document.querySelector('.ag-setmain .ag-bkl'));
+    check('CSF blok listeleri Ayarlar\'da yok (Sağlayıcılar sekmesinde katman)', !bkSet, '');
+    await page.click('.ag-tabs [data-tab="prov"]'); await page.waitForSelector('#ag-bkl-card', { timeout: 20000 }).catch(() => {});
+    const bk = await page.evaluate(() => { const c = document.querySelector('#ag-bkl-card.ag-pc'); const tl = document.querySelector('.ag-lay [data-act="laygo"][data-v="ag-bkl-card"]');
+      const L = Array.from(document.querySelectorAll('.ag-lay [data-act="laygo"]')).map(b => b.getAttribute('data-v'));
+      return c ? { n: c.querySelectorAll('.ag-bkl .ag-dep').length, m: c.querySelectorAll('[data-act="menu"]').length, tile: !!tl, sira: L.join(','), how: !!c.querySelector('details.ag-how') } : null; });
+    check('Sağlayıcılar: CSF blok listeleri katmanı (özet kutusu üçüncü, kart katman bileşeniyle, her liste bir satır, menülü)',
+      !!bk && bk.tile && bk.sira === 'ag-cloud-card,ag-prov-card,ag-bkl-card,ag-svc-card' && bk.how && bk.n > 0 && bk.m > 0, JSON.stringify(bk));
+    // kapalı listeler katlanmış bölümde (kart 15 satırla uzuyordu); açık listeler doğrudan
+    const kat = await page.evaluate(() => { const d = document.querySelector('#ag-bkl-card details.ag-more2'); return d ? { open: d.open, off: d.querySelectorAll('.ag-dep').length, onv: document.querySelectorAll('#ag-bkl-card .ag-bkl:not(details .ag-bkl) .ag-dep').length } : null; });
+    check('CSF blok listeleri: kapalı listeler katlanmış bölümde, başta kapalı', !!kat && !kat.open && kat.off > 0, JSON.stringify(kat));
     if (bk && bk.m) {
-      await page.click('.ag-bklcard [data-act="menu"]'); await page.waitForTimeout(300);
-      const on = await page.$('.ag-bklcard [data-act="bklon"]');
+      await page.evaluate(() => { const d = document.querySelector('#ag-bkl-card details.ag-more2'); if (d) d.open = true; }); await page.waitForTimeout(200);
+      await page.click('#ag-bkl-card [data-act="menu"]'); await page.waitForTimeout(300);
+      const on = await page.$('#ag-bkl-card [data-act="bklon"]');
       if (on) {
         await on.click(); await page.waitForSelector('.ag-modal', { timeout: 5000 }).catch(() => {});
         const mt = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); return m ? m.innerText.replace(/\s+/g, ' ') : ''; });
@@ -541,6 +555,18 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
         await page.keyboard.press('Escape'); await page.waitForTimeout(300);
       } else check('blok listesi menüsünde "Listeyi aç" (kapalı liste)', false, 'bklon yok');
     }
+    // birleşik servis dosyası (1.15.119): İzinli servisler kartının bölümü; test makinesinde izinli servisler kapalı → taslakta açılır,
+    // bölüm ve yeniden yükleme seçeneği görünür, Vazgeç ile taslak atılır (kaydedilmez)
+    await page.click('#ag-svc-card [data-act="cfgchip"][data-k="SVC_ALLOW"][data-v="1"]').catch(() => {}); await page.waitForTimeout(400);
+    const sx0 = await page.evaluate(() => { const c = document.querySelector('#ag-svc-card'); return c ? { exp: !!c.querySelector('[data-k="SVC_EXPORT"]'), rl: !!c.querySelector('[data-k="SVC_EXPORT_RELOAD"]') } : null; });
+    await page.click('#ag-svc-card [data-act="cfgchip"][data-k="SVC_EXPORT"][data-v="1"]').catch(() => {}); await page.waitForTimeout(400);
+    const sx1 = await page.evaluate(() => { const c = document.querySelector('#ag-svc-card'); return c ? { rl: !!c.querySelector('[data-k="SVC_EXPORT_RELOAD"]'), yol: /services-all\.txt/.test(c.innerText), not: /restartsrv_httpd --graceful/.test(c.innerText) } : null; });
+    check('İzinli servisler: birleşik dosya bölümü (açınca yeniden yükleme seçeneği, dosya yolu, ne zaman yeniden yüklendiği)', !!sx0 && sx0.exp && !sx0.rl && !!sx1 && sx1.rl && sx1.yol && sx1.not, JSON.stringify([sx0, sx1]));
+    for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(250); await layoutChecks(page, 'svc-birlesik', w); await shot('svc-birlesik-' + w); }
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.click('[data-act="cfgdiscard"]').catch(() => {}); await page.waitForTimeout(400);
+    // sonraki denetimler Ayarlar'da sürer
+    await page.click('.ag-tabs [data-tab="settings"]'); await page.waitForSelector('.ag-setnav [data-s]', { timeout: 20000 }).catch(() => {}); await page.waitForTimeout(300);
   }
   {
     if (await tik(page, '.ag-setnav [data-s="thr"]')) await page.waitForTimeout(500);

@@ -45,7 +45,7 @@ SVC=$(cat_of SVC_CATALOG); CLD=$(cat_of CLOUD_CATALOG)
     for k in ASN_UDP CLOUD_UDP; do printf '%s\t%s\n' "$k" '443' "$k" ''; done
     # kiralık liste başına kip (svc / all / exc; servisler; portlar tire aralıklı)
     printf 'CLOUD_MODES\t%s\n' 'aws=exc:web:' 'azure=svc:web,ssh:8080,30000-35000 gcp=all::' 'x-kendi--alt=svc::2222' 'oracle=exc::' 'aws=svc::443/udp' 'aws=exc:web:53/udp,30000-30100/udp' ''
-    for k in ASN_BAN SVC_ALLOW CLOUD_BAN ENABLED LOOKUP DIGEST BLOCK_EXPIRE_AUTO IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST IC_REVIEW IE_REVIEW; do printf '%s\t0\n%s\t1\n' "$k" "$k"; done
+    for k in ASN_BAN SVC_ALLOW CLOUD_BAN ENABLED LOOKUP DIGEST BLOCK_EXPIRE_AUTO SVC_EXPORT SVC_EXPORT_RELOAD IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST IC_REVIEW IE_REVIEW; do printf '%s\t0\n%s\t1\n' "$k" "$k"; done
     printf 'ASN_MODE\t%s\n' web ports
     printf 'MSG_LANG\t%s\n' tr en
     printf 'NOTIFY\t%s\n' all email slack
