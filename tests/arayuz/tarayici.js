@@ -526,6 +526,21 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     check('Ayarlar: her bölüm açıklama ile başlıyor, ilk kart aynı hizada (±24 px)', bad.length === 0 && spread <= 24, bad.join(' | ') + ' ' + tops.join(','));
     check('Ayarlar: kart içeriği kart kenarına yapışmaz (≥12 px), telefonda kart taşmaz', edge.length === 0, edge.slice(0, 6).join(' | '));
     check('Ayarlar: parola türünde alan yok (tarayıcı WHM arama kutusunu dolduruyordu)', pw.length === 0, pw.join(' | '));
+    // CSF blok listeleri kartı (1.15.117; test makinesinin gerçek csf.blocklists'i): her liste bir satır, kapalı listenin ⋯ menüsünde "Listeyi
+    // aç"; pencere değişecek satırı ve csf -ra'yı söyler (onaylanmaz, Escape)
+    await page.click('.ag-setnav [data-s="src"]'); await page.waitForTimeout(500);
+    const bk = await page.evaluate(() => { const c = document.querySelector('.ag-bklcard'); return c ? { n: c.querySelectorAll('.ag-dep').length, m: c.querySelectorAll('[data-act="menu"]').length } : null; });
+    check('Ayarlar → Kaynaklar: CSF blok listeleri kartı, her liste bir satır, menülü', !!bk && bk.n > 0 && bk.m > 0, JSON.stringify(bk));
+    if (bk && bk.m) {
+      await page.click('.ag-bklcard [data-act="menu"]'); await page.waitForTimeout(300);
+      const on = await page.$('.ag-bklcard [data-act="bklon"]');
+      if (on) {
+        await on.click(); await page.waitForSelector('.ag-modal', { timeout: 5000 }).catch(() => {});
+        const mt = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); return m ? m.innerText.replace(/\s+/g, ' ') : ''; });
+        check('blok listesi aç penceresi: değişecek satır (#), csf -ra ve güvenlik duvarının birkaç saniye açık kalması', /csf\.blocklists/.test(mt) && /#/.test(mt) && /csf -ra/.test(mt) && /(birkaç saniye|a few seconds)/.test(mt), mt.slice(0, 260));
+        await page.keyboard.press('Escape'); await page.waitForTimeout(300);
+      } else check('blok listesi menüsünde "Listeyi aç" (kapalı liste)', false, 'bklon yok');
+    }
   }
   {
     if (await tik(page, '.ag-setnav [data-s="thr"]')) await page.waitForTimeout(500);

@@ -95,6 +95,13 @@ if [ -f csf_autogroup.sh ] && grep -q "case 'abuse_key'" "$W/api.php"; then
     ok "abuse_block: bozuk giriş reddedilir" "printf '%s' \"\$BODY\" | grep -q '\"error\":\"bad_input\"'"
     post "a=abuse_block&cidr=158.101.136.0/24"
     ok "abuse_block: CSRF anahtarı olmadan reddedilir" "printf '%s' \"\$BODY\" | grep -q '\"error\":\"session\"'"
+    # bkl (1.15.117): CSF blok listesi aç / kapat; bozuk ad ve işlem motora gitmeden reddedilir, CSRF'siz istek reddedilir
+    post "a=bkl&n=SPAM%3Bid&w=on&csrf=$TOK"
+    ok "bkl: bozuk liste adı reddedilir" "printf '%s' \"\$BODY\" | grep -q '\"error\":\"bad_input\"'"
+    post "a=bkl&n=SPAMDROP&w=sil&csrf=$TOK"
+    ok "bkl: on / off dışı işlem reddedilir" "printf '%s' \"\$BODY\" | grep -q '\"error\":\"bad_input\"'"
+    post "a=bkl&n=SPAMDROP&w=on"
+    ok "bkl: CSRF anahtarı olmadan reddedilir" "printf '%s' \"\$BODY\" | grep -q '\"error\":\"session\"'"
 fi
 
 echo "api-uc: $PASS geçti, $FAIL düştü"

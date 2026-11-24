@@ -573,12 +573,20 @@ answering, the block is retried on the next run instead of being banned.
 CSF can load third-party lists of bad addresses itself (`/etc/csf/csf.blocklists`:
 Spamhaus DROP, DShield, Tor exit nodes, Blocklist.de…). lfd downloads each enabled
 list into `/var/lib/csf/csf.block.NAME` and drops incoming traffic from its
-addresses on every port; an address on the allow list still passes. The plugin
-does not manage these lists, it reads them: an address in an enabled list shows
-as *blocklist NAME* in the IP card and in *Measure impact*, and a later lfd ban
-on such an address counts as a *Violation under a ban*, not towards the
-thresholds. A list that was disabled in `csf.blocklists` is not counted, even
-though CSF leaves its downloaded file on disk.
+addresses on every port; an address on the allow list still passes. An address
+in an enabled list shows as *blocklist NAME* in the IP card and in *Measure
+impact*, and a later lfd ban on such an address counts as a *Violation under a
+ban*, not towards the thresholds. A list that was disabled in `csf.blocklists`
+is not counted, even though CSF leaves its downloaded file on disk.
+
+Settings → Sources and refresh → *CSF blocklists* lists every entry of
+`csf.blocklists` with its state, how many addresses are loaded and when it was
+last downloaded. A list can be turned on or off from its ⋯ menu: the plugin
+removes or adds the `#` at the start of that one line and restarts csf and lfd
+(`csf -ra`, a few seconds during which the firewall is open), and the change is
+written to the settings history. The plugin never turns a list on by itself,
+and it only turns off lists it turned on; a list you enabled by hand is shown
+as such and left alone.
 
 ### AbuseIPDB
 

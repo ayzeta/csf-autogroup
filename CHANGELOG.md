@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.15.117 — 2026-11-24
+
+- Settings → Sources and refresh: a *CSF blocklists* card lists every entry of
+  `csf.blocklists` (on or off, addresses loaded, last download, lfd's last
+  line when an enabled list has no file yet). A list can be turned on or off
+  from its menu; the window says which line changes and that csf and lfd
+  restart. The plugin only turns off lists it turned on itself, and the
+  change is recorded in the settings history.
+- The settings history shows the AbuseIPDB key change by name instead of the
+  raw `ABUSEIPDB_KEY`; a text check makes sure every recorded setting has a
+  name in the panel.
+- IP card: for a range you banned by hand, the block line no longer calls the
+  bans that were inside the block "the reason of the ban"; it says the ban was
+  added manually and lists the bans that were in the block at that time.
+
 ## 1.15.116 — 2026-11-24
 
 - AbuseIPDB in the range card: a `/24` or narrower range can be checked with

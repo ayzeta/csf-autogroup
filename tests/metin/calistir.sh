@@ -75,5 +75,6 @@ node "$(wp "$H/olu.js")" "$(wp "$JS")" "$(wp "$REPO")" || bad=$((bad + 1))   # s
 node "$(wp "$H/yol.js")" "$(wp "$JS")" "$(wp "$SH")" || bad=$((bad + 1))     # "Ayarlar → …" yolları ayar ekranında var
 node "$(wp "$H/yer.js")" "$(wp "$JS")" "$(wp "$SH")" || bad=$((bad + 1))     # TR ↔ EN yer tutucuları, port sınırı metinleri
 node "$(wp "$H/devrik.js")" "$(wp "$JS")" "$(wp "$SH")" || bad=$((bad + 1))  # Türkçe cümle yüklemle biter ("… daha önce." yok)
+node "$(wp "$H/gecmis.js")" "$(wp "$JS")" "$(wp "$SH")" || bad=$((bad + 1))  # ayar geçmişinin sabit anahtarları panelde adıyla
 if [ "$bad" -eq 0 ]; then echo "Terim tutarlılığı: eski ad kalmadı"; exit 0; fi
 echo "Terim tutarlılığı: $bad sorun"; exit 1

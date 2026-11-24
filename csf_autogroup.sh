@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.116"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.117"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -472,6 +472,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_L_HOST="Hostname"; M_L_FWD="ileri yönde doğrulandı"; M_L_NOFWD="ileri yönde doğrulanamadı"
   M_L_OWNER="Sahibi"; M_L_PREFIX="Duyurulan blok"; M_L_REG="Kayıt"; M_L_DENY="csf.deny"
   M_L_TEMP="Geçici liste"; M_L_WL="İzin listesi"; M_L_CLOUD="Kiralık liste"; M_L_BKL="Blok listesi"; M_AB_LINE="puan %s/100 · %s bildirim (%s kişi) · son %s · %s"; M_AB_ERR="sorgulanamadı (HTTP %s): %s"; M_AB_BAD="AbuseIPDB anahtarı yalnız harf ve rakam olmalı (20–200 karakter)"; M_L_PENDING="İzleniyor"; M_L_IGN="Susturuldu"; M_L_ACCT="Denemeler"
+  M_BKL_BAD="Liste adı ya da işlem geçersiz (beklenen: AD on|off)"; M_BKL_NONE="%s listesi csf.blocklists dosyasında yok"; M_BKL_NOTMINE="%s listesini eklenti açmadı; elle açılan listeyi eklenti kapatmaz (csf.blocklists dosyasından kapatın)"; M_BKL_ON="%s blok listesi açıldı; csf ve lfd yeniden başladı, lfd listeyi indiriyor"; M_BKL_OFF="%s blok listesi kapatıldı; csf ve lfd yeniden başladı"
   M_H_NOREASON="geçici ban (günlükte sebep yok)"
   M_CFG_BAD="Geçersiz değer: %s = %s (%s olmalı)"
   M_CFG_RANGE="%s ile %s arası bir tam sayı"
@@ -755,6 +756,7 @@ else
   M_L_HOST="Hostname"; M_L_FWD="forward-confirmed"; M_L_NOFWD="not forward-confirmed"
   M_L_OWNER="Owner"; M_L_PREFIX="Announced prefix"; M_L_REG="Registry"; M_L_DENY="csf.deny"
   M_L_TEMP="Temp list"; M_L_WL="Allow list"; M_L_CLOUD="Rented-server list"; M_L_BKL="Blocklist"; M_AB_LINE="score %s/100 · %s reports (%s users) · last %s · %s"; M_AB_ERR="could not query (HTTP %s): %s"; M_AB_BAD="The AbuseIPDB key must be letters and digits only (20–200 characters)"; M_L_PENDING="Watched"; M_L_IGN="Muted"; M_L_ACCT="Attempts"
+  M_BKL_BAD="Invalid list name or action (expected: NAME on|off)"; M_BKL_NONE="List %s is not in csf.blocklists"; M_BKL_NOTMINE="List %s was not turned on by the plugin; the plugin does not turn off a list you turned on by hand (turn it off in csf.blocklists)"; M_BKL_ON="Blocklist %s turned on; csf and lfd restarted, lfd is downloading the list"; M_BKL_OFF="Blocklist %s turned off; csf and lfd restarted"
   M_H_NOREASON="temp ban (no reason in the log)"
   M_CFG_BAD="Invalid value: %s = %s (must be %s)"
   M_CFG_RANGE="a whole number from %s to %s"
@@ -5537,6 +5539,23 @@ bkl_load() {     # → BKL_NAMES = etkin ve dosyası olan listelerin adları (bo
     done
     return 0
 }
+# csf.blocklists'teki BÜTÜN listeler (açık ve kapalı) → stdout "açık|AD|süre|en çok|adres|açıklama|ayrıntı" (Ayarlar → Kaynaklar kartı ve
+# açma / kapama işleminin tek okuyucusu). Açıklama: listenin bloğundaki ilk yorum satırı (CSF'in kendi metni; "Details:" ayrıntı adresi,
+# "Set URLGET" / "Note" satırları atlanır); bloklar boş satırla ayrılır. Ölçüldü (WSL CSF 16.33, 2026-11-24): açmak = satır başındaki "#"
+# kalkar, csf -ra (4,4 sn); lfd listeyi ~1 sn'de indirir ($CSF_VAR/csf.block.AD, değişme saati = son indirme), bl_AD kümesine yükler,
+# LOCALINPUT'ta DENYIN'den sonra; kapatınca csf -ra (5,2 sn) küme ve zincir kalkar, dosya diskte kalır.
+BKL_MINE="$(dirname "$SAYAC_FILE")/bkl.mine"     # eklentinin panelden açtığı listeler: kapatma yalnız bunlara (elle açılana dokunulmaz)
+bkl_conf() {
+    [ -r "$CSF_DIR/csf.blocklists" ] || return 0
+    awk '/^[[:space:]]*$/ { d = ""; det = ""; next }
+        /^[[:space:]]*#?[[:space:]]*[A-Za-z0-9_]+\|[0-9]+\|[0-9]+\|/ {
+            on = ($0 !~ /^[[:space:]]*#/); s = $0; sub(/^[[:space:]]*#?[[:space:]]*/, "", s); split(s, a, "|")
+            u = s; sub(/^[^|]*\|[^|]*\|[^|]*\|/, "", u); gsub(/[[:space:]]+$/, "", u)
+            print on "|" a[1] "|" a[2] + 0 "|" a[3] + 0 "|" u "|" d "|" det; d = ""; det = ""; next }
+        /^[[:space:]]*#/ { c = $0; sub(/^[[:space:]]*#+[[:space:]]?/, "", c); gsub(/\|/, "/", c); gsub(/[[:space:]]+$/, "", c)
+            if (c ~ /^Details:/) { det = c; sub(/^Details:[[:space:]]*/, "", det) }
+            else if (d == "" && c != "" && c !~ /^(Set URLGET|Note|#|Copyright|This file|Each |Uncomment|After making|If you want|The downloaded)/) d = c }' "$CSF_DIR/csf.blocklists"
+}
 bkl_lines() {    # → stdout "lo hi ad" (etkin listelerin bütün satırları, sayı olarak): IP, aralık ve tablo okuyucularının tek kaynağı
     local n
     bkl_load
@@ -7784,6 +7803,17 @@ do_config() {
                 # AbuseIPDB: anahtarın kendisi panele gitmez — yalnız tanımlı mı, son 4 karakteri, bugünkü sorgu sayısı
                 local akt="" atd atb; abuse_key && akt="${REPLY: -4}"; abuse_today; atd=$REPLY; abuse_btoday; atb=$REPLY
                 o+=",\"abuse\":{\"set\":$([ -n "$akt" ] && echo true || echo false),\"tail\":\"$akt\",\"today\":$atd,\"btoday\":$atb}"
+                # CSF blok listeleri (Ayarlar → Kaynaklar): her liste açık mı, yüklü satır, son indirme; açık ama dosyası yoksa lfd'nin o liste
+                # için son günlük satırı; eklentinin açtıkları (mine). LF_IPSET: CSF uzun listeler için ister (csf.blocklists notu)
+                local bj="" bon bn biv bmx bu bd bdt bc bt blm
+                while IFS='|' read -r bon bn biv bmx bu bd bdt; do
+                    [ -n "$bn" ] || continue; bc=0; bt=0; blm=""
+                    if [ "$bon" = 1 ] && [ -s "$CSF_VAR/csf.block.$bn" ]; then bc=$(grep -c . "$CSF_VAR/csf.block.$bn"); bt=$(stat -c %Y "$CSF_VAR/csf.block.$bn")
+                    elif [ "$bon" = 1 ]; then blm=$(grep -a -F "blocklist $bn " "$LFD_LOG" 2>/dev/null | tail -n 1 | sed 's/^.*lfd\[[0-9]*\]: //'); fi
+                    jstr "$bu"; bu="$REPLY"; jstr "$bd"; bd="$REPLY"; jstr "$bdt"; bdt="$REPLY"; jstr "$blm"; blm="$REPLY"
+                    bj+="${bj:+,}{\"n\":\"$bn\",\"on\":$([ "$bon" = 1 ] && echo true || echo false),\"iv\":$biv,\"mx\":$bmx,\"url\":$bu,\"d\":$bd,\"det\":$bdt,\"c\":$bc,\"t\":$bt,\"lm\":$blm,\"mine\":$(grep -qxF "$bn" "$BKL_MINE" 2>/dev/null && echo true || echo false)}"
+                done < <(bkl_conf)
+                o+=",\"bkl\":[$bj],\"bkl_ipset\":\"$(conf_val LF_IPSET)\",\"bkl_file\":$([ -w "$CSF_DIR/csf.blocklists" ] && echo true || echo false)"
                 slack_url; o+=",\"slack\":$([ -n "$REPLY" ] && echo true || echo false)"
                 # lfd'nin geçici ban süreleri (saniye; en kısa ve en uzun): LF_TRIGGER açıksa LF_TRIGGER_PERM, değilse açık
                 # her tetikleyicinin (LF_X > 0) LF_X_PERM'i; 1 kalıcı demek, yalnız 1'den büyükler geçici süredir
@@ -7896,6 +7926,29 @@ do_config() {
             log "$(m "$M_CFG_LOG" "$AG_BY" ABUSEIPDB_KEY "${ok:+…$ok}" "${nt:+…$nt}")"
             ev config "" "by=\"$AG_BY\"" "changes=[{\"key\":\"ABUSEIPDB_KEY\",\"from\":\"${ok:+…$ok}\",\"to\":\"${nt:+…$nt}\"}]"
             act_out 0 "$(m "$M_CFG_SAVED" 1)" ;;
+        blocklist)
+            # CSF blok listesi aç / kapat (standart: yalnız panelde kullanıcının işlemiyle; kapatma yalnız eklentinin açtığına).
+            # csf.blocklists'te o listenin tek satırının başındaki "#" kalkar / gelir, sonra csf -ra (CSF'in kendi talimatı: csf ve lfd
+            # yeniden başlar; ölçülen 4–5 sn). Geçmiş'e CSF_BLOCKLIST:AD 0 → 1 yazılır
+            local bn="${ARGS[1]:-}" bw="${ARGS[2]:-}" bf="$CSF_DIR/csf.blocklists" bcur bex
+            [[ "$bn" =~ ^[A-Za-z0-9_]{1,25}$ ]] && [[ "$bw" =~ ^(on|off)$ ]] || { act_out 2 "$M_BKL_BAD"; return; }
+            [ -w "$bf" ] || { act_out 1 "$(m "$M_ERR_NOFILE" "$bf")"; return; }
+            bex=$(grep -cE "^[[:space:]]*#?[[:space:]]*${bn}\|[0-9]+\|[0-9]+\|" "$bf"); bcur=$(grep -cE "^[[:space:]]*${bn}\|[0-9]+\|[0-9]+\|" "$bf")
+            [ "$bex" = 1 ] || { act_out 2 "$(m "$M_BKL_NONE" "$bn")"; return; }
+            if [ "$bw" = on ]; then
+                [ "$bcur" = 1 ] && { act_out 0 "$M_CFG_NOCHANGE"; return 0; }
+                sed -i -E "s/^([[:space:]]*)#[[:space:]]*(${bn}\|[0-9]+\|[0-9]+\|)/\1\2/" "$bf" || { act_out 1 "$M_CFG_WFAIL"; return; }
+                grep -qxF "$bn" "$BKL_MINE" 2>/dev/null || printf '%s\n' "$bn" >> "$BKL_MINE"
+            else
+                [ "$bcur" = 0 ] && { act_out 0 "$M_CFG_NOCHANGE"; return 0; }
+                grep -qxF "$bn" "$BKL_MINE" 2>/dev/null || { act_out 2 "$(m "$M_BKL_NOTMINE" "$bn")"; return; }
+                sed -i -E "s/^([[:space:]]*)(${bn}\|[0-9]+\|[0-9]+\|)/\1#\2/" "$bf" || { act_out 1 "$M_CFG_WFAIL"; return; }
+                sed -i "/^${bn}\$/d" "$BKL_MINE"
+            fi
+            "$CSF_BIN" -ra >/dev/null 2>&1 9>&-
+            log "$(m "$M_CFG_LOG" "$AG_BY" "CSF_BLOCKLIST:$bn" "$([ "$bw" = on ] && echo 0 || echo 1)" "$([ "$bw" = on ] && echo 1 || echo 0)")"
+            ev config "" "by=\"$AG_BY\"" "changes=[{\"key\":\"CSF_BLOCKLIST:$bn\",\"from\":\"$([ "$bw" = on ] && echo 0 || echo 1)\",\"to\":\"$([ "$bw" = on ] && echo 1 || echo 0)\"}]"
+            act_out 0 "$(m "$([ "$bw" = on ] && echo "$M_BKL_ON" || echo "$M_BKL_OFF")" "$bn")" ;;
         test-mail)
             local out rc
             # Panel bağlantısı test mailinde de var: gerçek bir uyarı beklemeden bağlantı denenebilsin.

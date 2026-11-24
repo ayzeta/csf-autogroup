@@ -142,6 +142,14 @@ switch ($a) {
         }
         ag_json(ag_run_json(['--abuse-block', $cidr], 30));
 
+    case 'bkl':                                     // CSF blok listesi aç / kapat (Ayarlar → Kaynaklar; motor csf.blocklists satırını değiştirir, csf -ra)
+        $n = (string) ($_POST['n'] ?? '');
+        $w = (string) ($_POST['w'] ?? '');
+        if (!preg_match('/^[A-Za-z0-9_]{1,25}$/', $n) || !in_array($w, ['on', 'off'], true)) {
+            ag_json(['ok' => false, 'error' => 'bad_input']);
+        }
+        ag_json(ag_run_json(['--config', 'blocklist', $n, $w, '--json'], 60));
+
     case 'events':                                  // Geçmiş sekmesi: olay kaydından bir sayfa
         $m = (string) ($_POST['m'] ?? 'latest');
         if (!in_array($m, ['latest', 'after', 'before'], true)) {
