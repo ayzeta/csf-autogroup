@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.15.124 — 2026-11-24
+
+- Measure impact treats CSF blocklists as lists: it no longer asks what
+  changes "if you ban with Everything" or shows a provider's verdict for them.
+  When no requests came, lists (rented-server lists too) say "from this
+  list's addresses" instead of "from this provider".
+- IPv6 blocklists (such as SPAMDROPV6) are no longer taken for empty sources:
+  the check counts their IPv6 lines and the row says so; their details say the
+  list has no IPv4 addresses instead of "not downloaded yet".
+
 ## 1.15.123 — 2026-11-24
 
 - CSF blocklists are turned on and off with the same On / Off switch as the

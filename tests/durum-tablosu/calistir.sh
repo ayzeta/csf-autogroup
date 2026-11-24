@@ -1063,7 +1063,7 @@ mcheck "blok listesi: ban altında ihlal maili kapsamanın adıyla (panelle ayn�
 # blok listesi aç / kapat (1.15.117; standart: yalnız panel işlemiyle, kapatma yalnız eklentinin açtığına). Açma / kapama biçimi WSL gerçek
 # CSF 16.33'te ölçüldü (satır başındaki "#", csf -ra); burada taklit csf çağrıyı kaydeder
 mk cvbklo; bkl; quiet
-mcheck "blok listesi kartı: bütün listeler (açık / kapalı), açıklama CSF'in yorumundan, yüklü satır; elle açılmış liste eklentinin değil" "run --config get --json 2>/dev/null | grep -q '\"bkl\":\[{\"n\":\"SPAMDROP\",\"on\":true,\"iv\":86400,\"mx\":0,\"url\":\"http://www.spamhaus.org/drop/drop.txt\",\"d\":\"Spamhaus DROP\",\"det\":\"\",\"c\":1,\"t\":[1-9][0-9]*,\"lm\":\"\",\"pt\":[0-9]*,\"ph\":[0-9]*,\"pc\":[0-9]*,\"pp\":[0-9]*,\"mine\":false},{\"n\":\"ESKI\",\"on\":false,[^]]*\"c\":0,\"t\":0,\"lm\":\"\",\"pt\":[0-9]*,\"ph\":[0-9]*,\"pc\":[0-9]*,\"pp\":[0-9]*,\"mine\":false}\],\"bkl_ipset\":\"[0-9]*\",\"bkl_file\":true'"
+mcheck "blok listesi kartı: bütün listeler (açık / kapalı), açıklama CSF'in yorumundan, yüklü satır; elle açılmış liste eklentinin değil" "run --config get --json 2>/dev/null | grep -q '\"bkl\":\[{\"n\":\"SPAMDROP\",\"on\":true,\"iv\":86400,\"mx\":0,\"url\":\"http://www.spamhaus.org/drop/drop.txt\",\"d\":\"Spamhaus DROP\",\"det\":\"\",\"c\":1,\"t\":[1-9][0-9]*,\"lm\":\"\",\"pt\":[0-9]*,\"ph\":[0-9]*,\"pc\":[0-9]*,\"pp\":[0-9]*,\"p6\":[0-9]*,\"mine\":false},{\"n\":\"ESKI\",\"on\":false,[^]]*\"c\":0,\"t\":0,\"lm\":\"\",\"pt\":[0-9]*,\"ph\":[0-9]*,\"pc\":[0-9]*,\"pp\":[0-9]*,\"p6\":[0-9]*,\"mine\":false}\],\"bkl_ipset\":\"[0-9]*\",\"bkl_file\":true'"
 mcheck "blok listesi: elle açılmış listeyi eklenti kapatmaz (dosya ve CSF'e dokunulmaz)" "run --config blocklist SPAMDROP off --json 2>/dev/null | grep -q '\"ok\":false,\"code\":2' && grep -q '^SPAMDROP|' '$R/etc/csf/csf.blocklists' && ! grep -q 'csf -ra' '$R/csf_calls.log'"
 mcheck "blok listesi: aç → satır başındaki # kalkar, eklentinin listesine girer, csf -ra, Geçmiş'e 0 → 1" "run --config blocklist ESKI on --json 2>/dev/null | grep -q '\"ok\":true' && grep -q '^ESKI|86400|0|' '$R/etc/csf/csf.blocklists' && grep -qx ESKI '$R/var/lib/csf_autogroup/bkl.mine' && grep -q 'csf -ra' '$R/csf_calls.log' && grep -q '\"key\":\"CSF_BLOCKLIST:ESKI\",\"from\":\"0\",\"to\":\"1\"' \"\$(EVF)\""
 mcheck "blok listesi: eklentinin açtığı kapatılır (# geri gelir, listeden çıkar, Geçmiş'e 1 → 0); ikinci kapatma değişiklik yok" "run --config blocklist ESKI off --json 2>/dev/null | grep -q '\"ok\":true' && grep -q '^#ESKI|' '$R/etc/csf/csf.blocklists' && ! grep -qx ESKI '$R/var/lib/csf_autogroup/bkl.mine' && grep -q '\"key\":\"CSF_BLOCKLIST:ESKI\",\"from\":\"1\",\"to\":\"0\"' \"\$(EVF)\" && run --config blocklist ESKI off --json 2>/dev/null | grep -q '\"ok\":true,\"code\":0'"
@@ -1076,11 +1076,12 @@ if kok_on && command -v python3 >/dev/null 2>&1; then
     printf '%s\n' '; Spamhaus DROP List' '151.80.8.0/24 ; SBL1' '203.0.113.0/25 ; SBL2' '; EOF' > "$LD/drop.txt"
     printf '%s\n' '; This list has been merged into https://www.spamhaus.org/drop/drop.txt' '; EOF' > "$LD/bos.txt"
     printf '%s\n' '# bogons' '10.0.0.0/8' '198.18.0.0/15' > "$LD/ozel.txt"
+    printf '%s\n' '; Spamhaus DROPv6 List' '2001:db8::/32 ; SBL3' '2001:db8:1::/48 ; SBL4' '; EOF' > "$LD/v6.txt"
     python3 "$H/liste-sunucu.py" "$R/ls.port" "$R/ls.hits" "$LD" & LSP=$!
     for i in 1 2 3 4 5 6 7 8 9 10; do [ -s "$R/ls.port" ] && break; sleep 0.3; done
     U="http://127.0.0.1:$(cat "$R/ls.port" 2>/dev/null)"
     printf '%s\n' 'SPAMDROP|86400|0|http://www.spamhaus.org/drop/drop.txt' "#DROPT|86400|0|$U/drop.txt" "#BOS|86400|0|$U/bos.txt" \
-        "#OZEL|86400|0|$U/ozel.txt" "#YOK|86400|0|$U/yok.txt" > "$R/etc/csf/csf.blocklists"
+        "#OZEL|86400|0|$U/ozel.txt" "#YOK|86400|0|$U/yok.txt" "#V6|86400|0|$U/v6.txt" > "$R/etc/csf/csf.blocklists"
     printf '%s\n' 151.80.7.0/24 > "$R/var/lib/csf/csf.block.SPAMDROP"
     single 151.80.8.5 sshd
     bkg() { run --config get --json 2>/dev/null | grep -o "{\"n\":\"$1\"[^}]*}"; }
@@ -1088,6 +1089,7 @@ fi
 quiet
 mcheck "blok listesi yoklaması: kapalı listenin kaynağı indirilip sayılır (yorum satırları atlanır), açık listede CSF'in dosyası" "bkg DROPT | grep -q '\"ph\":200,\"pc\":2,\"pp\":0' && bkg SPAMDROP | grep -q '\"ph\":200,\"pc\":1,'"
 mcheck "blok listesi yoklaması: boş kaynak (DROP'a birleştirilmiş EDROP gibi) 0 adres, açılmayan kaynak HTTP kodu, özel aralık içeren işaretli" "bkg BOS | grep -q '\"ph\":200,\"pc\":0,' && bkg YOK | grep -q '\"ph\":404,\"pc\":0,' && bkg OZEL | grep -q '\"pc\":2,\"pp\":1'"
+mcheck "blok listesi yoklaması: IPv6 listesi boş sayılmaz (IPv6 satırları ayrı sayılır); ayrıntısı 'IPv4 yok' der, 'indirilmedi' demez" "bkg V6 | grep -q '\"ph\":200,\"pc\":0,\"pp\":0,\"p6\":2' && run --src-ips bk:V6 --json 2>/dev/null | grep -q '\"error\":\"no_v4\"'"
 kok_on && cp "$R/ls.hits" "$R/ls.hits0"; quiet
 mcheck "blok listesi yoklaması: günde bir (ikinci turda kaynak yeniden indirilmez)" "cmp -s '$R/ls.hits0' '$R/ls.hits' && [ \"\$(grep -c drop.txt '$R/ls.hits')\" = 1 ]"
 mcheck "blok listesi ayrıntısı: bk:AD anahtarı listedeki ihlal eden IP'yi verir (kapalı liste, yoklanan dosyadan)" "run --src-ips bk:DROPT --json 2>/dev/null | grep -q '\"ok\":true,\"n\":1,\"ips\":\[\[\"151.80.8.5\"' && run --src-ips 'bk:X;id' --json 2>/dev/null | grep -q 'bad_key'"

@@ -591,6 +591,7 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     // yoklaması internetten indirir, test ona bağlı kalmasın)
     {
       const bkr = async route => { const pd = route.request().postData() || '';
+        if (/^a=asn_impact/.test(pd) && /asn=bk%3A/.test(pd)) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, total: 0, ips: 0, ok2xx: 0, codes: {}, posts: [], bots: [], sites: [] }) });
         if (!/^a=src_ips/.test(pd) || !/asn=bk%3A/.test(pd)) return route.continue();
         return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, n: 1, ips: [['198.51.100.7', 'ssh', 'lfd: (sshd) Failed SSH login', Math.floor(Date.now() / 1000) - 3600, 'deny', 'deny']] }) }); };
       await page.route('**/api.php*', bkr);
@@ -599,6 +600,12 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
       await page.waitForSelector('#ag-bkl-card #ag-srcd table', { timeout: 8000 }).catch(() => {});
       const sd = await page.evaluate(() => { const w = document.querySelector('#ag-bkl-card #ag-srcd'); return w ? { ip: /198\.51\.100\.7/.test(w.innerText), imp: !!w.querySelector('[data-act="asnimpact"][data-v^="bk:"]'), port: /port listesi|port list/i.test(w.innerText) } : null; });
       check('blok listesi: Ayrıntı sağlayıcı ve kiralık listeyle aynı pencereyi açar (ihlal eden IP tablosu, Etkisini ölç; port önerisi yok)', !!bn && !!sd && sd.ip && sd.imp && !sd.port, bn + ' ' + JSON.stringify(sd));
+      // Etkisini ölç: blok listesi bir liste — sağlayıcının sorusu ("Her şey" ile banlarsanız), kararı ve "bu sağlayıcıdan" metni yok
+      // (1.15.123 ilk hâlinde ölçüm penceresi yalnız cl: önekini liste sayıyordu; kullanıcının telefon ekranı)
+      await page.click('#ag-bkl-card #ag-srcd [data-act="asnimpact"]').catch(() => {});
+      await page.waitForSelector('#ag-bkl-card #ag-srcd .ag-impact .ag-im-lead', { timeout: 8000 }).catch(() => {});
+      const im = await page.evaluate(() => { const w = document.querySelector('#ag-bkl-card #ag-srcd .ag-impact'); return w ? w.innerText.replace(/\s+/g, ' ') : ''; });
+      check('blok listesi Etkisini ölç: liste metinleri (sağlayıcı sorusu, kararı ve "bu sağlayıcıdan" yok)', !!im && /listenin|list's/.test(im) && !/Her şey|Everything|sağlayıcı|provider/i.test(im), im.slice(0, 260));
       for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(250); await layoutChecks(page, 'blok-ayrinti', w); await shot('blok-ayrinti-' + w); }
       await page.setViewportSize({ width: 1280, height: 900 });
       await page.evaluate(() => { const b = document.querySelector('#ag-bkl-card [data-act="srcinfo"][aria-expanded="true"]'); if (b) b.click(); }); await page.waitForTimeout(300);
