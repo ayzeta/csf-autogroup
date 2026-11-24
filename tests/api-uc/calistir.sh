@@ -62,5 +62,30 @@ ok "tempban_check POST'la ve anahtarsız gelirse CSRF denetimi reddeder" "printf
 OUT=$(cd "$W" && env -i PATH="$PATH" REQUEST_METHOD=GET QUERY_STRING="a=tempban_check&ip=198.51.100.77" AG_CSF_VAR="$W/csf" "$PHP" api.php 2>/dev/null)
 ok "WHM oturumu yoksa (REMOTE_USER boş) reddedilir" "printf '%s' \"\$OUT\" | grep -q 'only be opened from WHM'"
 
+# abuse_key (1.15.114): AbuseIPDB anahtarı POST + CSRF ile; api.php motoru STANDART GİRDİYLE çağırır (anahtar komut satırında olmaz),
+# motor ayrı dosyaya yazar. Geçici depo kopyası (version.json → repo) ve kendi durum dizini; CSF'e dokunulmaz.
+if [ -f csf_autogroup.sh ] && grep -q "case 'abuse_key'" "$W/api.php"; then
+    mkdir -p "$W/repo" "$W/st" "$W/csfx"; cp csf_autogroup.sh "$W/repo/"; chown root:root "$W/repo/csf_autogroup.sh"
+    : > "$W/csfx/csf.deny"; : > "$W/csfx/csf.allow"; : > "$W/csfx/csf.conf"   # motor açılışta csf.deny ister
+    printf '%s\n' "MSG_LANG=tr" "SAYAC_FILE=$W/st/counter" "LOG_FILE=$W/st/log" "CSF_DIR=$W/csfx" "CSF_VAR=$W/csfx" "DENY_FILE=$W/csfx/csf.deny" > "$W/repo/config.env"
+    printf '{"version":"t","commit":"","repo":"%s","installed":""}\n' "$W/repo" > "$W/version.json"
+    TOK=$(cd "$W" && env -i PATH="$PATH" REMOTE_USER=root "$PHP" -r 'require "lib.php"; ag_bootstrap(); echo ag_csrf_token();' 2>/dev/null)
+    post() {   # GÖVDE → OUT / BODY
+        OUT=$(cd "$W" && printf '%s' "$1" | env -i PATH="$PATH" REMOTE_USER=root REQUEST_METHOD=POST CONTENT_TYPE=application/x-www-form-urlencoded \
+            CONTENT_LENGTH=${#1} "$PHP" -d display_errors=0 api.php 2>/dev/null)
+        BODY=$(printf '%s' "$OUT" | awk 'f { print } /^\r?$/ { f = 1 }')
+    }
+    post "a=abuse_key&key=APIANAHTAR0123456789abcdQRST&csrf=$TOK"
+    ok "abuse_key: anahtar POST ile kaydedilir, motor dosyaya yazar (0600)" "printf '%s' \"\$BODY\" | grep -q '\"ok\":true' && grep -q '^APIANAHTAR0123456789abcdQRST\$' '$W/st/abuseipdb/key' && [ \"\$(stat -c %a '$W/st/abuseipdb/key')\" = 600 ]"
+    ok "abuse_key: anahtar config.env'e yazılmaz" "! grep -q APIANAHTAR '$W/repo/config.env'"
+    ok "abuse_key: api.php motoru anahtarı komut satırında vermez (standart girdi)" "grep -q \"ag_run(\['--config', 'abuse-key', '--json'\], 20, \\\$k)\" '$W/api.php'"
+    post "a=abuse_key&key=k%C3%B6t%C3%BC%20anahtar&csrf=$TOK"
+    ok "abuse_key: harf ve rakam dışı anahtar reddedilir" "printf '%s' \"\$BODY\" | grep -q '\"ok\":false' && grep -q '^APIANAHTAR' '$W/st/abuseipdb/key'"
+    post "a=abuse_key&key=&csrf=$TOK"
+    ok "abuse_key: boş anahtar kaldırır" "printf '%s' \"\$BODY\" | grep -q '\"ok\":true' && [ ! -e '$W/st/abuseipdb/key' ]"
+    post "a=abuse_key&key=APIANAHTAR0123456789abcdQRST"
+    ok "abuse_key: CSRF anahtarı olmadan reddedilir" "printf '%s' \"\$BODY\" | grep -q '\"error\":\"session\"' && [ ! -e '$W/st/abuseipdb/key' ]"
+fi
+
 echo "api-uc: $PASS geçti, $FAIL düştü"
 [ "$FAIL" = 0 ]

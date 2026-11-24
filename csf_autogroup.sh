@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.113"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.114"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -470,7 +470,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_S_NONE="yok"; M_S_DAYSLEFT="%s gün kaldı"; M_S_TTL="geçici ban %s kaldı"
   M_L_HOST="Hostname"; M_L_FWD="ileri yönde doğrulandı"; M_L_NOFWD="ileri yönde doğrulanamadı"
   M_L_OWNER="Sahibi"; M_L_PREFIX="Duyurulan blok"; M_L_REG="Kayıt"; M_L_DENY="csf.deny"
-  M_L_TEMP="Geçici liste"; M_L_WL="İzin listesi"; M_L_CLOUD="Kiralık liste"; M_L_BKL="Blok listesi"; M_L_PENDING="İzleniyor"; M_L_IGN="Susturuldu"; M_L_ACCT="Denemeler"
+  M_L_TEMP="Geçici liste"; M_L_WL="İzin listesi"; M_L_CLOUD="Kiralık liste"; M_L_BKL="Blok listesi"; M_AB_LINE="puan %s/100 · %s bildirim (%s kişi) · son %s · %s"; M_AB_ERR="sorgulanamadı (HTTP %s): %s"; M_AB_BAD="AbuseIPDB anahtarı yalnız harf ve rakam olmalı (20–200 karakter)"; M_L_PENDING="İzleniyor"; M_L_IGN="Susturuldu"; M_L_ACCT="Denemeler"
   M_H_NOREASON="geçici ban (günlükte sebep yok)"
   M_CFG_BAD="Geçersiz değer: %s = %s (%s olmalı)"
   M_CFG_RANGE="%s ile %s arası bir tam sayı"
@@ -753,7 +753,7 @@ else
   M_S_NONE="none"; M_S_DAYSLEFT="%s days left"; M_S_TTL="temp ban %s left"
   M_L_HOST="Hostname"; M_L_FWD="forward-confirmed"; M_L_NOFWD="not forward-confirmed"
   M_L_OWNER="Owner"; M_L_PREFIX="Announced prefix"; M_L_REG="Registry"; M_L_DENY="csf.deny"
-  M_L_TEMP="Temp list"; M_L_WL="Allow list"; M_L_CLOUD="Rented-server list"; M_L_BKL="Blocklist"; M_L_PENDING="Watched"; M_L_IGN="Muted"; M_L_ACCT="Attempts"
+  M_L_TEMP="Temp list"; M_L_WL="Allow list"; M_L_CLOUD="Rented-server list"; M_L_BKL="Blocklist"; M_AB_LINE="score %s/100 · %s reports (%s users) · last %s · %s"; M_AB_ERR="could not query (HTTP %s): %s"; M_AB_BAD="The AbuseIPDB key must be letters and digits only (20–200 characters)"; M_L_PENDING="Watched"; M_L_IGN="Muted"; M_L_ACCT="Attempts"
   M_H_NOREASON="temp ban (no reason in the log)"
   M_CFG_BAD="Invalid value: %s = %s (must be %s)"
   M_CFG_RANGE="a whole number from %s to %s"
@@ -4683,12 +4683,14 @@ do_lookup() {
         o+=",\"net\":{\"n\":${NO_N[$nk]:-0},\"b\":${NO_SUB[$nk]:-0},\"u\":${NO_U[$nk]:-0},\"t\":$THRESHOLD_16,\"h\":$(net_hit16 "$p16" && [ "$NH_K" = "$nk" ] && echo true || echo false)}"
         net_unit "$bp"
         [ -n "$NU_PF" ] && o+=",\"pnet\":{\"p\":\"$NU_PF\",\"n\":${NP_N[$NU_PF]:-0},\"b\":${NP_SUB[$NU_PF]:-0},\"t\":$THRESHOLD_PFX,\"h\":$(pfx_hit "$NU_PF" && echo true || echo false)}"
+        abuse_pub "$ip" && abuse_check "$ip" && o+=",\"abuse\":$REPLY"     # AbuseIPDB (anahtar tanımlıysa; özel adres sorulmaz)
         o+=",\"covers\":[$cvj],\"asn\":\"$asn\",\"fwd\":$fwd,\"lookup\":$([ "$LOOK_INIT" = 1 ] && echo true || echo false)}"
         echo "$o"; return 0
     fi
     echo "$ip"
     printf '  %-18s %s\n' "$M_L_HOST" "${host:--}$([ -n "$host" ] && { [ "$fwd" = true ] && echo " ($M_L_FWD)" || echo " ($M_L_NOFWD)"; })"
     [ -n "$asn" ] && printf '  %-18s %s\n' "$M_L_OWNER" "AS$asn ${asname:-?}"
+    if abuse_pub "$ip" && abuse_check "$ip"; then abuse_text "$REPLY"; printf '  %-18s %s\n' "AbuseIPDB" "$REPLY"; fi
     [ -n "$pfx" ] && printf '  %-18s %s\n' "$M_L_PREFIX" "$pfx ($cc)"
     [ -n "$reg" ] && printf '  %-18s %s\n' "$M_L_REG" "$reg · $alloc"
     [ -n "$deny" ]  && printf '  %-18s %s\n' "$M_L_DENY" "$deny"
@@ -5558,6 +5560,62 @@ bkl_range() {    # ALT ÜST → 0: aralığın TAMAMI bir etkin listenin tek sat
     bkl_load; [ -n "$BKL_NAMES" ] || return 1
     REPLY=$(bkl_lines | awk -v a="$1" -v b="$2" '$1 + 0 <= a + 0 && $2 + 0 >= b + 0 { print $3; exit }')
     [ -n "$REPLY" ]
+}
+# ── AbuseIPDB (isteğe bağlı): IP'nin itibar bilgisi — yalnız IP kartı ve IP ban penceresi (tek IP sorgusu) ──────────────────────────
+# Anahtar ayarlarda (config.env) DEĞİL: kendi dosyasında (0600); --config get ve Geçmiş anahtarın kendisini değil yalnız tanımlı mı
+# ve son 4 karakterini taşır. Anahtar curl'e komut satırıyla değil başlık dosyasıyla verilir (-H @dosya; ps'te görünmez; curl 7.55+,
+# WSL 7.76'da ölçüldü). Sorgu yalnız IP'yi gönderir. Cevap (ölçüldü 2026-11-23, lin, 158.101.136.233): data{ipAddress, isPublic,
+# ipVersion, isWhitelisted, abuseConfidenceScore, countryCode, usageType, isp, domain, hostnames[], isTor, totalReports,
+# numDistinctUsers, lastReportedAt}; hatada errors[{detail, status}] (401 ölçüldü). Sonuç IP başına 24 saat önbellekte; hata 10 dk.
+# Tur, durum çıktısı, mail ve Slack sorgu yapmaz (ücretsiz kota günde 1.000 sorgu): toplu listelerde itibar gösterilmez.
+ABUSE_DIR="$(dirname "$SAYAC_FILE")/abuseipdb"
+ABUSE_API="${ABUSE_API:-https://api.abuseipdb.com/api/v2/check}"
+abuse_key() {    # → REPLY = anahtar (geçerliyse); yoksa 1
+    REPLY=""; [ -r "$ABUSE_DIR/key" ] && REPLY=$(tr -d ' \t\r\n' < "$ABUSE_DIR/key")   # yokken "< dosya" yönlendirme hatası basmasın
+    [[ "$REPLY" =~ ^[A-Za-z0-9]{20,200}$ ]] || { REPLY=""; return 1; }
+}
+abuse_today() {  # → REPLY = bugün yapılan sorgu sayısı
+    local d="" n=0; [ -r "$ABUSE_DIR/count" ] && read -r d n < "$ABUSE_DIR/count"
+    [ "$d" = "$(date +%F)" ] && [[ "$n" =~ ^[0-9]+$ ]] && REPLY=$n || REPLY=0
+}
+abuse_check() {  # IP → 0 ve REPLY = JSON nesnesi {"s","r","u","l","ut","isp","dom","tor","wl","t"} ya da {"err","code","t"}; anahtar yoksa 1
+    local ip="$1" k c="$ABUSE_DIR/c/$1.json" e="$ABUSE_DIR/c/$1.err" now h body code
+    abuse_key || return 1; k="$REPLY"
+    [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+    printf -v now '%(%s)T' -1
+    if [ -s "$c" ] && [ $(( now - $(stat -c %Y "$c" 2>/dev/null || echo 0) )) -lt 86400 ]; then REPLY=$(cat "$c"); return 0; fi
+    if [ -s "$e" ] && [ $(( now - $(stat -c %Y "$e" 2>/dev/null || echo 0) )) -lt 600 ]; then REPLY=$(cat "$e"); return 0; fi
+    mkdir -p "$ABUSE_DIR/c" 2>/dev/null; chmod 700 "$ABUSE_DIR" 2>/dev/null
+    h=$(mktemp "$ABUSE_DIR/h.XXXXXX") || return 1; chmod 600 "$h"
+    printf 'Key: %s\nAccept: application/json\n' "$k" > "$h"
+    body=$(curl -sS --max-time 8 -G "$ABUSE_API" --data-urlencode "ipAddress=$ip" -d maxAgeInDays=90 -H @"$h" -w '\n%{http_code}' 2>/dev/null)
+    rm -f "$h"
+    code="${body##*$'\n'}"; body="${body%$'\n'*}"; [[ "$code" =~ ^[0-9]+$ ]] || code=0
+    abuse_today; printf '%s %s\n' "$(date +%F)" "$(( REPLY + 1 ))" > "$ABUSE_DIR/count" 2>/dev/null
+    REPLY=$(printf '%s' "$body" | perl -MJSON::PP -e '
+        local $/; my $in = <STDIN>; my ($code, $now) = @ARGV; my $J = JSON::PP->new->canonical;
+        my $d = eval { $J->decode($in) };
+        if ($code == 200 && ref $d eq "HASH" && ref $d->{data} eq "HASH") { my $x = $d->{data};
+            print $J->encode({ s => ($x->{abuseConfidenceScore} // 0) + 0, r => ($x->{totalReports} // 0) + 0, u => ($x->{numDistinctUsers} // 0) + 0,
+                l => $x->{lastReportedAt} // "", ut => $x->{usageType} // "", isp => $x->{isp} // "", dom => $x->{domain} // "",
+                tor => $x->{isTor} ? JSON::PP::true : JSON::PP::false, wl => $x->{isWhitelisted} ? JSON::PP::true : JSON::PP::false, t => $now + 0 }) }
+        else { my $m = (ref $d eq "HASH" && ref $d->{errors} eq "ARRAY" && ref $d->{errors}[0] eq "HASH") ? ($d->{errors}[0]{detail} // "") : "";
+            print $J->encode({ err => $m, code => $code + 0, t => $now + 0 }) }' "$code" "$now" 2>/dev/null)
+    [ -n "$REPLY" ] || REPLY="{\"err\":\"\",\"code\":$code,\"t\":$now}"
+    if [[ "$REPLY" == *'"err"'* ]]; then printf '%s' "$REPLY" > "$e.tmp.$$" && mv -f "$e.tmp.$$" "$e"
+    else printf '%s' "$REPLY" > "$c.tmp.$$" && mv -f "$c.tmp.$$" "$c"; rm -f "$e"; fi
+    return 0
+}
+abuse_pub() {    # IP → 0: herkese açık adres (özel, döngü, yerel ağ AbuseIPDB'ye sorulmaz)
+    case "$1" in 10.*|127.*|0.*|169.254.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[01].*) return 1 ;; esac
+    return 0
+}
+abuse_text() {   # JSON (abuse_check) → REPLY = düz metin satırı: "puan 100/100 · 426 bildirim (231 kişi) · son 2026-11-23 · Data Center/…"
+    local j="$1" f
+    f() { printf '%s' "$j" | sed -n "s/.*\"$1\":\(\"\([^\"]*\)\"\|\([0-9a-z]*\)\).*/\2\3/p"; }
+    if [[ "$j" == *'"err"'* ]]; then REPLY=$(m "$M_AB_ERR" "$(f code)" "$(f err)"); return; fi
+    REPLY=$(m "$M_AB_LINE" "$(f s)" "$(f r)" "$(f u)" "$(f l | cut -c1-10)" "$(f ut)")
+    [ "$(f tor)" = true ] && REPLY+=" · Tor"
 }
 bkl_has() {      # IP → 0: etkin bir blok listesinde (REPLY = listenin adı)
     REPLY=""
@@ -7675,6 +7733,9 @@ do_config() {
                 for k in $CFG_KEYS; do jstr "$(cfg_value "$k")"; o+="$([ $i -gt 0 ] && echo ,)\"$k\":$REPLY"; i=1; done
                 o+="},\"defaults\":{\"MSG_LANG\":\"en\",\"ALERT_MAIL\":\"whm\",\"DIGEST\":\"1\",\"DIGEST_DAY\":\"1\",\"NOTIFY\":\"all\",\"IC_FIREWALL\":\"1\",\"IC_LISTFULL\":\"1\",\"IC_RUN\":\"1\",\"IC_DIGEST\":\"1\",\"IE_FIREWALL\":\"1\",\"IE_LISTFULL\":\"1\",\"IE_RUN\":\"1\",\"IE_DIGEST\":\"1\",\"IC_REVIEW\":\"1\",\"IE_REVIEW\":\"1\",\"THRESHOLD_24\":\"3\",\"THRESHOLD_24_PERMANENT\":\"5\",\"THRESHOLD_16\":\"5\",\"THRESHOLD_PFX\":\"4\",\"THRESHOLD_TEMP_24\":\"3\",\"LOOKUP\":\"1\",\"LOOKUP_TIMEOUT\":\"2\",\"SAYAC_RETENTION_DAYS\":\"180\",\"REVIEW_DAYS\":\"7\",\"LOG_KEEP_DAYS\":\"30\",\"EVENTS_DAYS\":\"180\",\"RUN_DAYS\":\"31\",\"PERM_WINDOW_DAYS\":\"90\",\"BANLOG_DAYS\":\"90\",\"LOG_ROTATE_MB\":\"1\",\"LOG_ROTATE_KEEP\":\"5\",\"BLOCK_EXPIRE_DAYS\":\"365\",\"BLOCK_ACTIVE_DAYS\":\"30\",\"OWNER_TTL_DAYS\":\"30\",\"IMUNIFY_REFRESH_MIN\":\"60\",\"CLOUD_REFRESH_DAYS\":\"1\",\"CLOUD_FAIL_DAYS\":\"3\",\"SVC_REFRESH_DAYS\":\"1\",\"SVC_FAIL_DAYS\":\"3\",\"GEO_REFRESH_DAYS\":\"25\",\"REFRESH_HOUR\":\"4\",\"BLOCK_EXPIRE_AUTO\":\"0\",\"CRON_MIN\":\"*/10\"}"
                 ALERT_MAIL=whm mail_to; jstr "$REPLY"; o+=",\"whm_contact\":$REPLY"
+                # AbuseIPDB: anahtarın kendisi panele gitmez — yalnız tanımlı mı, son 4 karakteri, bugünkü sorgu sayısı
+                local akt="" atd; abuse_key && akt="${REPLY: -4}"; abuse_today; atd=$REPLY
+                o+=",\"abuse\":{\"set\":$([ -n "$akt" ] && echo true || echo false),\"tail\":\"$akt\",\"today\":$atd}"
                 slack_url; o+=",\"slack\":$([ -n "$REPLY" ] && echo true || echo false)"
                 # lfd'nin geçici ban süreleri (saniye; en kısa ve en uzun): LF_TRIGGER açıksa LF_TRIGGER_PERM, değilse açık
                 # her tetikleyicinin (LF_X > 0) LF_X_PERM'i; 1 kalıcı demek, yalnız 1'den büyükler geçici süredir
@@ -7769,6 +7830,24 @@ do_config() {
             for msg in "${logs[@]}"; do log "$msg"; done
             ev config "" "by=\"$AG_BY\"" "changes=[$changes]"
             act_out 0 "$(m "$M_CFG_SAVED" "$n")" ;;
+        abuse-key)
+            # AbuseIPDB anahtarı standart girdiden (komut satırında görünmesin); boş satır anahtarı kaldırır. Geçmiş'e anahtar değil
+            # yalnız son 4 karakteri yazılır
+            local nk ok="" nt=""; IFS= read -r nk; nk="${nk//[[:space:]]/}"
+            abuse_key && ok="${REPLY: -4}"
+            if [ -n "$nk" ]; then
+                [[ "$nk" =~ ^[A-Za-z0-9]{20,200}$ ]] || { act_out 2 "$M_AB_BAD"; return; }
+                mkdir -p "$ABUSE_DIR" && chmod 700 "$ABUSE_DIR" || { act_out 1 "$M_CFG_WFAIL"; return; }
+                ( umask 077; printf '%s\n' "$nk" > "$ABUSE_DIR/key.tmp.$$" ) && mv -f "$ABUSE_DIR/key.tmp.$$" "$ABUSE_DIR/key" || { rm -f "$ABUSE_DIR/key.tmp.$$"; act_out 1 "$M_CFG_WFAIL"; return; }
+                rm -f "$ABUSE_DIR"/c/*.err 2>/dev/null; nt="${nk: -4}"
+            else
+                [ -n "$ok" ] || { act_out 0 "$M_CFG_NOCHANGE"; return 0; }
+                rm -f "$ABUSE_DIR/key"
+            fi
+            [ "$ok" = "$nt" ] && [ -n "$nt" ] && { act_out 0 "$M_CFG_NOCHANGE"; return 0; }
+            log "$(m "$M_CFG_LOG" "$AG_BY" ABUSEIPDB_KEY "${ok:+…$ok}" "${nt:+…$nt}")"
+            ev config "" "by=\"$AG_BY\"" "changes=[{\"key\":\"ABUSEIPDB_KEY\",\"from\":\"${ok:+…$ok}\",\"to\":\"${nt:+…$nt}\"}]"
+            act_out 0 "$(m "$M_CFG_SAVED" 1)" ;;
         test-mail)
             local out rc
             # Panel bağlantısı test mailinde de var: gerçek bir uyarı beklemeden bağlantı denenebilsin.

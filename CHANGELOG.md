@@ -1,9 +1,26 @@
 # Changelog
 
+## 1.15.114 — 2026-11-24
+
+- AbuseIPDB in the IP card. With an API key (Settings → Server → AbuseIPDB;
+  the free plan allows 1,000 checks a day) opening an IP card asks AbuseIPDB
+  about that address and shows its confidence score, the number of reports
+  and reporters, the last report and the usage type, with a link to the full
+  page. The ban window shows the same line. The answer is kept for a day, so
+  opening the card again does not use another check; private and local
+  addresses are never sent, and runs and list screens never ask. The score is
+  only shown, it does not take part in any ban decision.
+- The key is kept in its own file readable only by root, not in `config.env`.
+  The panel passes it to the engine on standard input, never on the command
+  line; the settings history, the log and the panel show only its last four
+  characters. Leaving the field empty removes it.
+- The blocklist examples named a list that CSF's own `csf.blocklists` does
+  not ship; they now name Blocklist.de, which it does.
+
 ## 1.15.113 — 2026-11-24
 
 - CSF's own blocklists (`csf.blocklists`: Spamhaus DROP, DShield, Tor,
-  AbuseIPDB…) are now known to the plugin. An address in an enabled list
+  Blocklist.de…) are now known to the plugin. An address in an enabled list
   shows as *blocklist NAME* (everything blocked) in the IP card, its result
   line and *Measure impact*; a later lfd ban on it is a *Violation under a
   ban*, in the panel, email and Slack alike. Before, the IP card said "not

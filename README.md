@@ -571,7 +571,7 @@ answering, the block is retried on the next run instead of being banned.
 ### CSF blocklists
 
 CSF can load third-party lists of bad addresses itself (`/etc/csf/csf.blocklists`:
-Spamhaus DROP, DShield, Tor exit nodes, AbuseIPDB…). lfd downloads each enabled
+Spamhaus DROP, DShield, Tor exit nodes, Blocklist.de…). lfd downloads each enabled
 list into `/var/lib/csf/csf.block.NAME` and drops incoming traffic from its
 addresses on every port; an address on the allow list still passes. The plugin
 does not manage these lists, it reads them: an address in an enabled list shows
@@ -579,6 +579,19 @@ as *blocklist NAME* in the IP card and in *Measure impact*, and a later lfd ban
 on such an address counts as a *Violation under a ban*, not towards the
 thresholds. A list that was disabled in `csf.blocklists` is not counted, even
 though CSF leaves its downloaded file on disk.
+
+### AbuseIPDB
+
+With an AbuseIPDB API key (Settings → Server → AbuseIPDB; a free account
+allows 1,000 checks a day) the IP card asks AbuseIPDB about the address when
+you open it and shows its confidence score, how many reports and reporters
+it has, the last report and the usage type; the ban window shows the same
+line. Answers are cached for a day, private and local addresses are never
+sent, and the runs and list screens never ask, so the daily limit is only
+used by cards you open. The score is shown for your decision; the plugin
+does not ban on it. The key is stored in its own root-only file (not in
+`config.env`), is handed to the engine on standard input, and only its last
+four characters appear in the panel, the log and the settings history.
 
 ### With Imunify360
 

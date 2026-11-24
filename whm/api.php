@@ -239,6 +239,15 @@ switch ($a) {
     case 'config_get':
         ag_json(ag_run_json(['--config', 'get', '--json'], 30));
 
+    case 'abuse_key':                               // AbuseIPDB anahtarı: ayrı dosyaya, standart girdiden (config.env'e ve komut satırına girmez)
+        $k = trim((string) ($_POST['key'] ?? ''));
+        if (!preg_match('/^[A-Za-z0-9]{0,200}$/', $k)) {
+            ag_json(['ok' => false, 'code' => 2, 'message' => 'bad_value: ABUSEIPDB_KEY']);
+        }
+        $r = ag_run(['--config', 'abuse-key', '--json'], 20, $k);
+        $d = json_decode($r['out'], true);
+        ag_json(is_array($d) ? $d : ['ok' => $r['rc'] === 0, 'message' => trim($r['out'])]);
+
     case 'config_set':
         // Anahtar listesi ve kaba karakter süzgeci burada; asıl doğrulama script'te (cfg_check).
         $keys = ['MSG_LANG', 'ALERT_MAIL', 'DIGEST', 'DIGEST_DAY', 'NOTIFY', 'IC_FIREWALL', 'IC_LISTFULL', 'IC_RUN', 'IC_DIGEST', 'IE_FIREWALL', 'IE_LISTFULL', 'IE_RUN', 'IE_DIGEST', 'IC_REVIEW', 'IE_REVIEW', 'THRESHOLD_24', 'THRESHOLD_24_PERMANENT', 'THRESHOLD_16', 'THRESHOLD_PFX', 'THRESHOLD_TEMP_24',

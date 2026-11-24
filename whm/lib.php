@@ -288,7 +288,7 @@ function ag_which(string $bin): ?string
  *
  * @return array{rc:int, out:string}
  */
-function ag_run(array $args, int $timeout = 60): array
+function ag_run(array $args, int $timeout = 60, ?string $stdin = null): array   // stdin: gizli değer (komut satırında görünmesin)
 {
     $script = ag_script();
     if ($script === null) {
@@ -311,10 +311,18 @@ function ag_run(array $args, int $timeout = 60): array
     if ($errf === false) {
         $errf = '/dev/null';
     }
-    $p = @proc_open($cmd, [1 => ['pipe', 'w'], 2 => ['file', $errf, 'w']], $pipes);
+    $spec = [1 => ['pipe', 'w'], 2 => ['file', $errf, 'w']];
+    if ($stdin !== null) {
+        $spec[0] = ['pipe', 'r'];
+    }
+    $p = @proc_open($cmd, $spec, $pipes);
     if (!is_resource($p)) {
         if ($errf !== '/dev/null') { @unlink($errf); }
         return ['rc' => 126, 'out' => '', 'err' => 'proc_open failed'];
+    }
+    if ($stdin !== null) {
+        fwrite($pipes[0], $stdin . "\n");
+        fclose($pipes[0]);
     }
     $out = (string) stream_get_contents($pipes[1]);
     fclose($pipes[1]);
