@@ -125,9 +125,10 @@ settings, with no prompts. `config.env` is left untouched.
   permanent and temp lists are, each with its change over the chosen period (the
   list cards show it once there is a run record from the start of the period).
   One selector above the cards (7 or 30 days) sets the cards and the chart.
+  The number in a list card jumps to that list.
 - **Activity** — a daily chart of block bans, blocks made permanent, temp block
   bans, suspicious networks and allow list skips, for the chosen period. Hover a day
-  for its breakdown.
+  for its breakdown; click a total to open History filtered to that kind and period.
 - **Provider card** — every AS badge opens it: CSF provider ban state,
   violations, offending IPs and **Measure impact**.
 - **Colors** — one meaning, one color everywhere (badges, icons, chart): red full

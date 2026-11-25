@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.15.131 — 2026-11-25
+
+A pass over every screen, fixing each kind of inconsistency everywhere at once:
+
+- **Plain wording.** Panel texts, the glossary and the mails no longer address
+  the reader or use possessives ("your entries", "if you ban it"): they name
+  the thing instead ("entries added by hand", "with a ban on the port list").
+- **Addresses are links everywhere.** An IP or range in a sentence (a card's
+  verdict, an allow entry, a History detail, a mute note, the impact summary)
+  opens its card. The card's own address is not a link.
+- **Counters lead somewhere.** The number in the *Active range bans* and
+  *Needs review* summary cards jumps to that list. Each total next to the
+  activity chart opens History filtered to that kind and period, counted the
+  same way as the chart; the filter chip clears it.
+- **One way to change a state.** The state itself ("Blocked: Web") is the
+  link that opens its settings, for rented-server lists and the shared port
+  list; the separate "What to block" / "Change" links are gone. The detail
+  button is the same on provider rows, rented-server boxes and CSF blocklists.
+- **No repeats.** The "empty in CSF" warning is a short state on each provider
+  row, with the explanation in its tooltip. An IP table whose rows share one
+  owner shows the owner once above the table. Web targets list each site once
+  with its paths. A row whose current state matches its record no longer says
+  it twice. Service counts read "name number" everywhere.
+- **Layout.** Boxes in one row have the same height. The IP card's levels go
+  from the narrowest range to the widest, then country, provider and lists. A
+  watched block says it is watched instead of "not banned". State badges in
+  lists stay on one line.
+- **Keeping the place.** When the panel redraws (after an action, a refresh or
+  a measurement), the item that was clicked stays where it was on the screen,
+  even if something above it grew or shrank. On phones the page used to jump.
+
 ## 1.15.130 — 2026-11-25
 
 - One period selector (7 or 30 days) above the summary cards and the activity

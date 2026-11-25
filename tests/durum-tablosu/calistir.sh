@@ -281,12 +281,12 @@ mcheck "SSH: lfd'nin saydığı satırlardaki kullanıcılar (sshd ve sshd-sessi
 mcheck "FTP: pure-ftpd satırındaki hesap" "grep -q 'denenen FTP hesapları: admin (1 hatalı giriş)' <<< \"\$AL\""
 mcheck "cPanel/WHM: hesap ve giriş türü, API anahtarı ayrı; 2024 tarihli satır sayılmaz" "grep -q 'denenen cPanel/WHM girişleri: root · WHM (1 hatalı giriş), root · WHM API (1 hatalı giriş)' <<< \"\$AL\" && ! grep -q eski <<< \"\$AL\""
 mcheck "web şifresi (htpasswd): Apache 2.2 ve 2.4 biçimi (pid, client:port)" "grep -q 'denenen web şifresi kullanıcıları: webadmin (1 hatalı giriş), webadmin2 (1 hatalı giriş)' <<< \"\$AL\""
-mcheck "ModSecurity: yalnız Access denied satırlarının site ve adresi; Warning (404 izleme) sayılmaz" "grep -q 'hedef: site-a.example /wp-login.php (2 engellendi), site-b.example /x (1 engellendi)' <<< \"\$AL\" && ! grep -q '/2399' <<< \"\$AL\""
+mcheck "ModSecurity: yalnız Access denied satırlarının site ve adresi; Warning (404 izleme) sayılmaz" "grep -q 'hedef: site-a.example: /wp-login.php (2 engellendi); site-b.example: /x (1 engellendi)' <<< \"\$AL\" && ! grep -q '/2399' <<< \"\$AL\""
 mcheck "IP kartı JSON'unda servis ve web kuralı" "run --lookup 198.51.100.50 --json 2>/dev/null | grep -q '{\"s\":\"web\",\"u\":\"site-a.example /wp-login.php\",\"n\":2,\"i\":\"1302\"}'"
 mkm acweb 1; ornek
 printf '%s\n' "198.51.100.50 # lfd: (mod_security) mod_security (id:9999) triggered by 198.51.100.50 (FR/France/-): 5 in the last 3600 secs - $DT" >> "$D"
 for x in 51 52; do single 198.51.100.$x sshd; done; quiet
-mcheck "blok banı maili: ModSecurity tekilinde yalnız banı doğuran kuralın hedefi (id:9999 → site-b), öteki servisler de" "mtext | grep -q '198.51.100.50 .*denenen SSH kullanıcıları: root (2 hatalı giriş).*hedef: site-b.example /x (1 engellendi)' && ! mtext | grep -q 'wp-login'"
+mcheck "blok banı maili: ModSecurity tekilinde yalnız banı doğuran kuralın hedefi (id:9999 → site-b), öteki servisler de" "mtext | grep -q '198.51.100.50 .*denenen SSH kullanıcıları: root (2 hatalı giriş).*hedef: site-b.example: /x (1 engellendi)' && ! mtext | grep -q 'wp-login'"
 # lfd'nin kendi ayrıştırıcısı (CSF kuruluysa): örnek satırları lfd de aynı IP ve hesapla sayıyor mu
 if [ -r /usr/local/csf/lib/ConfigServer/RegexMain.pm ]; then
     LK=$(DTI="$DTI" DTS="$DTS" DTA="$DTA" "$(command -v /usr/local/cpanel/3rdparty/bin/perl || command -v perl)" "$(dirname "$0")/lfd-karsilastir.pl" "$ORNEK" 2>&1)
@@ -406,7 +406,7 @@ mcheck "izin aralığı (/25) yoksayılınca 'İzinli aralık' satırı düşer"
 mcheck "/7 gibi aralık yoksayma hedefi olarak reddedilir" "run --action ignore 128.0.0.0/7 10 2>&1 | grep -q 'Geçersiz hedef'"
 # süresiz yoksayma: 0 gün → dosyada 9999-12-31, durumda ignored kaydı; IP kartı "süresiz" yazar; kaldırılabilir
 mkl aaignf; printf '151.80.7.9 # müşteri\n' >> "$A"; lfdb 3600 151.80.7.9
-mcheck "süresiz yoksayma (0 gün) kabul edilir, mesajı 'siz kaldırana kadar susturuldu'" "run --action ignore 151.80.7.9 0 2>&1 | grep -q 'siz kaldırana kadar susturuldu' && grep -q '^151.80.7.9 9999-12-31 ' '$R/var/lib/csf_autogroup/ignored'"
+mcheck "süresiz yoksayma (0 gün) kabul edilir, mesajı 'elle kaldırılana kadar susturuldu'" "run --action ignore 151.80.7.9 0 2>&1 | grep -q 'elle kaldırılana kadar susturuldu' && grep -q '^151.80.7.9 9999-12-31 ' '$R/var/lib/csf_autogroup/ignored'"
 mcheck "süresiz yoksayılan IP listede yok, Yoksayılanlar'da 9999-12-31 ile, IP kartında 'süresiz'" "[ -z \"\$(rvrow 151.80.7.9)\" ] && run --status --json 2>/dev/null | grep -q '\"cidr\":\"151.80.7.9\",\"until\":\"9999-12-31\"' && run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"ign\":\"151.80.7.9 → süresiz\"'"
 quiet --action unignore 151.80.7.9
 mcheck "süresiz yoksayma kaldırılınca satır geri gelir" "rvrow 151.80.7.9 | grep -q '\"type\":\"allow_ban\"'"

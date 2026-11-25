@@ -25,6 +25,8 @@ kural() {   # ad, desen, izinli satır deseni
 kural "durum rengi sınıfı yalnız ST_CLS'te" "ag-pill-(ban|temp|prom|part|skip|dw|leak|n|ok|bad|acc|warn|info)[^a-z-]" "^  function stAttr"
 kural "rozet (class=\"ag-pill\") yalnız stAttr'da" "class=\"ag-pill[ \"]" "^  function stAttr"
 kural "adres bağlantısı yalnız cidrLink'te" "class=\"ag-cidr\"" "^  function cidrLink"
+kural "değiştirilebilen durum yalnız stLink'te (durumun kendisi tıklanır; ayrı \"Ne kapatılsın\" / \"Değiştir\" yok)" "class=\"ag-stlink\"" "^  function stLink"
+kural "kaynak ayrıntısı düğmesi yalnız detBtn'de (sağlayıcı, kiralık liste, blok listesi aynı düğme)" "data-act=\"srcinfo\" data-v=\"[^\"]*\" aria-expanded" "^  function detBtn"
 kural "kapsayan ban etiketi yalnız coverTag'de" "class=\"ag-ctag" "^  function coverTag"
 kural "kart sayı rozeti yalnız countBadge'de (sayı num() ile)" "class=\"ag-count" "^  function countBadge"
 kural "sağlayıcı satırı yalnız asnRow'da (1.15.87: Banlı sağlayıcılar kendi kopyasıydı)" "class=\"ag-asn-r\"" "^    return '<div class=\"ag-asn-r\">"
@@ -40,5 +42,11 @@ if [ -n "$out" ]; then echo "DÜŞTÜ: prov_apply bitince ayarlar yeniden okunmu
 # okuyucu — csfpost.sh'taki --apply ya da dışarıdan okuyan araç — "> dosya" önce boşalttığı için yazma anında boş / yarım dosya görebilir; TOOLS=dizin ile eski araçlarla sınanır)
 out=$(grep -nE "> \"\\\$old\"([^.]|\$)" "${TOOLS:-$D/tools}/services-allow.sh" "${TOOLS:-$D/tools}/cloud-ban.sh" 2>/dev/null)
 if [ -n "$out" ]; then echo "DÜŞTÜ: liste dosyası doğrudan yazılıyor (geçici dosya + mv olmalı)"; echo "$out" | head -4; F=$((F + 1)); else echo "GEÇTİ: liste dosyaları geçici dosya + mv ile yazılır"; fi
+# grafik sınıfı panelde de (Geçmiş süzgeci, 1.15.131): evCls motorun AWK_EVC evcls'iyle aynı türleri aynı sınıfa koyar (sayı grafiktekiyle aynı)
+SHF="${AG_SH:-$D/csf_autogroup.sh}"
+a=$(grep -m1 "^AWK_EVC=" "$SHF" | grep -oE '"[a-z0-9_]+"\) *\?|"[a-z0-9_]+" *\?|== "[a-z0-9_]+"|"[A-Z][0-9]?"' | tr -d ' ?=)' | tr '\n' ' ')
+j=$(awk '/^  function evCls\(e\)/ { p = 1 } p { print } p && /^  }/ { exit }' "$J" | grep -oE "=== '[a-z0-9_]+'|'[A-Z][0-9]?'" | sed "s/=== //" | tr -d "'" | tr '\n' ' ')
+a=$(printf '%s' "$a" | tr -d '"')
+if [ -z "$j" ] || [ "$a" != "$j" ]; then echo "DÜŞTÜ: evCls (panel) motorun AWK_EVC sınıflandırmasından farklı"; echo "  motor: $a"; echo "  panel: $j"; F=$((F + 1)); else echo "GEÇTİ: grafik sınıfı panelde ve motorda aynı"; fi
 [ $F -eq 0 ] && echo "GEÇTİ: tek kaynak ($J)" || echo "DÜŞTÜ: $F kural"
 exit $F

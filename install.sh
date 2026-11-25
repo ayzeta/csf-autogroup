@@ -171,7 +171,7 @@ else
         echo '  log)       L=$(logf); exec tail -n 50 -f "${L:-/var/log/csf_autogroup.log}" ;;'
         echo '  version)   echo "CSF Auto-Group $("$SCRIPT" --version) ($(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo "no git")) — $REPO" ;;'
         echo '  *) echo "Usage: csf-autogroup {update|check|reinstall|run|dry-run|status|lookup IP|log|version}"'
-        echo '     echo "  update     pull from GitHub if it is ahead, then reinstall with your saved settings"'
+        echo '     echo "  update     pull from GitHub if it is ahead, then reinstall with the saved settings"'
         echo '     echo "  check      only tell whether an update is available"'
         echo '     echo "  reinstall  reinstall the current version (cron, WHM plugin, log rotation)"'
         echo '     echo "  run        one run now            dry-run  one run that changes nothing"'
@@ -192,7 +192,7 @@ echo "Log rotation: $ROTATE"
 echo "Command: $CMD"
 echo "Config: $SRC/config.env   ·   Log: /var/log/csf_autogroup.log"
 echo
-echo "⚠️  This auto-bans /24 subnets. Make sure your own IPs are in csf.allow,"
+echo "⚠️  This auto-bans /24 subnets. Make sure the admin IPs are in csf.allow,"
 echo "    start with high thresholds, and watch the log for a few days:"
 echo "      tail -f /var/log/csf_autogroup.log"
 echo "Test one run now with:  $SCRIPT"

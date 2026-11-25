@@ -288,6 +288,9 @@ async function layoutChecks(page, label, width) {
   check(`${label} · ${width} px · yatay taşma yok`, sw <= width, `belge ${sw}px`);
   const clipped = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-pill')).filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent.trim()));
   check(`${label} · ${width} px · kesilen rozet yok`, clipped.length === 0, clipped.slice(0, 5).join(' | '));
+  // liste satırının durum rozeti tek satır (C3, 1.15.131: "tekrar geldi, kalıcı" 132 px'lik sütunda iki satıra iniyordu, öteki rozetler tek)
+  const wrapped = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-td-state .ag-pill')).filter(e => e.offsetHeight > 0 && e.getBoundingClientRect().height > 26).map(e => e.textContent.trim()));
+  check(`${label} · ${width} px · durum rozeti iki satıra inmez`, wrapped.length === 0, wrapped.slice(0, 5).join(' | '));
   // görünümün sağından taşan öğe (kart içinde kesilen düğme / seçenek sırası dahil)
   const over = await page.evaluate(w => Array.from(document.querySelectorAll('button, .ag-chip, .ag-pill, .ag-card, input, select')).filter(e => {
     const r = e.getBoundingClientRect(); return r.width > 0 && r.right > w + 1; }).map(e => (e.className || e.tagName) + ': ' + (e.textContent || '').trim().slice(0, 30)), width);
@@ -1152,6 +1155,21 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
     await shot('deneme-turu');
     await page.keyboard.press('Escape'); await page.waitForTimeout(400);
   }
+  // C4 (1.15.131): yeniden çizimde tıklanan öğe ekranda aynı yerde kalır, üstteki içerik uzasa da (önce kaydırma değeri geri konuyordu,
+  // telefonda ölçüm / yenileme sonrası bakılan yer kayboluyordu). Üstteki başlığı yalnız 30 gün seçiliyken 300 px uzatan kural eklenir,
+  // 30 gün çipi tıklanır: çip yerinden oynamamalı (eski panelde 300 px aşağı kayar)
+  await page.click('.ag-tabs [data-tab="overview"]'); await sakin(page);
+  const konum = await page.evaluate(async () => {
+    const st = document.createElement('style'); st.id = 'c4-test'; st.textContent = '.ag-wrap:has(.ag-period .ag-chip.on[data-d="30"]) .ag-head { margin-bottom: 300px; }'; document.head.appendChild(st);
+    const c7 = document.querySelector('.ag-period [data-d="7"]'); if (c7 && !c7.classList.contains('on')) { c7.click(); await new Promise(r => setTimeout(r, 300)); }
+    const ch = document.querySelector('.ag-period [data-d="30"]'); if (!ch) return null;
+    window.scrollTo(0, 0); const y0 = ch.getBoundingClientRect().top; window.scrollTo(0, Math.max(0, y0 - 150));
+    const t0 = ch.getBoundingClientRect().top; ch.click(); await new Promise(r => setTimeout(r, 400));
+    const t1 = document.querySelector('.ag-period [data-d="30"]').getBoundingClientRect().top;
+    document.querySelector('.ag-period [data-d="7"]').click(); await new Promise(r => setTimeout(r, 300)); st.remove();
+    return { t0: Math.round(t0), t1: Math.round(t1) };
+  });
+  check('C4: yeniden çizimde tıklanan öğe yerinde kalır (üstteki içerik uzasa da)', !!konum && Math.abs(konum.t1 - konum.t0) <= 2, JSON.stringify(konum));
   // sekmeye eski veriyle dönüş: yeni durum gelene kadar salt okuyan eylem (menü) çalışır, durum değiştiren (Sustur) bildirimle bekler.
   // Önce bütün eylemler kapanıyordu; durum isteği sunucuda 5-7 sn sürünce kullanıcı sayfayı donmuş sanıyordu
   await page.click('.ag-tabs [data-tab="overview"]'); await sakin(page);
@@ -1254,7 +1272,7 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
     await page.click('.ag-modal [data-svc="web"]').catch(() => {}); await page.waitForTimeout(150);
     await page.click('.ag-modal [data-m="ok"]').catch(() => {}); await page.waitForTimeout(400);
     const cm1 = await page.evaluate(() => { const t = Array.from(document.querySelectorAll('#ag-cloud-card .ag-tile')).find(x => x.querySelector('[data-act="clmode"][data-v="cl:gcp"]'));
-      return { em: t ? (t.querySelector('em.cm span') || {}).textContent : null, modal: !!document.querySelector('.ag-modal') }; });
+      return { em: t ? (t.querySelector('em.cm .ag-stlink') || {}).textContent : null, modal: !!document.querySelector('.ag-modal') }; });
     check('liste kipi: Uygula taslağa yazar, kutu yeni kuralı söyler ("Her şey kapalı, açık: Web"), kaydet çubuğu çıkar', !!cm1.em && /Her şey kapalı, açık: Web/.test(cm1.em) && !cm1.modal && !!(await page.$('.ag-savebar')), JSON.stringify(cm1));    const names = async (g) => page.$$eval(`${g} .ag-tile-m b`, L => L.map(b => b.textContent.trim()));
     const chips = async (g, nm) => page.$$eval(`${g} .ag-tile`, (L, nm) => { const x = L.find(e => (e.querySelector('.ag-tile-m b') || {}).textContent === nm);
       return x ? Array.from(x.querySelectorAll('.ag-tile-subs .ag-chip')).map(c => c.firstChild.textContent.trim()) : null; }, nm);
