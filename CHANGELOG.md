@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.15.128 — 2026-11-25
+
+- Faster status (panel refresh): the listening mail ports (Exim, Dovecot) are
+  read with one `ss -ltnp` call instead of two and kept for 10 minutes. On a
+  busy server this call walks every process and can take more than half a
+  second.
+- Sorting inside the engine uses byte order. With a UTF-8 character setting
+  GNU sort was many times slower on the same data (the output is the same).
+
 ## 1.15.127 — 2026-11-25
 
 - Returning to the panel tab opens one status request instead of two: when

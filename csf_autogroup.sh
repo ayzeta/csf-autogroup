@@ -60,8 +60,12 @@ shopt -u patsub_replacement 2>/dev/null || true
 # satırları yazmamaya iter: o noktadan sonraki bütün lfd / posta / site günlüğü kayıtları sessizce kayboluyordu (ölçüldü: WSL'de
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
+# sort bayt sırasıyla: Türkçe modda LC_CTYPE C.utf8 (tr_ctype), İngilizcede çoğu sunucuda en_US.UTF-8; UTF-8 harf ayarında GNU sort
+# aynı satırları ~13 kat yavaş sıralıyor (ölçüldü: 200.000 satır -k1,1 -k2,2n 3,2 sn ↔ 0,23 sn, çıktı aynı). Sıralanan her şey IP,
+# sayı, anahtar; Türkçe modda sıralama kuralı zaten C idi (LC_COLLATE=C)
+sort() { LC_ALL=C command sort "$@"; }
 
-VERSION="1.15.127"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.128"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -4814,11 +4818,28 @@ ssh_ports() {    # sunucunun SSH port(lar)ı → REPLY ("22" ya da "33330"); sü
 # tls_on_connect_ports), yoksa varsayılan. Taklit köklerde (SIM_ROOT) makinenin süreçlerine bakılmaz: yalnız yapılandırma dosyası.
 EXIM_CONF="${EXIM_CONF:-/etc/exim.conf}"
 declare -A MAILP_MEMO=()
+MAILP_SS=""; MAILP_SSD=""
+MAILP_TTL=600
+mail_ss() {      # → MAILP_SS = "exim=25,26,465,587 dovecot=110,143,993,995,4190" (dinleyen süreçler). ss -ltnp bir kez; sonuç
+    # MAILP_TTL saniye dosyada (portlar nadiren değişir). -p bütün süreçlerin dosya tanıtıcılarını gezer: sunucuda tek çağrı 623 ms
+    # ölçüldü ve durum çıktısı onu Exim ve Dovecot için iki kez çalıştırıyordu
+    [ -n "$MAILP_SSD" ] && return 0; MAILP_SSD=1
+    local f="$(dirname "$SAYAC_FILE")/mailports" now
+    printf -v now '%(%s)T' -1
+    if [ -r "$f" ] && [ $(( now - $(stat -c %Y "$f" 2>/dev/null || echo 0) )) -lt "$MAILP_TTL" ]; then MAILP_SS=$(< "$f"); return 0; fi
+    MAILP_SS=$(ss -ltnp 2>/dev/null | awk '$1 == "LISTEN" { for (i = 1; i <= 2; i++) { pr = (i == 1 ? "exim" : "dovecot")
+            if (index($0, "users:((\"" pr "\"")) { a = $4; sub(/.*:/, "", a); if (a ~ /^[0-9]+$/) P[pr, a + 0] = 1 } } }
+        END { for (i = 1; i <= 2; i++) { pr = (i == 1 ? "exim" : "dovecot"); o = ""
+                for (a = 1; a <= 65535; a++) if ((pr, a) in P) o = o (o == "" ? "" : ",") a
+                printf "%s%s=%s", (i == 1 ? "" : " "), pr, o } }')
+    [ -n "$MAILP_SS" ] && { printf '%s\n' "$MAILP_SS" > "$f.$$" && mv -f "$f.$$" "$f"; } 2>/dev/null
+    return 0
+}
 mail_ports() {   # smtp | mread → REPLY = TCP portları ("25,26,465,587" / "110,143,993,995,4190"); süreç başına bir kez
     local k="$1" pr p=""
     [ -n "${MAILP_MEMO[$k]+x}" ] && { REPLY="${MAILP_MEMO[$k]}"; return; }
     [ "$k" = smtp ] && pr=exim || pr=dovecot
-    [ -z "${SIM_ROOT:-}" ] && p=$(ss -ltnp 2>/dev/null | awk -v pr="$pr" '$1 == "LISTEN" && index($0, "users:((\"" pr "\"") { a = $4; sub(/.*:/, "", a); if (a ~ /^[0-9]+$/) print a }' | sort -un | paste -sd, -)
+    if [ -z "${SIM_ROOT:-}" ]; then mail_ss; p=" $MAILP_SS"; p="${p#* $pr=}"; [ "$p" = " $MAILP_SS" ] && p=""; p="${p%% *}"; fi
     [ -z "$p" ] && [ "$k" = smtp ] && p=$(awk -F= '$1 ~ /^[ \t]*(daemon_smtp_ports|tls_on_connect_ports)[ \t]*$/ { n = split($2, a, /[ \t:,]+/); for (i = 1; i <= n; i++) if (a[i] ~ /^[0-9]+$/) print a[i] }' "$EXIM_CONF" 2>/dev/null | sort -un | paste -sd, -)
     [ "$k" = smtp ] && REPLY="${p:-25,465,587}" || REPLY="${p:-110,143,993,995}"
     MAILP_MEMO[$k]="$REPLY"
