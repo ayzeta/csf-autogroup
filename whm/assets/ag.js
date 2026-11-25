@@ -2857,11 +2857,25 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     });
     var wr = $app.querySelector('.ag-wrap'); if (wr) wr.classList.add('ag-stale');
   }
+  // Süren durum isteği varken: dönüş / yoklama (light) onun sonucunu kullanır; eylemden sonraki yenileme onu bekler, sonra YENİ veriyi
+  // ister (eylemden önce başlamış istek eski veri getirir), bekleyenler tek istekte birleşir. Önce sekmeye dönüşte iki "görünür" olayı
+  // iki ayrı istek açıyordu (canlıda ölçüldü 2026-11-25: aynı saniyede iki durum isteği, ikisi de ~11 sn)
+  var REF_P = null, REF_NEXT = null, NET_FAIL = 0;
   function refresh(light) {       // light: sekmeye / sayfaya dönüşte; veri eskiyse sayılar yeni durum gelene kadar gösterilmez
     if (light && LAST_OK && nowSec() - LAST_OK > 70) goBack();
+    if (REF_P) {
+      if (light) return REF_P;
+      if (!REF_NEXT) { var go = function () { REF_NEXT = null; return refresh(false); }; REF_NEXT = REF_P.then(go, go); }
+      return REF_NEXT;
+    }
+    var p = REF_P = refreshNow(light), done = function () { if (REF_P === p) REF_P = null; };
+    p.then(done, done);
+    return p;
+  }
+  function refreshNow(light) {
     return api('status').then(function (d) {
       if (!d || d.ok === false) { throw new Error((d && (d.message || d.error)) || 'status'); }
-      S = d; BACK = false; if (STALE !== 'work') STALE = false; LANG = d.lang === 'tr' ? 'tr' : 'en'; try { localStorage.setItem('ag-lang', LANG); } catch (e) {} CLOCK = d.now - Date.now() / 1000; LAST_OK = d.now; tzSet(d); setConn(null);
+      S = d; BACK = false; if (STALE !== 'work') STALE = false; LANG = d.lang === 'tr' ? 'tr' : 'en'; try { localStorage.setItem('ag-lang', LANG); } catch (e) {} CLOCK = d.now - Date.now() / 1000; LAST_OK = d.now; tzSet(d); setConn(null); NET_FAIL = 0;
       if (SEEN0 === null) { SEEN0 = d.last_seen || 0; setTimeout(function () { api('seen').catch(function () {}); }, 1500); }
       document.documentElement.lang = LANG;
       if (wasRunning && !d.running) toast(t('t_done'), 'ok');
@@ -2876,6 +2890,15 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       }
       evLoad().then(function (n) { if (n && !busy && !(cfgTab() && CFG && changedKeys().length)) render(); });
     }).catch(function (e) {
+      // tek ağ hatası uyarı değil: telefon tarayıcısı arka plandaki sekmenin bağlantısını keser, dönüşte o istek düşer (kullanıcı yalnız
+      // telefonda 5-6 sn "Sunucuya ulaşılamıyor" gördü). İlk hatada 2 sn sonra (sekme gizliyse dönüşte) yeniden denenir; uyarı art arda
+      // ikinci hatada. Oturum ve sunucu hataları (JSON değil, HTTP kodu) beklemez
+      if (S && e && e.message === 'network' && NET_FAIL === 0) {
+        NET_FAIL = 1;
+        if (document.hidden) { clearTimeout(pollTimer); HIDDEN_DUE = true; } else schedule(2000);
+        return;
+      }
+      NET_FAIL++;
       jsErr(e);
       if (BACK) { BACK = false; render(); }   // yenilenemedi: bağlantı uyarısı son verinin yaşını söyler
       if (STALE) { STALE = false; render(); }
@@ -2995,7 +3018,10 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
         render();
       });
     });
-    Object.keys(UI.srcip || {}).forEach(function (k) { var x = UI.srcip[k]; if (x && x !== 'wait') loadSrcIps(k, true); });
+    // yalnız açık kaynak ayrıntısı (UI.srcd) yeniden istenir. UI.srcip görünmeyen kaynakların da önbelleği (port listesi rozetleri asnAtt
+    // ile doldurur): hepsini istemek her eylemden sonra N ağır --src-ips çağrısıydı, IP kartının yeniden açılışını arkasında bekletiyordu
+    // (arayüz testinde 4 istek ~25 sn, kart sorgusu 48 sn'de gelmedi; ölçüldü 2026-11-25). Ötekiler açılınca loadSrcIps'in 60 sn kuralıyla
+    var sk = UI.srcd, sx = sk && (UI.srcip || {})[sk]; if (sx && sx !== 'wait') loadSrcIps(sk, true);
   }
   function doAction(name, target, extra) {
     var p = { name: name, target: target, confirm: target };

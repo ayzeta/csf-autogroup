@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.15.127 — 2026-11-25
+
+- Returning to the panel tab opens one status request instead of two: when
+  the browser reported the tab visible twice in a row, each opened its own
+  request, and on a busy server both took the full status time.
+- A single network error no longer shows "Can't reach the server": the panel
+  retries after 2 seconds (or when the tab becomes visible again) and shows the
+  warning only if the retry fails too. Phone browsers cut the connection of a
+  tab in the background, which showed the warning for a few seconds after
+  coming back.
+- After an action (ban, allow, removal), only the source details that are open
+  are reloaded. Before, every list whose violating addresses the page had
+  loaded was requested again, which delayed reopening the IP card.
+- Status output: the partial-ban rows build their input once instead of once
+  per partial ban; more detailed profiling marks (`AG_PROF=1`) for the
+  suspicious-network count and the provider-ban coverage.
+
 ## 1.15.126 — 2026-11-24
 
 - Measure impact checks whether an active list works: for a CSF blocklist

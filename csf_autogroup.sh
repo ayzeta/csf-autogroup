@@ -61,7 +61,7 @@ shopt -u patsub_replacement 2>/dev/null || true
 # lfd.log'da 20.783 NUL satırı, motor son banları görmüyordu). Betikteki her grep metin olarak okur (-a metin dosyasında etkisiz)
 grep() { command grep -a "$@"; }
 
-VERSION="1.15.126"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.127"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -2958,16 +2958,16 @@ cov_prep() {     # NOT_DİZİSİ_ADI IP… → kararın toplu hazırlığı (IP 
     local ip k IFS=$' \t\n'; local -a want=() rep=()
     for ip in "$@"; do [ -n "${COV_K[$ip]+x}" ] || want+=("$ip"); done
     [ "${#want[@]}" -gt 0 ] || return 0
-    cov_conf; cov_load; pcv_load
+    pa "cp · öncesi"; cov_conf; pa "cp · cov_conf"; cov_load; pa "cp · cov_load"; pcv_load; pa "cp · pcv_load"
     while IFS='|' read -r ip k; do
         [ -n "$ip" ] || continue
         COV_K[$ip]="$k"; [ "$k" = repeat ] && [ -z "${PERM_CLS[$ip]+x}" ] && rep+=("$ip")
     done < <(for ip in "${want[@]}"; do printf '%s|%s\n' "$ip" "${CPN[$ip]//|/ }"; done |
         LC_ALL=C awk -F'|' "$AWK_CLS"' { print $1 "|" cls(substr($0, length($1) + 2)) }')
-    [ "${#rep[@]}" -gt 0 ] && perm_cls_load "${rep[@]}"
+    pa "cp · sınıf"; [ "${#rep[@]}" -gt 0 ] && perm_cls_load "${rep[@]}"; pa "cp · perm_cls_load"
     if [ "$COV_CCD$COV_CCP" != ",,,," ]; then geo_ips_load "${want[@]}"; for ip in "${want[@]}"; do COV_G[$ip]="${GEOI[$ip]:-}"; done
     else for ip in "${want[@]}"; do COV_G[$ip]=""; done; fi
-    cloud_prefill "${want[@]}"; bkl_prefill "${want[@]}"
+    pa "cp · geo_ips_load"; cloud_prefill "${want[@]}"; pa "cp · cloud_prefill"; bkl_prefill "${want[@]}"; pa "cp · bkl_prefill"
     return 0
 }
 # cov_decide IP SEBEP [T] → REPLY = none | once | open | under; COV_KEY = kararı veren kapsamanın defter anahtarı, COV_T0 = başlangıcı.
@@ -3156,7 +3156,7 @@ sgl_elig() {     # → SGL_E[ip] = sebep, SGL_ORD (sıra: kalıcılar, sonra ge�
     # Kapsama kararı (cov_decide) burada: "önce" (kapsamadan önce banlanmış) ve "ban altında" (kapsama servisini kapatırken sonradan
     # banlanmış) tekil sayılmaz; ban altındakiler SGL_U[ip] = "başlangıç|kapsama anahtarı" (ayrı olay: under_events).
     [ -n "${SGL_OK:-}" ] && return 0; SGL_OK=1
-    tpk_load
+    pa "sg · öncesi"; tpk_load; pa "sg · tpk_load"
     SGL_E=(); SGL_ORD=(); SGL_U=()
     local ip; local -A sn=(); local -a sl=() sx=()
     for ip in "${!SINGLE_NOTE[@]}" "${TEL_IPS[@]}"; do
@@ -3171,20 +3171,21 @@ sgl_elig() {     # → SGL_E[ip] = sebep, SGL_ORD (sıra: kalıcılar, sonra ge�
         [ "${TEL_OK[$ip]}" = 0 ] && [ -z "${sn[$ip]+x}" ] && [ -z "${INEFF[$ip]+x}" ] && [ -z "${DENY_IP[$ip]+x}" ] || continue
         sn[$ip]="${TEL_NOTE[$ip]}"; sx+=("$ip")
     done
-    cov_prep sn "${sl[@]}" "${sx[@]}"
+    pa "sg · liste"; cov_prep sn "${sl[@]}" "${sx[@]}"; pa "sg · cov_prep"
     for ip in "${sl[@]}"; do
         cov_decide "$ip" "${sn[$ip]}"
         case "$REPLY" in once) continue ;; under) SGL_U[$ip]="$COV_T0|$COV_KEY"; continue ;; esac
         SGL_E[$ip]="${sn[$ip]}"; SGL_ORD+=("$ip")
     done
     for ip in "${sx[@]}"; do cov_decide "$ip" "${sn[$ip]}"; [ "$REPLY" = under ] && SGL_U[$ip]="$COV_T0|$COV_KEY"; done
+    pa "sg · cov_decide"; pc "sg tekil" "${#sl[@]}"
     return 0
 }
 NC_DONE=""
 declare -A TURN_B24=()   # bu turda banlanan bloklar (add24, promote, temp24): ağ sayımı onların tekillerini saymaz
 net_count() {    # → NC_N[A.B] tekil sayısı, NC_P / NC_T kalıcı / geçici, NC_IPS[A.B] (" ip ip …", sayım sırasıyla), NC_SUB[A.B] farklı /24
     [ -n "$NC_DONE" ] && return 0; NC_DONE=1
-    sgl_elig
+    pa "nc · öncesi"; sgl_elig; pa "nc · sgl_elig"
     declare -gA NC_N=() NC_P=() NC_T=() NC_IPS=() NC_SUB=(); NC_N=(); NC_P=(); NC_T=(); NC_IPS=(); NC_SUB=()
     # basamaklar (şüpheli aralık hiyerarşisi): duyurulan aralık (/17–/23, sahip önbelleğinden OWN_P) ve /16'da sahip başına.
     # NP_*[aralık]: N tekil, P/T kalıcı/geçici, IPS, SUB farklı /24 (banlı bloklar dahil). NO_*["A.B|ASN"]: aynı /16'da aynı sahibin
@@ -3210,6 +3211,7 @@ net_count() {    # → NC_N[A.B] tekil sayısı, NC_P / NC_T kalıcı / geçici,
             [ -n "${pb[$pf $p24]}" ] || { pb[$pf $p24]=1; NP_SUB[$pf]=$(( ${NP_SUB[$pf]:-0} + 1 )); }
         fi
     done
+    pa "nc · 1. geçiş"
     # banlı bloklar (kalıcı /24, geçici /24, bu turda banlananlar) alt birim sayılır, tekilleri sayılmaz: dağılımı gösterirler
     local b i; local -a bb=()
     for b in $( { for i in "${!DC_TXT[@]}"; do [[ "${DC_TXT[i]}" == */24 ]] && echo "${DC_TXT[i]%.0/24}"; done
@@ -3218,6 +3220,7 @@ net_count() {    # → NC_N[A.B] tekil sayısı, NC_P / NC_T kalıcı / geçici,
         bb+=("$b"); net_unit "$b"; pf="$NU_PF"
         [ -n "$pf" ] && [ -n "${NP_N[$pf]+x}" ] && { [ -n "${pb[$pf $b]}" ] || { pb[$pf $b]=1; NP_SUB[$pf]=$(( ${NP_SUB[$pf]:-0} + 1 )); }; }
     done
+    pa "nc · banlı bloklar"
     # 2. geçiş: /16 basamağı (NO_*), sahip başına. Eşiği aşan duyurulan aralığın (pfx_hit) tekilleri ve banlı blokları burada sayılmaz:
     # o aralık kendi basamağında bildirilir, aynı IP'ler /16'da yeniden sayılmaz. Önce tek bir dar aralıktaki tekiller başka aralıktaki
     # tek bir blokla birlikte /16 uyarısını da doğuruyordu (aynı IP'ler iki bildirimde)
@@ -3241,6 +3244,7 @@ net_count() {    # → NC_N[A.B] tekil sayısı, NC_P / NC_T kalıcı / geçici,
         [ -n "${ou[$k $u]}" ] || { ou[$k $u]=1; NO_U[$k]=$(( ${NO_U[$k]:-0} + 1 )); }
         [ -n "${os[$k $b]}" ] || { os[$k $b]=1; NO_SUB[$k]=$(( ${NO_SUB[$k]:-0} + 1 )); }
     done
+    pa "nc · 2. geçiş"
 }
 net_unit() {     # A.B.C → REPLY = alt birim (duyurulan aralık /17–/23 ya da blok A.B.C.0/24), NU_PF = duyurulan aralık ya da ""
     local pf="${OWN_P[$1]}"
@@ -3506,7 +3510,8 @@ do_status() {
     # sağlayıcı banının içinde kalan banlar (geçici bloklar hariç: kendiliğinden kalkarlar)
     local -A PCOV=(); local pcl=() gi2
     for gi2 in "${!g_tok[@]}"; do [ "${g_kind[gi2]}" = temp ] || pcl+=("${g_tok[gi2]}:${g_kind[gi2]}::"); done
-    for c in "${!PB_P[@]}"; do pcl+=("$c:partial:$(uniq_ports "${PB_P[$c]}"):${PB_S[$c]}"); done
+    # kısmi banın port listesi bir kez (aşağıdaki kısmi ban satırları da kullanır; uniq_ports dört süreçli boru hattı)
+    local -A PB_PP=(); for c in "${!PB_P[@]}"; do PB_PP[$c]=$(uniq_ports "${PB_P[$c]}"); pcl+=("$c:partial:${PB_PP[$c]}:${PB_S[$c]}"); done
     prov_covmap "${pcl[@]}"
     prof prov_covmap
     for gi in "${!g_tok[@]}"; do
@@ -3537,17 +3542,21 @@ do_status() {
     done
     pa "gj grup satırları"; pc "gj grup" "${#g_tok[@]}"; pc "gj kısmi ban" "${#PB_P[@]}"
     local -A PSINCE=()
+    # attack_json'un girdisi (tekiller + ban geçmişindeki geçici banlar) kısmi ban başına değil bir kez: her ban için yeniden üretiliyordu
+    # (sunucu kopyasında 5 kısmi ban × 1.111 tekil + 1.385 satır; ölçüldü 2026-11-25)
+    local aj_in=""
+    [ ${#PB_P[@]} -gt 0 ] && aj_in=$(for x in "${!SINGLE_NOTE[@]}"; do printf '%s|%s\n' "$x" "${SINGLE_NOTE[$x]}"; done; bl_tlines)
     for c in "${!PB_P[@]}"; do
         local pa=0 pp
-        pp=$(uniq_ports "${PB_P[$c]}")
+        pp="${PB_PP[$c]}"
         [ -n "${PB_D[$c]}" ] && pa=$(LC_ALL=C date -d "${PB_D[$c]}" +%s 2>/dev/null || echo 0)
         local psince="{}"
+        pa "gj kp · tarih+port"
         if [ "$pa" -gt 0 ] && cidr_range "$c"; then
-            attack_json "$R_LO" "$R_HI" "$pa" "${PB_S[$c]}" < <(
-                for x in "${!SINGLE_NOTE[@]}"; do printf '%s|%s\n' "$x" "${SINGLE_NOTE[$x]}"; done
-                bl_tlines)
+            attack_json "$R_LO" "$R_HI" "$pa" "${PB_S[$c]}" <<< "$aj_in"
             psince="$REPLY"; PSINCE[$c]="$REPLY"
         fi
+        pa "gj kp · attack_json"
         REPLY=""; cidr_range "$c" && under_of "$R_LO" "$R_HI" "$c"
         groups+=("{\"cidr\":\"$c\",\"since\":$psince,\"kind\":\"partial\",\"dnd\":false,\"n\":0,\"added\":${pa:-0},\"ttl\":0,\"svc\":\"${PB_S[$c]}\",\"extra\":\"${PB_X[$c]}\",\"ports\":\"$pp\"${REPLY:+,\"under\":\"$REPLY\"}${PCOV[$c]:+,\"pcov\":\"${PCOV[$c]}\"}}")
         [ "$JSON" = 1 ] || gtext+=("$(printf '%-18s %-9s %s' "$c" "partial" "tcp $pp")")
@@ -3613,13 +3622,15 @@ do_status() {
             # kapsama kararını taşır (sgl_elig → cov_decide): aralığa sonradan kısmi ban kondu, servisi bir sağlayıcı / ülke banı ya da
             # kiralık liste kapattı → o tekiller sayılmaz, satır kendiliğinden düşer (önce burada üç ayrı "zaten kapalı" dalı vardı)
             if [[ "$ty" =~ ^warn(16|16t|pfx)$ ]]; then
-                net_count
-                if [ "$ty" = warnpfx ]; then pfx_hit "$c" || continue; else net_hit16 "${c%.0.0/16}" || continue; fi
+                net_count; pa "rv_ev net_count"
+                if [ "$ty" = warnpfx ]; then pfx_hit "$c" || { pa "rv_ev pfx/net hit"; continue; }; else net_hit16 "${c%.0.0/16}" || { pa "rv_ev pfx/net hit"; continue; }; fi
+                pa "rv_ev pfx/net hit"
             fi
             pc "rv_ev benzersiz"
-            ign_covers "$c" && continue
-            cidr_range "$c" && perm_covers "$R_LO" "$R_HI" && { pa "rv_ev ign+perm_covers"; continue; }
-            pa "rv_ev ign+perm_covers"
+            ign_covers "$c" && { pa "rv_ev ign_covers"; continue; }
+            pa "rv_ev ign_covers"
+            cidr_range "$c" && perm_covers "$R_LO" "$R_HI" && { pa "rv_ev perm_covers"; continue; }
+            pa "rv_ev perm_covers"
             # atlanan blok (skip_wl): kayıttaki IP'lerin hiçbiri bugün eşiğe sayılmıyorsa (hepsi "önce" ya da "ban altında") bakılacak bir şey yok
             if [ "$ty" = skip_wl ] && [[ "$line" == *'"ips":[{'* ]]; then
                 sgl_elig; rvn=0; rvo=0
@@ -3785,8 +3796,7 @@ do_status() {
     prof rv_aa_rows
     local rvwin=$(( now - REVIEW_DAYS * 86400 )) pao pws pjs pso=""
     # bütün tekiller (kalıcı + geçici) bir kez: her kısmi ban için binlerce satırı bash'te yeniden üretmek pahalıydı
-    [ "${#PSINCE[@]}" -gt 0 ] && pso=$(for x in "${!SINGLE_NOTE[@]}"; do printf '%s|%s\n' "$x" "${SINGLE_NOTE[$x]}"; done
-        bl_tlines)
+    [ "${#PSINCE[@]}" -gt 0 ] && pso="$aj_in"      # kısmi ban satırlarında üretilen girdinin aynısı (tekiller + ban geçmişi)
     # Satır = adres: bir adresin birden çok durumu olabilir (şüpheli ağ + açık servis + ban altında ihlal). İkinci satır açılmaz; sonraki
     # durum, adresin var olan satırına ad verilmiş nesne olarak eklenir ("po" açık servis, "ub" ban altında ihlal) ve panel bütün
     # durumları aynı satırda gösterir. Önce ikinci durum "bu adresin satırı var" diye atlanıyordu (kayıt görünmüyordu).
@@ -7401,7 +7411,7 @@ prov_covmap() {  # "CIDR:TÜR:TCP:SERVİS" … → PCOV[CIDR]=ASNNN (çağıran 
     # ve sağlayıcı banı bu banın kapattığı her şeyi kapatıyorsa: tam ban için "her şey", kısmi ban için portları listede.
     local IFS=$' \t\n' x c k tp sv a q="" el dt du rf ok pt
     PCOV=()
-    asn_banned
+    pa "pcov · öncesi"; asn_banned; pa "pcov · asn_banned"
     { [ ${#ASB_A[@]} -gt 0 ] && command -v ipset >/dev/null 2>&1; } || [ "$CLOUD_ON" = 1 ] || return 0
     dt=",$(conf_val CC_DENY_PORTS_TCP | tr -d ' '),"; du=",$(conf_val CC_DENY_PORTS_UDP | tr -d ' '),"
     local cx
@@ -7428,6 +7438,7 @@ prov_covmap() {  # "CIDR:TÜR:TCP:SERVİS" … → PCOV[CIDR]=ASNNN (çağıran 
         fi
         [ -n "$el" ] && q+="$c $R_LO $R_HI $el"$'\n'
     done
+    pa "pcov · ban döngüsü"
     [ -n "$q" ] || return 0
     rf=$(mktemp) || return 0
     for a in "${ASB_A[@]}"; do
@@ -7441,13 +7452,14 @@ prov_covmap() {  # "CIDR:TÜR:TCP:SERVİS" … → PCOV[CIDR]=ASNNN (çağıran 
             [ -r "$CLOUD_DIR/$cx.txt" ] && awk -F'[./]' -v a="c_$cx" 'NF >= 4 { b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%s %.0f %.0f\n", a, lo, lo + 2 ^ (32 - b) - 1 }' "$CLOUD_DIR/$cx.txt"
         done >> "$rf.a"
     fi
-    sort -k1,1 -k2,2n "$rf.a" > "$rf"; rm -f "$rf.a"
+    pa "pcov · küme okuma"
+    sort -k1,1 -k2,2n "$rf.a" > "$rf"; rm -f "$rf.a"; pa "pcov · sıralama"
     while read -r c a; do [ -n "$a" ] || continue; if [[ "$a" == c_* ]]; then PCOV[$c]="cloud:${a#c_}"; else PCOV[$c]="AS$a"; fi; done < <(printf '%s' "$q" | awk -v rf="$rf" '
         BEGIN { while ((getline l < rf) > 0) { split(l, x, " "); a = x[1]; lo = x[2] + 0; hi = x[3] + 0; n = N[a] + 0
                     if (n && lo <= H[a, n] + 1) { if (hi > H[a, n]) H[a, n] = hi } else { N[a] = ++n; L[a, n] = lo; H[a, n] = hi } } }
         { lo = $2 + 0; hi = $3 + 0; k = split($4, as, ",")
           for (j = 1; j <= k; j++) { a = as[j]; for (i = 1; i <= N[a] + 0; i++) if (L[a, i] <= lo && H[a, i] >= hi) { print $1, a; next } } }')
-    rm -f "$rf"
+    rm -f "$rf"; pa "pcov · eşleme"
 }
 prov_near() {    # stdin "ip|sebep|asn" → 0: her IP banlı bir sağlayıcıda ya da bulut listesinde ama bazı saldırılar
     # kapalı olmayan portlara (PN_SRC = kapsayanlar, PN_SVC = kapanmayan servisler; panel "port listesine ekleyin" der)

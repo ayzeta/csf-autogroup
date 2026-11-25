@@ -132,13 +132,22 @@ async function adresBol(page, ad) {
   const b = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-cidr')).filter(e => e.offsetWidth > 0 && e.getClientRects().length > 1).map(e => e.textContent.trim()).slice(0, 3));
   b.forEach(x => { if (BOLUNEN.length < 8) BOLUNEN.push(ad + ' ‹' + x + '›'); });
 }
+// sonlu CSS canlandırmalarının bitmesini bekler (sonsuzlar — dönen simge, iskelet — beklenmez). Kaydet çubuğu ve pencereler
+// scale(.97)'den açılır: canlandırma sırasında ölçülen 34 px'lik düğme 33 çıkıyor, envanter ara sıra düşüyordu (ölçüldü 2026-11-24)
+async function animBekle(page) {
+  await page.evaluate(() => Promise.race([
+    Promise.all(document.getAnimations().filter(a => { const t = a.effect && a.effect.getComputedTiming(); return t && isFinite(t.endTime); })
+      .map(a => a.finished.catch(() => {}))),
+    new Promise(r => setTimeout(r, 3000))])).catch(() => {});
+}
 async function rolInv(page, ad) {
+  await animBekle(page);
   const got = await page.evaluate(([R, IST]) => {
     const out = [], ist = Object.keys(IST).join(', ');
     Object.keys(R).forEach(role => Array.from(document.querySelectorAll(R[role])).forEach(e => {
       if (!(e.offsetWidth > 0 && e.offsetHeight > 0) || e.closest('.ag-menu') || !e.textContent.trim() || e.matches(ist)) return;
       const c = getComputedStyle(e), btn = /düğme/.test(role);
-      const sig = btn ? [c.fontSize, c.fontWeight, 'h' + Math.round(e.getBoundingClientRect().height)].join(' · ')
+      const sig = btn ? [c.fontSize, c.fontWeight, 'h' + e.offsetHeight].join(' · ')
         : [c.fontSize, c.fontWeight, c.textTransform === 'none' ? '' : c.textTransform, c.letterSpacing === 'normal' ? '' : 'ls ' + c.letterSpacing,
           c.color, c.fontFamily.split(',')[0].replace(/"/g, '')].filter(Boolean).join(' · ');
       const card = e.closest('.ag-card, .ag-drawer, .ag-modal'), h = card && card.querySelector('h2, h3');
@@ -343,12 +352,42 @@ async function layoutChecks(page, label, width) {
   if (width >= 1000) await rolInv(page, label);   // masaüstü genişliği (telefonda boyutlar bilinçli küçülür; ayrı denetlenir)
 }
 const errs = [];          // sayfanın JS hataları: test yarıda düşerse de yazılır
+const API_LOG = [];
+let API_PEND = 0;
+// sekme / bölüm değişiminden sonra: panelin bekleyen API isteği kalmayınca (+ çizim payı) döner, en çok 30 sn. Sabit beklemeler istek
+// kuyrukta gecikince boş ekranı ölçüyordu (Kontrol edilecekler 0 satır, Ayarlar kartı yok; 2026-11-25)
+async function sakin(page) {
+  const t0 = Date.now(); let z = 0;
+  while (Date.now() - t0 < 30000) { await page.waitForTimeout(100); z = API_PEND > 0 ? 0 : z + 1; if (z >= 3) return; }
+  console.log('  [tanı] 30 sn\'de istekler bitmedi · ' + apiSon(6));
+}
+async function taniDurum(page, t0) {   // kararsız düşüşte ekranın anı: geçen süre, kart, dönen simge, pencere, bildirimler, son istekler
+  const s = await page.evaluate(() => { const d = document.querySelector('.ag-drawer'), q = x => (document.querySelector(x) || {}).innerText || '';
+    return { n: document.querySelectorAll('.ag-drawer').length, spin: !!(d && d.querySelector('.ag-spin')), dr: d ? d.innerText.replace(/\s+/g, ' ').slice(0, 160) : '',
+      modal: q('.ag-modal').replace(/\s+/g, ' ').slice(0, 120), toast: (window.__agToasts || []).slice(-4).join(' / ') }; });
+  return ` [tanı: ${Date.now() - t0} ms, kart ${s.n} «${s.dr}», dönen simge ${s.spin}, pencere «${s.modal}», bildirim «${s.toast}», istekler: ${apiSon(8)}]`;
+}
+function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms | bekliyor"
+  const t = Date.now();
+  return API_LOG.slice(-n).map(q => { const a = ((q.postData() || '').match(/^a=[a-z0-9_]+/) || ['?'])[0], r = q.timing && q.timing();
+    const done = r && r.responseEnd > 0; return a + ' -' + (t - q._t0) + 'ms ' + (done ? 'süre ' + Math.round(r.responseEnd) + 'ms' : 'bekliyor'); }).join(' | ');
+}
 (async () => {
   const opts = { args: ['--no-sandbox'] };
   if (process.env.AG_CHROME) opts.executablePath = process.env.AG_CHROME;
   const browser = await chromium.launch(opts);
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   page.on('pageerror', e => errs.push(e.message));
+  // API isteklerinin zaman çizelgesi (tanı): kararsız düşüşte son istekler süreleriyle yazılır (apiSon)
+  await page.addInitScript(() => {   // tanı: bildirimler kaybolur; metinleri zamanıyla biriktirilir (window.__agToasts)
+    window.__agToasts = [];
+    new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => { if (n.nodeType === 1 && n.classList && n.classList.contains('ag-toast'))
+      setTimeout(() => window.__agToasts.push(new Date().toTimeString().slice(0, 8) + ' ' + n.innerText.replace(/\s+/g, ' ').slice(0, 90)), 0); })))
+      .observe(document, { childList: true, subtree: true });
+  });
+  page.on('request', q => { if (/api\.php/.test(q.url())) { q._t0 = Date.now(); API_PEND++; API_LOG.push(q); if (API_LOG.length > 60) API_LOG.shift(); } });
+  page.on('requestfinished', q => { if (/api\.php/.test(q.url())) API_PEND = Math.max(0, API_PEND - 1); });
+  page.on('requestfailed', q => { if (/api\.php/.test(q.url())) API_PEND = Math.max(0, API_PEND - 1); });
   page.on('console', m => { var u = (m.location && m.location().url) || ''; if (m.type() === 'error' && !/favicon/.test(m.text() + u)) errs.push(m.text() + (u ? ' (' + u + ')' : '')); });
   const shot = async (name) => { if (OUT) await page.screenshot({ path: `${OUT}/${name}.png`, fullPage: true }); };
   // test makinesinde ASN sorgusu cevapsız kalır, IP kartının sağlayıcı satırları hiç çizilmezdi (canlıda "shortName is not
@@ -395,6 +434,13 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
   console.log('Arayüz');
   await page.goto(URL, { waitUntil: 'networkidle', timeout: 90000 }); await ready(page);
   check('sayfa açıldı, durum yüklendi', await page.$('.ag-head') !== null);
+  // test düzeni: tıklama seçiciyle (tik / page.click) — page.$ ile alınan öğe, panel arada yeniden çizilirse kopar ve takımı durdurur
+  // ("Element is not attached to the DOM", 2026-11-24 dört koşunun birinde)
+  { const src = require('fs').readFileSync(__filename, 'utf8').split('\n'), hb = [];
+    src.forEach((l, i) => { if (/await (?!page\b|l\b)[A-Za-z0-9_]+\.click\(/.test(l)) hb.push(i + 1); });
+    check('test düzeni: öğe tutamağıyla tıklama yok (seçiciyle tıklanır)', hb.length === 0, 'satır ' + hb.join(', '));
+    const sb = []; src.forEach((l, i) => { if (/(\.ag-tabs \[data-tab=|\.ag-setnav \[data-s)/.test(l) && /waitForTimeout\(/.test(l)) sb.push(i + 1); });
+    check('test düzeni: sekme / bölüm değişiminden sonra sabit bekleme yok (sakin: istekler bitene kadar)', sb.length === 0, 'satır ' + sb.join(', ')); }
   // geçici blok banını kaldırma penceresi: motor geçici blokta yalnız csf -tr yapar (geri yükleme yok, csf -r yok) → pencerede geri
   // yükleme kutusu ve "kalıcı listeden kaldırılır" yok; aynı olay kaydıyla kalıcı blokta kutu var (karşılaştırma). Düğme sayfaya
   // eklenip tıklanır: test verisinde geçici blok banı olmayabilir
@@ -416,7 +462,7 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
   for (const tab of ['overview', 'history', 'prov', 'settings']) {
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 900 });
-      if (await tik(page, `.ag-tabs [data-tab="${tab}"]`)) await page.waitForTimeout(900);
+      if (await tik(page, `.ag-tabs [data-tab="${tab}"]`)) await sakin(page);
       await layoutChecks(page, tab, width);
       await shot(`${tab}-${width}`);
       if (width === 390 && tab === 'overview') {
@@ -479,7 +525,7 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
   }
   // kısa telefon ekranı (tarayıcı çubukları açıkken): Terimler penceresi başlığı ve Kapat düğmesiyle görünüm içinde kalmalı
   await page.setViewportSize({ width: 390, height: 560 });
-  await page.click('.ag-tabs [data-tab="overview"]'); await page.waitForTimeout(600);
+  await page.click('.ag-tabs [data-tab="overview"]'); await sakin(page);
   {
     if (await tik(page, '[data-act="terms"]')) {
       await page.waitForTimeout(600);
@@ -492,7 +538,7 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
   // Ayarlar: sayı kutusunun + / − düğmesi bir adım atar (kaydedilmez; geri alınır)
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.click('.ag-tabs [data-tab="settings"]');
-  await page.waitForSelector('.ag-setnav [data-s]', { timeout: 20000 }).catch(function () {}); await page.waitForTimeout(300);
+  await page.waitForSelector('.ag-setnav [data-s]', { timeout: 20000 }).catch(function () {}); await sakin(page);
   {
     // Ayarlar ilk açılışta menünün ilk bölümüyle (Genel) gelir; öncelik sırası menüdeki sırayla aynı
     const first = await page.$$eval('.ag-setnav [data-s]', L => ({ f: L[0] && L[0].getAttribute('data-s'), on: (L.filter(b => b.classList.contains('on'))[0] || {}).getAttribute ? L.filter(b => b.classList.contains('on'))[0].getAttribute('data-s') : null }));
@@ -503,7 +549,7 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     const secs = await page.$$eval('.ag-setnav [data-s]', L => L.map(b => b.getAttribute('data-s')));
     const bad = [], tops = [], edge = [], pw = [];
     for (const s of secs) {
-      await page.click(`.ag-setnav [data-s="${s}"]`); await page.waitForTimeout(400);
+      await page.click(`.ag-setnav [data-s="${s}"]`); await sakin(page);
       const r = await page.evaluate(() => { const m = document.querySelector('.ag-setmain'); const f = m && m.firstElementChild; const n = f && f.nextElementSibling;
         // kart içeriği kartın kenarına yapışmaz: metin, giriş kutusu, düğme kartın sol / sağ kenarından en az 12 px içeride (AbuseIPDB kartı
         // ortak kart gövdesi olmadan yazılmıştı, metin kenara dayanıyordu — kullanıcı ekranı 1.15.114)
@@ -542,7 +588,7 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
         return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(j) });
       };
       await page.route('**/api.php*', cfr);
-      await page.click('.ag-tabs [data-tab="overview"]').catch(() => {}); await page.waitForTimeout(300);
+      await page.click('.ag-tabs [data-tab="overview"]').catch(() => {}); await sakin(page);
       await page.click('.ag-tabs [data-tab="settings"]'); await page.waitForSelector('.ag-setnav [data-s]', { timeout: 20000 }).catch(() => {});
       if (await tik(page, '.ag-setnav [data-s="server"]')) await page.waitForSelector('#ag-abkey', { timeout: 10000 }).catch(() => {});
       const k0 = await page.evaluate(() => { const i = document.getElementById('ag-abkey'); const c = i && i.closest('.ag-card');
@@ -564,7 +610,7 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
       const k2 = await page.evaluate(() => { const i = document.getElementById('ag-abkey'); return i ? i.readOnly : null; });
       check('AbuseIPDB: Değiştir boş, gizli, odaklı yazılabilir kutu açar; Vazgeç maskeli hâle döner', !!k1 && !k1.ro && k1.v === '' && k1.sec && k1.focus && k1.back && k2 === true, JSON.stringify([k1, k2]));
       await page.unroute('**/api.php*', cfr);
-      await page.click('.ag-tabs [data-tab="overview"]').catch(() => {}); await page.waitForTimeout(300);
+      await page.click('.ag-tabs [data-tab="overview"]').catch(() => {}); await sakin(page);
       await page.click('.ag-tabs [data-tab="settings"]'); await page.waitForSelector('.ag-setnav [data-s]', { timeout: 20000 }).catch(() => {});
     }
     // CSF blok listeleri (1.15.118: Sağlayıcılar sekmesinin bir katmanı; 1.15.117'de Ayarlar'daydı). Test makinesinin gerçek csf.blocklists'i:
@@ -620,18 +666,20 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
       const mt = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); return m ? m.innerText.replace(/\s+/g, ' ') : ''; });
       check('blok listesi: Açık çipi taslağa yazar (Kaydet çubuğu, katlı bölüm açık kalır); onay penceresi listeyi ve csf -ra\'yı söyler', !!ad && sb.bar && sb.open && sb.on && mt.indexOf(ad) >= 0 && /csf -ra/.test(mt), ad + ' ' + JSON.stringify(sb) + ' ' + mt.slice(0, 260));
       const cancel = await page.$('.ag-modal [data-act="cancel"], .ag-modal .ag-btn:not(.ag-btn-primary)');
-      if (cancel) await cancel.click(); else await page.keyboard.press('Escape');
+      if (cancel) await tik(page, '.ag-modal [data-act="cancel"], .ag-modal .ag-btn:not(.ag-btn-primary)'); else await page.keyboard.press('Escape');
       await page.waitForTimeout(300); await page.click('[data-act="cfgdiscard"]').catch(() => {}); await page.waitForTimeout(300);
     }
     // birleşik servis dosyası 1.15.120'den beri Ayarlar'da (listenin nasıl işlediği); Sağlayıcılar'daki İzinli servisler kartında seçeneği yok
     const sxp = await page.evaluate(() => !!document.querySelector('[data-k="SVC_EXPORT"], [data-k="SVC_EXPORT_RELOAD"]'));
     check('birleşik servis dosyası seçenekleri Sağlayıcılar sekmesinde yok (Ayarlar → Kaynaklar ve yenileme)', !sxp, 'Sağlayıcılar\'da SVC_EXPORT');
     // sonraki denetimler Ayarlar'da sürer
-    await page.click('.ag-tabs [data-tab="settings"]'); await page.waitForSelector('.ag-setnav [data-s]', { timeout: 20000 }).catch(() => {}); await page.waitForTimeout(300);
+    await page.click('.ag-tabs [data-tab="settings"]'); await page.waitForSelector('.ag-setnav [data-s]', { timeout: 20000 }).catch(() => {}); await sakin(page);
     // birleşik servis dosyası (1.15.120): Ayarlar → Kaynaklar ve yenileme → İzinli servis listeleri kartı; test makinesinde izinli servisler
     // kapalı → açınca "Sağlayıcılar'da kapalı" notu; yeniden yükleme seçeneği dosya kapalıyken soluk; Vazgeç ile taslak atılır
-    if (await tik(page, '.ag-setnav [data-s="src"]')) await page.waitForTimeout(500);
+    if (await tik(page, '.ag-setnav [data-s="src"]')) await sakin(page);
     const sxc = '.ag-card:has([data-k="SVC_EXPORT"])';
+    // bölüm ayarlar sunucudan gelince çizilir: sabit 500 ms, istek kuyrukta gecikince kartı bulamıyordu ([null,null], 2026-11-25 iki koşu)
+    await page.waitForSelector(sxc, { timeout: 20000 }).catch(async () => console.log('  [tanı] birleşik dosya kartı 20 sn\'de çizilmedi · istekler: ' + apiSon(6)));
     const sx0 = await page.evaluate((q) => { const c = document.querySelector(q); return c ? { rl: !!c.querySelector('.ag-bagli.off [data-k="SVC_EXPORT_RELOAD"]'), ref: !!c.querySelector('[data-k="SVC_REFRESH_DAYS"]') } : null; }, sxc);
     await page.click(sxc + ' [data-act="cfgchip"][data-k="SVC_EXPORT"][data-v="1"]').catch(() => {}); await page.waitForTimeout(400);
     const sx1 = await page.evaluate((q) => { const c = document.querySelector(q); return c ? { rl: !!c.querySelector('.ag-bagli:not(.off) [data-k="SVC_EXPORT_RELOAD"]'), yol: /services-all\.txt/.test(c.innerText), not: /restartsrv_httpd --graceful/.test(c.innerText), nosvc: /(Sağlayıcılar sekmesinde kapalı|off on the Providers tab)/.test(c.innerText) } : null; }, sxc);
@@ -641,7 +689,7 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     await page.click('[data-act="cfgdiscard"]').catch(() => {}); await page.waitForTimeout(400);
   }
   {
-    if (await tik(page, '.ag-setnav [data-s="thr"]')) await page.waitForTimeout(500);
+    if (await tik(page, '.ag-setnav [data-s="thr"]')) await sakin(page);
     const inp = await page.$('#ag-f-THRESHOLD_24');
     if (inp) {
       const v0 = +(await inp.inputValue());
@@ -665,7 +713,7 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
   }
   {
     // Bildirim: olay × kanal tablosu — 5 olay (1.15.4: Kontrol edilecekler bulguları) × 2 kanal; hücre tıklanınca kaydet çubuğu çıkar, geri tıklanınca taslak temiz; telefonda sığar
-    if (await tik(page, '.ag-setnav [data-s="notify"]')) await page.waitForTimeout(500);
+    if (await tik(page, '.ag-setnav [data-s="notify"]')) await sakin(page);
     // 1.15.120: 6 olay (birleşik servis dosyası sorunları); her satırda iki kanal hücresi
     const cells = await page.$$('.ag-evm .ag-chk');
     const evRows = await page.$$eval('.ag-evm tbody tr', r => r.length).catch(() => 0);
@@ -685,7 +733,7 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
       await page.setViewportSize({ width: 1280, height: 900 }); await page.waitForTimeout(400);
     }
   }
-  await page.click('.ag-tabs [data-tab="overview"]'); await page.waitForTimeout(900);
+  await page.click('.ag-tabs [data-tab="overview"]'); await sakin(page);
   {
     // Son tur ipucu: durum verisinin alındığı saat (ss:dd:ss); geri sayım kutusu var
     const tip = await page.$eval('#ag-last', b => b.parentElement.getAttribute('title') || '').catch(() => '');
@@ -693,9 +741,14 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
   }
   // Terimler penceresi
   const terms = await page.$('[data-act="terms"]');
-  if (terms) { await terms.click(); await page.waitForTimeout(600); check('Terimler penceresi açılıyor', await page.$('.ag-terms') !== null); const no = await page.$('[data-m="no"], [data-m="ok"]'); if (no) await no.click(); await page.waitForTimeout(400); }
+  if (terms) { await tik(page, '[data-act="terms"]'); await page.waitForTimeout(600); check('Terimler penceresi açılıyor', await page.$('.ag-terms') !== null); const no = await page.$('[data-m="no"], [data-m="ok"]'); if (no) await tik(page, '[data-m="no"], [data-m="ok"]'); await page.waitForTimeout(400); }
   // Kontrol edilecekler satırları: IP kartı ve menü
   let ipBanSinandi = false;
+  // liste çizilmeden satır toplanmaz: Ayarlar'dan dönüşte liste yeniden çizilirken 0 satır sayılıp ban altında ihlal denetimleri
+  // "yok" diye düşüyordu (2026-11-24, dört koşunun birinde). Enjekte satır her koşuda var → onu bekle
+  await page.waitForSelector('.ag-item[data-row="198.51.100.200"] .ag-tr-r', { timeout: 20000 }).catch(async () => console.log('  [tanı] Kontrol edilecekler 20 sn\'de çizilmedi · sekme ' +
+    await page.evaluate(() => { const a = document.querySelector('.ag-tabs .on, .ag-tabs [aria-selected="true"], .ag-tabs .active'); return (a ? a.getAttribute('data-tab') || a.textContent.trim() : '?') +
+      ' · Kaydet çubuğu ' + !!document.querySelector('.ag-savebar') + ' · satır ' + document.querySelectorAll('.ag-item[data-row]').length; }) + await taniDurum(page, Date.now())));
   const rows =await page.evaluate(() => Array.from(document.querySelectorAll('.ag-item[data-row] .ag-tr-r')).map(r => ({
     cidr: r.closest('.ag-item').getAttribute('data-row'), ip: (r.querySelector('.ag-cidr') || {}).getAttribute ? r.querySelector('.ag-cidr').getAttribute('data-ip') : '' })));
   console.log(`  Kontrol edilecekler: ${rows.length} satır`);
@@ -717,18 +770,18 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     check('durum standardı: Kontrol edilecekler satırlarının not bölümünde rozet yok (durumlar Durum sütununda)', np === '', np);
     const tg = await page.$('.ag-item[data-row="198.18.0.0/16"] .ag-td-why [data-act="toggle"]');
     if (tg) {
-      await tg.click(); await page.waitForTimeout(400);
+      await tik(page, '.ag-item[data-row="198.18.0.0/16"] .ag-td-why [data-act="toggle"]'); await page.waitForTimeout(400);
       const ipr = await page.evaluate(() => { const rs = Array.from(document.querySelectorAll('.ag-item[data-row="198.18.0.0/16"] .ag-ip-t tbody tr'));
         return rs.length + ' satır, rozetli ' + rs.filter(r => /Ban altında ihlal|Violation under a ban/.test(r.textContent)).length; });
       check('ban altında ihlal eki: IP listesinde 5 + 2 IP, eklenen 2 IP rozetli', ipr === '7 satır, rozetli 2', ipr);
-      const tg2 = await page.$('.ag-item[data-row="198.18.0.0/16"] .ag-td-why [data-act="toggle"]'); if (tg2) { await tg2.click(); await page.waitForTimeout(300); }
+      const tg2 = await page.$('.ag-item[data-row="198.18.0.0/16"] .ag-td-why [data-act="toggle"]'); if (tg2) { await tik(page, '.ag-item[data-row="198.18.0.0/16"] .ag-td-why [data-act="toggle"]'); await page.waitForTimeout(300); }
     } else check('ban altında ihlal eki: IP listesi açılır', false, 'aç/kapa bağlantısı yok');
   }
   for (const r of rows) {
     const before = errs.length;
     const el = await page.$(`.ag-item[data-row="${r.cidr}"] .ag-cidr`);
     if (!el) continue;
-    await el.click();
+    await tik(page, `.ag-item[data-row="${r.cidr}"] .ag-cidr`);
     await page.waitForFunction(() => { const d = document.querySelector('.ag-drawer'); return d && d.innerText.length > 40 && !d.querySelector('.ag-spin'); }, null, { timeout: 20000 }).catch(function () {});
     // aralık satırı (/16, /24…) aralık kartını açar: başlık hemen gelir, gövde motorun cevabıyla (ölçüldü: ~2 sn) — karar satırı
     // çizilene kadar beklenir (önce Kontrol edilecekler'de aralık satırı olan test verisi yoktu, gövde beklenmeden denetleniyordu)
@@ -772,7 +825,7 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     await page.waitForTimeout(300);
     const mb = await page.$(`.ag-item[data-row="${r.cidr}"] [data-act="menu"]`);
     if (mb) {
-      await mb.click(); await page.waitForTimeout(400);
+      await tik(page, `.ag-item[data-row="${r.cidr}"] [data-act="menu"]`); await page.waitForTimeout(400);
       const acts = await page.evaluate(c => Array.from(document.querySelectorAll(`.ag-item[data-row="${c}"] .ag-menu [data-act]`)).map(b => b.getAttribute('data-act')), r.cidr);
       check(`menüde Sustur var: ${r.cidr}`, acts.includes('ignore'), acts.join(','));
       await page.keyboard.press('Escape'); await page.waitForTimeout(300);
@@ -873,7 +926,7 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     const alw = await page.$('.ag-drawer [data-dr="allow1"]');
     check('izin: banlı / izinli olmayan IP\'nin kartında "İzin ver…" var', !!alw);
     if (alw) {
-      await alw.click(); await page.waitForSelector('.ag-modal #ag-al-note', { timeout: 8000 }).catch(() => {});
+      await tik(page, '.ag-drawer [data-dr="allow1"]'); await page.waitForSelector('.ag-modal #ag-al-note', { timeout: 8000 }).catch(() => {});
       const am = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); if (!m) return null;
         const n = m.querySelector('#ag-al-note'), ok = m.querySelector('[data-m="ok"]');
         n.value = 'a#b'; n.dispatchEvent(new Event('input', { bubbles: true })); const bad = ok.disabled;
@@ -882,15 +935,25 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
       check('izin penceresi: 5 süre (ilki süresiz), açıklama, geçersiz notta onay kapalı, geçerlide açık', !!am && am.sure.length === 5 && /^(Süresiz|No end)$/.test(am.sure[0]) && am.bad && am.ok && am.d.length > 20, JSON.stringify(am));
       for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(250); await layoutChecks(page, 'ip-izin', w); }
       await page.setViewportSize({ width: 1280, height: 900 });
+      const akA = Date.now();
       await page.click('.ag-modal [data-ttl="3600"]'); await page.click('.ag-modal [data-m="ok"]');
+      const akT0 = Date.now();
       await page.waitForSelector('.ag-drawer [data-dr="unallow1"]', { timeout: 60000 }).catch(() => {});
-      const ak = await page.evaluate(() => { const d = document.querySelector('.ag-drawer'); return d ? { un: !!d.querySelector('[data-dr="unallow1"]'), txt: d.innerText } : null; });
-      check('izin: onaydan sonra kart "İzni kaldır" ve geçici iznin kalan süresini gösterir', !!ak && ak.un && /csf\.tempallow/.test(ak.txt) && /(kaldı|left)/.test(ak.txt), ak ? ak.txt.slice(0, 400) : '');
+      const ak = await page.evaluate(() => { const d = document.querySelector('.ag-drawer'); return d ? { un: !!d.querySelector('[data-dr="unallow1"]'), txt: d.innerText,
+        spin: !!d.querySelector('.ag-spin'), n: document.querySelectorAll('.ag-drawer').length, modal: (document.querySelector('.ag-modal') || {}).innerText || '' } : null; });
+      const akOk = !!ak && ak.un && /csf\.tempallow/.test(ak.txt) && /(kaldı|left)/.test(ak.txt);
+      // eylemden sonra yalnız açık kaynak ayrıntısı yeniden istenir (en çok bir --src-ips); önce önbellekteki bütün kaynaklar isteniyordu
+      // (4 istek ~25 sn, kartın sorgusu arkalarında 48 sn'de gelmedi)
+      const akSrc = API_LOG.filter(q => q._t0 >= akA && /^a=src_ips/.test(q.postData() || '')).length;
+      check('eylemden sonra yalnız açık kaynak ayrıntısı yeniden istenir (en çok 1 src_ips)', akSrc <= 1, akSrc + ' istek');
+      check('izin: onaydan sonra kart "İzni kaldır" ve geçici iznin kalan süresini gösterir', akOk, (ak ? ak.txt.slice(0, 400) : '') + (akOk ? '' : await taniDurum(page, akT0)));
       if (ak && ak.un) {
         await page.click('.ag-drawer [data-dr="unallow1"]'); await page.waitForSelector('.ag-modal [data-m="ok"]', { timeout: 8000 }).catch(() => {});
+        const unT0 = Date.now();
         await page.click('.ag-modal [data-m="ok"]');
         await page.waitForSelector('.ag-drawer [data-dr="allow1"]', { timeout: 60000 }).catch(() => {});
-        check('izin: İzni kaldır sonrası kart yeniden "İzin ver…" gösterir', !!(await page.$('.ag-drawer [data-dr="allow1"]')));
+        const unOk = !!(await page.$('.ag-drawer [data-dr="allow1"]'));
+        check('izin: İzni kaldır sonrası kart yeniden "İzin ver…" gösterir', unOk, unOk ? '' : await taniDurum(page, unT0));
       }
       // kart kapatıldıktan sonra biten eylem kartı yeniden açmaz (canlıda: arka arkaya IP'lere 1 sa izin verirken bir önceki IP'nin kartı
       // yenisinin üstüne geliyordu — istek sunucuda sürerken kart kapatılmış, cevap gelince eski kart açılıyordu). İstek bilerek geciktirilir
@@ -922,7 +985,7 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     // 1 sa ile onay → kartın Blok satırı kalan süreyi gösterir → Aktif aralık banları satırı "elle · süre", ⋯ → Banı kaldır (yazarak)
     const b24 = await page.$('.ag-drawer .ag-lv-t [data-act="ban24"]');
     if (b24) {
-      await b24.click(); await page.waitForSelector('.ag-modal #ag-ttl', { timeout: 30000 }).catch(() => {});
+      await tik(page, '.ag-drawer .ag-lv-t [data-act="ban24"]'); await page.waitForSelector('.ag-modal #ag-ttl', { timeout: 30000 }).catch(() => {});
       const rb = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); const tt = m && m.querySelector('#ag-ttl'); if (!tt) return null;
         const vis = () => tt.style.display !== 'none', r = { all: vis(), n: m.querySelectorAll('#ag-ttl [data-ttl]').length };
         m.querySelector('[data-mode="svc"]').click(); r.svc = vis(); m.querySelector('[data-mode="exc"]').click(); r.exc = vis();
@@ -940,7 +1003,7 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
       const pill = await page.evaluate(c => { const r = document.querySelector(`.ag-item[data-row="${c}"] .ag-td-state`); return r ? r.textContent.trim() : ''; }, gr);
       check('aralık banı: Aktif aralık banları satırı "elle · kalan süre", menüde Banı değiştir yok', /^(elle|manual) · \d/.test(pill), pill);
       if (gm) {
-        await gm.click(); await page.waitForTimeout(400);
+        await tik(page, `.ag-item[data-row="${gr}"] [data-act="menu"]`); await page.waitForTimeout(400);
         const acts = await page.evaluate(c => Array.from(document.querySelectorAll(`.ag-item[data-row="${c}"] .ag-menu [data-act]`)).map(b => b.getAttribute('data-act')), gr);
         check('aralık banı: süreli elle banın menüsünde Banı değiştir yok, Banı kaldır var', !acts.includes('chg') && acts.includes('unban'), acts.join(','));
         await page.click(`.ag-item[data-row="${gr}"] .ag-menu [data-act="unban"]`); await page.waitForSelector('.ag-modal [data-m="ok"]', { timeout: 8000 }).catch(() => {});
@@ -1008,7 +1071,7 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     const rw = await page.$('.ag-menu [data-act="rewatch"]');
     if (rw) {
       const pfx = await rw.getAttribute('data-t');
-      await rw.click(); await page.waitForTimeout(500);
+      await tik(page, '.ag-menu [data-act="rewatch"]'); await page.waitForTimeout(500);
       await tik(page, '.ag-modal [data-m="ok"]');
       await page.waitForTimeout(6000);
       const left = await page.evaluate(p => { const r = Array.from(document.querySelectorAll('.ag-item[data-row]')).filter(x => x.getAttribute('data-row') === p + '.0/24')[0]; return r ? r.innerText : ''; }, pfx);
@@ -1018,7 +1081,7 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
   // Deneme turu: gerçek motor kuru çalışır; pencere özetle açılmalı (ham çıktı açılır bölümde)
   const dryBtn = await page.$('[data-act="dry"]');
   if (dryBtn) {
-    await dryBtn.click();
+    await tik(page, '[data-act="dry"]');
     await page.waitForFunction(() => document.querySelector('.ag-modal .ag-dry'), null, { timeout: 90000 }).catch(function () {});
     const dry = await page.evaluate(() => { const d = document.querySelector('.ag-modal .ag-dry'); return d ? { sum: d.querySelectorAll('.ag-dry-s').length, raw: !!d.querySelector('.ag-dry-raw pre') } : null; });
     check('Deneme turu penceresi özetle açılıyor (ham çıktı ayrı)', !!dry && dry.sum > 0 && dry.raw, JSON.stringify(dry));
@@ -1027,7 +1090,7 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
   }
   // sekmeye eski veriyle dönüş: yeni durum gelene kadar salt okuyan eylem (menü) çalışır, durum değiştiren (Sustur) bildirimle bekler.
   // Önce bütün eylemler kapanıyordu; durum isteği sunucuda 5-7 sn sürünce kullanıcı sayfayı donmuş sanıyordu
-  await page.click('.ag-tabs [data-tab="overview"]'); await page.waitForTimeout(600);
+  await page.click('.ag-tabs [data-tab="overview"]'); await sakin(page);
   const back = await page.evaluate(async () => {
     const od = Date.now; Date.now = () => od() + 120000;               // eldeki veri 2 dakika eski görünsün
     // yeni durum isteği sürerken sınanır: yerel sunucu 30 ms içinde cevaplarsa veri tazelenip denetim yanlış düşüyordu
@@ -1046,6 +1109,42 @@ const errs = [];          // sayfanın JS hataları: test yarıda düşerse de y
     return { upd, menu, mut: !!mut, toast, modal };
   });
   check('eski veriyle dönüş: menü hemen açılır, durum değiştiren eylem bildirimle bekler (pencere açılmaz)', back.upd && back.menu && back.mut && back.toast && !back.modal, JSON.stringify(back));
+  // önceki denetimin durum isteği 3 sn geciktirildi ve o süre ağa çıkmadığı için sakin onu görmez: bitmeden başlarsak yeni panel o
+  // isteği paylaşır (doğru davranış) ve aşağıdaki sayım 0 çıkardı
+  await page.waitForTimeout(3500); await sakin(page);
+  // dönüşte tek durum isteği: arka arkaya iki "görünür" olayı süren isteği paylaşır (canlıda ikisi de ~11 sn'lik iki istek açıyordu)
+  const cift = await page.evaluate(async () => {
+    const od = Date.now; Date.now = () => od() + 120000;
+    let n = 0; const of = window.fetch;
+    window.fetch = (u, o) => { if (o && /^a=status(&|$)/.test(String(o.body || ''))) { n++; return new Promise(r => setTimeout(() => r(of(u, o)), 1500)); } return of(u, o); };
+    document.dispatchEvent(new Event('visibilitychange')); await new Promise(r => setTimeout(r, 40));
+    document.dispatchEvent(new Event('visibilitychange')); await new Promise(r => setTimeout(r, 40));
+    const k = n; await new Promise(r => setTimeout(r, 2500)); Date.now = od; window.fetch = of; return k;
+  });
+  check('sekmeye dönüş: arka arkaya iki görünürlük olayı tek durum isteği açar', cift === 1, cift + ' istek');
+  await sakin(page);
+  // tek ağ hatası uyarı değil (telefon tarayıcısı arka plandaki sekmenin bağlantısını keser): yeniden denenir, uyarı yalnız art arda
+  // ikinci hatada. fail = kaç durum isteği ağ hatasıyla düşsün
+  const agHata = async (fail) => page.evaluate(async (fail) => {
+    const od = Date.now; Date.now = () => od() + 120000;
+    let n = 0; const of = window.fetch;
+    window.fetch = (u, o) => { if (o && /^a=status(&|$)/.test(String(o.body || ''))) { n++; if (n <= fail) return Promise.reject(new TypeError('Failed to fetch')); } return of(u, o); };
+    document.dispatchEvent(new Event('visibilitychange'));
+    await new Promise(r => setTimeout(r, 400));
+    const w0 = !!document.querySelector('.ag-conn');
+    await new Promise(r => setTimeout(r, 3000));
+    const w1 = !!document.querySelector('.ag-conn'), k = n; Date.now = od; window.fetch = of; return { w0, w1, n: k };
+  }, fail);
+  const h1 = await agHata(1);
+  check('tek ağ hatası: uyarı çıkmaz, durum 2 sn sonra yeniden istenir', !h1.w0 && !h1.w1 && h1.n >= 2, JSON.stringify(h1));
+  await sakin(page);
+  const h2 = await agHata(2);
+  check('art arda iki ağ hatası: "Sunucuya ulaşılamıyor" uyarısı çıkar', !h2.w0 && h2.w1 && h2.n >= 2, JSON.stringify(h2));
+  // uyarıyı kaldır: yeni durum gelsin
+  await page.evaluate(() => { const od = Date.now; Date.now = () => od() + 120000; document.dispatchEvent(new Event('visibilitychange')); setTimeout(() => { Date.now = od; }, 200); });
+  await page.waitForFunction(() => !document.querySelector('.ag-conn'), null, { timeout: 30000 }).catch(() => {});
+  check('ağ hatası sonrası ilk başarılı durumda uyarı kalkar', !(await page.$('.ag-conn')));
+  await sakin(page);
   // Sağlayıcılar: kiralık liste ve izinli servis kutuları tek tip — hazır gelenler de kendi eklenenler de aynı kutu, ekle / sil,
   // kutuya kaynak (taslakta; sonunda vazgeçilir, kaydedilmez)
   await page.setViewportSize({ width: 1280, height: 900 });
