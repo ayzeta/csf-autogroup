@@ -213,7 +213,10 @@ settings, with no prompts. `config.env` is left untouched.
   and why the ban was added (and, for partial bans, violations on other services
   since then); the IP card has three parts: *This IP* (result, its own ban,
   allow list, ban history and what the address tried in each service,
-  *Attempts*), *Wider levels* (one row each for the block, announced range,
+  *Attempts*, and **Measure impact**: the last 24 hours of web requests from
+  this address, as for a provider; if the address is banned it shows whether
+  requests still got through after the ban; the range card has the same
+  section), *Wider levels* (one row each for the block, announced range,
   network, country, provider and rented-server list, with its state, how far it
   is from its threshold and its ban button) and *Who*;
   changing a threshold shows its effect on the current entries; suspicious

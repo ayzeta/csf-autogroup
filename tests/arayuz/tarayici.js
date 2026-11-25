@@ -851,6 +851,8 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
     await page.route('**/api.php', abr);
     await page.fill('#ag-lk-ip', '198.51.100.0/24'); await page.press('#ag-lk-ip', 'Enter');
     await page.waitForSelector('.ag-drawer .ag-verdict', { timeout: 30000 }).catch(() => {});
+    // aralık kartında da IP kartıyla aynı Etkisini ölç bölümü (anahtar aralığın kendisi)
+    check('aralık kartı: Etkisini ölç bölümü (anahtar net:aralık, IP kartıyla aynı bileşen)', !!(await page.$('.ag-drawer [data-impbox="net:198.51.100.0/24"] [data-act="asnimpact"]')));
     const q0 = await page.evaluate(() => !!document.querySelector('.ag-drawer #ag-ab-blk [data-dr="abq"]'));
     check('AbuseIPDB aralık: kart açılınca sorgu gitmez, "AbuseIPDB\'de sor" düğmesi var', q0 && abCalls === 0, 'düğme ' + q0 + ', istek ' + abCalls);
     if (q0) {
@@ -908,6 +910,31 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
     // telefonlar 320–390 arası (büyük yazı boyutu da dar genişlik gibi davranır): kart her birinde yatay kaymamalı
     for (const w of [1280, 390, 360, 320]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(250); await layoutChecks(page, 'ip-karti', w); }
     await page.setViewportSize({ width: 1280, height: 900 });
+    // IP kartında Etkisini ölç (1.15.129): sağlayıcıdaki aynı ölçüm, anahtar net:IP/32; yalnız tıklanınca, kart açık kalır, sonuç kartın
+    // kutusunda; metinler adresin diliyle (sağlayıcı / liste sözü ve "Her şey ile banlarsanız" sorusu yok). Cevap taklit
+    {
+      const imr = async route => { const pd = route.request().postData() || '';
+        if (!/^a=asn_impact/.test(pd) || !/asn=net%3A/.test(pd) || /states=/.test(pd)) return route.fallback();
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, total: 4, ips: 1, ok2xx: 3, areq: 0, aips: 0, codes: { 200: 3, 404: 1 },
+          ocodes: { 200: 3, 404: 1 }, posts: [], bots: [], sites: [['shop.test', 3, 0, '', '']], fails: [['404 · shop.test · GET /.env', 1, 0, '', '198.51.100.77']], afails: [],
+          cloud: { web: false, lists: '', req: 0, ips: 0 }, cdn: { req: 0 }, crawl: { bots: [] }, after: { web: 0, since: 0, req: 0 },
+          open: { req: 4, ips: 1, ok: 3, codes: { 200: 3, 404: 1 }, last: '', pt: { 443: 4 }, top: [['198.51.100.77', 4, 3, 'shop.test · GET /', '']] }, ban: '' }) }); };
+      await page.route('**/api.php', imr);
+      const kb = await page.$('.ag-drawer [data-impbox="net:198.51.100.77/32"] [data-act="asnimpact"]');
+      check('IP kartı: Etkisini ölç bölümü (anahtar net:IP/32, yalnız tıklanınca)', !!kb);
+      if (kb) {
+        await tik(page, '.ag-drawer [data-impbox="net:198.51.100.77/32"] [data-act="asnimpact"]');
+        await page.waitForSelector('.ag-drawer [data-impbox] .ag-im-lead', { timeout: 10000 }).catch(() => {});
+        const ki = await page.evaluate(() => { const b = document.querySelector('.ag-drawer [data-impbox]'); return { kart: !!document.querySelector('.ag-drawer'), t: b ? b.innerText.replace(/\s+/g, ' ') : '' }; });
+        check('IP kartı Etkisini ölç: kart açık kalır, sonuç kartta; adresin metinleri (sağlayıcı / liste / "Her şey" yok)', ki.kart && /bu adresten|this address/.test(ki.t) && /198\.51\.100\.77/.test(ki.t) && !/sağlayıcı|provider|listenin|Her şey|Everything/i.test(ki.t), ki.t.slice(0, 300));
+        for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(250); await layoutChecks(page, 'ip-etki', w); await shot('ip-etki-' + w); }
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await tik(page, '.ag-drawer [data-impbox] [data-act="asnimpact"][data-again]').catch(() => {});   // yeniden ölç: kart yine açık
+        await page.waitForTimeout(600);
+        check('IP kartı Etkisini ölç: Yeniden ölç kartı kapatmaz', !!(await page.$('.ag-drawer [data-impbox]')));
+      }
+      await page.unroute('**/api.php', imr);
+    }
     if (var1) {
       await page.click('.ag-drawer [data-dr="ban1"]'); await page.waitForSelector('.ag-modal #ag-ttl', { timeout: 8000 }).catch(() => {});
       const ib = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); if (!m) return null;
@@ -955,6 +982,43 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
         const unOk = !!(await page.$('.ag-drawer [data-dr="allow1"]'));
         check('izin: İzni kaldır sonrası kart yeniden "İzin ver…" gösterir', unOk, unOk ? '' : await taniDurum(page, unT0));
       }
+      // eylemden sonra kart sayfanın durumunu BEKLEMEDEN yenilenir (canlıda: ban bildirimi geldi, kart ~8 sn "açık" demeye devam etti), bekleme
+      // kutusu kartın ÜSTÜNDE görünür (önce kartın arkasında kalıyordu: kart açıkken ekran boş bekliyordu) ve yenilenen karttaki bir sonraki
+      // düğme beklemez (kartın verisi eylemden sonra alındı). Durum cevabı bilerek 8 sn, eylem 2 sn geciktirilir
+      if (await page.$('.ag-drawer [data-dr="allow1"]')) {
+        const yav = async route => { const pd = route.request().postData() || '';
+          if (/^a=status(&|$)/.test(pd)) await new Promise(r => setTimeout(r, 8000));
+          else if (/(^|&)name=allow1(&|$)/.test(pd)) await new Promise(r => setTimeout(r, 2000));
+          return route.fallback(); };
+        await page.route('**/api.php', yav);
+        await tik(page, '.ag-drawer [data-dr="allow1"]'); await page.waitForSelector('.ag-modal [data-m="ok"]', { timeout: 8000 }).catch(() => {});
+        const evCevap = page.waitForResponse(r => /(^|&)name=allow1(&|$)/.test(r.request().postData() || ''), { timeout: 60000 }).catch(() => null);
+        await page.click('.ag-modal [data-ttl="3600"]'); await page.click('.ag-modal [data-m="ok"]');
+        const yT0 = Date.now(); await page.waitForTimeout(700);
+        const ust = await page.evaluate(() => { const w = document.getElementById('ag-wait-l'), e = document.elementFromPoint(innerWidth / 2, innerHeight / 2);
+          return { var: !!w, ustte: !!(w && e && w.contains(e)), kart: !!document.querySelector('.ag-drawer'), en: e ? e.className : '' }; });
+        check('eylem sürerken bekleme kutusu açık kartın üstünde görünür', ust.var && ust.ustte && ust.kart, JSON.stringify(ust));
+        await evCevap; const yA = Date.now();
+        const stCevap = page.waitForResponse(r => /^a=status(&|$)/.test(r.request().postData() || ''), { timeout: 60000 }).catch(() => null);
+        await page.waitForSelector('.ag-drawer [data-dr="unallow1"]', { timeout: 7000 }).catch(() => {});
+        const yC = Date.now(), kartTaze = !!(await page.$('.ag-drawer [data-dr="unallow1"]'));
+        check('eylemden sonra kart sayfanın durumunu beklemeden yenilenir (durum 8 sn gecikmeli)', kartTaze && yC - yA < 7000,
+          'eylem ' + (yA - yT0) + ' ms, kart ' + (yC - yA) + ' ms sonra' + (kartTaze ? '' : await taniDurum(page, yT0)));
+        if (kartTaze) {                          // durum hâlâ beklenirken karttaki sonraki düğme pencereyi açar, "biraz bekleyin" demez
+          const tn = (await page.evaluate(() => (window.__agToasts || []).length));
+          await page.click('.ag-drawer [data-dr="unallow1"]'); await page.waitForSelector('.ag-modal [data-m="ok"]', { timeout: 4000 }).catch(() => {});
+          const pen = !!(await page.$('.ag-modal [data-m="ok"]')), bek = await page.evaluate(n => (window.__agToasts || []).slice(n).join(' / '), tn);
+          check('yenilenen karttaki sonraki düğme beklemez (kartın verisi eylemden sonra alındı)', pen && !/(Güncel durum alınıyor|Fetching the current status)/.test(bek), (pen ? 'pencere açıldı' : 'pencere yok') + ' · ' + bek);
+          if (pen) { await page.click('.ag-modal [data-m="ok"]'); }
+        }
+        await stCevap; await page.unroute('**/api.php', yav);
+        await page.waitForSelector('.ag-drawer [data-dr="allow1"]', { timeout: 60000 }).catch(() => {});
+        if (!(await page.$('.ag-drawer [data-dr="allow1"]')) && await page.$('.ag-drawer [data-dr="unallow1"]')) {   // geri al
+          await page.click('.ag-drawer [data-dr="unallow1"]'); await page.waitForSelector('.ag-modal [data-m="ok"]', { timeout: 8000 }).catch(() => {});
+          await page.click('.ag-modal [data-m="ok"]'); await page.waitForSelector('.ag-drawer [data-dr="allow1"]', { timeout: 60000 }).catch(() => {});
+        }
+        await sakin(page);
+      }
       // kart kapatıldıktan sonra biten eylem kartı yeniden açmaz (canlıda: arka arkaya IP'lere 1 sa izin verirken bir önceki IP'nin kartı
       // yenisinin üstüne geliyordu — istek sunucuda sürerken kart kapatılmış, cevap gelince eski kart açılıyordu). İstek bilerek geciktirilir
       if (await page.$('.ag-drawer [data-dr="allow1"]')) {
@@ -965,8 +1029,8 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
         await page.click('.ag-modal [data-ttl="3600"]'); await page.click('.ag-modal [data-m="ok"]');
         await page.waitForTimeout(300);
         await page.evaluate(() => { const x = document.querySelector('.ag-drawer [data-dr="x"]'); if (x) x.click(); });
-        // eylemin sonucu durum yenilemesinden SONRA döner (doAction → refresh): kart, varsa, o yenilemeden sonra açılır. İlk sürüm yalnız eylem
-        // cevabını bekliyordu; eski panelle de geçti, hatayı yakalamıyordu
+        // kart eylem cevabından hemen sonra, ardından durum yenilemesinden sonra yeniden çizilir (1.15.129'a kadar yalnız yenilemeden sonra):
+        // ikisini de bekler. İlk sürüm yalnız eylem cevabını bekliyordu; eski panelle de geçti, hatayı yakalamıyordu
         const yenile = cevap.then(() => page.waitForResponse(r => /^a=status(&|$)/.test(r.request().postData() || ''), { timeout: 60000 }).catch(() => null));
         await cevap; await yenile; await page.waitForTimeout(2000);
         check('izin: kart kapatıldıktan sonra biten izin, kartı yeniden açmaz', !(await page.$('.ag-drawer')));

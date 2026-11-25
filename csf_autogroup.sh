@@ -65,7 +65,7 @@ grep() { command grep -a "$@"; }
 # sayı, anahtar; Türkçe modda sıralama kuralı zaten C idi (LC_COLLATE=C)
 sort() { LC_ALL=C command sort "$@"; }
 
-VERSION="1.15.128"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.129"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -6154,6 +6154,7 @@ src_rng() {      # ANAHTAR DOSYA → DOSYA'ya sıralı "lo hi" aralıkları: sa�
             [ "${#fs[@]}" -gt 0 ] || return 4
             awk -F'[./]' 'NF >= 4 { b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%.0f %.0f\n", lo, lo + 2 ^ (32 - b) - 1 }' "${fs[@]}" |
                 sort -n -k1,1 > "$2" ;;
+        net:*) cidr_range "${k#net:}" || return 2; printf '%s %s\n' "$R_LO" "$R_HI" > "$2" ;;   # tek IP (/32) ya da aralık (IP / aralık kartı)
         bk:*) local nm="${k#bk:}"; f="$CSF_VAR/csf.block.$nm"
             [ -s "$f" ] || { f="$BKL_PROBE_DIR/$nm.txt"; [ -s "$f" ] || { bkl_probe "$nm" zorla >/dev/null 2>&1; [ -s "$f" ] || { [ -r "$BKL_PROBE_DIR/$nm.st" ] && return 5; return 4; }; }; }
             awk -F'[./]' 'NF >= 4 { b = (NF >= 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%.0f %.0f\n", lo, lo + 2 ^ (32 - b) - 1 }' "$f" |
@@ -6217,10 +6218,15 @@ do_src_ips() {   # ANAHTAR (ASnnn | cl:ad) → JSON: o sağlayıcıya / kiralık
             printf "{\"ok\":true,\"n\":%d,\"ips\":[%s]}\n", n, o }'
     rm -f "$rng" "$svm" "$alw"
 }
-do_asn_impact() { # ANAHTAR (ASnnn | cl:ad) → son 24 saatin web günlüklerinde bu sağlayıcıdan / kiralık listeden gelen istekler
+do_asn_impact() { # ANAHTAR (ASnnn | cl:ad | bk:ad | net:CIDR) → son 24 saatin web günlüklerinde bu sağlayıcıdan / kiralık listeden / CSF
+    # blok listesinden / adresten (tek IP /32 ya da aralık /8–/32: IP ve aralık kartı) gelen istekler
     local a="$1" n="" dir="" d files rng rc
     [ -z "$IMP_STATES" ] || [[ "$IMP_STATES" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}(,[0-9]{1,3}(\.[0-9]{1,3}){3}){0,299}$ ]] || { echo '{"ok":false,"error":"bad_states"}'; return 2; }
     if [[ "${a^^}" =~ ^AS([0-9]{1,10})$ ]]; then a="${a^^}"; n="${BASH_REMATCH[1]}"
+    elif [[ "$a" =~ ^net:([0-9]{1,3}(\.[0-9]{1,3}){3})/([0-9]{1,2})$ ]]; then
+        local nb="${BASH_REMATCH[3]}" na="${BASH_REMATCH[1]}"   # cidr_range kendi eşleşmesiyle BASH_REMATCH'i ezer
+        (( nb >= 8 && nb <= 32 )) && cidr_range "${a#net:}" && ip2int "$na" && [ "$R_LO" = "$REPLY" ] ||
+            { echo '{"ok":false,"error":"bad_asn"}'; return 2; }   # ağ adresiyle (198.51.100.0/24; 198.51.100.7/24 değil)
     elif ! [[ "$a" =~ ^(cl:[a-z0-9-]{1,63}([+][a-z0-9-]{1,63}){0,30}|bk:[A-Za-z0-9_]{1,25})$ ]]; then echo '{"ok":false,"error":"bad_asn"}'; return 2; fi
     for d in ${DOMLOGS:-} /var/log/apache2/domlogs /usr/local/apache/domlogs /etc/apache2/logs/domlogs; do [ -d "$d" ] && { dir="$d"; break; }; done
     rng=$(mktemp) || return 1
@@ -6315,6 +6321,22 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad) → son 24 saatin web günlüklerind
                       cl_pol "$lx"; lks+=("cl:$lx|$CP_K|$CP_T|$CP_U")
                   done ;;
         esac
+        # adresin kendi tam banı (csf.deny satırı ya da geçici listede portsuz satır): ban işliyor mu, aynı hesap. Başlangıç: aralıkta kapsama
+        # defteri (ban:/temp:), tek IP'de ban geçmişinin süren kaydı. Kısmi ban ya da onu kapsayan daha geniş ban burada sayılmaz (satır
+        # durumlarında görünür)
+        if [[ "$a" == net:* ]]; then
+            local nc="${a#net:}" nip="" nt=0 ni; [[ "$nc" == */32 ]] && nip="${nc%/32}"
+            tb_load
+            if deny_has "${nip:-$nc}"; then nt=p
+            else for ni in "${!TB_A[@]}"; do [ "${TB_A[ni]}" = "${nip:-$nc}" ] && [ -z "${TB_P[ni]}" ] && [ "${TB_E[ni]}" -gt "$(date +%s)" ] && { nt=t; break; }; done; fi
+            if [ "$nt" != 0 ]; then
+                ban="own"; bweb=1; bsince=0
+                if [ -z "$nip" ]; then cov_load; lt="${COV_T[$([ "$nt" = p ] && echo ban || echo temp):$nc]:-0}"; bsince=$lt
+                else bl_load; bsince=$(printf '%s\n' "$BLV" | awk -F'|' -v ip="$nip" -v k="$nt" -v now="$(date +%s)" '$1 == ip && $2 == k && ($4 + 0 == 0 || $4 + 0 > now) && $3 + 0 > b { b = $3 + 0 } END { print b + 0 }'); fi
+                [[ "$bsince" =~ ^[0-9]+$ ]] || bsince=0
+                bkey=""; [ "$bsince" -gt 0 ] && bkey=$(date -d "@$bsince" +%Y%m%d%H%M%S 2>/dev/null)
+            fi
+        fi
         if [ "$lok" = 1 ] && [ "${#lks[@]}" -gt 0 ]; then
             ban="list"; bweb=1; cov_load
             for lx in "${lks[@]}"; do lt="${COV_T[$lx]:-0}"; [ "$lt" = 0 ] && { lmax=0; break; }; [ "$lt" -gt "$lmax" ] && lmax=$lt; done
@@ -6391,7 +6413,10 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad) → son 24 saatin web günlüklerind
             if (tr && !rg) o = o (o == "" ? "" : ",") "tempr:" tr
             if (ip in IMB) o = o (o == "" ? "" : ",") "imunify"
             if ((p in WT) && !rg && !tr) o = o (o == "" ? "" : ",") "watch"     # izlenen blok (banı yok)
-            if (ban != "" && !rg) o = o (o == "" ? "" : ",") "asn:" ban          # bu sağlayıcının banı (ports: yalnız port listesi)
+            # bu sağlayıcının banı (ports: yalnız port listesi). Yalnız sağlayıcı ölçümünde: liste ("list") ve adresin kendi banı ("own")
+            # ölçümünde ban değişkeni sızıntı denetimi içindir; önce her satıra "asn:list" ekleniyordu, panel onu "sağlayıcı banı · yalnız
+            # port listesi" diye gösteriyordu (blok listesi ölçümünde sağlayıcı banı yokken)
+            if (ban != "" && ban != "list" && ban != "own" && !rg) o = o (o == "" ? "" : ",") "asn:" ban
             if (!rg) for (i = 1; i <= xn; i++) if (v >= XL[i] && v <= XH[i] && index("," o ",", "," XS[i] ",") == 0) o = o (o == "" ? "" : ",") XS[i]   # ülke, kiralık liste, port satırı
             return o }
         function topip(A, k, X, N,  o, i, best, bk, n) { o = ""   # [IP, istek, başarılı, örnek, şu anki durum]
@@ -7545,19 +7570,21 @@ asn_top() {      # [N] [evidence|blocks] → ASN_TOP satırları: "ASN|KURUM|CC|
     local -A G=() B=() T=() NM=() CC=() IS_AG=() DEN=() M=() IS_M=() CCOV=() CV=() CVS=() SCL=() PBC=() SVN=() SEP=() LA=()
     local c i p a qf k src ptl ptu sv pb rp=()
     if [ "${3:-}" = reuse ] && [ -n "${ASN_ROWS_SET:-}" ]; then asn_top_sort "${1:-10}" "${2:-evidence}"; return 0; fi
-    asn_banned
+    pa "asn · öncesi"; asn_banned; pa "asn · asn_banned"
     # sayılan tekiller (blok ve şüpheli ağ eşiğiyle aynı pencere): kalıcı tekil penceresindeki (PERM_WINDOW_DAYS) csf.deny
     # tekilleri + ban geçmişinde aynı pencerede geçici banlanmış IP'ler (süresi dolmuş olanlar da: önce yalnız şu an listede
     # duranlar sayılıyor, süresi dolan geçici banlar sağlayıcının sayımından düşüyordu). Geçici kaydın notuna lfd biçiminde
     # tarihi eklenir: son ihlal zamanı (SEP) tekillerle aynı yoldan okunur.
     local -A ASG=()
     for c in "${!SINGLE_NOTE[@]}"; do [ -n "${OLD_SGL[$c]+x}" ] || ASG[$c]="${SINGLE_NOTE[$c]}"; done
-    bl_load
+    pa "asn · tekiller"; bl_load; pa "asn · bl_load"
     while IFS='|' read -r c k; do [ -n "${ASG[$c]+x}" ] || [ -n "${DENY_IP[$c]+x}" ] || ASG[$c]="$k"; done < <(printf '%s\n' "$BLV" |
         LC_ALL=C awk -F'|' -v cut=$(( $(date +%s) - PERM_WINDOW_DAYS * 86400 )) '$2 == "t" && $3 + 0 >= cut && $3 + 0 >= T[$1] + 0 { T[$1] = $3; R[$1] = $5 }
             END { for (i in T) print i "|" R[i] " - " strftime("%a %b %e %H:%M:%S %Y", T[i]) }')
-    # tekillerin saldırdığı servis bir kez (PERMBLOCK: lfd günlüğündeki önceki geçici ban; hepsi tek taramada)
-    while read -r c k; do SCL[$c]="$k"; [ "$k" = repeat ] && rp+=("$c"); done < <(for c in "${!ASG[@]}"; do printf '%s|%s\n' "$c" "${ASG[$c]}"; done | awk -F'|' "$AWK_CLS"'{ print $1, cls($2) }')
+    pa "asn · ban geçmişi tekilleri"
+    # tekillerin saldırdığı servis bir kez (PERMBLOCK: lfd günlüğündeki önceki geçici ban; hepsi tek taramada). Kapsama kararıyla
+    # (cov_prep) aynı ortamda: LC_ALL=C (sebepler ASCII; UTF-8 harf ayarında awk ~2 kat yavaş, çıktı aynı — ölçüldü)
+    while read -r c k; do SCL[$c]="$k"; [ "$k" = repeat ] && rp+=("$c"); done < <(for c in "${!ASG[@]}"; do printf '%s|%s\n' "$c" "${ASG[$c]}"; done | LC_ALL=C awk -F'|' "$AWK_CLS"'{ print $1, cls($2) }')
     pa "asn servis sınıfı"; pc "asn tekil" "${#ASG[@]}"
     perm_cls_load "${rp[@]}"
     for c in "${rp[@]}"; do [ -n "${PERM_CLS[$c]}" ] && SCL[$c]="${PERM_CLS[$c]}"; done

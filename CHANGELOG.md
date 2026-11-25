@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.15.129 — 2026-11-25
+
+- After an action from the IP or range card (ban, remove, allow, change), the
+  card shows the new state as soon as the action is done. It used to wait until
+  the whole page status was reloaded, so the card still said "not banned" for
+  several seconds after the "banned" message. The rest of the page is refreshed
+  in the background, and the card is redrawn once more when that is done.
+- The "working" box (banning, waiting for CSF) is shown above an open card.
+  It used to be drawn behind the card, so nothing seemed to happen.
+- The next button in a card reopened after an action no longer says "try again
+  in a few seconds": the card's own data was fetched after the action.
+- **Measure impact** in the IP card and the range card: the last 24 hours of
+  web requests from that address or range, with the same buckets as for a
+  provider. If the address has its own full ban, it shows whether requests
+  still reached your sites after the ban.
+- Measure impact of a rented-server list or a CSF blocklist no longer shows a
+  "provider ban" badge on each listed address.
+
 ## 1.15.128 — 2026-11-25
 
 - Faster status (panel refresh): the listening mail ports (Exim, Dovecot) are

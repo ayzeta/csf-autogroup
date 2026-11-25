@@ -296,6 +296,8 @@ switch ($a) {
         $key = trim((string) ($_POST['asn'] ?? ''));
         if (preg_match('/^as[0-9]{1,10}$/i', $key)) {
             $key = strtoupper($key);
+        } elseif ($a === 'asn_impact' && preg_match('/^net:([0-9]{1,3}\.){3}[0-9]{1,3}\/([89]|[12][0-9]|3[0-2])$/', $key)) {
+            // IP / aralık kartı: tek IP (/32) ya da aralık (ağ adresiyle; motor ayrıca denetler)
         } elseif (!preg_match('/^(cl:[a-z0-9-]{1,63}(\+[a-z0-9-]{1,63}){0,30}|bk:[A-Za-z0-9_]{1,25})$/', $key)) {   // bk: CSF blok listesi
             ag_json(['ok' => false, 'error' => 'bad_asn']);
         }

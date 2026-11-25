@@ -1112,6 +1112,14 @@ if kok_on; then
 fi
 mcheck "blok listesi Etkisini ölç: açık listede sızıntı denetimi (açık görüldükten sonraki istek sayılır, öncesi sayılmaz); kapalı listede yok" "run --asn-impact bk:SPAMDROP --json 2>/dev/null | grep -q '\"after\":{\"web\":1,\"since\":[1-9][0-9]*,\"req\":1,\"ips\":1,' && run --asn-impact bk:DROPT --json 2>/dev/null | grep -q '\"after\":{\"web\":0,'"
 mcheck "Etkisini ölç: 127.0.0.1 sunucunun kendisi (izinli kovada, açık adreslerde değil); öteki adres açık" "run --asn-impact bk:OZEL --json 2>/dev/null | grep -q '\"asvc\":{\"self\":2}' && run --asn-impact bk:OZEL --json 2>/dev/null | grep -o '\"open\":{[^}]*}' | grep -q '\"req\":1,\"ips\":1,'"
+# liste ölçümünde satırın durumu yalnız listeyi söyler: 1.15.128'e kadar "asn:list" de ekleniyordu, panel onu "sağlayıcı banı · yalnız
+# port listesi" diye gösteriyordu (sağlayıcı banı yokken)
+mcheck "liste Etkisini ölç: satır durumunda sağlayıcı banı belirteci yok (yalnız blok listesi)" "run --asn-impact bk:SPAMDROP --states 151.80.7.9 --json 2>/dev/null | grep -qx '{\"ok\":true,\"st\":{\"151.80.7.9\":\"bkl:SPAMDROP\"}}'"
+# IP / aralık kartında Etkisini ölç (1.15.129, net:CIDR): aynı ölçüm, tek IP ya da aralık; ağ adresi olmayan aralık reddedilir; adresin
+# kendi tam banı varsa ban işliyor mu (sızıntı denetimi) aynı hesapla
+kok_on && printf '151.80.7.10 # test tekil ban\n' >> "$R/etc/csf/csf.deny"
+mcheck "IP / aralık Etkisini ölç: tek IP 1 istek, /24 iki IP'nin 2 isteği, ağ adresi olmayan aralık reddedilir" "run --asn-impact net:151.80.7.9/32 --json 2>/dev/null | grep -q '^{\"ok\":true,\"total\":1,\"ips\":1,' && run --asn-impact net:151.80.7.0/24 --json 2>/dev/null | grep -q '^{\"ok\":true,\"total\":2,\"ips\":2,' && run --asn-impact net:151.80.7.9/24 --json 2>/dev/null | grep -q 'bad_asn'"
+mcheck "IP Etkisini ölç: adresin kendi tam banı varsa sızıntı denetimi (ban \"own\"), banı olmayanda yok" "run --asn-impact net:151.80.7.10/32 --json 2>/dev/null | grep -q '\"after\":{\"web\":1,.*\"ban\":\"own\"' && run --asn-impact net:151.80.7.9/32 --json 2>/dev/null | grep -q '\"after\":{\"web\":0,.*\"ban\":\"\"'"
 kok_on && { kill "$LSP" 2>/dev/null; wait "$LSP" 2>/dev/null; }
 # birleşik servis dosyası (1.15.119, SVC_EXPORT): CSF'e giden izinli servis dosyası (services-allow.sh'nin yazdığı biçim: başlık, kaynak
 # yorumu, "adres # csf_autogroup: service ad") → tek dosya, yalnız değişince; yeniden yükleme komutu taklit (çağrıyı sayar)

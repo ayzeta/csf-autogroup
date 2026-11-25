@@ -70,7 +70,7 @@
 /* eski veriyle bütün sayfa soluklaşıp kilitlenmiyor (donmuş sanılıyordu): durum değiştiren eylemler tıklanınca bildirimle bekler (ag.js
    waitFresh); yalnız sayılar "güncelleniyor" der */
 /* işlem sürerken: ekranın ortasında kutu; sayfa nerede kaydırılmış olursa olsun görünür, arkası tıklanmaz */
-.ag-wait { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(15, 23, 42, .18); }
+.ag-wait { position: fixed; inset: 0; z-index: 99993; margin: 0; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(15, 23, 42, .18); }
 .ag-wait-b { display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 340px; padding: 22px 26px; text-align: center;
   background: var(--ag-card); border: 1px solid var(--ag-line); border-radius: 14px; box-shadow: 0 12px 40px rgba(15, 23, 42, .18); }
 .ag-wait-b b { font-size: 15px; font-weight: 650; color: var(--ag-text); }
@@ -834,7 +834,7 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
 .ag-im-ms { color: var(--ag-text-3); font-weight: 400; font-size: 12.5px; }
 .ag-im-mb { padding: 0 0 12px; }
 .ag-im-t { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.ag-im-t td { padding: 8px 10px 8px 0; border-top: 1px solid var(--ag-line-soft); vertical-align: top; }
+.ag-im-t td { padding: 8px 10px 8px 0; border-top: 1px solid var(--ag-line-soft); vertical-align: top; color: var(--ag-text); }   /* öteki tablolarla aynı renk (ölçüm penceresinin soluk metnini devralmaz) */
 .ag-im-t td.ag-im-st { text-align: right; padding-right: 0; }
 .ag-im-t td.ag-im-st .ag-pill { margin: 0 0 3px 4px; }
 .ag-im-ex { font-size: 12px; overflow-wrap: anywhere; margin-top: 2px; }
@@ -1417,3 +1417,7 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
   .ag-setform .ag-field .ag-addrow:has(#ag-abkey[readonly]) { flex-wrap: wrap; justify-content: flex-start; }
   .ag-setform .ag-field .ag-addrow #ag-abkey[readonly] { flex: 1 1 100%; }
 }
+/* IP / aralık kartında Etkisini ölç (1.15.129): kart satırı gibi boşluk; ölçüm penceresinin kendi üst çizgisi ve boşluğu kartta yok */
+.ag-dr-imp { padding: 12px 0; }
+.ag-dr-imp > .ag-muted { margin: 0 0 8px; }
+.ag-dr-imp .ag-impact.ag-im { margin-top: 0; padding: 0; border-top: 0; }
