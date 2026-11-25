@@ -114,6 +114,7 @@
 
 /* ── KPI cards ──────────────────────────────────────────────────── */
 .ag-period { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin: 0 0 10px; }
+.ag-period-l { font-size: 12px; font-weight: 600; color: var(--ag-text-3); }
 .ag-period-n { font-size: 12px; color: var(--ag-text-3); }
 .ag-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 20px; }
 .ag-kpi { background: var(--ag-card); border: 1px solid var(--ag-line); border-radius: var(--ag-radius); padding: 16px 18px; box-shadow: var(--ag-shadow); min-width: 0;
@@ -379,6 +380,9 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-own-s .ag-org { overflow: hidden; text-overflow: ellipsis; }
 .ag-own-s.ag-own-f { margin-top: 0; font-size: inherit; }   /* aralık kartı Sahip satırı */
 .ag-asn { font-family: var(--ag-mono); font-size: 11px; font-weight: 600; color: var(--ag-accent); background: var(--ag-accent-soft); padding: 2px 6px; border-radius: 5px; flex: none; }
+.ag-asn-l { cursor: pointer; }   /* tıklanır: sağlayıcı kartı (görünüm aynı, IP bağlantısı gibi üzerine gelince belirginleşir) */
+.ag-asn-l:hover, .ag-asn-l:focus-visible { background: var(--ag-accent); color: #fff; outline: none; }
+.ag-srcd.ag-srcd-card { margin: 0; padding: 10px 0 0; border: 0; background: none; }
 .ag-org { overflow: hidden; text-overflow: ellipsis; color: var(--ag-text); }
 /* sahip bileşeni (ownerHtml) tablo hücresinin "anywhere" bölmesini almaz: kurum adı sözcük aralarından, rozet hiç bölünmez */
 .ag-org { overflow-wrap: normal; } .ag-asn, .ag-flag { overflow-wrap: normal; white-space: nowrap; }
@@ -1227,6 +1231,9 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
   .ag-sd-t .ag-sd-f, .ag-sd-t .ag-sd-st { display: none; }
   .ag-sd-t .ag-sd-m { display: block; margin-top: 3px; color: var(--ag-text-3); font-size: 12px; }
 }
+/* kartın içinde (460 px) de aynı dar düzen: masaüstünde sağlayıcı kartında son sütun kartın dışına taşıyordu */
+.ag-drawer .ag-sd-t .ag-sd-f, .ag-drawer .ag-sd-t .ag-sd-st { display: none; }
+.ag-drawer .ag-sd-t .ag-sd-m { display: block; margin-top: 3px; color: var(--ag-text-3); font-size: 12px; }
 .ag-srcd-w { border-top: 1px dashed var(--ag-line); margin-top: 10px; padding-top: 8px; }
 .ag-srcd-w h4 { margin: 0 0 6px; font-size: 13px; }
 .ag-srcd-w > .ag-btn svg { width: 13px; height: 13px; }

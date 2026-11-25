@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.15.130 — 2026-11-25
+
+- One period selector (7 or 30 days) above the summary cards and the activity
+  chart sets both. The change shown in each summary card is against that
+  period; the selector used to be inside the chart only, and the cards were
+  fixed to 7 days. The review card says how many days the list holds.
+- Every AS badge opens a provider card (the same side panel as the IP card):
+  whether the provider is banned in CSF, its violations, its offending IPs and
+  **Measure impact**, with a ban button when it is not banned.
+- Service summaries always read name then number ("repeat bans (no service
+  record) 5", not "5 repeat bans …").
+
 ## 1.15.129 — 2026-11-25
 
 - After an action from the IP or range card (ban, remove, allow, change), the

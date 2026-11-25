@@ -122,11 +122,14 @@ settings, with no prompts. `config.env` is left untouched.
   a problem. Coming back to a tab that was hidden for a while, the run times
   show *updating…* until the new status arrives, never the old numbers.
 - **Summary cards** — active block bans, items to review, and how full CSF's
-  permanent and temp lists are, each with its change over the last 7 days (the
-  list cards show it once there is a run record from 7 days ago).
+  permanent and temp lists are, each with its change over the chosen period (the
+  list cards show it once there is a run record from the start of the period).
+  One selector above the cards (7 or 30 days) sets the cards and the chart.
 - **Activity** — a daily chart of block bans, blocks made permanent, temp block
-  bans, suspicious networks and allow list skips, for 7 or 30 days. Hover a day
+  bans, suspicious networks and allow list skips, for the chosen period. Hover a day
   for its breakdown.
+- **Provider card** — every AS badge opens it: CSF provider ban state,
+  violations, offending IPs and **Measure impact**.
 - **Colors** — one meaning, one color everywhere (badges, icons, chart): red full
   ban, violet made permanent, teal temp ban, blue partial ban, amber suspicious
   network, gray allow list skip.
