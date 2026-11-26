@@ -65,7 +65,7 @@ grep() { command grep -a "$@"; }
 # sayı, anahtar; Türkçe modda sıralama kuralı zaten C idi (LC_COLLATE=C)
 sort() { LC_ALL=C command sort "$@"; }
 
-VERSION="1.15.139"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.140"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -8625,8 +8625,12 @@ prov_resolve     # "auto" ayarlar: CSF'te elle kurulmuş sağlayıcı banı / iz
 case "$MODE" in
     status) LOG_MODE=quiet; do_status; exit $? ;;
     lookup) LOG_MODE=quiet; do_lookup "${ARGS[0]}"; exit $? ;;
-    objstate) LOG_MODE=quiet; st_prep || exit 1
-        if [ "${#ARGS[@]}" -gt 0 ]; then printf '%s\n' "${ARGS[@]}" | obj_state; else obj_state; fi; exit $? ;;
+    objstate) LOG_MODE=quiet
+        for _k in "${ARGS[@]}"; do [[ "$_k" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}(/([89]|[12][0-9]|3[0-2]))?$ ]] || { echo '{"ok":false,"error":"bad_input"}'; exit 2; }; done
+        st_prep || exit 1
+        if [ "$JSON" = 1 ]; then   # panel (Geçmiş "şu an" notu): {"ok":true,"st":{adres:kayıt}}
+            printf '%s\n' "${ARGS[@]}" | obj_state | awk -F'\t' 'BEGIN { printf "{\"ok\":true,\"st\":{" } NF >= 3 { printf "%s\"%s\":%s", (n++ ? "," : ""), $1, $3 } END { print "}}" }'
+        elif [ "${#ARGS[@]}" -gt 0 ]; then printf '%s\n' "${ARGS[@]}" | obj_state; else obj_state; fi; exit $? ;;
     abuseblk) LOG_MODE=quiet                     # CIDR ağ adresiyle (aralık kartının gönderdiği biçim); anahtar yoksa nokey
         abuse_key || { echo '{"ok":false,"error":"nokey"}'; exit 1; }
         [ "$ABUSE_ON" = 1 ] || { echo '{"ok":false,"error":"abuse_off"}'; exit 1; }

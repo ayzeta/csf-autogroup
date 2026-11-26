@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.15.140 — 2026-11-26
+
+- The "now" note on History rows reads the same state record as the IP card.
+  Before, the panel worked it out on its own. It said "no longer banned" for an
+  address LFD had banned temporarily while the IP card said "banned", and it
+  missed bans it did not know about (Imunify360, block lists, timed range
+  bans). Until the record arrives the note stays empty rather than guessing.
+  The panel asks for the records of the newest rows through a new read-only
+  call (`states`) and refreshes them every minute.
+- Whether another ban already covers an item, which the History and list menus
+  use, also comes from that record when it is available.
+
 ## 1.15.139 — 2026-11-26
 
 - Four **Measure impact** texts in Turkish still spoke to the reader in the

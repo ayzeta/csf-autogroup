@@ -697,6 +697,8 @@ mcheck "tek durum: Imunify kuralları sırasıyla — beyaz liste RETURN (kara l
 mcheck "tek durum: izlenen blok ve susturma kayıtta" "stc 151.80.12.5 none '\"w\":\"' && stc 151.80.13.5 none '\"ig\":\"9999-12-31\"'"
 LK=$(run --lookup 151.80.21.5 --json 2>/dev/null | grep -o '"st":{.*}' | head -c 2000)
 mcheck "tek durum: IP kartı (--lookup) aynı kaydı taşır" "[ -n \"\$(printf '%s' '$LK')\" ] && printf '%s' '$LK' | grep -qF \"\$(sto 151.80.21.5 | cut -f2)\""
+# panelin "states" ucu (Geçmiş "şu an" notu, 1.15.140): aynı kayıt JSON nesnesinde; geçersiz anahtar reddedilir
+mcheck "tek durum: --obj-state --json (Geçmiş notunun kaynağı) aynı kaydı verir, geçersiz anahtar reddedilir" "run --obj-state 151.80.9.5 151.80.10.0/24 --json 2>/dev/null | grep -qF \"{\\\"ok\\\":true,\\\"st\\\":{\\\"151.80.9.5\\\":\$(sto 151.80.9.5 | cut -f2)\" && run --obj-state 'x;y' --json 2>/dev/null | grep -q bad_input"
 IN1=$(run --inside 151.80.10.0/24 --states 151.80.10.5 --json 2>/dev/null)
 mcheck "tek durum: aralık kartı (--inside) süreli aralık banını görür (kartın hükmü engelli) ve IP satırının kaydı tek durum kaydıyla aynı" "printf '%s' '$IN1' | grep -q '\"st\":{\"e\":\"ban\",\"k\":\[{\"t\":\"temp\",\"a\":\"151.80.10.0/24\"' && printf '%s' '$IN1' | grep -qF \"\\\"151.80.10.5\\\":\$(sto 151.80.10.5 | cut -f2)\" && run --inside 151.80.10.0/24 --states 'x;y' --json 2>/dev/null | grep -q bad_states"
 mk st2; printf 'CC_DENY = "AS16276"\nCC_DENY_PORTS = "FR"\nCC_DENY_PORTS_TCP = "22"\n' >> "$R/etc/csf/csf.conf"

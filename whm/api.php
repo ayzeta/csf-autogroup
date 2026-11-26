@@ -159,6 +159,13 @@ switch ($a) {
         $n = max(1, min(1000, (int) ($_POST['n'] ?? 300)));
         ag_json(ag_run_json(['--events', $m, (string) $t, (string) $n], 30));
 
+    case 'states':                                  // tek durum kaydı (motor obj_state): Geçmiş'in "şu an" notu; IP ya da CIDR, en çok 300
+        $keys = trim((string) ($_POST['keys'] ?? ''));
+        if (!preg_match('/^([0-9]{1,3}\.){3}[0-9]{1,3}(\/([89]|[12][0-9]|3[0-2]))?(,([0-9]{1,3}\.){3}[0-9]{1,3}(\/([89]|[12][0-9]|3[0-2]))?){0,299}$/', $keys)) {
+            ag_json(['ok' => false, 'error' => 'bad_input']);
+        }
+        ag_json(ag_run_json(array_merge(['--obj-state'], explode(',', $keys), ['--json']), 45));
+
     case 'inside':                                  // elle /16 ya da /24 banının onay penceresi: içindekiler
         $bits = (string) ($_POST['bits'] ?? '');
         $target = trim((string) ($_POST['target'] ?? ''));
