@@ -721,6 +721,10 @@ printf '#t|%s\nsite.test|site.test|192.0.2.10|other\ncf.test|cf.test|104.16.0.1|
 AJ=$(run --asn-impact AS16276 --json 2>/dev/null)
 mcheck "Etkisini ölç arşivi: günlük pencereden sonra başlıyor → pencereye düşen arşiv satırları sayılır (2 + 3), pencere öncesi ve sahte başlıklar değil; kapsam tam" "printf '%s' '$AJ' | grep -q '\"open\":{\"req\":5,' && printf '%s' '$AJ' | grep -q '\"cov\":{\"since\":[0-9]*,\"n\":2,\"a\":1,\"s\":0,'"
 mcheck "Etkisini ölç: 'other' etiketli site (web'i başka sunucuda) açık sayılır, yalnız CDN olduğu bilinen site CDN kovasında; başka saat diliminde yazılmış pencere dışı satır sayılmaz" "printf '%s' '$AJ' | grep -q '\"cdn\":{\"req\":1,' && printf '%s' '$AJ' | grep -q '\"total\":6,'"
+# süre sınırı: aşılınca kalan sitelerin arşivi okunmaz, kapsam "time" sebebiyle kısa; ölçüm yine sonuç verir (canlıda 1.15.137 bütün
+# arşivlerde 180 sn sınırını aşıp sonuçsuz kalmıştı)
+AJ=$(ARCH_BUDGET=0 run --asn-impact AS16276 --json 2>/dev/null)
+mcheck "Etkisini ölç arşivi: süre sınırı aşılınca arşiv okunmaz, kapsam kısa ve sebebi 'time' (ölçüm yine sonuç verir)" "printf '%s' '$AJ' | grep -q '\"total\":3,' && printf '%s' '$AJ' | grep -q '\"r\":{\"time\":1}'"
 head -c -12 "$AGZ" > "$AGZ.k" && cat "$AGZ.k" > "$AGZ"; rm -f "$AGZ.k"
 AJ=$(run --asn-impact AS16276 --json 2>/dev/null)
 mcheck "Etkisini ölç arşivi: bozuk arşiv kullanılmaz (yalnız günlüklerin 3 isteği), kapsam kısa ve sebebi 'bad'" "printf '%s' '$AJ' | grep -q '\"total\":3,' && printf '%s' '$AJ' | grep -q '\"cov\":{\"since\":[0-9]*,\"n\":2,\"a\":0,\"s\":1,\"from\":[1-9][0-9]*,\"r\":{\"bad\":1}}'"

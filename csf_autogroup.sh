@@ -65,7 +65,7 @@ grep() { command grep -a "$@"; }
 # sayı, anahtar; Türkçe modda sıralama kuralı zaten C idi (LC_COLLATE=C)
 sort() { LC_ALL=C command sort "$@"; }
 
-VERSION="1.15.137"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.138"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -6570,93 +6570,71 @@ function lg_ep(d, z,  a, y, m, dd, mp, era, yoe, doy, doe, off) {
     doy = int((153 * mp + 2) / 5) + dd - 1; doe = yoe * 365 + int(yoe / 4) - int(yoe / 100) + doy
     off = 0; if (match(z, /[-+][0-9][0-9][0-9][0-9]/)) off = (substr(z, RSTART + 1, 2) * 3600 + substr(z, RSTART + 3, 2) * 60) * (substr(z, RSTART, 1) == "-" ? -1 : 1)
     return (era * 146097 + doe - 719468) * 86400 + a[4] * 3600 + a[5] * 60 + a[6] - off }'
-user_home() {    # KULLANICI → REPLY = ev dizini (passwd; test kökünde SIM_ROOT/etc/passwd); yoksa 1
-    local pw="/etc/passwd"; [ -n "${SIM_ROOT:-}" ] && [ -r "$SIM_ROOT/etc/passwd" ] && pw="$SIM_ROOT/etc/passwd"
-    REPLY=$(awk -F: -v u="$1" '$1 == u { print $6; exit }' "$pw" 2>/dev/null)
-    [ -n "$1" ] && [ -n "$REPLY" ]
-}
-lg_epoch() {     # günlük satırı → REPLY = satırın zamanı (epoch, satırdaki saat dilimiyle); okunamazsa 0
-    REPLY=0
-    [[ "$1" =~ \[([0-9]{2})/([A-Z][a-z]{2})/([0-9]{4}):([0-9]{2}:[0-9]{2}:[0-9]{2})\ ([-+][0-9]{4})\] ]] || return 1
-    REPLY=$(LC_ALL=C date -d "${BASH_REMATCH[1]} ${BASH_REMATCH[2]} ${BASH_REMATCH[3]} ${BASH_REMATCH[4]} ${BASH_REMATCH[5]}" +%s 2>/dev/null) || REPLY=0
-    [[ "$REPLY" =~ ^[0-9]+$ ]] || REPLY=0
-    [ "$REPLY" -gt 0 ]
-}
-gz_hdr() {       # DOSYA KONUM → REPLY = "bayrak xfl os mtime" (başlığın 10 baytı); okunamazsa 1
-    local h; h=$(tail -c +$(( $2 + 1 )) "$1" 2>/dev/null | head -c 10 | od -An -tu1 | tr -s ' \n' ' ')
-    local -a b=($h); [ "${#b[@]}" -eq 10 ] && [ "${b[0]}" = 31 ] && [ "${b[1]}" = 139 ] && [ "${b[2]}" = 8 ] || return 1
-    REPLY="${b[3]} ${b[8]} ${b[9]} $(( b[4] + b[5] * 256 + b[6] * 65536 + b[7] * 16777216 ))"
-}
-# ARŞİV SINCE_EPOCH SINCE_TKEY ÇIKIŞ → pencereye düşen satırlar ÇIKIŞ'a eklenir. REPLY: "ok BAŞ" (BAŞ: okunan ilk satırın zamanı; 0 =
-# arşivden okunacak satır yoktu), "first" (ayın ilk parçası pencerenin içinde: önceki ayın arşivi de gerekir; satırlar yine yazılır),
-# ya da hata: "owner", "nohdr", "bad" (açılamadı / günlük satırı olmayan satır)
-arch_part() {
-    local a="$1" se="$2" sk="$3" out="$4" u="$5" s0 f0 x0 o0 m0 fm o h start="" sm=0 st tmp
-    [ -r "$a" ] || { REPLY=none; return 1; }
-    [ "$(stat -c %U "$a" 2>/dev/null)" = "$u" ] || { REPLY=owner; return 1; }
-    gz_hdr "$a" 0 || { REPLY=nohdr; return 1; }
-    read -r f0 x0 o0 m0 <<< "$REPLY"; fm=$(stat -c %Y "$a")
-    # zaman damgası pencere başından yeni olan en eski geçerli aday (adaylar dosya sırasıyla)
-    while IFS=: read -r o _; do
-        [[ "$o" =~ ^[0-9]+$ ]] || continue
-        gz_hdr "$a" "$o" || continue
-        read -r f x os m <<< "$REPLY"
-        [ "$f" = "$f0" ] && [ "$x" = "$x0" ] && [ "$os" = "$o0" ] && [ "$m" -ge "$m0" ] && [ "$m" -le $(( fm + 86400 )) ] || continue
-        [ "$m" -gt "$se" ] && { start=$o; sm=$m; break; }
-    done < <(LC_ALL=C grep -obUaP '\x1f\x8b\x08' "$a" 2>/dev/null)
-    [ -n "$start" ] || { REPLY="ok 0"; return 0; }      # son parça da pencereden eski: arşivde pencereye düşen satır yok
-    tmp=$(mktemp) || { REPLY=bad; return 1; }
-    tail -c +$(( start + 1 )) "$a" | gzip -dc 2>/dev/null > "$tmp"; st=${PIPESTATUS[1]}
-    # her satır günlük satırı: "adres kimlik kullanıcı [gg/Ay/yyyy:ss:dd:ss +zzzz] " (ifade programın içinde: -v ile verilince awk
-    # kaçışları yutuyor, ifade bozuluyordu)
-    if [ "$st" != 0 ] || ! LC_ALL=C awk '$0 !~ /^[^ ]+ [^ ]+ [^ ]+ \[[0-9][0-9]\/[A-Z][a-z][a-z]\/[0-9][0-9][0-9][0-9]:[0-9][0-9]:[0-9][0-9]:[0-9][0-9] [-+][0-9][0-9][0-9][0-9]\] / { exit 1 }' "$tmp"; then rm -f "$tmp"; REPLY=bad; return 1; fi
-    lg_epoch "$(head -n 1 "$tmp")"; local fe="$REPLY"
-    LC_ALL=C awk -v se="$se" "$AWK_LGT"'{ e = lg_ep($4, $5); if (e >= se) print }' "$tmp" >> "$out"
-    rm -f "$tmp"
-    # başlangıç ayın ilk parçası değilse önceki parça pencereden önce yazılmış: pencere bütünüyle kapsanır (aradaki boşluk = istek yok)
-    if [ "$start" = 0 ] && [ "$fe" -gt "$se" ]; then REPLY="first $fe"; else REPLY="ok 0"; fi
-}
-# LİSTE (günlük dosyaları) SINCE_EPOCH SINCE_TKEY DİZİN → pencerenin başından sonra başlayan günlükler arşivden tamamlanır (dosyalar
-# DİZİN/<günlük adı> olarak listeye eklenir: site adı ve port ölçümde dosya adından); REPLY = kapsama JSON'u
-# {"since":…,"n":site,"a":arşivden tamamlanan,"s":tamamı ölçülemeyen,"from":onların en geç başlangıcı,"r":{sebep:sayı}}
-arch_fill() {
-    local lf="$1" se="$2" sk="$3" od="$4" f b u home fe cf n=0 na=0 ns=0 worst=0 r mo pm out
-    local -A seen=() rs=()
+# Arşiv okuması tek perl sürecinde (1.15.138): site başına yalnız bir "gzip -dc". 1.15.137'de site başına ~12, aday başına 3 süreç
+# açılıyordu; canlıda 825 arşivle ölçüm 180 sn'lik sınırı aştı (WSL'de aynı yük: 244 sn; aday denetimi perl'e alınınca 43 sn).
+# Girdi (stdin): günlük dosyaları. Argümanlar: pencere başı (epoch), çıkış dizini, bu ay ve önceki ay ("Nov-2026"), passwd yolu,
+# süre sınırı (sn). Çıktı: "F<TAB>dosya" (listeye eklenecek, adı günlüğün adı: site ve port ölçümde dosya adından) ve son satır
+# "C<TAB>{kapsam}". Saat: satırın kendi saat dilimi ekiyle (Time::Local, perl ile her kurulumda gelir).
+ARCH_PERL='
+use strict; use warnings; use Time::Local qw(timegm); use File::Basename qw(basename dirname);
+my ($se, $od, $mo, $pm, $pw, $bud) = @ARGV; my $t0 = time;
+my %M; @M{qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec)} = (0 .. 11);
+my $RE = qr{^\S+ \S+ \S+ \[(\d\d)/([A-Z][a-z][a-z])/(\d{4}):(\d\d):(\d\d):(\d\d) ([-+])(\d\d)(\d\d)\] };
+sub lep { my $l = shift; return 0 unless defined $l && $l =~ $RE && exists $M{$2};
+    my $e = eval { timegm($6, $5, $4, $1, $M{$2}, $3) }; return 0 unless defined $e; return $e - ($7 eq "-" ? -1 : 1) * ($8 * 3600 + $9 * 60) }
+my %home; if (open(my $P, "<", $pw)) { while (<$P>) { my @f = split /:/; $home{$f[0]} = $f[5] if @f > 5 } close $P }
+sub hdr { my ($F, $o) = @_; seek($F, $o, 0) or return; my $b; (read($F, $b, 10) // 0) == 10 or return; my @b = unpack("C10", $b);
+    return unless $b[0] == 31 && $b[1] == 139 && $b[2] == 8; return ($b[3], $b[8], $b[9], $b[4] + $b[5] * 256 + $b[6] * 65536 + $b[7] * 16777216) }
+# ARŞİV KULLANICI ÇIKIŞ → ("ok"|"first"|hata, ilk satır zamanı); pencereye düşen satırlar ÇIKIŞ dosyasına eklenir
+sub part { my ($ar, $u, $out) = @_;
+    return ("none") unless -f $ar && -r _;
+    my $ow = getpwuid((stat _)[4]) // ""; return ("owner") unless $ow eq $u;
+    open(my $F, "<", $ar) or return ("none"); binmode $F; my @h0 = hdr($F, 0) or return ("nohdr"); my $fm = (stat $ar)[9];
+    my @o; my $pos = 0; my $buf = ""; seek($F, 0, 0);
+    while (1) { my $n = read($F, my $c, 8 << 20) // 0; last unless $n; my $s = substr($buf, -2) . $c; my $base = $pos - length(substr($buf, -2));
+        my $i = 0; while (($i = index($s, "\x1f\x8b\x08", $i)) >= 0) { push @o, $base + $i; $i++ } $buf = $c; $pos += $n }
+    my %u; @o = grep { !$u{$_}++ } @o; my $start = -1;
+    for my $o (sort { $b <=> $a } @o) { my @h = hdr($F, $o) or next;
+        next unless $h[0] == $h0[0] && $h[1] == $h0[1] && $h[2] == $h0[2] && $h[3] >= $h0[3] && $h[3] <= $fm + 86400;
+        if ($h[3] > $se) { $start = $o } else { last } }
+    return ("ok", 0) if $start < 0;                                   # son parça da pencereden eski: arşivde pencereye düşen satır yok
+    my $tg = "$out.gz.$$"; open(my $T, ">", $tg) or return ("bad"); binmode $T; seek($F, $start, 0);
+    while (my $n = read($F, my $c, 8 << 20)) { print $T $c } close $T; close $F;
+    open(my $G, "-|", "gzip", "-dc", $tg) or do { unlink $tg; return ("bad") };
+    my (@keep, $fe, $bad); while (my $l = <$G>) { my $e = lep($l); if (!$e) { $bad = 1; last } $fe //= $e; push @keep, $l if $e >= $se }
+    close $G; my $st = $?; unlink $tg;
+    return ("bad") if $bad || $st;                                    # açılamadı (CRC) ya da günlük satırı olmayan satır: arşiv kullanılmaz
+    if (@keep) { open(my $W, ">>", $out) or return ("bad"); print $W @keep; close $W }
+    return ($start == 0 && ($fe // 0) > $se ? "first" : "ok", $fe // 0) }
+my (%seen, %rs); my ($n, $na, $ns, $worst) = (0, 0, 0, 0);
+while (my $f = <STDIN>) { chomp $f; next if $f eq ""; my $b = basename($f); next if $seen{$b}++; $n++;
+    my $fe = 0; if (open(my $L, "<", $f)) { $fe = lep(scalar <$L>); close $L }
+    next if $fe && $fe <= $se;                                        # günlük pencerenin başını zaten kapsıyor
+    $fe ||= (stat $f)[9] // time;                                     # boş günlük: boşaltıldığı an
+    my $u = basename(dirname($f)); unless (exists $home{$u}) { $u = getgrgid((stat $f)[5] // -1) // "" }
+    my $hm = $home{$u}; my $out = "$od/$b"; my $cf = $fe; my $r = "";
+    if (time - $t0 >= $bud) { $r = "time" } elsif (!$hm) { $r = "nouser" }
+    else { my ($k, $x) = part("$hm/logs/$b-$mo.gz", $u, $out);
+        if ($k eq "ok") { $cf = $se }
+        elsif ($k eq "first") { $cf = $x; my ($k2, $x2) = part("$hm/logs/$b-$pm.gz", $u, "$out.p");
+            if ($k2 eq "ok") { $cf = $se } elsif ($k2 eq "first") { $cf = $x2 } elsif ($k2 eq "none") { $r = "noprev" } else { $r = $k2; unlink "$out.p" }
+            # önceki ayın satırları önce, bu ayınkiler sonra (aynı dosya: site adı dosya adından)
+            if (-s "$out.p") { if (-s $out && open(my $A, ">>", "$out.p") && open(my $B, "<", $out)) { while (my $l = <$B>) { print {$A} $l } close $A; close $B } rename "$out.p", $out } }
+        elsif ($k eq "none") { $r = "noarch" } else { $r = $k; unlink $out } }
+    if (-s $out) { print "F\t$out\n"; $na++ }
+    $rs{$r}++ if $r ne "";
+    if ($cf > $se + 600) { $ns++; $worst = $cf if $cf > $worst } }
+my $rj = join(",", map { "\"$_\":$rs{$_}" } sort keys %rs);
+print "C\t{\"since\":$se,\"n\":$n,\"a\":$na,\"s\":$ns,\"from\":$worst,\"r\":{$rj}}\n";'
+arch_fill() {    # LİSTE SINCE_EPOCH _ DİZİN → pencereden sonra başlayan günlükler arşivden tamamlanır (DİZİN/<günlük adı> listeye eklenir);
+    # REPLY = kapsama JSON'u {"since","n","a" arşivden tamamlanan,"s" tamamı ölçülemeyen,"from" onların en geç başlangıcı,"r" sebepler}
+    local lf="$1" se="$2" od="$4" pw="/etc/passwd" o mo pm
+    [ -n "${SIM_ROOT:-}" ] && [ -r "$SIM_ROOT/etc/passwd" ] && pw="$SIM_ROOT/etc/passwd"
     mkdir -p "$od" || { REPLY='{}'; return 1; }
     mo=$(LC_ALL=C date +%b-%Y); pm=$(LC_ALL=C date -d "$(date +%Y-%m-01) -1 day" +%b-%Y)
-    while IFS= read -r f; do
-        b="${f##*/}"; [ -n "${seen[$b]}" ] && continue; seen[$b]=1; n=$((n + 1))   # aynı günlük iki dizinde (domlogs ve domlogs/KULLANICI)
-        lg_epoch "$(head -c 8192 "$f" 2>/dev/null | head -n 1)"; fe="$REPLY"
-        [ "$fe" -gt 0 ] && [ "$fe" -le "$se" ] && continue                         # günlük pencerenin başını zaten kapsıyor
-        [ "$fe" -gt 0 ] || fe=$(stat -c %Y "$f")                                   # boş günlük: boşaltıldığı an
-        u="${f%/*}"; u="${u##*/}"; user_home "$u" || { u=$(stat -c %G "$f" 2>/dev/null); user_home "$u"; }
-        home="$REPLY"
-        out="$od/$b"; cf="$fe"; r=""
-        if [ -z "$home" ]; then r=nouser
-        else
-            arch_part "$home/logs/$b-$mo.gz" "$se" "$sk" "$out" "$u"
-            case "$REPLY" in
-                ok\ *)    cf="$se" ;;                                              # pencere bütünüyle kapsandı
-                first\ *) cf="${REPLY#first }"                                     # ayın ilk parçası pencerenin içinde: önceki ayın arşivi
-                          local cur; cur=$(mktemp); [ -s "$out" ] && mv "$out" "$cur"
-                          arch_part "$home/logs/$b-$pm.gz" "$se" "$sk" "$out" "$u"
-                          case "$REPLY" in
-                              ok\ *) cf="$se" ;;
-                              first\ *) cf="${REPLY#first }" ;;
-                              none) r=noprev ;;                                    # önceki ayın arşivi yok: bu ayın başından ölçülür
-                              *) r="$REPLY"; : > "$out" ;;
-                          esac
-                          [ -s "$cur" ] && cat "$cur" >> "$out"; rm -f "$cur" ;;
-                none)     r=noarch ;;
-                *)        r="$REPLY"; : > "$out" ;;
-            esac
-        fi
-        [ -s "$out" ] && { printf '%s\n' "$out" >> "$lf"; na=$((na + 1)); }
-        [ -n "$r" ] && rs[$r]=$(( ${rs[$r]:-0} + 1 ))
-        if [ "$cf" -gt $(( se + 600 )) ]; then ns=$((ns + 1)); [ "$cf" -gt "$worst" ] && worst=$cf; fi
-    done < <(cat "$lf")
-    local rj="" k; for k in "${!rs[@]}"; do rj+="${rj:+,}\"$k\":${rs[$k]}"; done
-    REPLY="{\"since\":$se,\"n\":$n,\"a\":$na,\"s\":$ns,\"from\":$worst,\"r\":{$rj}}"
+    o=$(perl -e "$ARCH_PERL" "$se" "$od" "$mo" "$pm" "$pw" "${ARCH_BUDGET:-60}" < "$lf" 2>/dev/null)
+    printf '%s\n' "$o" | sed -n 's/^F\t//p' >> "$lf"
+    REPLY=$(printf '%s\n' "$o" | sed -n 's/^C\t//p'); [ -n "$REPLY" ] || REPLY='{}'
 }
 do_asn_impact() { # ANAHTAR (ASnnn | cl:ad | bk:ad | net:CIDR) → son 24 saatin web günlüklerinde bu sağlayıcıdan / kiralık listeden / CSF
     # blok listesinden / adresten (tek IP /32 ya da aralık /8–/32: IP ve aralık kartı) gelen istekler

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.15.138 — 2026-11-26
+
+- **Measure impact** timed out on a real server with 1.15.137. Right after
+  cPanel's daily statistics run every site log starts inside the window, so
+  every site's archive was read, and the check started several processes per
+  archive and per candidate part. With 825 sites it took longer than the
+  180-second limit. Archive reading now runs in one Perl process, with one
+  `gzip -dc` per archive. On a test machine with 825 archives it went from 244
+  seconds to 4, with the same result.
+- Reading archives has a time limit. Sites not reached in time are not read,
+  and the result lists them as not measured for the full 24 hours, with the
+  reason. A measurement always returns a result.
+
 ## 1.15.137 — 2026-11-26
 
 - **Measure impact** could show much less than "the last 24 hours". cPanel's
