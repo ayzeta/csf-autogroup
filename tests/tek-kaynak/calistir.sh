@@ -88,6 +88,10 @@ else echo "GEÇTİ: şu anki durum tek kayıttan (motor obj_state; IP kartı hü
 # DÜŞME TARİHİ (P15, 1.15.143): Kontrol edilecekler satırının listeden düşme tarihi motorun "drop" alanı; panel tarih hesaplamaz
 rd=$(awk '/^  function rvDrop\(e\)/ { p = 1 } p { print } p && /^  }$/ { exit }' "$J" | grep -cE "86400|review_days")
 if [ "$rd" != 0 ]; then echo "DÜŞTÜ: düşme tarihini panel hesaplıyor (rvDrop'ta $rd satır gün hesabı)"; F=$((F + 1)); else echo "GEÇTİ: düşme tarihi motordan (rvDrop yalnız metni seçer)"; fi
+# GEREKSİZ BAN (1.15.144): "bu ban zaten başka engelin içinde mi" tek işlev (grpCov). Satır etiketi ülke banını görürken Gereksizleşen
+# banlar kartı ve toplu kaldırma yalnız g.pcov / g.under'a bakıyordu
+gp=$(grep -c "g\.pcov || g\.under\|g\.under || g\.pcov" "$J"); gu=$(grep -c "filter(grpCov)" "$J")
+if [ "$gp" != 0 ] || [ "$gu" != 2 ]; then echo "DÜŞTÜ: gereksiz ban kararı tek yerde değil (kendi denetimi $gp yer, grpCov süzgeci $gu)"; F=$((F + 1)); else echo "GEÇTİ: gereksiz ban kararı tek işlevden (grpCov)"; fi
 # İZLEME SINIRI (M-K, 1.15.143): "blok izleniyor mu" tek ölçüt (watch_cut). Sınırı kendisi hesaplayan yer (SAYAC_RETENTION_DAYS days ago)
 # ya da İzlenenler listesinin eski gün hesabı (ret - age >= 0; yaz saati geçişinde IP kartından bir gün ayrışıyordu) geri gelmez
 wc=$(grep -c 'SAYAC_RETENTION_DAYS days ago' "$SHF"); wa=$(grep -c 'ret - age >= 0' "$SHF")

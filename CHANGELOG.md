@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.15.144 — 2026-11-27
+
+- A range ban inside a country ban (or a provider's "everything" ban) is now
+  also listed under *Providers → Bans no longer needed* and removed by its
+  "remove all" button. Before, the *Active range bans* row already said
+  "inside a country ban" but the card and the button did not know about
+  country bans. One function now decides this for the row, the card, the
+  button and the remove window.
+
 ## 1.15.143 — 2026-11-27
 
 - The IP card's *Wider levels* rows (block, announced range, network) read the
