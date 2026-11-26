@@ -660,6 +660,18 @@ mk own3; OF="$R/var/lib/csf_autogroup/owners"
 printf '151.80.7|16276|FR|OVH - OVH SAS, FR|%s|151.80.0.0/20\n' "$NOW" > "$OF"; single 151.80.7.9 sshd
 run --lookup 151.80.7.9 --json > /dev/null 2>&1
 mcheck "sahip: IP kartı önbellekten farklı duyurulan aralık görünce de blok işaretlenir" "grep -qx '151.80.7' '$OF.stale'"
+# Team Cymru sorulamadı (sunucunun çözücüsü SERVFAIL; "dig +short" boş ve 0 döner — ölçüldü 2026-11-26): "kayıt yok" sayılmaz.
+# Önbellekteki duyurulan aralık silinmez, IP kartı sebebi ve önbellekteki aralığı verir, blok "eskimiş" işaretlenmez,
+# üç arızadan sonra yalnız Cymru sorguları kapanır (ters DNS sürer). Eski motor aralığı boşla eziyordu
+mk cyf; OF="$R/var/lib/csf_autogroup/owners"
+printf '151.80.7|16276|FR|OVH - OVH SAS, FR|%s|151.80.0.0/20\n' "$NOW" > "$OF"; single 151.80.7.9 sshd
+DIG_FAIL=cymru run --lookup 151.80.7.9 --json > "$W/out/cyf.kart.json" 2>/dev/null
+mcheck "Cymru SERVFAIL: IP kartı sebebi ve önbellekteki aralığı verir, blok eskimiş işaretlenmez" "grep -q '\"cyerr\":\"SERVFAIL\"' '$W/out/cyf.kart.json' && grep -q '\"pfx\":\"151.80.0.0/20\"' '$W/out/cyf.kart.json' && grep -q '\"pfxc\":true' '$W/out/cyf.kart.json' && [ ! -s '$OF.stale' ]"
+mk cyf2; OF="$R/var/lib/csf_autogroup/owners"
+for b in 7 8 9 10; do printf '151.80.%s|16276|FR|OVH - OVH SAS, FR|%s|151.80.0.0/20\n' "$b" $(( NOW - 40 * 86400 )) >> "$OF"; single "151.80.$b.9" sshd; done
+DIG_FAIL=cymru quiet
+mcheck "Cymru SERVFAIL: tur süresi geçen kayıtları yenilerken bilinen duyurulan aralığı silmez" "[ \$(grep -c '^151\.80\.[0-9]*|.*|151\.80\.0\.0/20' '$OF') -eq 4 ]"
+mcheck "Cymru SERVFAIL: üç arızadan sonra yalnız Cymru sorguları kapanır, günlükte sebebiyle" "grep -q 'Team Cymru.*SERVFAIL' '$R/autogroup.log' && ! grep -q 'DNS sorguları art arda\|DNS lookups failed' '$R/autogroup.log'"
 # sağlayıcı sıralaması: durum çıktısı sıralama ağırlığını verir (panel çubuğu ondan çizer); elle konan blok banı ağırlık almaz
 mk asnw; OF="$R/var/lib/csf_autogroup/owners"
 printf '151.80.7|9999|FR|AGIR-AS - Agir, FR|%s|\n151.80.8|9999|FR|AGIR-AS - Agir, FR|%s|\n' "$NOW" "$NOW" > "$OF"

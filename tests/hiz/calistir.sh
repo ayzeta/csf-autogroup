@@ -16,7 +16,7 @@ cp "$REPO/csf_autogroup.sh" "$R/app/"; cp "$REPO"/tools/*.sh "$R/app/tools/"
 NOW=$(date +%s)
 
 # ── taklit araçlar ──
-printf '#!/bin/bash\nexit 0\n' > "$B/bin/csf"; cp "$B/bin/csf" "$B/bin/iptables"; cp "$B/bin/csf" "$B/bin/dig"; cp "$B/bin/csf" "$B/bin/imunify360-agent"
+printf '#!/bin/bash\nexit 0\n' > "$B/bin/csf"; cp "$B/bin/csf" "$B/bin/iptables"; printf '#!/bin/bash\necho ";; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 1"\n' > "$B/bin/dig"; chmod +x "$B/bin/dig";cp "$B/bin/csf" "$B/bin/imunify360-agent"
 printf '#!/bin/bash\necho 1234\nexit 0\n' > "$B/bin/pgrep"
 printf '#!/bin/bash\n[ "$1" = -l ] && echo "*/5 * * * * %s/app/csf_autogroup.sh >/dev/null 2>&1"\nexit 0\n' "$R" > "$B/bin/crontab"
 tr -d '\r' < "$H/bin/ipset" > "$B/bin/ipset"

@@ -9,6 +9,10 @@
 # ulaşabiliyordu (sunucuda ölçüldü 2026-10-10, tools/ban-leak.sh). Tam banlar (kalıcı, geçici, blok, "her şey") bundan
 # etkilenmez: port bakmazlar ve Imunify yalnız bağlantının ilk paketini kabul eder, sonrakiler CSF'te düşer.
 #
+# TCP ve UDP banları birlikte kopyalanır (1.15.135): Imunify'ın UDP'yi yönlendirip yönlendirmediğine bakılmaz — yönlendirmeyen
+# sunucuda ek kural zararsızdır (CSF o trafiği zaten düşürür), yönlendiren sunucuda UDP kısmi banı da (ör. HTTP/3, UDP 443) delinmez.
+# Ölçülen sunucuda (2026-11-26) nat'ta UDP yönlendirmesi yoktu; karar o sunucuya bağlanmadı.
+#
 # Kural mangle tablosunun PREROUTING zincirinde durur: nat yönlendirmesinden ÖNCE çalışır (hedef port henüz asıl port)
 # ve Imunify360'ın INPUT'taki zinciriyle sıra yarışına girmez (Imunify kendi zincirini INPUT'un başına yeniden koyuyor;
 # INPUT'ta kalan kural bir dakika içinde ikinci sıraya düşüyordu, sunucuda ölçüldü 2026-10-11). Yalnız yeni gelen
@@ -44,7 +48,7 @@ have() { M -L "$1" -n >/dev/null 2>&1; }
 # (küme sonradan yüklenince kural kurulsun), izin listeleri — değişince yeniden kurulur
 src_sum() {
     local c
-    { grep -E '^tcp\|in\|' "$CSF_DIR/csf.deny" 2>/dev/null; conf CC_DENY_PORTS; conf CC_DENY_PORTS_TCP
+    { grep -E '^(tcp|udp)\|in\|' "$CSF_DIR/csf.deny" 2>/dev/null; conf CC_DENY_PORTS; conf CC_DENY_PORTS_TCP; conf CC_DENY_PORTS_UDP
       for c in $(conf CC_DENY_PORTS | tr ',' ' '); do ipset list -n "cc_${c,,}" >/dev/null 2>&1 && echo "set:$c"; done
       ag_allow_sum; } | cksum | cut -d' ' -f1
 }
@@ -101,23 +105,23 @@ apply() {
         else M -A "$CHAIN" -p "$pr" -s "$pa" --dport "$pp" -j RETURN || { rfail; return 1; }; fi
     done < <(printf '%s\n' "$ents" | grep '^P ')
     local cs; for cs in $(ag_allow_sets); do M -A "$CHAIN" -m set --match-set "$cs" src -j RETURN || { rfail; return 1; }; done   # CSF'in CC_ALLOW kümeleri
-    # kısmi banlar (csf.deny: tcp|in|d=PORTLAR|s=ARALIK); /8'den geniş kaynak port kuralıdır, alınmaz
-    local l s d p n=0 c cc ports bad=0
+    # kısmi banlar (csf.deny: tcp|in|d=PORTLAR|s=ARALIK ve udp|in|…); /8'den geniş kaynak port kuralıdır, alınmaz
+    local l s d p n=0 c cc ports bad=0 pt
     while IFS= read -r l; do
-        l="${l%%#*}"; l="${l//[[:space:]]/}"
+        l="${l%%#*}"; l="${l//[[:space:]]/}"; pt="${l%%|*}"
         [[ "$l" =~ \|s=([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(/([0-9]+))?) ]] || continue; s="${BASH_REMATCH[1]}"
         [ -n "${BASH_REMATCH[3]}" ] && [ "${BASH_REMATCH[3]}" -lt 8 ] && continue
         [[ "$l" =~ \|d=([0-9,_:]+) ]] || continue; d="${BASH_REMATCH[1]//_/:}"
-        for p in ${d//,/ }; do if M -A "$CHAIN" -p tcp -s "$s" --dport "$p" -j DROP; then n=$((n + 1)); else bad=1; fi; done
-    done < <(grep -E '^tcp\|in\|' "$CSF_DIR/csf.deny" 2>/dev/null)
-    # port listesiyle banlı sağlayıcı / ülke kümeleri (CC_DENY_PORTS × CC_DENY_PORTS_TCP)
-    ports=$(conf CC_DENY_PORTS_TCP)
-    if [ -n "$ports" ]; then
+        for p in ${d//,/ }; do if M -A "$CHAIN" -p "$pt" -s "$s" --dport "$p" -j DROP; then n=$((n + 1)); else bad=1; fi; done
+    done < <(grep -E '^(tcp|udp)\|in\|' "$CSF_DIR/csf.deny" 2>/dev/null)
+    # port listesiyle banlı sağlayıcı / ülke kümeleri (CC_DENY_PORTS × CC_DENY_PORTS_TCP / _UDP)
+    for pt in tcp udp; do
+        ports=$(conf "CC_DENY_PORTS_${pt^^}"); [ -n "$ports" ] || continue
         for c in $(conf CC_DENY_PORTS | tr ',' ' '); do
             cc="cc_${c,,}"; ipset list -n "$cc" >/dev/null 2>&1 || continue
-            for p in ${ports//,/ }; do if M -A "$CHAIN" -p tcp -m set --match-set "$cc" src --dport "${p//_/:}" -j DROP; then n=$((n + 1)); else bad=1; fi; done
+            for p in ${ports//,/ }; do if M -A "$CHAIN" -p "$pt" -m set --match-set "$cc" src --dport "${p//_/:}" -j DROP; then n=$((n + 1)); else bad=1; fi; done
         done
-    fi
+    done
     order_fix || return 1
     # eksik ban kuralı varsa durum dosyası yazılmaz: --check "kaynaklar değişti" der, sonraki tur yeniden kurar
     if [ "$bad" = 1 ]; then rm -f "$STATE"; log "bazı ban kuralları eklenemedi; sonraki turda yeniden kurulacak"; return 1; fi

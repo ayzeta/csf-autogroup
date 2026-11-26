@@ -65,7 +65,7 @@ grep() { command grep -a "$@"; }
 # sayı, anahtar; Türkçe modda sıralama kuralı zaten C idi (LC_COLLATE=C)
 sort() { LC_ALL=C command sort "$@"; }
 
-VERSION="1.15.134"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.135"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -358,7 +358,8 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_MAILWL_BODY="Aşağıdaki bloklar ban eşiğine ulaştı ama CSF izin listeleriyle çakıştığı için banlanmadı.\nTekil banlar yerinde duruyor:"
   M_MAILWL_SUBJ="%s blok atlandı (izin listesi)"
   M_CC_NOLOOKUP="UYARI: csf.rignore tanımlı ama DNS sorgusu yapılamıyor (LOOKUP=0 ya da dig/host yok); ters DNS denetimi atlandı"
-  M_LOOKUP_OFF="UYARI: DNS sorguları art arda zaman aşımına uğradı, bu turda kapatıldı"
+  M_LOOKUP_OFF="UYARI: DNS sorguları art arda başarısız oldu (%s), bu turda kapatıldı"
+  M_CYMRU_OFF="UYARI: Team Cymru sorguları art arda başarısız oldu (sunucunun DNS çözücüsü: %s); duyurulan aralık bu turda sorulmuyor, sahip ve ülke CSF verisinden, önbellekteki aralıklar korunuyor"
   M_CLEANCNT="Sayaç temizliği yapıldı (%s günden eski kayıtlar silindi)"
   M_LOGTRIM="Günlükten %s günden eski satırlar silindi (%s satır)"
   M_MAIL_PERMFULL_SUBJ="kalıcı liste %%%s dolu"
@@ -656,7 +657,8 @@ else
   M_MAILWL_BODY="The following blocks reached the ban threshold but were NOT banned because they overlap a CSF allow list.\nThe single bans stay in place:"
   M_MAILWL_SUBJ="%s block(s) skipped (allow list)"
   M_CC_NOLOOKUP="WARNING: csf.rignore is set but DNS lookups are unavailable (LOOKUP=0 or no dig/host); the reverse DNS check was skipped"
-  M_LOOKUP_OFF="WARNING: DNS lookups timed out repeatedly, disabled for this run"
+  M_LOOKUP_OFF="WARNING: DNS lookups failed repeatedly (%s), disabled for this run"
+  M_CYMRU_OFF="WARNING: Team Cymru lookups failed repeatedly (server's DNS resolver: %s); announced ranges are not asked this run, provider and country come from CSF data, cached ranges are kept"
   M_CLEANCNT="Counter cleaned (records older than %s days removed)"
   M_LOGTRIM="Log lines older than %s days removed (%s lines)"
   M_MAIL_PERMFULL_SUBJ="permanent list %s%% full"
@@ -1794,27 +1796,44 @@ num() { [[ "$1" =~ ^[0-9]+$ ]] && echo "$1" || echo 0; }
 DIG_BIN=$(command -v dig 2>/dev/null); HOST_BIN=$(command -v host 2>/dev/null)
 LOOK_OK=0; [ "$LOOKUP" = "1" ] && [ -n "$DIG_BIN$HOST_BIN" ] && LOOK_OK=1
 LOOK_INIT="$LOOK_OK"   # 0 = kullanıcı kapattı / araç yok; 1 iken LOOK_OK=0 = bu turda arıza
-LOOK_FAILS=0
+LOOK_FAILS=0; CY_OK=1; CY_FAILS=0; CY_ERR=""; DNS_ST=""
 declare -A PTR_OF OWN_L OWN_S OWN_A OWN_C ASNAME
-# "Kayıt yok" (NXDOMAIN, boş cevap → 0 döner) ile "sorulamadı" (zaman aşımı/hata → 1 döner)
-# ayrımı önemli: beyaz liste kontrolü sorulamadıysa o tur banlanmaz.
-dns_q() {        # TYPE NAME → REPLY (satır satır, tırnaksız, sondaki nokta atılmış)
-    local out rc
-    REPLY=""
+# "Kayıt yok" (NXDOMAIN, kayıtsız NOERROR → 0 döner) ile "sorulamadı" (zaman aşımı, SERVFAIL, REFUSED → 1 döner)
+# ayrımı önemli: beyaz liste kontrolü sorulamadıysa o tur banlanmaz; sorulamayan sahip / aralık önbellekteki bilgiyi silmez.
+# DNS cevabının durum kodu okunur: "dig +short" SERVFAIL'de de 0 döner ve hiçbir şey yazmaz — "kayıt yok" sanılıyordu, sunucunun
+# DNS'i Team Cymru'ya SERVFAIL verdiğinde (ölçüldü 2026-11-26: çözücü SERVFAIL, 1.1.1.1 / 8.8.8.8 cevaplıyor) bilinen duyurulan
+# aralıklar boşla eziliyordu. Team Cymru arızası ayrı sayılır: kendi sorguları kapanır, ters DNS (PTR) ve öteki sorgular sürer.
+dns_q() {        # TYPE NAME → REPLY (satır satır, tırnaksız, sondaki nokta atılmış); DNS_ST = durum (NOERROR, NXDOMAIN, SERVFAIL, TIMEOUT…)
+    local out rc cy=0
+    REPLY=""; DNS_ST=""
     [ "$LOOK_OK" = 1 ] || return 1
+    [[ "$2" == *.cymru.com ]] && { cy=1; [ "$CY_OK" = 1 ] || return 1; }
     if [ -n "$DIG_BIN" ]; then
-        out=$("$DIG_BIN" +short +time="$LOOKUP_TIMEOUT" +tries=1 -t "$1" "$2" 2>/dev/null); rc=$?
+        out=$("$DIG_BIN" +noall +comments +answer +time="$LOOKUP_TIMEOUT" +tries=1 -t "$1" "$2" 2>/dev/null); rc=$?
+        DNS_ST=$(printf '%s\n' "$out" | sed -n 's/^;;.*status: \([A-Z]*\).*/\1/p' | head -n 1)
+        [ -z "$DNS_ST" ] && DNS_ST=TIMEOUT
+        # cevap bölümü "ad TTL sınıf TÜR veri": yalnız sorulan türdeki satırların verisi (CNAME zinciri atlanır)
+        out=$(printf '%s\n' "$out" | awk -v t="$1" '!/^;/ && NF >= 5 && $4 == t { $1 = $2 = $3 = $4 = ""; sub(/^ +/, ""); print }')
     else
         out=$("$HOST_BIN" -W "$LOOKUP_TIMEOUT" -t "$1" "$2" 2>/dev/null); rc=0   # host: NXDOMAIN'de de 1 döner
-        [[ "$out" == *"timed out"* || "$out" == *"no servers could be reached"* ]] && rc=9
+        DNS_ST=NOERROR
+        [[ "$out" == *"timed out"* || "$out" == *"no servers could be reached"* ]] && DNS_ST=TIMEOUT
+        [[ "$out" == *"(NXDOMAIN)"* ]] && DNS_ST=NXDOMAIN
+        [[ "$out" =~ \(([A-Z]+)\)$ ]] && [ "${BASH_REMATCH[1]}" != NXDOMAIN ] && [[ "$out" == *"not found"* ]] && DNS_ST="${BASH_REMATCH[1]}"
         out=$(printf '%s\n' "$out" | sed -n -e 's/.* descriptive text //p' -e 's/.* domain name pointer //p' -e 's/.* has address //p')
     fi
+    case "$DNS_ST" in NOERROR|NXDOMAIN) ;; *) rc=9 ;; esac
     if [ "$rc" -ne 0 ]; then
-        LOOK_FAILS=$((LOOK_FAILS + 1))
-        [ "$LOOK_FAILS" -ge 3 ] && { LOOK_OK=0; log "$M_LOOKUP_OFF"; }
+        if [ "$cy" = 1 ]; then
+            CY_FAILS=$((CY_FAILS + 1)); CY_ERR="$DNS_ST"
+            [ "$CY_FAILS" -ge 3 ] && [ "$CY_OK" = 1 ] && { CY_OK=0; log "$(m "$M_CYMRU_OFF" "$DNS_ST")"; }
+        else
+            LOOK_FAILS=$((LOOK_FAILS + 1))
+            [ "$LOOK_FAILS" -ge 3 ] && { LOOK_OK=0; log "$(m "$M_LOOKUP_OFF" "$DNS_ST")"; }
+        fi
         return 1
     fi
-    LOOK_FAILS=0
+    if [ "$cy" = 1 ]; then CY_FAILS=0; CY_ERR=""; else LOOK_FAILS=0; fi
     REPLY=$(printf '%s\n' "$out" | grep -v '^;' | tr -d '"' | sed -e 's/\.$//' -e '/^$/d')
     return 0
 }
@@ -1875,10 +1894,12 @@ csf_own_q() {    # IP → CSO_A (ASN), CSO_C (ülke), CSO_N (ad); bilinmeyen ala
 owner_resolve() { # IP [cymru] → RES_ASN, RES_NAME, RES_CC, RES_PFX, RES_REG, RES_ALLOC, RES_ASRC / RES_CSRC (csf|cymru|""), RES_DNS (Cymru
     # cevap verdi mi). Sahibin TEK çözücüsü: tur önbelleği (owner_lookup) ve IP kartı (do_lookup) bunu çağırır
     local a b c d txt casn="" ccc="" cname=""
-    RES_ASN=""; RES_NAME=""; RES_CC=""; RES_PFX=""; RES_REG=""; RES_ALLOC=""; RES_ASRC=""; RES_CSRC=""; RES_DNS=0
+    RES_ASN=""; RES_NAME=""; RES_CC=""; RES_PFX=""; RES_REG=""; RES_ALLOC=""; RES_ASRC=""; RES_CSRC=""; RES_DNS=0; RES_CYERR=""
     csf_own_q "$1"
     IFS=. read -r a b c d <<< "$1"
-    if dns_q TXT "$d.$c.$b.$a.origin.asn.cymru.com"; then
+    if ! dns_q TXT "$d.$c.$b.$a.origin.asn.cymru.com"; then
+        [ "$LOOK_INIT" = 1 ] && RES_CYERR="${DNS_ST:-${CY_ERR:-TIMEOUT}}"   # sorulamadı (SERVFAIL, REFUSED, zaman aşımı): aralık bilinmiyor
+    else
         RES_DNS=1
         cymru_line "$REPLY"; txt="$REPLY"      # "60729 | 185.220.101.0/24 | DE | ripencc | 2017-09-12" (çok satırda en dar önek)
         casn=$(printf '%s' "$txt" | cut -d'|' -f1 | awk '{print $1}')
@@ -4504,19 +4525,10 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
     # LOOKUP kapalıysa sorulmaz, bilinmez.
     local ccd ccpd IN_CCP=""; ccd=" $(conf_val CC_DENY | LC_ALL=C tr '[:lower:],' '[:upper:] ') "
     ccpd=" $(conf_val CC_DENY_PORTS | LC_ALL=C tr '[:lower:],' '[:upper:] ') "
+    # blok penceresinin sahibi önbellekte yoksa tek çözücüden (önce yalnız CC_DENY doluyken soruluyordu: sahip satırı ülke banı
+    # ayarına bağlıydı). Ağ (/16) için Team Cymru'nun en geniş öneki de soruluyordu, hiçbir yerde kullanılmıyordu (1.15.135'te silindi)
+    [ -n "$pfx24" ] && [ -z "$OWN_LONG" ] && owner_lookup "$pfx24.1"
     if [ -z "$IN_COVER" ] && { [ "$ccd" != "  " ] || [ "$ccpd" != "  " ]; }; then
-        local qa qb ccn="" asn="" ap=""
-        if [ -n "$pfx24" ]; then
-            [ -z "$OWN_CC$OWN_ASN" ] && owner_lookup "$pfx24.1"
-            ccn="$OWN_CC"; asn="$OWN_ASN"
-        else
-            local qc qd; IFS=. read -r qa qb qc qd <<< "${c%/*}"
-            if dns_q TXT "$(( qd + 1 )).$qc.$qb.$qa.origin.asn.cymru.com"; then
-                # "16276 | 151.80.0.0/16 | FR | ripencc | 2012-01-01" — birden çok satırda en geniş önek
-                read -r asn ap ccn < <(printf '%s\n' "$REPLY" | awk -F'|' '{gsub(/ /,""); split($2,p,"/"); print p[2]+0, $1, $2, $3}' | sort -n | head -1 | cut -d' ' -f2-)
-                asn="${asn%% *}"; [ -n "$ap" ] && [ "${ap#*/}" -le "$cbits" ] 2>/dev/null || { ccn=""; asn=""; }   # duyurulan önek bütün aralığı içermeli
-            fi
-        fi
         # yalnız CSF'in kendi verisi (csf_geo_cover; IP kartı ve tur kararıyla aynı). CSF ülke / ASN kümesini bölge dosyasından doldurur
         # (csf.pl: "-e zone/$cc.zone" yoksa küme boş, kural hiçbir şeyi düşürmez; ölçüldü 2026-11-10): verisi olmayan kod kapatmaz.
         # Önce o durumda Cymru'nun ülke / ASN'i kullanılıyordu (kapanmayan aralık "kapalı" görünüyordu)
@@ -4709,7 +4721,18 @@ do_lookup() {
     if [ -n "$host" ] && resolve_a "$host" && printf '%s\n' "$REPLY" | grep -qxF "$ip"; then fwd=true; fi
     IFS=. read -r a b c d <<< "$ip"
     # sahip: listelerin önbelleğiyle aynı çözücü (ASN, ad, ülke CSF verisinden; duyurulan aralık Team Cymru'dan)
-    owner_resolve "$ip"; asn="$RES_ASN"; asname="$RES_NAME"; cc="$RES_CC"; pfx="$RES_PFX"; reg="$RES_REG"; alloc="$RES_ALLOC"
+    local cyerr pfxc=0 asrc csrc
+    owner_resolve "$ip"; asn="$RES_ASN"; asname="$RES_NAME"; cc="$RES_CC"; pfx="$RES_PFX"; reg="$RES_REG"; alloc="$RES_ALLOC"; cyerr="$RES_CYERR"
+    asrc="$RES_ASRC"; csrc="$RES_CSRC"      # sağlayıcının ve ülkenin kaynağı (csf | cymru | cache): kartın Kim bölümü yazar
+    # Team Cymru sorulamadıysa (SERVFAIL, REFUSED, zaman aşımı) bilinmeyen alanlar sahip önbelleğinden (son başarılı sorgu); kaynak
+    # "cache" / pfxc. CSF verisi olmayan sunucuda sahip, verisi olan sunucuda duyurulan aralık böyle gelir; önbellek silinmez
+    if [ -n "$cyerr" ]; then
+        owners_load
+        local q="$a.$b.$c"
+        [ -z "$asn" ] && [ -n "${OWN_A[$q]}" ] && { asn="${OWN_A[$q]}"; asname="${OWN_N[$q]}"; asrc=cache; }
+        [ -z "$cc" ] && [ -n "${OWN_C[$q]}" ] && { cc="${OWN_C[$q]}"; csrc=cache; }
+        [ -z "$pfx" ] && [ -n "${OWN_P[$q]}" ] && { pfx="${OWN_P[$q]}"; pfxc=1; }
+    fi
     if [ -n "$asn" ]; then
         # önbellekteki sahip bu taze cevaptan farklıysa blok "eskimiş" işaretlenir; tur onu önce yeniden sorar (backfill_owners).
         # Kart taze sahibi, listeler önbelleği gösteriyordu: blok başka ASN'ye geçince ikisi çelişiyordu (173.46.80: liste AS47007,
@@ -4808,10 +4831,10 @@ do_lookup() {
     if [ "$JSON" = 1 ]; then
         local o="{\"ok\":true,\"ip\":\"$ip\"" k v
         if self_overlap "$n" "$n"; then o+=",\"self\":true"; else o+=",\"self\":false"; fi   # sunucunun kendi adresi: ban konamaz
-        local asrc="$RES_ASRC" csrc="$RES_CSRC"      # sağlayıcının ve ülkenin kaynağı (csf | cymru): kartın Kim bölümü yazar
-        for k in host asname pfx cc reg alloc asrc csrc deny temp wl wle rig pend ign ign_by; do
+        for k in host asname pfx cc reg alloc asrc csrc cyerr deny temp wl wle rig pend ign ign_by; do
             v="${!k}"; jstr "$v"; o+=",\"$k\":$REPLY"
         done
+        [ "$pfxc" = 1 ] && o+=",\"pfxc\":true"     # aralık önbellekten (Team Cymru şu an sorulamadı)
         # izin bütün portları açıyor mu: motorun ölçütü (wl_full_idx; ineff ve izinli saldırgan sayımıyla aynı). Panel ban / izin
         # düğmelerini ve sonucu buna göre çizer (önce etiketten kendisi tahmin ediyordu: Imunify etiketini tam izin sayıyordu)
         if [ "$wff" = 3 ] && [ "$wle" = in_ok ]; then o+=",\"wfull\":1,\"wfin\":1"; else o+=",\"wfull\":$([ "$wff" = 1 ] && echo 1 || echo 0)"; fi

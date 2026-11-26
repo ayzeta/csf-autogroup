@@ -220,6 +220,8 @@ done <<< '*/15 900
 @hourly 0'
 # mangle PREROUTING sırası (sondaki boşluklu iptables çıktısı, önce ekle sonra sil): ayrı betik, taklit iptables
 N=$((N + 1)); if ms=$(bash "$H/mangle-sira.sh" 2>&1); then echo "  ✓ ${ms##*$'\n'}"; else F=$((F + 1)); printf '%s\n' "$ms" | grep '✗'; fi
+# ban-guard: CSF'in porta bağlı banlarının hepsi (TCP ve UDP, kısmi ban ve CC_DENY_PORTS) kopyalanır (ayrı betik, taklit iptables)
+N=$((N + 1)); if ms=$(timeout 60 bash "$H/guard-kural.sh" 2>&1); then echo "  ✓ ${ms##*$'\n'}"; else F=$((F + 1)); printf '%s\n' "$ms" | grep '✗'; fi
 # posta portları: ss -ltnp tek çağrı + kısa süreli dosya (ayrı betik, taklit ss)
 N=$((N + 1)); if ms=$(bash "$H/mail-ss.sh" 2>&1); then echo "  ✓ ${ms##*$'\n'}"; else F=$((F + 1)); printf '%s\n' "$ms" | grep '✗'; fi
 echo "Birim: $N durum, $F beklenmeyen"; [ "$F" -eq 0 ]

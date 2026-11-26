@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.15.135 — 2026-11-26
+
+- A DNS answer of `SERVFAIL` or `REFUSED` was read as "no record". `dig +short`
+  prints nothing and exits 0 in that case. So when the server's resolver could
+  not answer Team Cymru, every owner refresh replaced the known announced range
+  with an empty one, and the IP card showed no range. DNS answers are now read
+  with their status code. Only `NOERROR` and `NXDOMAIN` count as answers;
+  anything else is a failed lookup that keeps the cached data. The IP card
+  shows the cached range or owner as an earlier lookup and says why it could
+  not be asked. Team Cymru failures are counted on their own, so they no longer
+  switch off reverse DNS for the rest of the run.
+- The ban guard copies UDP port bans too: partial bans with UDP ports (such as
+  UDP 443 for HTTP/3) and `CC_DENY_PORTS_UDP`. Before, only TCP was copied.
+- The block ban window asks for the owner whenever it is not cached. Before, it
+  asked only when `CC_DENY` or `CC_DENY_PORTS` was set. An unused Team Cymru
+  query for /16 ranges was removed.
+
 ## 1.15.134 — 2026-11-26
 
 First part of a code-wide clean-up: the same question is now answered in one

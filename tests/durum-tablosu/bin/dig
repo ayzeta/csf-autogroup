@@ -1,12 +1,22 @@
 #!/bin/bash
-# Team Cymru taklidi: 151.80.x.x → AS16276 FR; başka her şey boş (PTR yok)
-name="${!#}"
+# Team Cymru taklidi: 151.80.x.x → AS16276 FR; başka her şey kayıtsız (PTR yok).
+# Çıktı gerçek "dig +noall +comments +answer" biçiminde (durum satırı + cevap bölümü; biçim sunucuda ölçüldü 2026-11-26).
+# DIG_FAIL=cymru: Team Cymru sorguları SERVFAIL (sunucunun çözücüsü Cymru'yu çözemiyor; cevap bölümü boş, çıkış 0).
+name="${!#}"; typ=A
+while [ $# -gt 0 ]; do [ "$1" = -t ] && { typ="$2"; shift; }; shift; done
+ans=""
 case "$name" in
-  *.80.151.origin.asn.cymru.com) echo '"16276 | 151.80.0.0/16 | FR | ripencc | 2012-01-01"' ;;
-  AS16276.asn.cymru.com)         echo '"16276 | FR | ripencc | 2001-01-01 | OVH, FR"' ;;
-  *.113.0.203.origin.asn.cymru.com) [ -z "$NO_DNS" ] && echo '"64500 | 203.0.113.0/24 | US | arin | 2010-01-01"' ;;   # sunucunun kendi IP'si
-  9.7.80.151.in-addr.arpa)       [ -n "$PTR_GOOGLE" ] && echo 'crawl-151-80-7-9.googlebot.com.' ;;   # csf.rignore sınaması
-  crawl-151-80-7-9.googlebot.com) echo '151.80.7.9' ;;
-  AS64500.asn.cymru.com)         echo '"64500 | US | arin | 2010-01-01 | EXAMPLE-HOSTING, US"' ;;
+  *.80.151.origin.asn.cymru.com) ans='"16276 | 151.80.0.0/16 | FR | ripencc | 2012-01-01"' ;;
+  AS16276.asn.cymru.com)         ans='"16276 | FR | ripencc | 2001-01-01 | OVH, FR"' ;;
+  *.113.0.203.origin.asn.cymru.com) [ -z "$NO_DNS" ] && ans='"64500 | 203.0.113.0/24 | US | arin | 2010-01-01"' ;;   # sunucunun kendi IP'si
+  9.7.80.151.in-addr.arpa)       [ -n "$PTR_GOOGLE" ] && ans='crawl-151-80-7-9.googlebot.com.' ;;   # csf.rignore sınaması
+  crawl-151-80-7-9.googlebot.com) ans='151.80.7.9' ;;
+  AS64500.asn.cymru.com)         ans='"64500 | US | arin | 2010-01-01 | EXAMPLE-HOSTING, US"' ;;
 esac
+st=NOERROR
+[ "$DIG_FAIL" = cymru ] && [[ "$name" == *.cymru.com ]] && { st=SERVFAIL; ans=""; }
+echo ";; Got answer:"
+echo ";; ->>HEADER<<- opcode: QUERY, status: $st, id: 4242"
+echo ";; flags: qr rd ra; QUERY: 1, ANSWER: $([ -n "$ans" ] && echo 1 || echo 0), AUTHORITY: 0, ADDITIONAL: 1"
+[ -n "$ans" ] && printf '%s.\t60\tIN\t%s\t%s\n' "$name" "$typ" "$ans"
 exit 0

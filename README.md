@@ -545,7 +545,12 @@ The plain-text part looks like this:
   CSF acts on. The announced range (BGP prefix) comes from
   [Team Cymru's](https://www.team-cymru.com/ip-asn-mapping) free DNS service (no
   account or API key); when CSF has no data for a field, that field comes from
-  Team Cymru too. The IP card names the source of each. Cached for
+  Team Cymru too. The IP card names the source of each. If the server's DNS
+  resolver cannot answer Team Cymru (for example it returns `SERVFAIL`), that is
+  not taken as "no data": the cached range and owner are kept and shown as an
+  earlier lookup, the IP card says why the range could not be asked, and after
+  three failures in a run only the Team Cymru lookups pause (reverse DNS goes
+  on). Cached for
   `OWNER_TTL_DAYS` (default 30 days); after that a run looks it up again (a
   limited number of blocks per run) and the old info is used until then.
 - **Hostname** — each IP's reverse DNS.
@@ -665,7 +670,11 @@ the connection still carries the port it was sent to, and Imunify360 has no
 rules there to race with (it puts its `INPUT` chain back on top within a
 minute, so a rule in `INPUT` loses its place). For new incoming connections
 only, it applies CSF's allow list first (the same list as the rented-server
-rule: a single-port allow passes only on its port) and then the port bans. Other traffic
+rule: a single-port allow passes only on its port) and then the port bans, TCP
+and UDP alike (partial bans in `csf.deny` and `CC_DENY_PORTS_TCP` /
+`CC_DENY_PORTS_UDP`). UDP bans are copied whether or not this server's
+Imunify360 redirects UDP: where it doesn't, the extra rule changes nothing,
+because CSF drops that traffic anyway. Other traffic
 and this server's own outgoing connections are not touched. A `csfpost.sh`
 line puts it back when CSF restarts, and each run checks that it is still
 first. The rented-server lists use the same place (see below).
