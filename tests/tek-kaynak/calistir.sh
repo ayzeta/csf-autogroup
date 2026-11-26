@@ -71,5 +71,16 @@ if [ -n "$out" ] || [ "$lv" != 1 ]; then echo "DÜŞTÜ: servis portu kuralı ko
 acts=$(grep -oE "pagerHtml\('[a-z]+'" "$J" | sed "s/pagerHtml('//; s/'//" | sort -u; echo limless)
 miss=""; for a in $acts; do awk -v a="$a" '$0 ~ "^    " a ": function" { p = 1 } p { print; if (/^    [a-z0-9_]+: function/ && $0 !~ "^    " a ":") exit; if (++n > 12) exit }' "$J" | grep -q 'cardTop(el)' || miss+=" $a"; done
 if [ -n "$miss" ]; then echo "DÜŞTÜ: listeyi değiştiren düğme kart başını göstermiyor (cardTop yok):$miss"; F=$((F + 1)); else echo "GEÇTİ: sayfa / kısaltma eylemleri kart başına döner ($(echo $acts))"; fi
+# TEK DURUM (1.15.136): bir adresin şu anki durumu motorda yalnız obj_state'te (AWK_ST). Etkisini ölç'ün eski kendi hesabı (ipst),
+# kaynak ayrıntısının izin / aralık / blok listesi hesabı geri gelmez; panelde IP kartının hükmü, kapsayan ban düzeyi ve izin kararı
+# yalnız kayıttan (d.st), Etkisini ölç rozetleri stToks'tan
+sx=$(grep -cE "function ipst\(|st = \"alw\"|\"deny24:\" : \"temp24:\"" "$SHF")
+pv=$(awk '/^  function verdict\(d, mb\)/ { p = 1 } p { print } p && /^  }$/ { exit }' "$J" | grep -c "st.e === 'alw'")
+pc=$(awk '/^  function coverBits\(d\)/ { p = 1 } p { print } p && /^  }$/ { exit }' "$J" | grep -c "(d.covers")
+pa=$(grep -c "function fullAllow(d) { return d.st ? " "$J")
+pi=$(awk '/^  function impState\(st\)/ { p = 1 } p { print } p && /^  }$/ { exit }' "$J" | grep -c "stToks(st)")
+if [ "$sx" != 0 ] || [ "$pv" != 1 ] || [ "$pc" != 0 ] || [ "$pa" != 1 ] || [ "$pi" != 1 ]; then
+    echo "DÜŞTÜ: şu anki durum tek kayıttan değil (motorda eski hesap $sx; hüküm kayıttan $pv; mb covers'tan $pc; izin kayıttan $pa; Etkisini ölç $pi)"; F=$((F + 1))
+else echo "GEÇTİ: şu anki durum tek kayıttan (motor obj_state; IP kartı hükmü, kapsayan ban, izin, Etkisini ölç)"; fi
 [ $F -eq 0 ] && echo "GEÇTİ: tek kaynak ($J)" || echo "DÜŞTÜ: $F kural"
 exit $F

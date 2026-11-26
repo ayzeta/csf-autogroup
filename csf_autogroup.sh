@@ -65,7 +65,7 @@ grep() { command grep -a "$@"; }
 # sayı, anahtar; Türkçe modda sıralama kuralı zaten C idi (LC_COLLATE=C)
 sort() { LC_ALL=C command sort "$@"; }
 
-VERSION="1.15.135"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.136"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -216,6 +216,7 @@ while [ $# -gt 0 ]; do
         --inside)  MODE=inside ;;
         --asn-impact) MODE=asnimpact ;;
         --src-ips) MODE=srcips ;;
+        --obj-state) MODE=objstate ;;   # tek durum kaydı (sınama ve araçlar): anahtarlar argüman ya da stdin
         --abuse-block) MODE=abuseblk ;;   # aralık kartındaki düğme: AbuseIPDB blok sorgusu (/16–/31; kart açılınca sorulmaz)
         --prov-apply) MODE=prov ;;
         --keep)    CLEAN=0 ;;
@@ -4605,7 +4606,19 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
         # "boşalır": CSF'in sınırına giren satırlar (do not delete olanlar zaten sayılmaz)
         local fr=0 fx fl
         for fx in "${IN_BLK[@]}" "${IN_OTH[@]}" "${IN_SGL[@]}"; do fl="${DLINE[$fx]}"; [ -n "$fl" ] && ! is_dnd "$fl" && fr=$((fr + 1)); done
-        o+=",\"removable\":$(( ${#IN_BLK[@]} + ${#IN_OTH[@]} + ${#IN_SGL[@]} + ${#IN_SGLD[@]} )),\"free\":$fr}"
+        o+=",\"removable\":$(( ${#IN_BLK[@]} + ${#IN_OTH[@]} + ${#IN_SGL[@]} + ${#IN_SGLD[@]} )),\"free\":$fr"
+        # tek durum (obj_state): aralığın kendisi ve kartta görünen her IP (tekiller, geçiciler, ihlal edenler, panelin gönderdiği
+        # Kontrol edilecekler / ban / izleme IP'leri: --states). Kartın hükmü ve IP tablosu yalnız bunu okur (önce kart kendisi hesaplıyordu:
+        # geçici aralık banını ve kiralık listenin her şey kipini görmüyordu)
+        st_prep; local stl sto="" sx2 sk2 sv2
+        stl=$({ printf '%s\n' "$c" "${IN_SGL[@]}" "${IN_SGLD[@]}"; for sx2 in "${IN_TMP[@]}"; do [[ "$sx2" == */* ]] || printf '%s\n' "$sx2"; done
+                grep -oE '"ip":"[0-9.]+"' <<< "$IN_ATKIPS" | cut -d'"' -f4; [ -n "$IMP_STATES" ] && printf '%s\n' ${IMP_STATES//,/ }; } |
+              awk 'NF && !S[$0]++' | head -n 400 | obj_state)
+        while IFS=$'\t' read -r sk2 _ sv2; do
+            [ -n "$sk2" ] || continue
+            if [ "$sk2" = "$c" ]; then o+=",\"st\":$sv2"; else sto+="${sto:+,}\"$sk2\":$sv2"; fi
+        done <<< "$stl"
+        o+=",\"ipst\":{$sto}}"
         echo "$o"; return 0
     fi
     echo "$c${OWN_LONG:+  ($OWN_LONG)}"
@@ -4707,6 +4720,169 @@ geo_ips_load() {
             $1 == "I" { I[++m] = $2 }
             END { for (j = 1; j <= m; j++) { split(I[j], q, "."); v = ((q[1] * 256 + q[2]) * 256 + q[3]) * 256 + q[4]
                       for (i = 1; i <= n; i++) if (v >= L[i] && v <= H[i] && !S[j, K[i]]++) print I[j], K[i] } }')
+}
+# ── TEK DURUM (obj_state, 1.15.136) ─────────────────────────────────────────────────────────────────────────────────────────
+# Bir nesnenin (tek IP ya da aralık) ŞU ANKİ koruma durumu tek yerde hesaplanır; IP kartı (--lookup), Etkisini ölç (--asn-impact),
+# kaynak ayrıntısı (--src-ips), aralık kartı (--inside) ve durum çıktısı bu kaydı okur. Önce aynı soru motorda 6, panelde 12 yerde
+# ayrı cevaplanıyordu (izinli + banlı IP kartta "izinli", Etkisini ölç'te "kalıcı banlı"; Imunify kara listesini yalnız Etkisini ölç
+# görüyordu; kiralık listenin "her şey" kipi kartta "kısmi" …). Kaynaklar bir kez hazırlanır (st_prep), değerlendirme tek awk'tadır.
+# Kayıt (JSON): {"e":"ban|part|alw|none", "k":[kapatanlar], "al":{izin}, "self":1, "w":"izleme günü", "ig":"susturma bitişi"}
+#   kapatan: {"t":tür, "a":ad, "m":"all|ports", "tcp":"…", "udp":"…", "end":bitiş epoch (0 = kalıcı), "own":1 (eklentinin satırı)}
+#   tür: ip (csf.deny tekil), cidr (csf.deny aralık), port (csf.deny port satırı), temp (csf.tempban; portlu satır m=ports),
+#        cc / asn (CC_DENY: all, CC_DENY_PORTS: ports), cl (kiralık liste; kipi), bk (CSF blok listesi), imu (Imunify kuralı)
+# Kurallar (STANDART.md "TEK DURUM"): izin banın önündedir (izinli + banlı = alw, kapatanlar yine listelenir: "ban işlemiyor"
+# bulgusunun dayanağı); m=all kapatan varsa ban, yalnız m=ports kapatan varsa part. Geçici satır csf.tempban'da durdukça banlıdır
+# (lfd kuralı ve satırı birlikte siler; ölçüldü 16.34). Imunify ayarından değil, kurulu kurallarından okunur (her entegrasyon
+# biçiminde aynı): zincir INPUT_imunify360'tan yürünür; adres bir kümeye düşerse RETURN = CSF'e geçer (ne izin ne ban), ACCEPT
+# portsuz = izin, ACCEPT yalnız bazı portlara ve sonra DROP = part, DROP / REJECT (ya da onlara giden zincir) = ban. Ölçüldü
+# 2026-11-26 (lin, Imunify Firewall 8.16): beyaz liste kümeleri RETURN, kara liste imunify360_log_bl → NFLOG + DROP, gri liste
+# WebShield portlarına ACCEPT sonra imunify360_log_gl → DROP.
+ST_D=""
+st_prep() {      # → ST_D (geçici dizin; süreç sonunda silinir): bir kez
+    [ -n "$ST_D" ] && return 0
+    ST_D=$(mktemp -d) || return 1
+    trap 'rm -rf "$ST_D"' EXIT
+    local k c z x an="" geo="$CSF_VAR/Geo/ip2asn-combined.tsv" i
+    tb_lines > "$ST_D/tb"
+    [ "$WL_LOADED" = 1 ] || load_whitelist
+    # izin: "lo hi ff metin" (ff: 1 bütün portlar, 2 sunucunun kendi IP si, 3 yalnız gelen yönde bütün portlar, 0 tek portluk)
+    wl_ff_lines | paste -d'\t' - <(printf '%s\n' "${WL_TXT[@]//$'\t'/ }" | head -n "${#WL_LO[@]}") | awk -F'\t' '{ split($1, w, " "); print w[2], w[3], w[5], $2 }' > "$ST_D/alw"
+    # ülke / sağlayıcı (CSF verisi: bölge dosyası, sağlayıcı için ip2asn): "lo hi tür:KOD:all|ports"
+    { for k in CC_DENY CC_DENY_PORTS; do
+          for c in $(conf_val "$k" | LC_ALL=C tr '[:lower:],' '[:upper:] '); do
+              z="$CSF_VAR/zone/${c,,}.zone"; x=$([ "$k" = CC_DENY ] && echo all || echo ports)
+              if [ -r "$z" ]; then
+                  awk -F'[./]' -v s="$([[ "$c" == AS* ]] && echo asn || echo cc):$c:$x" 'NF >= 4 && $1 ~ /^[0-9]+$/ { b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%.0f %.0f %s\n", lo, lo + 2 ^ (32 - b) - 1, s }' "$z"
+              elif [[ "$c" =~ ^AS([0-9]+)$ ]]; then an+=" ${BASH_REMATCH[1]}:$x"; fi
+          done
+      done
+      [ -n "$an" ] && [ -r "$geo" ] && awk -F'\t' -v A="$an " 'BEGIN { n = split(A, q, " "); for (i = 1; i <= n; i++) { split(q[i], r, ":"); W[r[1]] = W[r[1]] " " r[2] } }
+          ($3 in W) && $1 ~ /^[0-9.]+$/ { split($1, p, "."); split($2, e, "."); a = ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4]; h = ((e[1] * 256 + e[2]) * 256 + e[3]) * 256 + e[4]
+              n = split(W[$3], m, " "); for (i = 1; i <= n; i++) printf "%.0f %.0f asn:AS%s:%s\n", a, h, $3, m[i] }' "$geo"
+      if [ "$CLOUD_ON" = 1 ]; then
+          for x in $CLOUD_ACTIVE; do
+              [ -r "$CLOUD_DIR/$x.txt" ] && awk -F'[./]' -v s="cl:$x" 'NF >= 4 && $1 ~ /^[0-9]+$/ { b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%.0f %.0f %s\n", lo, lo + 2 ^ (32 - b) - 1, s }' "$CLOUD_DIR/$x.txt"
+          done
+      fi
+      bkl_lines | awk '{ print $1, $2, "bk:" $3 }'
+    } > "$ST_D/geo"
+    # kiralık listelerin kuralı: "ad kip tcp udp" (cl_pol: all | svc kapatılan portlar | exc açık kalan portlar)
+    : > "$ST_D/clp"
+    if [ "$CLOUD_ON" = 1 ]; then for x in $CLOUD_ACTIVE; do cl_pol "$x"; printf '%s %s %s %s\n' "$x" "${CP_K:-svc}" "${CP_T:--}" "${CP_U:--}" >> "$ST_D/clp"; done; fi
+    # Imunify: filtre tablosunun kuralları (yalnız imunify zincirleri) ve kurallarda geçen kümelerin üyeleri
+    : > "$ST_D/imr"; : > "$ST_D/ims"
+    if [ -z "${ST_IPT+x}" ]; then ST_IPT=$(iptables -S 2>/dev/null | grep -E '^-A (INPUT_imunify360|imunify360)'); fi
+    if [ -n "$ST_IPT" ]; then
+        printf '%s\n' "$ST_IPT" > "$ST_D/imr"
+        for x in $(printf '%s\n' "$ST_IPT" | grep -oE -- '--match-set [^ ]+ src' | awk '{ print $2 }' | sort -u); do
+            ipset list -o save "$x" 2>/dev/null | awk '$1 == "add"' >> "$ST_D/ims"
+        done
+    fi
+}
+# Tek değerlendirici. Girdi satırları: "anahtar" (IP ya da CIDR). Çıktı: "anahtar<TAB>e<TAB>json"
+AWK_ST='
+function v4(a,  q) { split(a, q, "."); return ((q[1] * 256 + q[2]) * 256 + q[3]) * 256 + q[4] }
+function rng(a,  y, b) { split(a, y, "/"); b = (y[2] == "" ? 32 : y[2] + 0); RL = v4(y[1]); RL = RL - RL % (2 ^ (32 - b)); RH = RL + 2 ^ (32 - b) - 1 }
+function js(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); gsub(/\t/, " ", s); return "\"" s "\"" }
+function addk(t, a, m, tc, ud, en, ow, xj) { NK++; KS = KS (KS == "" ? "" : ",") "{\"t\":\"" t "\",\"a\":" js(a) ",\"m\":\"" m "\"" (tc != "" ? ",\"tcp\":\"" tc "\"" : "") (ud != "" ? ",\"udp\":\"" ud "\"" : "") ",\"end\":" (en + 0) (ow ? ",\"own\":1" : "") xj "}"
+    if (m == "all") FULL = 1; else PART = 1 }
+function inset(s, v,  i, hit) { hit = 0
+    for (i = 1; i <= SN[s]; i++) if (v >= SL[s, i] && v <= SH[s, i]) { if (SX[s, i]) return 0; hit = 1 }
+    return hit }
+# Imunify zinciri: adres için sonucu döndürür ("" = zincir sonuna kadar karar yok, "R" CSF e geçti, "A" izin, "D" ban); yalnız
+# adrese özgü kurallar (match-set src ya da -s) değerlendirilir; herkese uygulanan port kuralları nesnenin durumu değildir
+# spec = 1: zincire adrese özgü bir kuraldan girildi (ör. kara liste → imunify360_log_bl); orada koşulsuz kurallar da adrese
+# uygulanır (NFLOG geçilir, DROP karar). spec = 0 iken koşulsuz kurallardan yalnız imunify zincirine atlamalar izlenir (ör. ülke
+# kara listesi zinciri), herkese uygulanan port kuralları nesnenin durumu değildir
+function iwalk(ch, v, d, spec,  i, r, s, sp, t, res, pts, sx) {
+    if (d > 6) return ""
+    for (i = 1; i <= CN[ch]; i++) { r = CR[ch, i]; s = ""; sp = ""; t = ""; pts = ""; sx = 0
+        if (match(r, /--match-set [^ ]+ src/)) { s = substr(r, RSTART + 12, RLENGTH - 16); if (!inset(s, v)) continue; sx = 1 }
+        else if (match(r, / -s [0-9.\/]+/)) { sp = substr(r, RSTART + 4, RLENGTH - 4); rng(sp); if (sp == "0.0.0.0/0") { if (!spec) continue } else if (v < RL || v > RH) continue; else sx = 1 }
+        else if (!spec && r !~ / -j (imunify360|INPUT_imunify360)/) continue
+        if (match(r, /--dports? [0-9,:]+/)) pts = substr(r, RSTART + (substr(r, RSTART + 7, 1) == "s" ? 9 : 8), RLENGTH - (substr(r, RSTART + 7, 1) == "s" ? 9 : 8))
+        if (match(r, / -j [^ ]+/)) t = substr(r, RSTART + 4, RLENGTH - 4)
+        if (pts != "") { if (t == "ACCEPT" && (sx || spec)) IPA = 1; continue }      # yalnız bazı portlara: kalan trafik sonraki kurallara
+        if (s != "" && IMS == "") IMS = s
+        if (t == "RETURN") { if (sx || spec) return "R"; continue }
+        if (t == "ACCEPT") return "A"
+        if (t == "DROP" || t == "REJECT") return "D"
+        if (t in CN) { res = iwalk(t, v, d + 1, spec || sx); if (res != "") return res }
+        if (s != "" && IMS == s) IMS = ""
+    }
+    return "" }
+BEGIN { now = now + 0; AP2[1] = 4; AP2[2] = 3; AP2[3] = 2; AP2[0] = 1
+    while ((getline l < tbf) > 0) { split(l, x, "|"); tn++; TA[tn] = x[1]; TE[tn] = x[3] + 0; TP[tn] = x[4]; TD[tn] = x[5] }
+    while ((getline l < dnf) > 0) { own = (l ~ /# csf_autogroup:/); sub(/[ \t#].*/, "", l)
+        if (l ~ /[|]/) { nf = split(l, f, "|"); pr = "tcp"; dr = "in"; pt = ""; ad = ""
+            for (i = 1; i <= nf; i++) { if (f[i] ~ /^(tcp|udp|icmp)$/) pr = f[i]; else if (f[i] ~ /^(in|out)$/) dr = f[i]
+                else if (f[i] ~ /^[sd]=/) { if (pt == "") pt = substr(f[i], 3); else if (ad == "") ad = substr(f[i], 3) } }
+            split(ad, y, "/"); if (y[2] == "") y[2] = 32
+            # /8 den geniş satır (herkese bir portu kapatan kural) nesnenin banı değildir (adv_wide ile aynı)
+            if (dr == "in" && ad ~ /^[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+([\/][0-9]+)?$/ && pt !~ /[.]/ && y[2] + 0 >= 8) {
+                pn++; rng(ad); PL[pn] = RL; PH[pn] = RH; PA[pn] = ad; PR[pn] = pr; PO[pn] = own; gsub(/_/, ":", pt); PT[pn] = pt }
+            continue }
+        if (l ~ /^[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+([\/][0-9]+)?$/) { dn++; rng(l); DL[dn] = RL; DH[dn] = RH; DA[dn] = l; DO[dn] = own } }
+    while ((getline l < gf) > 0) { split(l, x, " "); gn++; GL[gn] = x[1] + 0; GH[gn] = x[2] + 0; GS[gn] = x[3] }
+    while ((getline l < cpf) > 0) { split(l, x, " "); CK[x[1]] = x[2]; CT[x[1]] = (x[3] == "-" ? "" : x[3]); CU[x[1]] = (x[4] == "-" ? "" : x[4]) }
+    while ((getline l < af) > 0) { split(l, x, " "); an++; AL[an] = x[1] + 0; AH[an] = x[2] + 0; AF[an] = x[3] + 0; t = l; sub(/^[^ ]+ [^ ]+ [^ ]+ /, "", t); AT[an] = t }
+    while ((getline l < wf) > 0) if (l ~ /^[0-9]+[.][0-9]+[.][0-9]+ [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/) { split(l, x, " "); if (x[2] >= wcut) WT[x[1]] = x[2] }
+    while ((getline l < igf) > 0) { split(l, x, " "); if (x[2] >= today) { ign++; IGC[ign] = x[1]; IGU[ign] = x[2] } }
+    while ((getline l < imrf) > 0) { split(l, x, " "); ch = x[2]; CN[ch]++; CR[ch, CN[ch]] = l " " }
+    while ((getline l < imsf) > 0) { split(l, x, " "); s = x[2]; SN[s]++; rng(x[3]); SL[s, SN[s]] = RL; SH[s, SN[s]] = RH; SX[s, SN[s]] = (l ~ / nomatch/) }
+}
+{ key = $1; if (key == "") next; rng(key); lo = RL; hi = RH; isip = (key !~ /\//)
+  KS = ""; NK = 0; FULL = 0; PART = 0; BIDIR = 0
+  for (i = 1; i <= dn; i++) if (DL[i] <= lo && DH[i] >= hi) { addk(DL[i] == DH[i] ? "ip" : "cidr", DA[i], "all", "", "", 0, DO[i]); if (lfbio != 1) BIDIR = 1 }
+  pa = ""
+  for (i = 1; i <= pn; i++) if (PL[i] <= lo && PH[i] >= hi) { k = PA[i] SUBSEP PO[i]
+      if (PR[i] == "udp") PU[k] = PU[k] (PU[k] == "" ? "" : ",") PT[i]; else PC[k] = PC[k] (PC[k] == "" ? "" : ",") PT[i]
+      if (!(k in PS)) { PS[k] = 1; pa = pa SUBSEP k } }
+  n = split(substr(pa, 2), q, SUBSEP)
+  for (i = 1; i <= n; i += 2) { k = q[i] SUBSEP q[i + 1]; addk("port", q[i], "ports", PC[k], PU[k], 0, q[i + 1]); delete PC[k]; delete PU[k]; delete PS[k] }
+  for (i = 1; i <= tn; i++) { rng(TA[i]); if (RL <= lo && RH >= hi) { addk("temp", TA[i], TP[i] == "" ? "all" : "ports", TP[i], "", TE[i], 0); if (TD[i] ~ /out/) BIDIR = 1 } }
+  for (i = 1; i <= gn; i++) if (GL[i] <= lo && GH[i] >= hi) { split(GS[i], g, ":"); kk = GS[i]; if (kk in GSEEN) continue; GSEEN[kk] = 1
+      if (g[1] == "cc" || g[1] == "asn") addk(g[1], g[2], g[3] == "all" ? "all" : "ports", g[3] == "all" ? "" : ccpt, g[3] == "all" ? "" : ccpu, 0, 0)
+      else if (g[1] == "cl") addk("cl", g[2], CK[g[2]] == "all" ? "all" : "ports", CK[g[2]] == "exc" ? "exc:" CT[g[2]] : CT[g[2]], CK[g[2]] == "exc" ? "exc:" CU[g[2]] : CU[g[2]], 0, 0)
+      else if (g[1] == "bk") addk("bk", g[2], "all", "", "", 0, 0) }
+  delete GSEEN
+  IMA = ""
+  if (isip && CN["INPUT_imunify360"]) { IMS = ""; IPA = 0; r = iwalk("INPUT_imunify360", lo, 0, 0)
+      # gri liste / captcha: yalnız WebShield (doğrulama sayfası) portlarına izin, gerisi düşer → kısmi, "ws":1
+      if (r == "D") addk("imu", IMS, IPA ? "ports" : "all", "", "", 0, 0, IPA ? ",\"ws\":1" : "")
+      else if (r == "A") IMA = IMS }
+  # izin: en güçlüsü (1 bütün portlar > 2 sunucunun kendi IP si > 3 yalnız gelen yönde bütün portlar > 0 tek portluk). 3, ban iki
+  # yönlüyse işlemez (IP kartının wfin kuralı: tekil / aralık banı LF_BLOCKINONLY 1 değilse iki yönlü, geçici satırın yönü satırdan)
+  al = ""; self = 0; aff = -1; ap = 0
+  for (i = 1; i <= an; i++) if (AL[i] <= lo && AH[i] >= hi) { if (AF[i] == 2) self = 1; q2 = AP2[AF[i]]; if (q2 > ap) { ap = q2; aff = AF[i]; al = AT[i] } }
+  if (isip && IMA != "" && ap < 4) { aff = 1; al = "Imunify360: " IMA }
+  e = FULL ? "ban" : (PART ? "part" : "none")
+  if (aff == 1 || aff == 2 || (aff == 3 && !BIDIR)) e = "alw"
+  o = "{\"e\":\"" e "\",\"k\":[" KS "]"
+  if (aff >= 0) o = o ",\"al\":{\"ff\":" aff ",\"src\":" js(al) "}"
+  if (self) o = o ",\"self\":1"
+  p24 = key; sub(/\.[0-9]+(\/[0-9]+)?$/, "", p24); if (isip || key ~ /\/24$/) if (p24 in WT) o = o ",\"w\":\"" WT[p24] "\""
+  for (i = 1; i <= ign; i++) { c = IGC[i]; if (c == key) { o = o ",\"ig\":\"" IGU[i] "\""; break }
+      if (c ~ /\//) { rng(c); if (RL <= lo && RH >= hi) { o = o ",\"ig\":\"" IGU[i] "\""; break } } }
+  print key "\t" e "\t" o "}" }'
+obj_state() {    # stdin: anahtarlar (IP / CIDR, satır başına) → stdout "anahtar<TAB>e<TAB>json"
+    st_prep || return 1
+    LC_ALL=C awk -v now="$(date +%s)" -v today="$TODAY" -v wcut="$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')" \
+        -v tbf="$ST_D/tb" -v dnf="$DENY_FILE" -v gf="$ST_D/geo" -v cpf="$ST_D/clp" -v af="$ST_D/alw" -v wf="$SAYAC_FILE" -v igf="$IGNORE_FILE" \
+        -v imrf="$ST_D/imr" -v imsf="$ST_D/ims" -v lfbio="$(conf_val LF_BLOCKINONLY)" -v ccpt="$(conf_val CC_DENY_PORTS_TCP | tr -cd '0-9,:')" -v ccpu="$(conf_val CC_DENY_PORTS_UDP | tr -cd '0-9,:')" "$AWK_ST"
+}
+st_fill() {      # stdin: JSON satırı, şu anki durum yerine yer tutucu "\001IP" → yer tutucular tek durum kaydıyla doldurulur
+    local L ips sf
+    L=$(cat); ips=$(printf '%s' "$L" | grep -aoE $'\001[0-9.]+' | tr -d $'\001' | sort -u)
+    if [ -z "$ips" ]; then printf '%s\n' "$L"; return 0; fi
+    st_prep; sf=$(printf '%s\n' "$ips" | obj_state)
+    printf '%s\n' "$L" | awk -v sf="$sf" 'BEGIN { n = split(sf, R, "\n"); for (i = 1; i <= n; i++) { split(R[i], x, "\t"); if (x[1] != "") S[x[1]] = x[3] } }
+        { o = ""; r = $0; while (match(r, /"\001[0-9.]+"/)) { k = substr(r, RSTART + 2, RLENGTH - 3); o = o substr(r, 1, RSTART - 1) ((k in S) ? S[k] : "null"); r = substr(r, RSTART + RLENGTH) } print o r }'
+}
+obj_state1() {   # ANAHTAR → REPLY = json (tek nesne). st_prep ana kabukta: alt kabukta kurulsa her çağrıda yeniden hazırlanırdı
+    st_prep || { REPLY='{"e":"none","k":[]}'; return 1; }
+    REPLY=$(printf '%s\n' "$1" | obj_state | cut -f3)
+    [ -n "$REPLY" ] || REPLY='{"e":"none","k":[]}'
 }
 do_lookup() {
     local ip="$1" n host="" fwd=false txt asn="" pfx="" cc="" reg="" alloc="" asname="" a b c d i
@@ -4839,6 +5015,7 @@ do_lookup() {
         # düğmelerini ve sonucu buna göre çizer (önce etiketten kendisi tahmin ediyordu: Imunify etiketini tam izin sayıyordu)
         if [ "$wff" = 3 ] && [ "$wle" = in_ok ]; then o+=",\"wfull\":1,\"wfin\":1"; else o+=",\"wfull\":$([ "$wff" = 1 ] && echo 1 || echo 0)"; fi
         [ -n "$ign_t" ] && o+=",\"ign_t\":$ign_t"
+        obj_state1 "$ip"; o+=",\"st\":$REPLY"    # tek durum kaydı (Etkisini ölç, aralık kartı, kaynak ayrıntısı aynı işlevden)
         # IP'nin kendi izni (panelden kaldırılabilen): csf.allow'daki kendi satırı ve geçici izin (kalan saniye)
         local al_l al_t
         al_l=$(grep -m1 -E "^${ip//./\\.}([[:space:]]|$)" "$CSF_DIR/csf.allow" 2>/dev/null)
@@ -6330,11 +6507,8 @@ do_src_ips() {   # ANAHTAR (ASnnn | cl:ad) → JSON: o sağlayıcıya / kiralık
     src_rng "$k" "$rng"; rc=$?
     if [ "$rc" -ne 0 ]; then rm -f "$rng"; case "$rc" in 3) echo '{"ok":false,"error":"no_asn_data"}' ;; 5) echo '{"ok":false,"error":"no_v4"}' ;; *) echo '{"ok":false,"error":"no_list"}' ;; esac; return 1; fi
     svm=$(mktemp) && bl_svc_map "$svm"
-    # bütün portlara izinli adresler (IP kartı ve Etkisini ölç ile aynı ölçüt: wl_ff_lines ff 1): CSF izni her bandan önce uygular,
-    # bu IP'lerin banı işlemez → durum "alw" (tablo "kalıcı banlı" diyordu, IP kartı "banı işlemiyor")
-    local alw wi wlo whi wix wff; alw=$(mktemp) || { rm -f "$rng" "$svm"; return 1; }
-    load_whitelist >/dev/null 2>&1
-    while read -r wi wlo whi wix wff; do [ "$wff" = 1 ] && printf '%s %s\n' "$wlo" "$whi"; done < <(wl_ff_lines) | sort -n -k1,1 > "$alw"
+    # şu anki durum tek durum kaydıdır (obj_state; IP kartı, Etkisini ölç, aralık kartı aynı): satır yer tutucu yazar, sonda st_fill
+    # doldurur. Önce burada ayrı bir hesap vardı (tekil / geçici / aralık / blok listesi / tam izin), kiralık listeyi ve Imunify'ı bilmiyordu
     local now; printf -v now '%(%s)T' -1
     { [ -r "$EVENTS_FILE" ] && grep -F '"ips":[{' "$EVENTS_FILE" 2>/dev/null | awk '
         { t = 0; ty = ""; if (match($0, /"t":[0-9]+/)) t = substr($0, RSTART + 4, RLENGTH - 4) + 0
@@ -6348,33 +6522,27 @@ do_src_ips() {   # ANAHTAR (ASnnn | cl:ad) → JSON: o sağlayıcıya / kiralık
           if (c ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) print "D\t" c "\t0\t\t" cm
           else if (c ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\/[0-9]+$/) print "C\t" c }' "$DENY_FILE" 2>/dev/null
       tb_lines | awk -F'|' '{ k = ($1 ~ /\//) ? "R" : "T"; print k "\t" $1 "\t" $2 "\t" $3 "\t" $6 }'   # dosyadaki satır = ban duruyor
-    } | awk -F'\t' -v rf="$rng" -v pc="$svm" -v af="$alw" -v bkf=<(bkl_lines) "$AWK_CLS"'
+    } | awk -F'\t' -v rf="$rng" -v pc="$svm" "$AWK_CLS"'
         function v4(x,  p) { split(x, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
         function de(x,  a, k, M, i, h) { split("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec", M, " "); k = split(x, a, /[ \t]+/)
             if (k < 4 || a[k] !~ /^[0-9][0-9][0-9][0-9]$/ || a[k - 1] !~ /^[0-9][0-9]:[0-9][0-9]:[0-9][0-9]$/) return 0
             split(a[k - 1], h, ":"); for (i = 1; i <= 12; i++) if (M[i] == a[k - 3]) return mktime(a[k] " " i " " a[k - 2] " " h[1] " " h[2] " " h[3]); return 0 }
         function js(x) { gsub(/\\./, "", x); gsub(/"/, "", x); gsub(/[[:cntrl:]]/, " ", x); return "\"" substr(x, 1, 140) "\"" }
         function inr(v,  a, z, c, j) { a = 1; z = rn; j = 0; while (a <= z) { c = int((a + z) / 2); if (L[c] <= v) { j = c; a = c + 1 } else z = c - 1 }; return j && PM[j] >= v }
-        function ina(v,  a, z, c, j) { a = 1; z = an; j = 0; while (a <= z) { c = int((a + z) / 2); if (AL[c] <= v) { j = c; a = c + 1 } else z = c - 1 }; return j && AM[j] >= v }
         BEGIN { while ((getline l < rf) > 0) { split(l, x, " "); rn++; L[rn] = x[1] + 0; h = x[2] + 0; PM[rn] = (rn == 1 || h > PM[rn - 1]) ? h : PM[rn - 1] }
-                while ((getline l < af) > 0) { split(l, x, " "); an++; AL[an] = x[1] + 0; h = x[2] + 0; AM[an] = (an == 1 || h > AM[an - 1]) ? h : AM[an - 1] }
-                while ((getline l < pc) > 0) { split(l, x, " "); PC[x[1]] = x[2] }
-                while ((getline l < bkf) > 0) { split(l, x, " "); bn++; BL[bn] = x[1] + 0; BH[bn] = x[2] + 0; BN[bn] = x[3] } }   # CSF blok listeleri
-        $1 == "C" || $1 == "R" { split($2, q, "/"); lo = v4(q[1]); cn++; CL[cn] = lo; CH[cn] = lo + 2 ^ (32 - q[2]) - 1; CK[cn] = $1; CC[cn] = $2; next }
+                while ((getline l < pc) > 0) { split(l, x, " "); PC[x[1]] = x[2] } }
+        $1 == "C" || $1 == "R" { next }
         { ip = $2; if (!(ip in IN)) IN[ip] = inr(v4(ip)); if (!IN[ip]) next
           t = $3 + 0; if ($1 == "D") { t = de($5); D[ip] = 1 } else if ($1 == "T") TT[ip] = 1
           if (!(ip in BT) || t > BT[ip]) { BT[ip] = t; BW[ip] = ($1 == "E" ? $5 : $5); BF[ip] = ($1 == "E" ? $4 : $1 == "D" ? "deny" : "temp") } }
         END { n = 0
-            for (ip in BT) { n++; v = v4(ip); st = D[ip] ? "deny" : TT[ip] ? "temp" : ""
-                if (an && ina(v)) st = "alw"
-                if (st == "") for (i = 1; i <= cn; i++) if (CL[i] <= v && CH[i] >= v) { st = (CK[i] == "C" ? "deny24:" : "temp24:") CC[i]; if (CK[i] == "C") break }
-                if (st == "") for (i = 1; i <= bn; i++) if (BL[i] <= v && BH[i] >= v) { st = "bkl:" BN[i]; break }
+            for (ip in BT) { n++
                 sv = cls(BW[ip]); if (sv == "repeat" && (ip in PC)) sv = PC[ip]
-                K[n] = BT[ip]; R[n] = "[" js(ip) "," js(sv) "," js(BW[ip]) "," BT[ip] "," js(BF[ip]) "," js(st) "]" }
+                K[n] = BT[ip]; R[n] = "[" js(ip) "," js(sv) "," js(BW[ip]) "," BT[ip] "," js(BF[ip]) ",\"\001" ip "\"]" }
             o = ""; m = 0
             for (j = 1; j <= n && m < 500; j++) { b = 0; bt = -1; for (i in K) if (K[i] > bt) { bt = K[i]; b = i }; if (!b) break; o = o (m++ ? "," : "") R[b]; delete K[b] }
-            printf "{\"ok\":true,\"n\":%d,\"ips\":[%s]}\n", n, o }'
-    rm -f "$rng" "$svm" "$alw"
+            printf "{\"ok\":true,\"n\":%d,\"ips\":[%s]}\n", n, o }' | st_fill
+    rm -f "$rng" "$svm"
 }
 do_asn_impact() { # ANAHTAR (ASnnn | cl:ad | bk:ad | net:CIDR) → son 24 saatin web günlüklerinde bu sağlayıcıdan / kiralık listeden / CSF
     # blok listesinden / adresten (tek IP /32 ya da aralık /8–/32: IP ve aralık kartı) gelen istekler
@@ -6432,22 +6600,6 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad | bk:ad | net:CIDR) → son 24 saatin
         done | sort -n -k1,1 > "$clfa"
         awk -v w="$cwf" '{ i = index(w, " " $3 ":"); if (!i) next; f = substr(w, i + length($3) + 2); sub(/ .*/, "", f); print $1, $2, $3, f }' "$clfa" > "$clf"
     fi
-    # adresi kapsayan öteki banlar (IP kartının "Bu IP'yi kapsayan banlar" listesiyle aynı türler): ülke banı (CSF'in bölge
-    # dosyası, CC_DENY ya da CC_DENY_PORTS) ve etkin kiralık listeler (web portlarını kapatmasalar da); csf.deny port satırları awk içinde
-    local xcf k c z; xcf=$(mktemp) || { rm -f "$rng" "$lst" "$alw" "$clf"; return 1; }
-    { for k in CC_DENY CC_DENY_PORTS; do
-          for c in $(conf_val "$k" | LC_ALL=C tr '[:lower:],' '[:upper:] '); do
-              [[ "$c" =~ ^[A-Z]{2}$ ]] || continue; z="$CSF_VAR/zone/${c,,}.zone"; [ -r "$z" ] || continue
-              awk -F'[./]' -v s="cc:$c:$([ "$k" = CC_DENY ] && echo all || echo ports)" 'NF >= 4 && $1 ~ /^[0-9]+$/ { b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%.0f %.0f %s\n", lo, lo + 2 ^ (32 - b) - 1, s }' "$z"
-          done
-      done
-      if [ "$CLOUD_ON" = 1 ]; then
-          for x in $CLOUD_ACTIVE; do
-              [ -r "$CLOUD_DIR/$x.txt" ] && awk -F'[./]' -v s="cloud:$x" 'NF >= 4 && $1 ~ /^[0-9]+$/ { b = (NF == 5 ? $5 : 32); lo = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "%.0f %.0f %s\n", lo, lo + 2 ^ (32 - b) - 1, s }' "$CLOUD_DIR/$x.txt"
-          done
-      fi
-      bkl_lines | awk '{ print $1, $2, "bkl:" $3 }'      # CSF blok listeleri (yalnız etkin satırlar)
-    } > "$xcf"
     asn_banned; local ban="" bsince=0 bkey=""; [ -n "$n" ] && ban="${ASB[$n]:-}"   # kiralık listede sağlayıcı banı yok
     # banlıysa banın konduğu an: sağlayıcı olaylarında bu ASN'nin kesintisiz yer aldığı son dizinin ilk olayı;
     # ondan sonraki istekler ayrıca sayılır (ban işliyorsa web günlüğünde açık adreslerden istek kalmaz)
@@ -6511,32 +6663,10 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad | bk:ad | net:CIDR) → son 24 saatin
     else find -L "$dir" -type f -mmin -1440 ! -name '*bytes_log*' ! -name '*.offset*' ! -name '*.gz' 2>/dev/null > "$lst"; fi
     since=$(date -d '24 hours ago' +%Y%m%d%H%M%S)
     # dosyalar tek awk'a verilir (xargs çok dosyada gruplara bölüp yalnız son grubun sonucunu bırakıyordu)
-    awk -v sts="$IMP_STATES" -v rf="$rng" -v lf="$lst" -v since="$since" -v af="$alw" -v cf="$clf" -v cdf="$CDN_FILE" -v cweb="$cweb" -v cact="$cwl" -v ban="$ban" -v bkey="$bkey" -v bkey2="$([ -n "$bkey" ] && date -d "@$(( bsince + 120 ))" +%Y%m%d%H%M%S)" -v bsince="$bsince" -v bweb="$bweb" -v tbf=<(tb_lines) -v dnf="$DENY_FILE" -v wf="$SAYAC_FILE" -v wcut="$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')" -v imf="$IMUNIFY_FILE" -v xf="$xcf" -v now="$(date +%s)" '
+    awk -v sts="$IMP_STATES" -v rf="$rng" -v lf="$lst" -v since="$since" -v af="$alw" -v cf="$clf" -v cdf="$CDN_FILE" -v cweb="$cweb" -v cact="$cwl" -v ban="$ban" -v bkey="$bkey" -v bkey2="$([ -n "$bkey" ] && date -d "@$(( bsince + 120 ))" +%Y%m%d%H%M%S)" -v bsince="$bsince" -v bweb="$bweb" -v now="$(date +%s)" '
         BEGIN { while ((getline l < rf) > 0) { split(l, x, " "); m++; LO[m] = x[1] + 0; HI[m] = x[2] + 0 }
                 while ((getline l < cf) > 0) { split(l, x, " "); cn++; CL[cn] = x[1] + 0; h = x[2] + 0   # 4. alan: kapattığı web portları (8 = 80, 4 = 443)
                     if (cn == 1 || h > CP[cn - 1]) { CP[cn] = h; CN[cn] = x[3]; CF[cn] = x[4] } else { CP[cn] = CP[cn - 1]; CN[cn] = CN[cn - 1]; CF[cn] = CF[cn - 1] } }
-                # şu anki banlar: geçici (kalan saniye), csf.deny içindeki tek IP ve /24 blok satırları, Imunify360 kara listesi
-                # aralık banları da (kalıcı ve geçici; /24, /16, …): adresi kapsayan ban şu anki durumda söylenir. İzlenen bloklar sayaçtan
-                # (geçici blok banından sonra izleme süresi içinde): kartı açmadan görülsün
-                # tb_lines: "adres|başlangıç|bitiş|…"; dosyadaki satır = ban duruyor (süresi dolmuşu lfd kaldırana dek kalan 1 sn)
-                while ((getline l < tbf) > 0) { split(l, x, "|"); tbr = x[3] - now; if (tbr < 1) tbr = 1
-                    if (x[1] ~ /^[0-9.]+$/) TB[x[1]] = tbr
-                    else if (x[1] ~ /^[0-9.]+\/[0-9]+$/) { split(x[1], y, "/"); tn++; TL[tn] = v4(y[1]); TH[tn] = TL[tn] + 2 ^ (32 - y[2]) - 1; TT[tn] = tbr } }
-                while ((getline l < xf) > 0) { split(l, x, " "); xn++; XL[xn] = x[1] + 0; XH[xn] = x[2] + 0; XS[xn] = x[3] }
-                while ((getline l < dnf) > 0) { sub(/[ \t#].*/, "", l)
-                    # port satırı (kısmi ban): yönden sonraki ilk s= / d= port, sonraki adres; yalnız gelen yön
-                    if (l ~ /[|]/) { nf = split(l, f, "|"); pr = "tcp"; dr = "in"; pt = ""; ad = ""
-                        for (i = 1; i <= nf; i++) { if (f[i] ~ /^(tcp|udp|icmp)$/) pr = f[i]; else if (f[i] ~ /^(in|out)$/) dr = f[i]
-                            else if (f[i] ~ /^[sd]=/) { if (pt == "") pt = substr(f[i], 3); else if (ad == "") ad = substr(f[i], 3) } }
-                        # /8 ten geniş satır (herkese bir portu kapatan kural) ban sayılmaz: IP kartındaki adv_wide ile aynı
-                        split(ad, y, "/"); if (y[2] == "") y[2] = 32
-                        if (dr == "in" && ad ~ /^[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+([\/][0-9]+)?$/ && pt !~ /[.]/ && y[2] + 0 >= 8) { xn++; XL[xn] = v4(y[1])
-                            XH[xn] = XL[xn] + 2 ^ (32 - y[2]) - 1; gsub(/,/, ";", pt); gsub(/_/, "-", pt); XS[xn] = "port:" toupper(pr) " " pt }
-                        continue }
-                    if (l ~ /^[0-9]/) { DN[l] = 1
-                    if (l ~ /\//) { split(l, y, "/"); dn2++; DL[dn2] = v4(y[1]); DH[dn2] = DL[dn2] + 2 ^ (32 - y[2]) - 1 } } }
-                while ((getline l < wf) > 0) { split(l, x, " "); if (x[1] ~ /^[0-9]+\.[0-9]+\.[0-9]+$/ && x[2] >= wcut) WT[x[1]] = 1 }
-                while ((getline l < imf) > 0) { split(l, x, "|"); if (x[1] ~ /^[0-9.]+$/) IMB[x[1]] = 1 }
                 while ((getline l < af) > 0) { split(l, x, " "); an++; AL[an] = x[1] + 0; h = x[2] + 0
                     if (an == 1 || h > AP[an - 1]) { AP[an] = h; AN[an] = x[3] } else { AP[an] = AP[an - 1]; AN[an] = AN[an - 1] } }
                 while ((getline l < cdf) > 0) { split(l, x, "|"); if (x[1] != "#t" && x[1] != "") { CDN[x[1]] = (CDN[x[1]] == "" || CDN[x[1]] == "other") ? x[4] : CDN[x[1]] } }
@@ -6562,24 +6692,12 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad | bk:ad | net:CIDR) → son 24 saatin
             while (a <= b) { c = int((a + b) / 2); if (CL[c] <= v) { k = c; a = c + 1 } else b = c - 1 }
             return (k && CP[k] >= v) ? CN[k] "|" CF[k] : "" }
         function v4(a,  q) { split(a, q, "."); return ((q[1] * 256 + q[2]) * 256 + q[3]) * 256 + q[4] }
-        function ipst(ip,  o, p, v, i, rg, tr) {   # "temp:SANİYE,deny,deny24,tempr:SANİYE,imunify,watch" (şu an hangi listelerde)
-            o = ""; p = ip; sub(/\.[0-9]+$/, "", p); v = v4(ip)
-            if (ip in TB) o = o (o == "" ? "" : ",") "temp:" TB[ip]
-            if (ip in DN) o = o (o == "" ? "" : ",") "deny"
-            else { rg = 0; for (i = 1; i <= dn2; i++) if (v >= DL[i] && v <= DH[i]) { rg = 1; break }; if (rg) o = o (o == "" ? "" : ",") "deny24" }
-            tr = 0; for (i = 1; i <= tn; i++) if (v >= TL[i] && v <= TH[i] && TT[i] > tr) tr = TT[i]
-            if (tr && !rg) o = o (o == "" ? "" : ",") "tempr:" tr
-            if (ip in IMB) o = o (o == "" ? "" : ",") "imunify"
-            if ((p in WT) && !rg && !tr) o = o (o == "" ? "" : ",") "watch"     # izlenen blok (banı yok)
-            # bu sağlayıcının banı (ports: yalnız port listesi). Yalnız sağlayıcı ölçümünde: liste ("list") ve adresin kendi banı ("own")
-            # ölçümünde ban değişkeni sızıntı denetimi içindir; önce her satıra "asn:list" ekleniyordu, panel onu "sağlayıcı banı · yalnız
-            # port listesi" diye gösteriyordu (blok listesi ölçümünde sağlayıcı banı yokken)
-            if (ban != "" && ban != "list" && ban != "own" && !rg) o = o (o == "" ? "" : ",") "asn:" ban
-            if (!rg) for (i = 1; i <= xn; i++) if (v >= XL[i] && v <= XH[i] && index("," o ",", "," XS[i] ",") == 0) o = o (o == "" ? "" : ",") XS[i]   # ülke, kiralık liste, port satırı
-            return o }
+        # şu anki durum: günlük taraması yalnız yer tutucu yazar ("\001IP"); tarama bitince listedeki bütün adresler tek durum işlevinden
+        # (obj_state) tek seferde doldurulur (st_fill). Önce burada ayrı bir hesap vardı (ipst): izni ve kiralık liste kipini bilmiyordu
+        function stp(ip) { return "\"\001" ip "\"" }
         function topip(A, k, X, N,  o, i, best, bk, n) { o = ""   # [IP, istek, başarılı, örnek, şu anki durum]
             for (n = 0; n < k; n++) { best = 0; bk = ""; for (i in A) if (A[i] > best) { best = A[i]; bk = i }
-                if (bk == "") break; o = o (o == "" ? "" : ",") "[" js(bk) "," best "," (X[bk] + 0) "," js(N[bk]) "," js(ipst(bk)) "]"; delete A[bk] }
+                if (bk == "") break; o = o (o == "" ? "" : ",") "[" js(bk) "," best "," (X[bk] + 0) "," js(N[bk]) "," stp(bk) "]"; delete A[bk] }
             return "[" o "]" }
         function js(s) { gsub(/\\/, "/", s); gsub(/"/, "", s); gsub(/[[:cntrl:]]/, " ", s); return "\"" s "\"" }   # JSON için: ters bölü ve tırnak sadeleşir
         { ip = $1; if (!(ip in SEEN)) SEEN[ip] = inr(ip); if (!SEEN[ip]) next
@@ -6626,7 +6744,7 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad | bk:ad | net:CIDR) → son 24 saatin
               if (u !~ /^Mozilla/) { B[u]++; if (w != "") { BA[u]++; BN[u] = w } } } }
         function topp(A, k, X, N, I,  o, i, best, bk, n) { o = ""    # top gibi + 6. alan: örnek adresin şu anki durumu (ipst)
             for (n = 0; n < k; n++) { best = 0; bk = ""; for (i in A) if (A[i] > best) { best = A[i]; bk = i }
-                if (bk == "") break; o = o (o == "" ? "" : ",") "[" js(bk) "," best "," (X[bk] + 0) "," js(N[bk]) "," js(I[bk]) "," js(ipst(I[bk])) "]"; delete A[bk] }
+                if (bk == "") break; o = o (o == "" ? "" : ",") "[" js(bk) "," best "," (X[bk] + 0) "," js(N[bk]) "," js(I[bk]) "," stp(I[bk]) "]"; delete A[bk] }
             return "[" o "]" }
         function top(A, k, X, N, I,  o, i, best, bk, n) { o = ""     # [anahtar, sayı, izinli sayı, izinli servis, örnek IP]
             for (n = 0; n < k; n++) { best = 0; bk = ""; for (i in A) if (A[i] > best) { best = A[i]; bk = i }
@@ -6654,7 +6772,7 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad | bk:ad | net:CIDR) → son 24 saatin
             o = ""; for (n = 0; n < 6; n++) { b = 0; k = ""; for (i in XP) if (XP[i] > b) { b = XP[i]; k = i }; if (k == "") break
                 o = o (o == "" ? "" : ",") "[" js(substr(k, 1, 80)) "," XP[k] "]"; delete XP[k] }
             return "{" x ",\"multi\":[" mi + 0 "," mr + 0 "],\"pageonly\":[" pi + 0 "," pr + 0 "],\"api\":[" o "],\"flag\":[" fi + 0 "," fr + 0 "," fo + 0 "]}" }
-        END { if (sts != "") { ns = split(sts, Q, ","); so = ""; for (i = 1; i <= ns; i++) so = so (so == "" ? "" : ",") js(Q[i]) ":" js(ipst(Q[i]))
+        END { if (sts != "") { ns = split(sts, Q, ","); so = ""; for (i = 1; i <= ns; i++) so = so (so == "" ? "" : ",") js(Q[i]) ":" stp(Q[i])
                   printf "{\"ok\":true,\"st\":{%s}}\n", so; exit }
               nip = 0; for (i in IPS) nip++; naip = 0; for (i in AIP) naip++; ncip = 0; for (i in CIP) ncip++; noip = 0; for (i in OIPS) noip++
               printf "{\"ok\":true,\"total\":%d,\"ips\":%d,\"ok2xx\":%d,\"areq\":%d,\"aips\":%d,\"codes\":%s,\"ocodes\":%s,\"acodes\":%s,\"asvc\":%s,\"posts\":%s,\"bots\":%s,\"sites\":%s,\"fails\":%s,\"afails\":%s,",
@@ -6667,8 +6785,8 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad | bk:ad | net:CIDR) → son 24 saatin
               printf "\"crawl\":%s,", crawl()
               printf "\"after\":{\"web\":%d,\"since\":%d,\"req\":%d,\"ips\":%d,\"ok\":%d,\"last\":\"%s\",\"late\":%d,\"ex\":[%s]},", bweb, bsince, btot, nbip, bok, blast, blate, aex
               printf "\"open\":{\"req\":%d,\"ips\":%d,\"ok\":%d,\"codes\":%s,\"last\":\"%s\",\"pt\":%s,\"top\":%s},\"ban\":%s}\n",
-                  otot, noip, ook, obj(OC), olast, obj(OPT), topip(OR, 10, OOK, OSM), js(ban) }' /dev/null | grep . | { IFS= read -r L; b=$(cat "$bjf" 2>/dev/null); [ -n "$b" ] && L="${L%\}},\"bans\":$b}"; printf '%s\n' "$L"; } || echo '{"ok":true,"total":0,"ips":0,"ok2xx":0,"codes":{},"posts":[],"bots":[],"sites":[]}'
-    rm -f "$rng" "$lst" "$alw" "$clf" "$clfa" "$bjf" "$xcf"
+                  otot, noip, ook, obj(OC), olast, obj(OPT), topip(OR, 10, OOK, OSM), js(ban) }' /dev/null | grep . | { IFS= read -r L; b=$(cat "$bjf" 2>/dev/null); [ -n "$b" ] && L="${L%\}},\"bans\":$b}"; printf '%s\n' "$L" | st_fill; } || echo '{"ok":true,"total":0,"ips":0,"ok2xx":0,"codes":{},"posts":[],"bots":[],"sites":[]}'
+    rm -f "$rng" "$lst" "$alw" "$clf" "$clfa" "$bjf"
 }
 svc_health() {   # izinli servis kaynaklarından uyarı süresinden uzun süredir indirilemeyenler → bildirim
     local st="$(dirname "$SAYAC_FILE")/services/status" n c t e f bad="" badr="" now; now=$(date +%s)
@@ -8414,6 +8532,8 @@ prov_resolve     # "auto" ayarlar: CSF'te elle kurulmuş sağlayıcı banı / iz
 case "$MODE" in
     status) LOG_MODE=quiet; do_status; exit $? ;;
     lookup) LOG_MODE=quiet; do_lookup "${ARGS[0]}"; exit $? ;;
+    objstate) LOG_MODE=quiet; st_prep || exit 1
+        if [ "${#ARGS[@]}" -gt 0 ]; then printf '%s\n' "${ARGS[@]}" | obj_state; else obj_state; fi; exit $? ;;
     abuseblk) LOG_MODE=quiet                     # CIDR ağ adresiyle (aralık kartının gönderdiği biçim); anahtar yoksa nokey
         abuse_key || { echo '{"ok":false,"error":"nokey"}'; exit 1; }
         [ "$ABUSE_ON" = 1 ] || { echo '{"ok":false,"error":"abuse_off"}'; exit 1; }
@@ -8421,7 +8541,9 @@ case "$MODE" in
             ip2int "${ARGS[0]%/*}" && [ "$REPLY" -eq "$R_LO" ] || { echo '{"ok":false,"error":"bad_input"}'; exit 2; }
         abuse_block "${ARGS[0]}"; echo "{\"ok\":true,\"abuse\":$REPLY}"; exit 0 ;;
     events) LOG_MODE=quiet; do_events "${ARGS[0]}" "${ARGS[1]}" "${ARGS[2]}"; exit $? ;;
-    inside) LOG_MODE=quiet; do_inside "${ARGS[0]}"; exit $? ;;
+    inside) LOG_MODE=quiet
+        [ -z "$IMP_STATES" ] || [[ "$IMP_STATES" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}(,[0-9]{1,3}(\.[0-9]{1,3}){3}){0,299}$ ]] || { echo '{"ok":false,"error":"bad_states"}'; exit 2; }
+        do_inside "${ARGS[0]}"; exit $? ;;
     asnimpact) LOG_MODE=quiet; do_asn_impact "${ARGS[0]}"; exit $? ;;
     srcips) LOG_MODE=quiet; do_src_ips "${ARGS[0]}"; exit $? ;;
     prov)   LOG_MODE=file; take_lock || { act_out 3 "$M_BUSY"; exit 3; }

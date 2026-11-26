@@ -225,6 +225,21 @@ settings, with no prompts. `config.env` is left untouched.
   is from its threshold and its ban button) and *Who*;
   changing a threshold shows its effect on the current entries; suspicious
   networks show the services hit.
+- **One answer for "is this address blocked now"** — the IP card, the range
+  card, **Measure impact** and the rented-list / provider details all read the
+  same state record, computed in one place in the engine from everything that
+  can block or allow an address: `csf.deny` (single IPs, ranges, port lines),
+  `csf.tempban` (a line with ports is a partial ban), country and provider bans
+  (`CC_DENY` blocks everything, `CC_DENY_PORTS` only its ports), rented-server
+  lists with their rule, CSF block lists, the allow lists (an allow comes before
+  any ban, so an allowed and banned address is *allowed* and the ban is shown as
+  not working), watched blocks and muting. Imunify360 is read from the rules it
+  has actually installed, not from its settings, so every way of running it
+  alongside CSF is covered: an address in a set whose rule returns to CSF is
+  neither allowed nor blocked, an accept for all ports is an allow, a drop is a
+  block, and accepting only the WebShield ports before a drop (grey list,
+  CAPTCHA) is a partial block — the address can only reach the verification
+  page.
 - **History actions** — every row has a **⋯** menu with what can be done with
   that item *now* (ban, change, remove, mute, show in Overview, IP card), and
   the newest row of each item says its current state ("banned now", "in To

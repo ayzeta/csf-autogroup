@@ -167,7 +167,10 @@ switch ($a) {
         if (!$pfx && !($bits === '16' && ag_valid(AG_RE_16, $target)) && !($bits === '24' && ag_valid(AG_RE_24, $target))) {
             ag_json(['ok' => false, 'error' => 'bad_input']);
         }
-        ag_json(ag_run_json(['--inside', $pfx ? $target : ($bits === '16' ? $target . '.0.0/16' : $target . '.0/24'), '--json'], 45));
+        // kartta görünecek öteki IP'ler (Kontrol edilecekler satırı, banın / izlemenin dayandığı): şu anki durumları tek durum kaydından
+        $ips = trim((string) ($_POST['ips'] ?? ''));
+        if ($ips !== '' && !preg_match('/^([0-9]{1,3}\.){3}[0-9]{1,3}(,([0-9]{1,3}\.){3}[0-9]{1,3}){0,299}$/', $ips)) ag_json(['ok' => false, 'error' => 'bad_input']);
+        ag_json(ag_run_json(array_merge(['--inside', $pfx ? $target : ($bits === '16' ? $target . '.0.0/16' : $target . '.0/24'), '--json'], $ips !== '' ? ['--states', $ips] : []), 45));
 
     case 'action':
         $name   = (string) ($_POST['name'] ?? '');

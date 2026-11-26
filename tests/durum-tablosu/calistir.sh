@@ -672,6 +672,35 @@ for b in 7 8 9 10; do printf '151.80.%s|16276|FR|OVH - OVH SAS, FR|%s|151.80.0.0
 DIG_FAIL=cymru quiet
 mcheck "Cymru SERVFAIL: tur süresi geçen kayıtları yenilerken bilinen duyurulan aralığı silmez" "[ \$(grep -c '^151\.80\.[0-9]*|.*|151\.80\.0\.0/20' '$OF') -eq 4 ]"
 mcheck "Cymru SERVFAIL: üç arızadan sonra yalnız Cymru sorguları kapanır, günlükte sebebiyle" "grep -q 'Team Cymru.*SERVFAIL' '$R/autogroup.log' && ! grep -q 'DNS sorguları art arda\|DNS lookups failed' '$R/autogroup.log'"
+# TEK DURUM (obj_state, 1.15.136): bir nesnenin şu anki durumu tek kayıttan; her kenar durumu ve her yol (IP kartı) aynı kaydı verir.
+# Imunify kuralları sunucunun gerçek çıktısından (imunify-kurallar.txt, lin 2026-11-26); kümeler kök başına taklit ipset'ten
+mk st1; mkdir -p "$R/bin" "$R/var/lib/csf_autogroup/cloud"
+cp "$REPO/tests/durum-tablosu/imunify-kurallar.txt" "$R/imr"
+printf '#!/bin/bash\n[ "$1" = -S ] && [ -z "$2" ] && { cat "%s"; exit 0; }\n[ "$1" = -S ] && [ "$2" = LOCALINPUT ] && { echo "-N LOCALINPUT"; exit 0; }\nexit 1\n' "$R/imr" > "$R/bin/iptables"
+printf '#!/bin/bash\ncase "$1 $2" in\n "list -n") [ "$3" = ag_cloud ] && exit 0; exit 1;;\n "test ag_cloud") exit 0;;\n "list -o") case "$4" in\n  i360.ipv4.whitelist) echo "add $4 151.80.20.5";;\n  i360.ipv4.blacklist) echo "add $4 151.80.21.5"; echo "add $4 151.80.20.5";;\n  i360.ipv4.graylist) echo "add $4 151.80.22.5";;\n esac; exit 0;;\nesac\nexit 1\n' > "$R/bin/ipset"; chmod +x "$R/bin/iptables" "$R/bin/ipset"
+single 151.80.7.9 sshd; single 151.80.7.10 sshd; printf '151.80.7.10 # ofis\n' >> "$A"
+printf 'tcp|in|d=80,443|s=151.80.8.0/24 # csf_autogroup: kısmi ban [svc=web]\nudp|in|d=443|s=151.80.8.0/24 # csf_autogroup: kısmi ban [svc=web]\n' >> "$D"
+printf '%s\n' "$NOW|151.80.9.5||in|3600|lfd: (sshd) Failed SSH login" "$NOW|151.80.9.6|22|in|3600|lfd: (sshd) Failed SSH login" "$NOW|151.80.10.0/24||inout|7200|csf_autogroup: elle süreli" >> "$T"
+printf '151.70.1.0/24\n' > "$R/var/lib/csf_autogroup/cloud/oracle.txt"; printf '45.32.0.0/16\n' > "$R/var/lib/csf_autogroup/cloud/vultr.txt"
+printf '%s\n' CLOUD_BAN=1 CLOUD_SOURCES=oracle,vultr 'CLOUD_MODES="oracle=all:: vultr=svc:web:"' >> "$R/app/config.env"; printf 'oracle vultr\n' > "$R/var/lib/csf_autogroup/cloud/active"
+printf 'SPAMDROP|86400|0|http://www.spamhaus.org/drop/drop.txt\n' > "$R/etc/csf/csf.blocklists"; printf '151.80.11.0/24\n' > "$R/var/lib/csf/csf.block.SPAMDROP"
+printf '151.80.12 %s\n' "$(date +%F)" >> "$C"; printf '151.80.13.0/24 9999-12-31 root %s\n' "$NOW" > "$R/var/lib/csf_autogroup/ignored"
+run --obj-state 151.80.7.9 151.80.7.10 151.80.8.5 151.80.9.5 151.80.9.6 151.80.10.5 151.70.1.5 45.32.1.1 151.80.11.5 151.80.20.5 151.80.21.5 151.80.22.5 151.80.12.5 151.80.13.5 151.80.8.0/24 > "$W/out/st1.txt" 2>/dev/null
+sto() { awk -F'\t' -v k="$1" '$1 == k { print $2 "\t" $3 }' "$W/out/st1.txt"; }
+stc() { sto "$1" | grep -qE "^$2	.*$3"; }
+mcheck "tek durum: tekil ban → engelli (ip); izinli + banlı → izinli, kapatan yine listede (ban işlemiyor bulgusunun dayanağı)" "stc 151.80.7.9 ban '\"t\":\"ip\"' && stc 151.80.7.10 alw '\"t\":\"ip\".*\"al\":\\{\"ff\":1'"
+mcheck "tek durum: eklentinin kısmi banı → kısmi (TCP 80,443 ve UDP 443 aynı kayıtta); aralığın kendisi de kısmi" "stc 151.80.8.5 part '\"t\":\"port\",\"a\":\"151.80.8.0/24\",\"m\":\"ports\",\"tcp\":\"80,443\",\"udp\":\"443\".*\"own\":1' && stc 151.80.8.0/24 part"
+mcheck "tek durum: lfd geçici tekil → engelli (bitişiyle); portlu geçici satır → kısmi; süreli aralık banının içi → engelli" "stc 151.80.9.5 ban '\"t\":\"temp\",\"a\":\"151.80.9.5\",\"m\":\"all\".*\"end\":[1-9]' && stc 151.80.9.6 part '\"t\":\"temp\",\"a\":\"151.80.9.6\",\"m\":\"ports\",\"tcp\":\"22\"' && stc 151.80.10.5 ban '\"t\":\"temp\",\"a\":\"151.80.10.0/24\",\"m\":\"all\"'"
+mcheck "tek durum: kiralık liste her şey kipi → engelli; servis kipi → kısmi" "stc 151.70.1.5 ban '\"t\":\"cl\",\"a\":\"oracle\",\"m\":\"all\"' && stc 45.32.1.1 part '\"t\":\"cl\",\"a\":\"vultr\",\"m\":\"ports\"'"
+mcheck "tek durum: CSF blok listesi → engelli" "stc 151.80.11.5 ban '\"t\":\"bk\",\"a\":\"SPAMDROP\"'"
+mcheck "tek durum: Imunify kuralları sırasıyla — beyaz liste RETURN (kara listede de olsa ne izin ne ban), kara liste engelli, gri liste kısmi" "stc 151.80.20.5 none && ! sto 151.80.20.5 | grep -q imu && stc 151.80.21.5 ban '\"t\":\"imu\",\"a\":\"i360.ipv4.blacklist\",\"m\":\"all\"' && stc 151.80.22.5 part '\"t\":\"imu\",\"a\":\"i360.ipv4.graylist\",\"m\":\"ports\",\"end\":0,\"ws\":1'"
+mcheck "tek durum: izlenen blok ve susturma kayıtta" "stc 151.80.12.5 none '\"w\":\"' && stc 151.80.13.5 none '\"ig\":\"9999-12-31\"'"
+LK=$(run --lookup 151.80.21.5 --json 2>/dev/null | grep -o '"st":{.*}' | head -c 2000)
+mcheck "tek durum: IP kartı (--lookup) aynı kaydı taşır" "[ -n \"\$(printf '%s' '$LK')\" ] && printf '%s' '$LK' | grep -qF \"\$(sto 151.80.21.5 | cut -f2)\""
+IN1=$(run --inside 151.80.10.0/24 --states 151.80.10.5 --json 2>/dev/null)
+mcheck "tek durum: aralık kartı (--inside) süreli aralık banını görür (kartın hükmü engelli) ve IP satırının kaydı tek durum kaydıyla aynı" "printf '%s' '$IN1' | grep -q '\"st\":{\"e\":\"ban\",\"k\":\[{\"t\":\"temp\",\"a\":\"151.80.10.0/24\"' && printf '%s' '$IN1' | grep -qF \"\\\"151.80.10.5\\\":\$(sto 151.80.10.5 | cut -f2)\" && run --inside 151.80.10.0/24 --states 'x;y' --json 2>/dev/null | grep -q bad_states"
+mk st2; printf 'CC_DENY = "AS16276"\nCC_DENY_PORTS = "FR"\nCC_DENY_PORTS_TCP = "22"\n' >> "$R/etc/csf/csf.conf"
+mcheck "tek durum: sağlayıcı banı (CC_DENY) → engelli; ülke port listesi (CC_DENY_PORTS) kısmi kapatan olarak aynı kayıtta" "run --obj-state 151.80.7.9 2>/dev/null | grep -qE '	ban	.*\"t\":\"asn\",\"a\":\"AS16276\",\"m\":\"all\".*\"t\":\"cc\",\"a\":\"FR\",\"m\":\"ports\",\"tcp\":\"22\"'"
 # sağlayıcı sıralaması: durum çıktısı sıralama ağırlığını verir (panel çubuğu ondan çizer); elle konan blok banı ağırlık almaz
 mk asnw; OF="$R/var/lib/csf_autogroup/owners"
 printf '151.80.7|9999|FR|AGIR-AS - Agir, FR|%s|\n151.80.8|9999|FR|AGIR-AS - Agir, FR|%s|\n' "$NOW" "$NOW" > "$OF"
@@ -737,8 +766,9 @@ quiet --config set 'CLOUD_MODES=gcp=svc::443'
 printf '151.80.7.9 - - [%s] "GET /s HTTP/1.1" 200 10 "-" "curl"\n' "$TL" > "$R/domlogs/site.test-ssl_log"
 mcheck "kip: Etkisini ölç 80 ve 443'ü ayrı sayar (443'ü kapatan listede ssl isteği kapalı, 80 isteği açık)" "run --asn-impact cl:gcp --json 2>/dev/null | grep -q '\"cloud\":{\"web\":true,\"lists\":\"gcp[^\"]*\",\"req\":1,.*\"pt\":{\"443\":1}' && run --asn-impact cl:gcp --json 2>/dev/null | grep -q '\"open\":{\"req\":1,.*\"pt\":{\"80\":1}'"
 # eylemden sonra ekran: ölçümdeki IP'lerin durumu günlük okumadan (--states), ölçümün "open.top" durumuyla aynı; ban konunca değişir
-ST0=$(run --asn-impact cl:gcp --json 2>/dev/null | grep -o '\[\"151.80.7.9\",[0-9]*,[0-9]*,\"[^\"]*\",\"[^\"]*\"\]' | head -1 | sed 's/.*,"\([^"]*\)"\]$/\1/')
-mcheck "durum kipi: ölçümle aynı durum; ban konunca yeni durum; hatalı girdi reddedilir" "run --asn-impact cl:gcp --states 151.80.7.9 --json 2>/dev/null | grep -q '^{\"ok\":true,\"st\":{\"151.80.7.9\":\"$ST0\"}}$' && run --action ban1 151.80.7.9 >/dev/null 2>&1 && run --asn-impact cl:gcp --states 151.80.7.9 --json 2>/dev/null | grep -q '\"151.80.7.9\":\"[^\"]*deny' && run --asn-impact cl:gcp --states 'x;y' --json 2>/dev/null | grep -q bad_states"
+# 1.15.136: satır durumu tek durum kaydıdır (obj_state); ölçümün kendi hesabı (ipst) kalktı — kayıt --obj-state ile bire bir aynı
+ST0=$(run --obj-state 151.80.7.9 2>/dev/null | cut -f3)
+mcheck "durum kipi: Etkisini ölç satır durumu tek durum kaydıyla aynı (ölçümde ve --states'te); ban konunca yeni kayıt; hatalı girdi reddedilir" "[ -n '$ST0' ] && run --asn-impact cl:gcp --json 2>/dev/null | grep -qF '[\"151.80.7.9\",' && run --asn-impact cl:gcp --json 2>/dev/null | grep -qF '$ST0' && run --asn-impact cl:gcp --states 151.80.7.9 --json 2>/dev/null | grep -qxF '{\"ok\":true,\"st\":{\"151.80.7.9\":$ST0}}' && run --action ban1 151.80.7.9 >/dev/null 2>&1 && run --asn-impact cl:gcp --states 151.80.7.9 --json 2>/dev/null | grep -q '\"151.80.7.9\":{\"e\":\"ban\",\"k\":\[{\"t\":\"ip\"' && run --asn-impact cl:gcp --states 'x;y' --json 2>/dev/null | grep -q bad_states"
 
 # Kaynak ayrıntısı (--src-ips): kiralık liste kutusundaki ihlal eden IP sayısı (durumun prov.cloud.pot) ile ayrıntının tablosu aynı
 # kaynaklardan (olay kaydı, csf.deny tekilleri, geçici liste) ve aynı sayıda; her IP'nin şu anki durumu (kalıcı, geçici, aralık banı)
@@ -750,10 +780,10 @@ printf '%s\n' "151.80.9.0/24 # csf_autogroup: elle blok banı - do not delete" >
 printf '{"t":%s,"type":"warn16","cidr":"151.80.0.0/16","n":1,"ips":[{"ip":"151.80.9.20","host":"","why":"lfd - (sshd) Failed SSH login"}]}\n' "$NOW" >> "$R/var/lib/csf_autogroup/events.jsonl"
 SI=$(run --src-ips cl:gcp --json 2>/dev/null); PO=$(run --status --json 2>/dev/null | grep -o '"pot":{[^}]*}' | grep -o '"gcp":[0-9]*' | cut -d: -f2)
 mcheck "kaynak ayrıntısı: kutudaki sayı (pot) = ayrıntının IP sayısı, listenin dışındaki IP sayılmaz" "[ \"\$(printf '%s' '$SI' | grep -o '\"n\":[0-9]*')\" = '\"n\":4' ] && [ '$PO' = 4 ] && ! printf '%s' '$SI' | grep -q 198.51.100.5"
-mcheck "kaynak ayrıntısı: şu anki durum — tekil kalıcı, geçici, aralık banı içinde, banlı değil" "printf '%s' '$SI' | grep -q '\"151.80.7.10\",\"ssh\",[^]]*,\"deny\",\"deny\"\]' && printf '%s' '$SI' | grep -q '\"151.80.7.11\",\"smtp\",[^]]*,\"temp\",\"temp\"\]' && printf '%s' '$SI' | grep -q '\"151.80.9.20\",[^]]*\"deny24:151.80.9.0/24\"\]' && printf '%s' '$SI' | grep -q '\"151.80.7.9\",\"ssh\",[^]]*,\"temp24\",\"\"\]'"
+mcheck "kaynak ayrıntısı: şu anki durum — tekil kalıcı, geçici, aralık banı içinde, banlı değil" "printf '%s' '$SI' | grep -q '\"151.80.7.10\",\"ssh\",[^]]*,\"deny\",{\"e\":\"ban\",\"k\":\[{\"t\":\"ip\",\"a\":\"151.80.7.10\"' && printf '%s' '$SI' | grep -q '\"151.80.7.11\",\"smtp\",[^]]*,\"temp\",{\"e\":\"ban\",\"k\":\[{\"t\":\"temp\",\"a\":\"151.80.7.11\",\"m\":\"all\"' && printf '%s' '$SI' | grep -q '\"151.80.9.20\",[^]]*{\"e\":\"ban\",\"k\":\[{\"t\":\"cidr\",\"a\":\"151.80.9.0/24\"' && printf '%s' '$SI' | grep -q '\"151.80.7.9\",\"ssh\",[^]]*,\"temp24\",{\"e\":\"none\",\"k\":\[\]}\]'"
 printf '%s\n' "151.80.7.10 # ofis" "tcp|in|d=22|s=151.80.7.11" >> "$A"
 SI=$(run --src-ips cl:gcp --json 2>/dev/null)
-mcheck "kaynak ayrıntısı: bütün portlara izinli IP'nin banı 'izinli' (IP kartı: ban işlemiyor); tek portluk izin banı bozmaz" "printf '%s' '$SI' | grep -q '\"151.80.7.10\",[^]]*,\"alw\"\]' && printf '%s' '$SI' | grep -q '\"151.80.7.11\",[^]]*,\"temp\"\]' && run --lookup 151.80.7.10 --json 2>/dev/null | grep -q '\"wl\":\"csf.allow: 151.80.7.10'"
+mcheck "kaynak ayrıntısı: bütün portlara izinli IP'nin banı 'izinli' (IP kartı: ban işlemiyor); tek portluk izin banı bozmaz" "printf '%s' '$SI' | grep -q '\"151.80.7.10\",[^]]*,{\"e\":\"alw\"' && printf '%s' '$SI' | grep -q '\"151.80.7.11\",[^]]*,{\"e\":\"ban\",\"k\":\[{\"t\":\"temp\"' && run --lookup 151.80.7.10 --json 2>/dev/null | grep -q '\"wl\":\"csf.allow: 151.80.7.10'"
 mcheck "kaynak ayrıntısı: hatalı anahtar reddedilir" "run --src-ips 'cl:../x' --json 2>/dev/null | grep -q bad_key"
 
 # Imunify360 8.15 "port bilen" beyaz listesi (v3/imunify360-csf.txt, csf.allow'a Include ile): satırlar tek yönlü ve tek portlu
@@ -1120,7 +1150,7 @@ mcheck "blok listesi: listedeki IP'ye sonradan gelen lfd banı ban altında ihla
 # kaynak ayrıntısı: olay kaydında IP'si duran (ban altında ihlal olayı) ama tekil banı kalkmış adres → şu anki durumu blok listesi
 sed -i '/^151\.80\.7\.9 /d' "$D"
 mkdir -p "$R/var/lib/csf/Geo"; printf '151.80.0.0\t151.80.255.255\t16276\tFR\tOVH\n' > "$R/var/lib/csf/Geo/ip2asn-combined.tsv"   # src_rng: CSF'in ASN verisi (başlangıç, bitiş, ASN)
-mcheck "blok listesi: kaynak ayrıntısında (--src-ips) tekil banı kalkmış, listedeki IP'nin şu anki durumu blok listesi" "run --src-ips AS16276 --json 2>/dev/null | grep -q '\[\"151.80.7.9\",[^]]*\"bkl:SPAMDROP\"\]'"
+mcheck "blok listesi: kaynak ayrıntısında (--src-ips) tekil banı kalkmış, listedeki IP'nin şu anki durumu blok listesi" "run --src-ips AS16276 --json 2>/dev/null | grep -q '\[\"151.80.7.9\",[^]]*{\"e\":\"ban\",\"k\":\[[^]]*\"t\":\"bk\",\"a\":\"SPAMDROP\"'"
 mkm cvbklm 1; bkl; quiet; cvback 172800; single 151.80.7.9 sshd "$(pdt now)"; quiet
 mcheck "blok listesi: ban altında ihlal maili kapsamanın adıyla (panelle aynı)" "mtext | grep -q 'blok listesi SPAMDROP (her şey)'"
 # blok listesi aç / kapat (1.15.117; standart: yalnız panel işlemiyle, kapatma yalnız eklentinin açtığına). Açma / kapama biçimi WSL gerçek
@@ -1172,7 +1202,7 @@ mcheck "blok listesi Etkisini ölç: açık listede sızıntı denetimi (açık 
 mcheck "Etkisini ölç: 127.0.0.1 sunucunun kendisi (izinli kovada, açık adreslerde değil); öteki adres açık" "run --asn-impact bk:OZEL --json 2>/dev/null | grep -q '\"asvc\":{\"self\":2}' && run --asn-impact bk:OZEL --json 2>/dev/null | grep -o '\"open\":{[^}]*}' | grep -q '\"req\":1,\"ips\":1,'"
 # liste ölçümünde satırın durumu yalnız listeyi söyler: 1.15.128'e kadar "asn:list" de ekleniyordu, panel onu "sağlayıcı banı · yalnız
 # port listesi" diye gösteriyordu (sağlayıcı banı yokken)
-mcheck "liste Etkisini ölç: satır durumunda sağlayıcı banı belirteci yok (yalnız blok listesi)" "run --asn-impact bk:SPAMDROP --states 151.80.7.9 --json 2>/dev/null | grep -qx '{\"ok\":true,\"st\":{\"151.80.7.9\":\"bkl:SPAMDROP\"}}'"
+mcheck "liste Etkisini ölç: satır durumunda sağlayıcı banı belirteci yok (yalnız blok listesi)" "run --asn-impact bk:SPAMDROP --states 151.80.7.9 --json 2>/dev/null | grep -qx '{\"ok\":true,\"st\":{\"151.80.7.9\":{\"e\":\"ban\",\"k\":\[{\"t\":\"bk\",\"a\":\"SPAMDROP\",\"m\":\"all\",\"end\":0}\]}}}'"
 # IP / aralık kartında Etkisini ölç (1.15.129, net:CIDR): aynı ölçüm, tek IP ya da aralık; ağ adresi olmayan aralık reddedilir; adresin
 # kendi tam banı varsa ban işliyor mu (sızıntı denetimi) aynı hesapla
 kok_on && printf '151.80.7.10 # test tekil ban\n' >> "$R/etc/csf/csf.deny"

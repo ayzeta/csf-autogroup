@@ -17,7 +17,8 @@ const AG = globalThis.__AG;
 let F = 0; const ok = (ad, kosul, deger) => { if (kosul) console.log('  ✓ ' + ad); else { F++; console.log('  ✗ ' + ad + ' → ' + deger); } };
 for (const L of ['tr', 'en']) {
   AG.set({ config: {} }, L);
-  const v = AG.verdict({ covers: [{ kind: 'bkl', what: 'SPAMDROP' }] }, 99);
+  // hüküm tek durum kaydından (1.15.136: motorun obj_state'i; covers yalnız açıklama ayrıntısı)
+  const v = AG.verdict({ covers: [{ kind: 'bkl', what: 'SPAMDROP' }], st: { e: 'ban', k: [{ t: 'bk', a: 'SPAMDROP', m: 'all', end: 0 }] } }, 99);
   ok(L + ' sonuç cümlesi: blok listesiyle tam banlı', /SPAMDROP/.test(v) && /verdict bad/.test(v), v);
   const s = AG.impState('bkl:SPAMDROP');
   ok(L + ' Etkisini ölç durumu: blok listesi adıyla, kalıcı renk', /SPAMDROP/.test(s) && /perm/.test(s), s);

@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.15.136 — 2026-11-26
+
+An address's current state is computed in one place. Before, the engine
+computed it in six places and the panel in twelve, and the same address could
+be shown differently from screen to screen:
+
+- An address that was both allowed and banned was "allowed" on the IP card but
+  "permanently banned" in **Measure impact**. It is now allowed everywhere, with
+  the ban shown as not working.
+- Imunify360's block list was only seen by **Measure impact**. Imunify360 is
+  now read from its installed rules and shown on every screen. Its grey list
+  (only the verification page reachable) counts as a partial block.
+- A rented-server list set to *everything* was "partly banned" on the IP and
+  range cards. It is now blocked.
+- A timed range ban was not counted as covering the addresses in it. The IP
+  card offered narrower bans, and the range card for a /24 inside it did not
+  say it was closed.
+- A temporary ban line with ports was shown as a full ban. It is now partial.
+
+The rented-list and provider details and the range card's IP table read the
+same record. The engine has a new `--obj-state ADDRESS…` command that prints
+the record.
+
 ## 1.15.135 — 2026-11-26
 
 - A DNS answer of `SERVFAIL` or `REFUSED` was read as "no record". `dig +short`

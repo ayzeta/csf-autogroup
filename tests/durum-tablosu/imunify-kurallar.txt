@@ -1,0 +1,32 @@
+-A INPUT -j INPUT_imunify360
+-A INPUT_imunify360 -p tcp -m set --match-set i360.ipv4.remote_proxy src -m multiport --dports 52223,52224,52227,52228,52229,52230,52231,52232 -j ACCEPT
+-A INPUT_imunify360 -p tcp -m set --match-set i360.ipv4.remote_proxy_static src -m multiport --dports 52223,52224,52227,52228,52229,52230,52231,52232 -j ACCEPT
+-A INPUT_imunify360 -m set --match-set i360.ipv4.whitelist.full_access src -j RETURN
+-A INPUT_imunify360 -m set --match-set i360.ipv4.whitelist.host_ips src -j RETURN
+-A INPUT_imunify360 -m set --match-set i360.ipv4.i360_whitelist.static src -j RETURN
+-A INPUT_imunify360 -m set --match-set i360.ipv4.whitelist.custom src -j RETURN
+-A INPUT_imunify360 -m set --match-set i360.ipv4.whitelist src -j RETURN
+-A INPUT_imunify360 -m set --match-set i360.ipv4.blacklist src -j imunify360_log_bl
+-A INPUT_imunify360 -m set --match-set i360.ipv4.blacklist.custom src -j imunify360_log_bl
+-A INPUT_imunify360 -m set --match-set i360.ipv4.white.sync src -j RETURN
+-A INPUT_imunify360 -m set --match-set i360.ipv4.whitelist.static src -j RETURN
+-A INPUT_imunify360 -m set --match-set i360.ipv4.drop.sync src -j imunify360_log_bl
+-A INPUT_imunify360 -m set --match-set i360.ipv4.ignorelist src -j RETURN
+-A INPUT_imunify360 -p tcp -m set --match-set i360.ipv4.graysplashlist src -m multiport --dports 52223,52224,52227,52228,52229,52230,52231,52232 -j ACCEPT
+-A INPUT_imunify360 -p tcp -m set --match-set i360.ipv4.graylist src -m multiport --dports 52223,52224,52227,52228,52229,52230,52231,52232 -j ACCEPT
+-A INPUT_imunify360 -m set --match-set i360.ipv4.graylist src -j imunify360_log_gl
+-A INPUT_imunify360 -p tcp -m set --match-set i360.ipv4.splashscreen.sync src -m multiport --dports 52223,52224,52227,52228,52229,52230,52231,52232 -j ACCEPT
+-A INPUT_imunify360 -p tcp -m set --match-set i360.ipv4.captcha.sync src -m multiport --dports 52223,52224,52227,52228,52229,52230,52231,52232 -j ACCEPT
+-A INPUT_imunify360 -m set --match-set i360.ipv4.captcha.sync src -j imunify360_log_gl
+-A imunify360_log_bl -j NFLOG --nflog-prefix im360-blacklist --nflog-group 36005
+-A imunify360_log_bl -j DROP
+-A imunify360_log_gl -j NFLOG --nflog-prefix im360-graylist --nflog-group 36005
+-A imunify360_log_gl -j DROP
+-A imunify360_log_bl_country -j NFLOG --nflog-prefix im360-blacklisted-country --nflog-group 36005
+-A imunify360_log_bl_country -j DROP
+-A imunify360_webshield_ports -p tcp -m multiport --dports 52229,52230 -j ACCEPT
+-A imunify360_webshield_ports -p tcp -m set --match-set i360.ipv4.graylist src -m multiport --dports 52223,52224,52227,52228,52229,52230,52231,52232 -j RETURN
+-A imunify360_webshield_ports -s 127.0.0.1/32 -j ACCEPT
+-A imunify360_webshield_ports -j imunify360_log_port_block
+-A imunify360_log_port_block -j NFLOG --nflog-prefix im360-blocked-by-port --nflog-group 36005
+-A imunify360_log_port_block -j REJECT --reject-with icmp-port-unreachable

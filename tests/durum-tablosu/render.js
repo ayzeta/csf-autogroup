@@ -79,7 +79,10 @@ for (const s of scen) {
   // K1: IP'yi tamamen kapsayan /16 ya da daha geniş ban varken hiçbir ekran bu ağ içinde ban önermez
   if (mb <= 16) bans.forEach(([k, x]) => fail(s, `${k}: "${x[2]}" — ağ zaten tamamen kapalı (/${mb})`));
   // K2: blok tamamen banlıyken (kendi banı ya da geniş tam ban) blok için ban önerilmez
-  if (mb <= 24) bans.filter(([k, x]) => x[0] === 'ban24' || x[0] === 'promote').forEach(([k, x]) => fail(s, `${k}: "${x[2]}" — blok zaten tamamen kapalı`));
+  // (blok yalnız KENDİ geçici banıyla kapalıysa "Kalıcı yap" aynı banın türünü değiştirir, yeni ban değil: önerilir; 1.15.136'dan beri
+  // tek durum kaydı geçici aralık banını da kapsayan ban sayıyor)
+  const ownT = mb === 24 && ((lk.st || {}).k || []).some(k => k.t === 'temp' && k.m === 'all' && k.a === BLK);
+  if (mb <= 24) bans.filter(([k, x]) => x[0] === 'ban24' || (x[0] === 'promote' && !ownT)).forEach(([k, x]) => fail(s, `${k}: "${x[2]}" — blok zaten tamamen kapalı`));
   // K3: aynı aralığın kısmi banı varken düğme "Banı değiştir" demeli
   (lk.covers || []).filter(c => c.kind === 'port' && c.own).forEach(c => {
     const want = c.cidr.endsWith('/16') ? 'ban16' : 'ban24';
