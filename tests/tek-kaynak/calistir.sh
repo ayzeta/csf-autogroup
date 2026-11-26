@@ -27,6 +27,7 @@ kural "rozet (class=\"ag-pill\") yalnız stAttr'da" "class=\"ag-pill[ \"]" "^  f
 kural "adres bağlantısı yalnız cidrLink'te" "class=\"ag-cidr\"" "^  function cidrLink"
 kural "değiştirilebilen durum yalnız stLink'te (durumun kendisi tıklanır; ayrı \"Ne kapatılsın\" / \"Değiştir\" yok)" "class=\"ag-stlink\"" "^  function stLink"
 kural "kaynak ayrıntısı düğmesi yalnız detBtn'de (sağlayıcı, kiralık liste, blok listesi aynı düğme)" "data-act=\"srcinfo\" data-v=\"[^\"]*\" aria-expanded" "^  function detBtn"
+kural "AS rozeti yalnız asnB'de (sağlayıcı kartını açar; 1.15.131'de Kapsanan banlar listesi bgp.he.net'e gidiyordu)" "class=\"ag-asn[ \"]" "^  function asnB"
 kural "kapsayan ban etiketi yalnız coverTag'de" "class=\"ag-ctag" "^  function coverTag"
 kural "kart sayı rozeti yalnız countBadge'de (sayı num() ile)" "class=\"ag-count" "^  function countBadge"
 kural "sağlayıcı satırı yalnız asnRow'da (1.15.87: Banlı sağlayıcılar kendi kopyasıydı)" "class=\"ag-asn-r\"" "^    return '<div class=\"ag-asn-r\">"

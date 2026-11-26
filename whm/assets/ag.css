@@ -1262,6 +1262,8 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-tile .ag-tile-det { margin-top: 8px; }
 .ag-urled-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; font-size: 12.5px; }
 .ag-urled-r { padding: 4px 0; font-size: 12px; }
+.ag-urled-rh { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 3px; }
+.ag-urled-rh .ag-link { flex: none; }
 .ag-urled .ag-url-in { display: flex; align-items: center; gap: 8px; }
 .ag-urled .ag-url-in .ag-input { flex: 1; min-width: 0; font-size: 12px; }
 .ag-urled > .ag-muted { font-size: 11.5px; margin-top: 4px; }

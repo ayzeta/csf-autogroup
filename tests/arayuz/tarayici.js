@@ -24,13 +24,20 @@ const KURAL = `window.agHizaKayik = function (root) {
   return out;
 };
 window.agIpBagsiz = function (root) {
-  // tek başına IP ya da aralık yazan öğe IP / aralık kartını açmalı (kartın kendi başlığı, giriş kutuları hariç)
-  const re = /^\\d{1,3}(\\.\\d{1,3}){3}(\\/\\d{1,2})?$/;
-  return Array.from(root.querySelectorAll('td, span, div, b, li, code')).filter(e => {
-    if (!e.offsetWidth || !re.test(e.textContent.trim())) return false;
-    if (Array.from(e.children).some(c => c.textContent.trim() === e.textContent.trim())) return false;
-    return !e.closest('[data-ip], [data-act], a, button, input, textarea, select, .ag-drawer-h');
-  }).map(e => (e.className || e.tagName) + ': ' + e.textContent.trim());
+  // metinde geçen her IP / aralık ve ASnnn kartını açmalı: tek başına yazan öğe de, cümle ya da rozet içindeki de (addrHtml).
+  // Hariç: kartın / pencerenin başlığı ve kartın kendi adresi (.ag-addr-self), giriş kutuları, CSF satırı / komut çıktısı, örnek adres ("ör." / "e.g.").
+  // 1.15.131 canlı: Geçmiş rozeti "X banının içinde", IP kartı seviye satırı, aralık kartı "Sağlayıcı banı (ASnnn)" düz yazıydı;
+  // eski kural yalnız metni tümüyle IP olan öğeye bakıyordu.
+  const re = /\\b\\d{1,3}(\\.\\d{1,3}){3}(\\/\\d{1,2})?\\b|\\bAS\\d{3,}\\b/;
+  const out = [], tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let n;
+  while ((n = tw.nextNode())) {
+    const s = n.nodeValue, p = n.parentElement;
+    if (!p || !p.offsetWidth || !re.test(s) || /ör\\.|e\\.g\\./.test(s)) continue;
+    if (p.closest('[data-ip], [data-act], a, button, input, textarea, select, option, pre, code, .ag-mono, .ag-out, .ag-target, .ag-addr-self, .ag-drawer-h, .ag-title, .ag-modal h3, .ag-srcd-h')) continue;   // başlıklar: sunucu adı, pencerenin konusu
+    out.push((p.className || p.tagName) + ': ' + s.trim().slice(0, 70));
+  }
+  return out;
 };
 window.agGorunmez = function (root) {
   function saydam(c) { return !c || c === 'transparent' || /rgba\\(.*,\\s*0\\)$/.test(c); }
@@ -204,7 +211,7 @@ async function layoutChecks(page, label, width) {
   check(`${label} · ${width} px · tablolar başlıklı`, bas.length === 0, bas.slice(0, 3).join(' | '));
   const ulke = await page.evaluate(() => window.agUlkeTekrar(document.getElementById('ag-app')));
   check(`${label} · ${width} px · ülke kodu rozetin yanında yinelenmiyor`, ulke.length === 0, ulke.slice(0, 3).join(' | '));
-  const ipb = await page.evaluate(() => window.agIpBagsiz(document.getElementById('ag-app')));
+  const ipb = await page.evaluate(() => [].concat(window.agIpBagsiz(document.getElementById('ag-app')), ...Array.from(document.querySelectorAll('.ag-drawer, .ag-modal')).map(x => window.agIpBagsiz(x))));
   check(`${label} · ${width} px · IP / aralık yazan her öğe tıklanıyor`, ipb.length === 0, ipb.slice(0, 4).join(' | '));
   check(`${label} · ${width} px · tıklanabilir öğeler tıklanabilir görünüyor`, gor.length === 0, gor.slice(0, 4).join(' | '));
   const kd = await page.evaluate(() => [].concat(window.agKardes(document.getElementById('ag-app')), ...Array.from(document.querySelectorAll('.ag-drawer, .ag-modal')).map(x => window.agKardes(x))));
@@ -1337,6 +1344,9 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
       const s1 = await chips(SG, goo);
       check('izinli servis: hazır kutuya kendi kaynağınız çip olarak eklenir', !!s1 && s1.includes('ek'), JSON.stringify(s1));
       const sub = s1 && s1.find(x => x !== 'ek');
+      // adres düzenleyicisinin her satırı da kaldırılabilir (çipteki × ile aynı eylem; 1.15.132'ye kadar yalnız çipte vardı)
+      const edRm = await page.$$eval('.ag-urled-r[data-src]', R => R.map(r => !!r.querySelector('[data-act="srcrm"]')));
+      check('izinli servis: adres düzenleyicisinde her kaynak satırının kendi kaldırma düğmesi var', edRm.length > 1 && edRm.every(Boolean), JSON.stringify(edRm));
       await tik(page, `${SG} .ag-tile:has(.ag-tile-m b:text-is("${goo}")) .ag-chip-x[data-v^="svc|b:"]`); await page.waitForTimeout(300);
       const s2 = await chips(SG, goo);
       await tik(page, `${SG} .ag-tile-add`); await page.waitForSelector('.ag-modal [data-ri]', { timeout: 10000 }).catch(() => {});

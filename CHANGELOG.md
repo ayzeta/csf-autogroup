@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.15.132 — 2026-11-26
+
+- Allowed services: a built-in **Anthropic (Claude)** box
+  (`https://claude.com/crawling/bots.json`). Anthropic publishes a single list
+  for ClaudeBot (AI training), Claude-SearchBot and Claude-User, so the box
+  allows all three together. The README now says that a chip on the Google or
+  OpenAI box can be removed to leave that kind of visitor out (for example
+  OpenAI without GPTBot).
+- A source can also be removed from the box's address editor: every row has
+  the same "remove" action as the × on its chip.
+- Addresses and provider numbers inside status badges and notes open their
+  card too: the "inside the … ban" badge in History and on the IP card, the
+  provider-ban line and the mixed-owner note on the range card, the covered
+  bans list. The provider badge in the covered bans list opens the provider
+  card like everywhere else (it went to bgp.he.net).
+- In the offending-IP table of a provider or list, a repeat ban read from
+  csf.deny no longer shows lfd's raw line; it reads "repeat ban" like the
+  other tables.
+- List sizes say what they count. The allowed-services, rented-server and
+  blocklist counts (boxes, list rows, the combined file, mails and the log)
+  are list entries, each a single IP or a range, not single addresses: they
+  now read "IPs / ranges".
+- The note that Yandex and Facebook publish no address lists is gone from
+  the allowed-services card.
+
 ## 1.15.131 — 2026-11-25
 
 A pass over every screen, fixing each kind of inconsistency everywhere at once:

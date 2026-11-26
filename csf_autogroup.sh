@@ -65,7 +65,7 @@ grep() { command grep -a "$@"; }
 # sayı, anahtar; Türkçe modda sıralama kuralı zaten C idi (LC_COLLATE=C)
 sort() { LC_ALL=C command sort "$@"; }
 
-VERSION="1.15.131"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.132"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -166,7 +166,7 @@ SVC_EXPORT_RELOAD="${SVC_EXPORT_RELOAD:-0}"
 SVCX_FILE="${SVCX_FILE:-/opt/csf-autogroup/services-all.txt}"
 SVCX_RELOAD_CMD="${SVCX_RELOAD_CMD:-/scripts/restartsrv_httpd --graceful}"
 SVCX_HTTPD="${SVCX_HTTPD:-/usr/sbin/httpd}"   # birleşik dosyanın Apache denetimi (httpd -t -c); yoksa denetim yapılmaz
-SVC_SOURCES="${SVC_SOURCES-google}"    # virgüllü: google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake microsoft365 quiccloud
+SVC_SOURCES="${SVC_SOURCES-google}"    # virgüllü: google bing apple duckduckgo openai anthropic stripe mollie uptimerobot pingdom statuscake microsoft365 quiccloud
 SVC_EXTRA="${SVC_EXTRA:-}"              # boşlukla ayrılmış "ad|https://liste" ya da "ad|1.2.3.0/24"
 SVC_URLS="${SVC_URLS:-}"                # hazır kaynakların değiştirilmiş adresleri: "google-common|https://… bing|https://…"
 SVC_SKIP="${SVC_SKIP:-}"                # seçili kaynakların alınmayan alt listeleri (virgüllü): ör. "openai-user,openai-gptbot"
@@ -347,7 +347,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_MAILT24_SUBJ="%s geçici blok banı"
   M_MAILT24P_BODY="Aşağıdaki bloklar (/24) izleniyordu ve yine geçici eşik kadar IP'si aynı anda geçici banlandı; kalıcı ve silinmez (do not delete) olarak banlandı:"
   M_MAILT24P_SUBJ="%s blok kalıcıya alındı"
-  M_WL_LOADED="İzin listesi yüklendi: %s aralık, %s rignore alan adı"
+  M_WL_LOADED="İzin listesi yüklendi: %s IP / aralık, %s rignore alan adı"
   M_WL_SELF="sunucu IP'si"; M_FOREVER="süresiz"
   M_A_SELF="%s sunucunun kendi IP'sini (%s) içeriyor; banlanamaz"
   M_WL_SKIP="ATLANDI %s: izin listesiyle çakışıyor (%s)"
@@ -494,7 +494,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_L_OWNER="Sahibi"; M_L_PREFIX="Duyurulan blok"; M_L_REG="Kayıt"; M_L_DENY="csf.deny"
   M_L_TEMP="Geçici liste"; M_L_WL="İzin listesi"; M_L_CLOUD="Kiralık liste"; M_L_BKL="Blok listesi"; M_AB_LINE="puan %s/100 · %s bildirim (%s kişi) · son %s · %s"; M_AB_LIM="bugünkü sorgu sınırı doldu (%s/%s)"; M_AB_ERR="sorgulanamadı (HTTP %s): %s"; M_AB_BAD="AbuseIPDB anahtarı yalnız harf ve rakam olmalı (20–200 karakter)"; M_L_PENDING="İzleniyor"; M_L_IGN="Susturuldu"; M_L_ACCT="Denemeler"
   M_BKL_BAD="Liste adı ya da işlem geçersiz (beklenen: AD on|off)"; M_BKL_NONE="%s listesi csf.blocklists dosyasında yok"; M_BKL_NOTMINE="%s listesini eklenti açmadı; elle açılan listeyi eklenti kapatmaz (csf.blocklists dosyasından kapatılır)"; M_BKL_ON="%s blok listesi açıldı; csf ve lfd yeniden başladı, lfd listeyi indiriyor"; M_BKL_OFF="%s blok listesi kapatıldı; csf ve lfd yeniden başladı"
-  M_SVCX_WROTE="Birleşik servis dosyası yazıldı: %s adres (%s)"; M_SVCX_SHRINK="Birleşik servis dosyası yazılmadı: yeni liste %s adres, öncekinin (%s) yarısından az (%s)"; M_SVCX_FAIL="Birleşik servis dosyası yazılamadı (%s)"; M_SVCX_RELOAD="Web sunucusu yeniden yüklendi: %s"; M_SVCX_RELOADF="Web sunucusu yeniden yüklenemedi: %s (çıkış %s): %s"; M_SVCX_BAD="Birleşik servis dosyası yazılmadı: Apache yeni listeyi (%s adres) ModSecurity kuralında kabul etmedi, önceki dosya korunuyor (%s): %s"
+  M_SVCX_WROTE="Birleşik servis dosyası yazıldı: %s IP / aralık (%s)"; M_SVCX_SHRINK="Birleşik servis dosyası yazılmadı: yeni liste %s IP / aralık, öncekinin (%s) yarısından az (%s)"; M_SVCX_FAIL="Birleşik servis dosyası yazılamadı (%s)"; M_SVCX_RELOAD="Web sunucusu yeniden yüklendi: %s"; M_SVCX_RELOADF="Web sunucusu yeniden yüklenemedi: %s (çıkış %s): %s"; M_SVCX_BAD="Birleşik servis dosyası yazılmadı: Apache yeni listeyi (%s adres) ModSecurity kuralında kabul etmedi, önceki dosya korunuyor (%s): %s"
   M_H_NOREASON="geçici ban (günlükte sebep yok)"
   M_CFG_BAD="Geçersiz değer: %s = %s (%s olmalı)"
   M_CFG_RANGE="%s ile %s arası bir tam sayı"
@@ -545,7 +545,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_H_TOPT="CSF'in en çok engellediği sağlayıcılar"; M_H_TOPS="csf.deny'deki blok banlarına ve tekil banlara göre · banlı sağlayıcılar hariç"
   M_H_PBT="Sağlayıcı banı"; M_H_PBS="Bu sağlayıcılar CSF'te banlı; sıralamalarda gösterilmez"; M_H_PBK="Kapalı"; M_H_PBR="Aralık"
   M_H_PBALL="her şey"; M_H_PBNL="CSF henüz yüklemedi"
-  M_H_SVC="İzinli servisler: csf.allow'da %s adres · son indirme %s"; M_H_SVCF="uyarı süresinden uzun süredir indirilemiyor: %s"
+  M_H_SVC="İzinli servisler: csf.allow'da %s IP / aralık · son indirme %s"; M_H_SVCF="uyarı süresinden uzun süredir indirilemiyor: %s"
   M_DG_PBH="Sağlayıcı banı (sıralamalarda gösterilmez):"; M_DG_PBL="   %-9s %-44s %s"
   M_H_PROV="Sağlayıcı"; M_H_BLK="Blok"; M_H_SGL="Tekil"; M_H_OTH="CSF Auto-Group dışı"; M_H_OTHV="+%s blok"
   M_H_IMT="Imunify360'ın en çok engellediği sağlayıcılar"; M_H_IMS="Sunucunun kendi kara listesi · %s IP"; M_H_IPS="IP"; M_H_RSN="Sebep"
@@ -637,7 +637,7 @@ else
   M_MAILT24_SUBJ="%s temp block ban(s)"
   M_MAILT24P_BODY="The following blocks (/24) were being watched and again had as many IPs as the temp threshold temp-banned at the same time, so they are now permanently banned (do not delete):"
   M_MAILT24P_SUBJ="%s block(s) made permanent"
-  M_WL_LOADED="Allow list loaded: %s ranges, %s rignore domains"
+  M_WL_LOADED="Allow list loaded: %s IPs / ranges, %s rignore domains"
   M_WL_SELF="server IP"; M_FOREVER="indefinitely"
   M_A_SELF="%s contains this server's own IP (%s); it can't be banned"
   M_WL_SKIP="SKIPPED %s: overlaps a allow list entry (%s)"
@@ -784,7 +784,7 @@ else
   M_L_OWNER="Owner"; M_L_PREFIX="Announced prefix"; M_L_REG="Registry"; M_L_DENY="csf.deny"
   M_L_TEMP="Temp list"; M_L_WL="Allow list"; M_L_CLOUD="Rented-server list"; M_L_BKL="Blocklist"; M_AB_LINE="score %s/100 · %s reports (%s users) · last %s · %s"; M_AB_LIM="daily query limit reached (%s/%s)"; M_AB_ERR="could not query (HTTP %s): %s"; M_AB_BAD="The AbuseIPDB key must be letters and digits only (20–200 characters)"; M_L_PENDING="Watched"; M_L_IGN="Muted"; M_L_ACCT="Attempts"
   M_BKL_BAD="Invalid list name or action (expected: NAME on|off)"; M_BKL_NONE="List %s is not in csf.blocklists"; M_BKL_NOTMINE="List %s was not turned on by the plugin; the plugin does not turn off a list turned on by hand (turn it off in csf.blocklists)"; M_BKL_ON="Blocklist %s turned on; csf and lfd restarted, lfd is downloading the list"; M_BKL_OFF="Blocklist %s turned off; csf and lfd restarted"
-  M_SVCX_WROTE="Combined services file written: %s addresses (%s)"; M_SVCX_SHRINK="Combined services file not written: the new list has %s addresses, less than half of the previous %s (%s)"; M_SVCX_FAIL="Combined services file could not be written (%s)"; M_SVCX_RELOAD="Web server reloaded: %s"; M_SVCX_RELOADF="Web server reload failed: %s (exit %s): %s"; M_SVCX_BAD="Combined services file not written: Apache did not accept the new list (%s addresses) in a ModSecurity rule, the previous file is kept (%s): %s"
+  M_SVCX_WROTE="Combined services file written: %s IPs / ranges (%s)"; M_SVCX_SHRINK="Combined services file not written: the new list has %s IPs / ranges, less than half of the previous %s (%s)"; M_SVCX_FAIL="Combined services file could not be written (%s)"; M_SVCX_RELOAD="Web server reloaded: %s"; M_SVCX_RELOADF="Web server reload failed: %s (exit %s): %s"; M_SVCX_BAD="Combined services file not written: Apache did not accept the new list (%s addresses) in a ModSecurity rule, the previous file is kept (%s): %s"
   M_H_NOREASON="temp ban (no reason in the log)"
   M_CFG_BAD="Invalid value: %s = %s (must be %s)"
   M_CFG_RANGE="a whole number from %s to %s"
@@ -835,7 +835,7 @@ else
   M_H_TOPT="Providers CSF blocks most"; M_H_TOPS="by block bans and single bans in csf.deny · banned providers left out"
   M_H_PBT="Provider ban"; M_H_PBS="These providers are banned in CSF; the rankings leave them out"; M_H_PBK="Blocked"; M_H_PBR="Ranges"
   M_H_PBALL="everything"; M_H_PBNL="not loaded by CSF yet"
-  M_H_SVC="Allowed services: %s addresses in csf.allow · last download %s"; M_H_SVCF="Not downloaded for longer than the warning period: %s"
+  M_H_SVC="Allowed services: %s IPs / ranges in csf.allow · last download %s"; M_H_SVCF="Not downloaded for longer than the warning period: %s"
   M_DG_PBH="Provider ban (left out of the rankings):"; M_DG_PBL="   %-9s %-44s %s"
   M_H_PROV="Provider"; M_H_BLK="Blocks"; M_H_SGL="Singles"; M_H_OTH="Not from CSF Auto-Group"; M_H_OTHV="+%s blocks"
   M_H_IMT="Providers Imunify360 blocks most"; M_H_IMS="This server's own blacklist · %s IPs"; M_H_IPS="IPs"; M_H_RSN="Reason"
@@ -900,7 +900,7 @@ mail() {
 # Paneldeki her alanın tek kuralı burada; eklenti ayrıca kontrol etse de karar burada verilir.
 CFG_KEYS="MSG_LANG ALERT_MAIL NOTIFY DIGEST DIGEST_DAY IC_FIREWALL IC_LISTFULL IC_RUN IC_DIGEST IE_FIREWALL IE_LISTFULL IE_RUN IE_DIGEST IC_REVIEW IE_REVIEW IC_SVCX IE_SVCX THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_PFX THRESHOLD_TEMP_24 LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS LOG_KEEP_DAYS EVENTS_DAYS RUN_DAYS PERM_WINDOW_DAYS BANLOG_DAYS LOG_ROTATE_MB LOG_ROTATE_KEEP BLOCK_EXPIRE_DAYS BLOCK_EXPIRE_AUTO CRON_MIN SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_MODES CLOUD_URLS CLOUD_EXTRA SRC_LABELS ENABLED CLOUD_REFRESH_DAYS CLOUD_FAIL_DAYS SVC_REFRESH_DAYS SVC_FAIL_DAYS GEO_REFRESH_DAYS REFRESH_HOUR OWNER_TTL_DAYS IMUNIFY_REFRESH_MIN BLOCK_ACTIVE_DAYS SVC_EXPORT SVC_EXPORT_RELOAD ABUSE_ON ABUSE_CACHE_H ABUSE_IP_MAX ABUSE_BLK_MAX ABUSE_MAX_AGE"
 PROV_KEYS="SVC_ALLOW SVC_SOURCES SVC_EXTRA SVC_URLS SVC_SKIP SVC_EXCEPT ASN_BAN ASN_LIST ASN_ALL ASN_MODE ASN_TCP ASN_UDP CLOUD_BAN CLOUD_SOURCES CLOUD_TCP CLOUD_UDP CLOUD_MODES CLOUD_URLS CLOUD_EXTRA ENABLED"
-SVC_CATALOG="google bing apple duckduckgo openai stripe mollie uptimerobot pingdom statuscake microsoft365 quiccloud"
+SVC_CATALOG="google bing apple duckduckgo openai anthropic stripe mollie uptimerobot pingdom statuscake microsoft365 quiccloud"
 CLOUD_CATALOG="gcp aws azure oracle digitalocean linode vultr"
 CFG_TRY_KEYS="THRESHOLD_24 THRESHOLD_24_PERMANENT THRESHOLD_16 THRESHOLD_PFX THRESHOLD_TEMP_24 PERM_WINDOW_DAYS LOOKUP LOOKUP_TIMEOUT SAYAC_RETENTION_DAYS REVIEW_DAYS"
 logrotate_write() { # [MB] [ARŞİV] → /etc/logrotate.d/csf_autogroup (geçici dosya + mv)
@@ -5268,6 +5268,9 @@ svc_urls() {     # KAYNAK → REPLY = "ad|adres" kayıtları (boşlukla); kaynak
         apple)      REPLY="apple|https://search.developer.apple.com/applebot.json" ;;
         duckduckgo) REPLY="duckduckgo|https://duckduckgo.com/duckduckbot.json" ;;
         openai)     REPLY="openai-gptbot|https://openai.com/gptbot.json openai-search|https://openai.com/searchbot.json openai-user|https://openai.com/chatgpt-user.json" ;;
+        # Anthropic (Claude): ClaudeBot, Claude-User ve Claude-SearchBot tek listede (botlara göre ayrılmıyor; 2026-11-26: 14 satır,
+        # OpenAI ile aynı JSON biçimi)
+        anthropic)  REPLY="anthropic|https://claude.com/crawling/bots.json" ;;
         stripe)     REPLY="stripe|https://stripe.com/files/ips/ips_webhooks.txt" ;;
         mollie)     REPLY="mollie|https://ip-ranges.mollie.com/ips.txt" ;;
         uptimerobot) REPLY="uptimerobot|https://uptimerobot.com/inc/files/ips/IPv4.txt" ;;

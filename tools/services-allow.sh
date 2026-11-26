@@ -156,13 +156,13 @@ for s in "${SOURCES[@]}"; do
     fi
     ff=$(cat "$CACHE/$name.fail" 2>/dev/null); [[ "$ff" =~ ^[0-9]+$ ]] || ff=0
     st+="$name|$n|$ot|$err|$ff"$'\n'
-    printf '%-20s %5s adres\n' "$name" "$n"
+    printf '%-20s %5s IP / aralık\n' "$name" "$n"
     [ "$n" -gt 0 ] && body+="# $name ($src)"$'\n'"$(printf '%s\n' "$new" | except_filter | sed "s|\$| # csf_autogroup: service $name|")"$'\n'
     total=$(( total + n ))
 done
 
 if [ -s "$OUT" ] && [ "$(grep -v '^# güncellendi' "$OUT")" = "${body%$'\n'}" ]; then changed=0; else changed=1; fi
-printf 'toplam %s adres · %s\n' "$total" "$([ "$changed" = 1 ] && echo "değişecek" || echo "değişiklik yok")"
+printf 'toplam %s IP / aralık · %s\n' "$total" "$([ "$changed" = 1 ] && echo "değişecek" || echo "değişiklik yok")"
 [ "$CHECK" = 1 ] && exit 0
 printf '%s' "$st" > "$CACHE/status.tmp" 2>/dev/null && mv -f "$CACHE/status.tmp" "$CACHE/status"
 [ "$total" -gt 0 ] || { log "hiç adres yok, dosyaya dokunulmadı"; exit 1; }
@@ -177,7 +177,7 @@ prevf=""
 if [ "$changed" = 1 ]; then
     prevf=$(mktemp) && { cat "$OUT" > "$prevf" 2>/dev/null || :; }   # fark için eski hâl (yoksa boş)
     { printf '# güncellendi %s — elle düzenlemeyin, tools/services-allow.sh yeniden yazar\n' "$(date '+%Y-%m-%d %H:%M')"; printf '%s' "$body"; } > "$OUT.tmp" && mv -f "$OUT.tmp" "$OUT" || { rm -f "$prevf"; exit 1; }
-    log "izin listesi güncellendi: $total adres"
+    log "izin listesi güncellendi: $total IP / aralık"
 fi
 # Include satırı yeni eklendiyse CSF dosyayı ancak yeniden yüklemede okur (ilk kurulum); yalnız içerik değiştiyse fark kümeye uygulanır
 if [ "$inc" = 1 ]; then "$CSF_BIN" -r >/dev/null 2>&1 && log "csf -r çalıştı"

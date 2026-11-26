@@ -835,7 +835,7 @@ restoring `config.env` is enough.
 **Allowed services.** Banning a provider also cuts the legitimate services
 running there. Services that publish their own addresses can be allowed:
 Google (Googlebot, AdsBot, Storebot, Gmail images, site verification), Bing,
-Apple, DuckDuckGo, OpenAI, Stripe, Mollie, Microsoft 365 (Outlook, Exchange
+Apple, DuckDuckGo, OpenAI, Anthropic (Claude), Stripe, Mollie, Microsoft 365 (Outlook, Exchange
 Online), the site monitors UptimeRobot, Pingdom and StatusCake, and QUIC.cloud
 (LiteSpeed's CDN and optimization service), plus your own entries
 (`name|https://list` or `name|IP`). They are written to a file included from
@@ -845,14 +845,16 @@ downloaded again as often as set under **Refresh** in the card (default every
 day, in the first run after the refresh hour, 04:00 by default); a list that fails to download, arrives incomplete
 (the connection dropped or timed out, or the JSON is cut off), or returns far fewer
 addresses than before, keeps its previous version, and the log says why; ranges wider than /16 are
-refused (Microsoft 365: up to /12). Yandex and Facebook don't publish address lists.
+refused (Microsoft 365: up to /12).
 
 Google and OpenAI publish several lists, one per kind of visitor; each shows as
-a chip on its box. Google: crawlers
+a chip on its box, and removing a chip leaves that kind out while the rest of
+the box stays allowed (for example OpenAI without GPTBot). Google: crawlers
 (Googlebot), special crawlers (AdsBot and the like), user-triggered fetchers
 (site verification, feed readers) and Google's own fetchers. OpenAI: GPTBot
 (training crawler), OAI-SearchBot (search) and ChatGPT-User (pages a user asks
-for). **Exclusions** (`SVC_EXCEPT`) keep single addresses or ranges out of the
+for). Anthropic publishes one list for ClaudeBot (training), Claude-SearchBot
+and Claude-User, so its box allows all three together. **Exclusions** (`SVC_EXCEPT`) keep single addresses or ranges out of the
 allowed lists even when a list contains them; the rest of the list stays
 allowed. Use it when one address of a service keeps violating: a ban on an
 allowed address has no effect, because CSF applies allows first. The IP card,
