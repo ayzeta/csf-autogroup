@@ -104,5 +104,10 @@ if [ -f csf_autogroup.sh ] && grep -q "case 'abuse_key'" "$W/api.php"; then
     ok "bkl: CSRF anahtarı olmadan reddedilir" "printf '%s' \"\$BODY\" | grep -q '\"error\":\"session\"'"
 fi
 
+
+# her preg_match ifadesi derlenir (derlenmeyen ifade ucun her isteğini sessizce reddeder; 1.15.140 states ucu)
+OUT=$("$PHP" tests/api-uc/re-derle.php "$W/api.php" "$W/lib.php" 2>&1)
+ok "api.php / lib.php: her preg_match ifadesi PHP'de derlenir" "[ -z \"\$OUT\" ]"
+
 echo "api-uc: $PASS geçti, $FAIL düştü"
 [ "$FAIL" = 0 ]

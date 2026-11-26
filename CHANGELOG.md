@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.15.141 — 2026-11-26
+
+- The History "now" notes from 1.15.140 did not appear: the new `states` call
+  rejected every request because its input check (one pattern repeating a
+  group up to 299 times) does not compile in PHP's regular expression engine.
+  The addresses are now checked one by one. A new test compiles every pattern
+  in `api.php` and `lib.php`, so this kind of fault is caught before release.
+
 ## 1.15.140 — 2026-11-26
 
 - The "now" note on History rows reads the same state record as the IP card.
