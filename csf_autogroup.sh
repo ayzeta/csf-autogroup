@@ -65,7 +65,7 @@ grep() { command grep -a "$@"; }
 # sayı, anahtar; Türkçe modda sıralama kuralı zaten C idi (LC_COLLATE=C)
 sort() { LC_ALL=C command sort "$@"; }
 
-VERSION="1.15.144"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.145"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1399,7 +1399,7 @@ h_box() {        # STİL İÇERİK → REPLY = tam genişlikte tek hücre (boşl
 }
 h_card() {       # BAŞLIK İÇ_HTML [bad|warn] [ALT_BAŞLIK] → REPLY = kart
     local bd="#e6e8ef" tc="#111827" t out pb=10px
-    case "$3" in bad) bd="#fecaca"; tc="#b91c1c" ;; warn) bd="#fde68a"; tc="#b45309" ;; esac
+    case "$3" in bad) bd="#fdba74"; tc="#c2410c" ;; warn) bd="#fde68a"; tc="#b45309" ;; esac   # ciddi / dikkat (panelin önem renkleri)
     [ -n "$4" ] && pb=2px
     h_esc "$1"; h_box "padding:14px 18px $pb;font-size:14px;font-weight:700;color:$tc;" "$REPLY"; out="$REPLY"
     if [ -n "$4" ]; then h_esc "$4"; h_box "padding:0 18px 10px;font-size:12px;color:#5f6776;" "$REPLY"; out+="$REPLY"; fi
@@ -1420,7 +1420,7 @@ h_usage() {      # KALICI_DOLU KALICI_SINIR GEÇİCİ_DOLU GEÇİCİ_SINIR [7_G�
         else used=$(num "$3"); lim=$(num "$4"); lab="$M_H_TEMP"; col="#b45309"; note=""; fi
         [ "$lim" -gt 0 ] || continue
         pt=0; [ -n "$out" ] && pt=14px
-        pc=$(( used * 100 / lim )); [ "$pc" -ge 80 ] && col="#b91c1c"
+        pc=$(( used * 100 / lim )); [ "$pc" -ge 80 ] && col="#c2410c"   # liste doluyor: ciddi (kırmızı yalnız engel)
         [ "$pc" -lt 1 ] && [ "$used" -gt 0 ] && pc=1
         out+="<tr><td style=\"font-family:$H_FONT;font-size:13px;font-weight:600;padding:$pt 0 6px;\">$lab</td><td align=\"right\" style=\"font-family:$H_FONT;font-size:13px;color:#4b5563;padding:$pt 0 6px;\">$(m "$M_H_LINES" "$used" "$lim" "$(( used * 100 / lim ))")<span style=\"color:#5f6776;\">$note</span></td></tr>"
         h_bar "$pc" "$col"; out+="<tr><td colspan=\"2\">$REPLY</td></tr>"
@@ -1478,7 +1478,7 @@ h_text() {       # BÖLÜM_METNİ → REPLY = kartın içi. Uyarı mailinin meti
                 h = (f[2] == "-" || f[2] == "") ? "<span style=\"color:#9aa1ad;\">—</span>" : esc(f[2])
                 if (own != "") h = h "<br><span style=\"font-size:11.5px;color:#5f6776;\">" esc(substr(own, 2, length(own) - 2)) "</span>"
                 w = esc(why)
-                if (tag != "") w = w " <span style=\"background:" (tag == tf ? "#fef2f2;color:#b91c1c" : "#f3f4f6;color:#4b5563") ";font-size:11px;white-space:nowrap;\">&nbsp;" esc(substr(tag, 2, length(tag) - 2)) "&nbsp;</span>"
+                if (tag != "") w = w " <span style=\"background:" (tag == tf ? "#fff7ed;color:#c2410c" : "#f3f4f6;color:#4b5563") ";font-size:11px;white-space:nowrap;\">&nbsp;" esc(substr(tag, 2, length(tag) - 2)) "&nbsp;</span>"
                 bg = (zr % 2) ? " bgcolor=\"#f7f8fa\"" : ""
                 o = o "<tr><td valign=\"top\"" bg " style=\"padding:6px 8px 6px 18px;font-family:" mono ";font-size:12.5px;color:#4338ca;white-space:nowrap;\">" esc(f[1]) "</td><td valign=\"top\"" bg " style=\"padding:6px 8px;font-family:" ff ";font-size:12.5px;color:#4b5563;word-break:break-all;\">" h "</td><td valign=\"top\"" bg " style=\"padding:6px 18px 6px 8px;font-family:" ff ";font-size:12.5px;color:#111827;\">" w "</td></tr>"
                 zr++; next }
@@ -1537,9 +1537,10 @@ ic_send() {      # OLAY KONU METİN → 0 gönderildi (IC_OUT = çıktı). Olay 
     if [ "$DRY" = 1 ]; then echo "      [dry-run] Slack: $subj"; return 0; fi
     subj="${subj//[$'\r\n\f']/ }"
     (( ${#txt} > 3500 )) && txt="${txt:0:3500} …"
-    # renk: sorun kırmızı (geçici liste turuncu), düzeldi yeşil, diğerleri lacivert
-    local col="#4338ca"
-    case "$1" in *Resolved) col="#047857" ;; ListTemp) col="#b45309" ;; Firewall|ListPerm) col="#b91c1c" ;; esac
+    # renk (panelin görsel dili): sağlık sorunu ve dolan kalıcı liste ciddi (koyu turuncu), geçici liste dikkat (amber), düzeldi ve
+    # öteki bildirimler renksiz (gri)
+    local col="#9aa1ad"
+    case "$1" in *Resolved) col="#9aa1ad" ;; ListTemp) col="#b45309" ;; Firewall|ListPerm) col="#c2410c" ;; esac
     slack_send "$subj" "$txt" "$col"; rc=$?
     [ "$rc" = 0 ] || log "$(m "$M_IC_FAIL" "${IC_OUT%%$NL*}")"
     return $rc
@@ -8248,8 +8249,7 @@ digest_build() { # → DG_SUBJ, DG_BODY
             DG_BODY+="   $(printf '%-18s' "$cidr") ${owner:--}${rs:+ · $rs}$NL"; n=$((n + 1))
             hv="M_H_K_$hk"; h_esc "${owner:-—}"; [ -n "$rs" ] && { local ho="$REPLY"; h_esc "$rs"; REPLY="$ho<br><span style=\"font-size:12px;color:#5f6776;\">$REPLY</span>"; }
             hcls="background:#f3f4f6;color:#4b5563;border:1px solid #e6e8ef"
-            [ "$hk" = promote ] && hcls="background:#f3edff;color:#7c3aed;border:1px solid #ddd0fb"
-            [ "$hk" = manual_ban ] && hcls="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca"
+            # ban olayları işlemdir: renksiz rozet (panelin Geçmiş rozetiyle aynı görsel dil)
             hr+="<tr$([ $((n % 2)) = 0 ] && echo ' bgcolor="#f7f8fa" style="background:#f7f8fa;"')><td style=\"padding:8px 8px 8px 18px;font-family:$H_MONO;font-weight:600;\">$cidr</td><td style=\"padding:8px;color:#4b5563;\">$REPLY</td><td align=\"right\" style=\"padding:8px 18px 8px 8px;\"><span style=\"$hcls;border-radius:10px;padding:2px 8px;font-size:11.5px;font-weight:600;white-space:nowrap;\">${!hv:-$hk}</span></td></tr>"
         done < <(awk -v s="$since" "$AWK_EVC"'
             match($0, /"t":[0-9]+/) { t = substr($0, RSTART + 4, RLENGTH - 4) + 0 } t < s { next }
@@ -8364,7 +8364,7 @@ digest_build() { # → DG_SUBJ, DG_BODY
     [ -n "$PANEL_FOOT" ] && DG_BODY+="$NL${PANEL_FOOT%$NL}"
     # HTML: izleme + tur sağlığı tek kartta; turlar beklenenin %90'ının altındaysa rozet turuncu
     hv="?"; [ "$iv" -gt 0 ] && hv=$(( win / iv + 1 ))
-    hcls="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0"
+    hcls="background:#f3f4f6;color:#4b5563;border:1px solid #e6e8ef"   # tamam renksiz; yalnız eksik tur dikkat (amber)
     [[ "$hv" =~ ^[0-9]+$ ]] && [ $(( runs * 10 )) -lt $(( hv * 9 )) ] && hcls="background:#fffbeb;color:#b45309;border:1px solid #fde68a"
     DGH+="<tr><td bgcolor=\"#ffffff\" style=\"background:#ffffff;border:1px solid #e6e8ef;border-radius:12px;padding:14px 18px;font-family:$H_FONT;font-size:13px;\"><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">"
     DGH+="<tr><td valign=\"top\" style=\"padding-bottom:10px;\"><b>$M_H_EXPT</b> <span style=\"color:#5f6776;\">· $M_H_EXPS</span>${hr:+<br>$hr}</td><td align=\"right\" valign=\"top\" style=\"padding-bottom:10px;color:#5f6776;\">$([ -z "$hr" ] && echo "$M_H_NONE_S")</td></tr>"

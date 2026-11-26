@@ -92,6 +92,18 @@ if [ "$rd" != 0 ]; then echo "DÜŞTÜ: düşme tarihini panel hesaplıyor (rvDr
 # banlar kartı ve toplu kaldırma yalnız g.pcov / g.under'a bakıyordu
 gp=$(grep -c "g\.pcov || g\.under\|g\.under || g\.pcov" "$J"); gu=$(grep -c "filter(grpCov)" "$J")
 if [ "$gp" != 0 ] || [ "$gu" != 2 ]; then echo "DÜŞTÜ: gereksiz ban kararı tek yerde değil (kendi denetimi $gp yer, grpCov süzgeci $gu)"; F=$((F + 1)); else echo "GEÇTİ: gereksiz ban kararı tek işlevden (grpCov)"; fi
+# GÖRSEL DİL (P4, 1.15.145): renk yalnız durum çipi + önem işareti. Geçmiş rozet tablosunda (EV_ST) durum renkleri (perm / temp / prom /
+# part / allow) yok — işlem olayları renksiz, tespit olayları önemle (warn / leak); izinli yeşil (ag-pill-ok), pembe "skip" rozet sınıfı yok;
+# kırmızı (ban sınıfları) yalnız perm / temp / prom / part adlarında. Önce allow pembe (izinli de bulgu da), ban olayları kırmızı, part mavi
+ev=$(awk '/^  var EV_ST = \{/ { p = 1 } p { print } p && /^  \};/ { exit }' "$J" | grep -cE "'(perm|temp|prom|part|allow)'")
+sc=$(grep -c "allow: 'ag-pill-ok'" "$J"); sk=$(grep -c "ag-pill-skip" "$J" "${J%.js}.css" | awk -F: '{ s += $NF } END { print s }')
+rd=$(grep -oE "[a-z]+: 'ag-pill-(ban|temp|prom|part)'" "$J" | cut -d: -f1 | sort -u | tr '\n' ' ')
+# mail / Slack: aynı dil — engel olmayan şeye kırmızı, işleme mor / mavi / turkuaz / pembe, "tamam"a yeşil yok (önce sorun kırmızı, kalıcıya alma
+# mor, elle ban kırmızı rozet)
+ml=$(grep -cE '#(b91c1c|dc2626|7c3aed|0d9488|2563eb|db2777|047857)' "$SHF")
+if [ "$ev" != 0 ] || [ "$sc" != 1 ] || [ "$sk" != 0 ] || [ "$rd" != "part perm prom temp " ] || [ "$ml" != 0 ]; then
+    echo "DÜŞTÜ: görsel dil standardı bozuk (Geçmiş rozetinde durum rengi $ev; izinli yeşil $sc; pembe sınıf $sk; kırmızı adlar: $rd; mailde eski renk $ml satır)"; F=$((F + 1))
+else echo "GEÇTİ: görsel dil — renk yalnız durum çipi ve önem işareti"; fi
 # İZLEME SINIRI (M-K, 1.15.143): "blok izleniyor mu" tek ölçüt (watch_cut). Sınırı kendisi hesaplayan yer (SAYAC_RETENTION_DAYS days ago)
 # ya da İzlenenler listesinin eski gün hesabı (ret - age >= 0; yaz saati geçişinde IP kartından bir gün ayrışıyordu) geri gelmez
 wc=$(grep -c 'SAYAC_RETENTION_DAYS days ago' "$SHF"); wa=$(grep -c 'ret - age >= 0' "$SHF")

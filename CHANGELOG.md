@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.15.145 — 2026-11-27
+
+- Colours follow one rule everywhere (panel, emails, Slack). Colour marks two
+  things only. The state of an address: red filled = blocked (permanent, timed
+  or made permanent alike), red outline = partly blocked, green = allowed,
+  plain = not banned. The importance of a finding or problem: amber =
+  attention, dark orange filled = serious (violation under a ban, firewall
+  problem, a list filling up, AbuseIPDB 50+). Before, colour meant four
+  different things: teal for timed bans, violet for made permanent, blue for
+  partial bans, pink for both "allowed" and "ban not working", and red also
+  for health problems.
+- History badges: actions and routine events (bans, making permanent, allows,
+  provider bans, settings) carry no colour, only icon and text; detections
+  carry their importance. The address's state now stays in the row's note.
+- *Needs review* badges (ban not working, violation from an allowed IP, open
+  service) are findings and show as *attention*.
+- Health markers that are fine are plain; only a problem is coloured.
+- *Terms* has a new *Colours* section.
+
 ## 1.15.144 — 2026-11-27
 
 - A range ban inside a country ban (or a provider's "everything" ban) is now

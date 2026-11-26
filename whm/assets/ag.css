@@ -22,15 +22,19 @@
   --ag-radius-sm: 8px;
   --ag-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 2px 6px rgba(15, 23, 42, .04);
   --ag-vio: #7c3aed; --ag-vio-soft: #f3edff;
-  /* Veri renkleri: bir anlam, her yerde (rozet, simge, grafik) aynı renk. Tailwind paletinden, birbirinden ayrışan tonlar.
-     Arayüz vurgusu (düğme, seçili sekme) indigo kalır, veri için kullanılmaz. */
-  --ag-d-ban: #dc2626;  --ag-d-ban-t: #b91c1c;  --ag-d-ban-s: #fef2f2;  --ag-d-ban-l: #fecaca;    /* tam ban (blok, ağ, tekil) */
-  --ag-d-prom: #7c3aed; --ag-d-prom-t: #6d28d9; --ag-d-prom-s: #f5f3ff; --ag-d-prom-l: #ddd6fe;   /* geçiciden kalıcıya alındı */
-  --ag-d-temp: #0d9488; --ag-d-temp-t: #0f766e; --ag-d-temp-s: #f0fdfa; --ag-d-temp-l: #99f6e4;   /* geçici (süreli) ban */
-  --ag-d-part: #2563eb; --ag-d-part-t: #1d4ed8; --ag-d-part-s: #eff6ff; --ag-d-part-l: #bfdbfe;   /* kısmi ban (yalnız seçilen servisler) */
-  --ag-d-leak: #5c1217;   /* ban altında ihlal */
-  --ag-d-warn: #d97706; --ag-d-warn-t: #b45309; --ag-d-warn-s: #fffbeb; --ag-d-warn-l: #fde68a;   /* şüpheli ağ, dikkat */
-  --ag-d-skip: #db2777; --ag-d-skip-t: #be185d; --ag-d-skip-s: #fdf2f8; --ag-d-skip-l: #fbcfe8;   /* izin ya da yoksayma yüzünden banlanmadı: atlandı, izinli, yoksayılan, sunucu IP'si, ban işlemiyor */
+  /* VERİ RENKLERİ — GÖRSEL DİL STANDARDI (1.15.145; STANDART.md "Görsel dil ve tek durum"). Renk yalnız iki şey içindir:
+     1) DURUM ÇİPİ (nesnenin şu anki etkin koruma hâli): engelli kırmızı dolu (kalıcı / süreli / kalıcıya alınmış aynı kırmızı; süreli
+        olanda kalan süre yazar), kısmen engelli kırmızı çerçeve dolgusuz, izinli yeşil, banlı değil renksiz. KIRMIZI YALNIZ ENGEL DEMEKTİR.
+     2) ÖNEM İŞARETİ (bulgu, tespit olayı, sağlık sorunu, dış itibar): dikkat amber, ciddi koyu turuncu dolu (beyaz yazı), bilgi renksiz.
+     İşlemler (ban, kaldırma, izin, susturma, ayar) ve olağan olaylar renk almaz. Arayüz vurgusu (indigo) yalnız tıklanan öğe / seçim.
+     Eski ad tokenları (prom, temp, part, skip) aynı iki aileye bağlanır: grafik serileri ban kararlarında kırmızı, bulgularda amber tonu. */
+  --ag-d-ban: #dc2626;  --ag-d-ban-t: #b91c1c;  --ag-d-ban-s: #fef2f2;  --ag-d-ban-l: #fecaca;    /* engelli (tam ban: tekil, blok, ağ, liste) */
+  --ag-d-prom: #b91c1c; --ag-d-prom-t: #991b1b; --ag-d-prom-s: #fef2f2; --ag-d-prom-l: #fecaca;   /* engelli, kalıcıya alındı (kırmızı tonu) */
+  --ag-d-temp: #ef4444; --ag-d-temp-t: #b91c1c; --ag-d-temp-s: #fef2f2; --ag-d-temp-l: #fecaca;   /* engelli, süreli (kırmızı tonu) */
+  --ag-d-part: #dc2626; --ag-d-part-t: #b91c1c; --ag-d-part-s: transparent; --ag-d-part-l: #ef4444;  /* kısmen engelli: kırmızı çerçeve, dolgu yok */
+  --ag-d-leak: #c2410c;   /* ciddi (önem): ban altında ihlal, güvenlik duvarı yüklü değil, liste doldu, AbuseIPDB 50+ */
+  --ag-d-warn: #d97706; --ag-d-warn-t: #b45309; --ag-d-warn-s: #fffbeb; --ag-d-warn-l: #fde68a;   /* dikkat (önem): karar bekleyen bulgu */
+  --ag-d-skip: #ca8a04; --ag-d-skip-t: #a16207; --ag-d-skip-s: #fefce8; --ag-d-skip-l: #fde68a;   /* dikkat ailesi (grafik serisi): atlandı, izinli IP'den ihlal */
   --ag-shadow-lg: 0 20px 48px rgba(16, 24, 40, .18), 0 4px 12px rgba(16, 24, 40, .08);
   --ag-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -131,7 +135,7 @@
 .ag-ring { width: 46px; height: 46px; flex: none; }
 .ag-ring circle { fill: none; stroke-width: 4; stroke: var(--ag-neutral-soft); }
 .ag-ring circle + circle { stroke: var(--ag-accent); stroke-linecap: round; }
-.ag-ring.warn circle + circle { stroke: #d97706; } .ag-ring.bad circle + circle { stroke: #dc2626; }
+.ag-ring.warn circle + circle { stroke: #d97706; } .ag-ring.bad circle + circle { stroke: var(--ag-d-leak); }   /* liste doluyor: önem (ciddi), engel değil */
 .ag-kpi-l { grid-area: l; font-size: 12px; color: var(--ag-text-3); font-weight: 600; }
 .ag-kpi-v { grid-area: v; font-size: 24px; font-weight: 700; letter-spacing: -.02em; margin-top: 2px; line-height: 1.2; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ag-kpi-v small { font-size: 14px; font-weight: 500; color: var(--ag-text-3); letter-spacing: 0; margin-left: 2px; }
@@ -177,7 +181,7 @@
 .ag-drawer .ag-fact-v .ag-pill { white-space: normal; height: auto; min-height: 22px; max-width: 100%; line-height: 1.35; padding-top: 3px; padding-bottom: 3px; border-radius: 12px; }
 .ag-pill-ok   { background: var(--ag-ok-soft);   color: var(--ag-ok);   border-color: var(--ag-ok-line); }
 .ag-pill-warn { background: var(--ag-warn-soft); color: var(--ag-warn); border-color: var(--ag-warn-line); }
-.ag-pill-bad  { background: var(--ag-bad-soft);  color: var(--ag-bad);  border-color: var(--ag-bad-line); }
+.ag-pill-bad  { background: var(--ag-d-leak); color: #fff; border-color: var(--ag-d-leak); }   /* önem: ciddi (kırmızı yalnız engel) */
 .ag-pill-info { background: var(--ag-info-soft); color: var(--ag-info); border-color: var(--ag-info-line); }
 .ag-pill-acc  { background: var(--ag-accent-soft); color: var(--ag-accent); border-color: var(--ag-accent-line); }
 .ag-pill-n    { background: var(--ag-neutral-soft); color: var(--ag-text-2); border-color: var(--ag-line); }
@@ -185,7 +189,7 @@
 .ag-pill-prom { background: var(--ag-d-prom-s); color: var(--ag-d-prom-t); border-color: var(--ag-d-prom-l); }
 .ag-pill-temp { background: var(--ag-d-temp-s); color: var(--ag-d-temp-t); border-color: var(--ag-d-temp-l); }
 .ag-pill-part { background: var(--ag-d-part-s); color: var(--ag-d-part-t); border-color: var(--ag-d-part-l); }
-.ag-pill-skip { background: var(--ag-d-skip-s); color: var(--ag-d-skip-t); border-color: var(--ag-d-skip-l); }
+
 .ag-pill-dw { background: var(--ag-d-warn-s); color: var(--ag-d-warn-t); border-color: var(--ag-d-warn-l); }
 /* ban altında ihlal: kapalı olması gereken servise ulaşıldı. Öteki durumlardan ayrı, koyu ve dolu (kırmızı–siyah arası): şüpheli ağın
    turuncusuyla aynı görünüyordu */
@@ -265,6 +269,7 @@
 .ag-ev-ic.d-warn { background: var(--ag-d-warn-s); color: var(--ag-d-warn); }
 .ag-ev-ic.d-leak { background: var(--ag-d-leak); color: #fff; }
 .ag-ev-ic.d-skip { background: var(--ag-d-skip-s); color: var(--ag-d-skip); }
+.ag-ev-ic.ok { background: var(--ag-ok-soft); color: var(--ag-ok); }   /* izinli (durum) */
 .ag-ev-b { flex: 1; min-width: 0; }
 .ag-ev-t { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .ag-ev-d { font-size: 12.5px; color: var(--ag-text-3); margin-top: 2px; }
@@ -540,15 +545,15 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 /* ── v1.7: durum bandı ─────────────────────────────────────────── */
 .ag-band { display: grid; grid-template-columns: minmax(230px, 1.4fr) repeat(3, minmax(90px, 1fr)) minmax(170px, 1.3fr); gap: 20px; align-items: center;
   background: var(--ag-card); border: 1px solid var(--ag-line); border-radius: var(--ag-radius); box-shadow: var(--ag-shadow); padding: 14px 22px; margin-bottom: 16px; }
-.ag-band.st-bad { border-color: var(--ag-bad-line); box-shadow: 0 0 0 3px var(--ag-bad-soft); }
+.ag-band.st-bad { border-color: #fdba74; box-shadow: 0 0 0 3px #fff7ed; }   /* sağlık sorunu: önem (ciddi) — kırmızı yalnız engel */
 .ag-band-s { display: flex; gap: 12px; align-items: center; min-width: 0; }
 .ag-band-s b { display: block; font-size: 14.5px; font-weight: 700; }
 .ag-band-s > div > span { display: block; font-size: 12px; color: var(--ag-text-3); }
-.ag-band.st-bad .ag-band-s b { color: var(--ag-bad); }
+.ag-band.st-bad .ag-band-s b { color: var(--ag-d-leak); }
 .ag-pulse { width: 36px; height: 36px; border-radius: 50%; background: var(--ag-ok-soft); display: flex; align-items: center; justify-content: center; flex: none; }
 .ag-pulse i { width: 12px; height: 12px; border-radius: 50%; background: #10b981; box-shadow: 0 0 0 5px rgba(16, 185, 129, .18); }
 .st-run .ag-pulse { background: var(--ag-info-soft); } .st-run .ag-pulse i { background: #3b82f6; box-shadow: 0 0 0 5px rgba(59, 130, 246, .2); animation: ag-pulse 1.2s ease-in-out infinite; }
-.st-bad .ag-pulse { background: var(--ag-bad-soft); } .st-bad .ag-pulse i { background: #dc2626; box-shadow: 0 0 0 5px rgba(220, 38, 38, .18); }
+.st-bad .ag-pulse { background: #fff7ed; } .st-bad .ag-pulse i { background: var(--ag-d-leak); box-shadow: 0 0 0 5px rgba(194, 65, 12, .18); }
 .ag-band-m small, .ag-band-g small { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ag-text-3); }
 .ag-band-m b { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ag-band-m span { font-size: 12px; color: var(--ag-text-3); margin-left: 5px; white-space: nowrap; }
@@ -884,9 +889,9 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
 .ag-hchips { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
 .ag-hc { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; border-radius: 20px; font-size: 11px; font-weight: 650; border: 1px solid transparent; }
 .ag-hc svg { width: 11px; height: 11px; }
-.ag-hc.ok { background: var(--ag-ok-soft); color: var(--ag-ok); border-color: var(--ag-ok-line); }
+.ag-hc.ok { background: var(--ag-neutral-soft); color: var(--ag-text-2); border-color: var(--ag-line); }   /* sağlıkta tamam renksiz (onay simgesi); yalnız sorun renklenir */
 .ag-hc.warn { background: var(--ag-warn-soft); color: var(--ag-warn); border-color: var(--ag-warn-line); }
-.ag-hc.bad { background: var(--ag-bad-soft); color: var(--ag-bad); border-color: var(--ag-bad-line); }
+.ag-hc.bad { background: var(--ag-d-leak); color: #fff; border-color: var(--ag-d-leak); }   /* sağlık sorunu: ciddi */
 /* eski blok banları çubuğu */
 .ag-oldbar { display: flex; align-items: center; gap: 10px; padding: 10px 18px; background: var(--ag-warn-soft); border-bottom: 1px solid var(--ag-warn-line); color: var(--ag-warn); font-size: 12.5px; font-weight: 550; flex-wrap: wrap; }
 .ag-oldbar svg { width: 16px; height: 16px; flex: none; }
@@ -1072,7 +1077,7 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
 .ag-lv-st.temp { color: var(--ag-d-temp-t); font-weight: 600; }
 .ag-lv-st.prom { color: var(--ag-d-prom-t); font-weight: 600; }
 .ag-lv-st.part { color: var(--ag-d-part-t); font-weight: 600; }
-.ag-lv-st.watch { color: var(--ag-d-temp-t); font-weight: 600; }
+.ag-lv-st.watch { color: var(--ag-text-2); font-weight: 600; }   /* izleniyor: durum değil ek bilgi, renksiz (görsel dil) */
 .ag-lv-x { margin-top: 2px; font-size: 12px; }
 .ag-lv-act { margin-top: 6px; }
 /* dar kartta (telefon) seviye tablosu kartı taşırmasın: düğme yazısı alt satıra kırılır, aralık "/" sonrasında kırılabilir. Önce

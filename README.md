@@ -118,8 +118,8 @@ settings, with no prompts. `config.env` is left untouched.
   it took, a countdown to the next run and the durations of the last 36 runs
   (a run's tooltip names what made it longer: lists refreshed, the Imunify360 list fetched, `csf -r`, lfd
   restarted, and the steps that took longer than two seconds), plus three markers: **CSF** (rules loaded, not disabled, not in testing mode),
-  **LFD** (running) and **Cron** (runs on time). Turns red when any of them has
-  a problem. Coming back to a tab that was hidden for a while, the run times
+  **LFD** (running) and **Cron** (runs on time). Turns dark orange (serious) when
+  any of them has a problem. Coming back to a tab that was hidden for a while, the run times
   show *updating…* until the new status arrives, never the old numbers.
 - **Summary cards** — active block bans, items to review, and how full CSF's
   permanent and temp lists are, each with its change over the chosen period (the
@@ -131,9 +131,13 @@ settings, with no prompts. `config.env` is left untouched.
   for its breakdown; click a total to open History filtered to that kind and period.
 - **Provider card** — every AS badge opens it: CSF provider ban state,
   violations, offending IPs and **Measure impact**.
-- **Colors** — one meaning, one color everywhere (badges, icons, chart): red full
-  ban, violet made permanent, teal temp ban, blue partial ban, amber suspicious
-  network, gray allow list skip.
+- **Colors** — colour is used for two things only, the same everywhere (badges,
+  icons, chart, emails). The *state* of an address: red filled = blocked
+  (permanent or timed; red only ever means blocked), red outline = partly
+  blocked, green = allowed, plain = not banned. The *importance* of a finding,
+  detection or health problem: amber = attention, dark orange filled = serious.
+  Actions (ban, remove, allow, mute, settings) and routine events carry no
+  colour; indigo marks only things to click. *Terms* has a *Colours* section.
 - **Needs review** — suspicious ranges, suspicious networks and allow-list-skipped blocks from the review
   period (*Days kept in the list*, `REVIEW_DAYS`, default 7 days), as a table: why it was flagged (how many IPs hit which services),
   owner, when, and the narrowest ban that would do; clicking the IP count lists
@@ -655,7 +659,7 @@ IP's and also shown in the range's ban window. AbuseIPDB's standard plan
 checks ranges up to `/24`, so wider ranges show no button. AbuseIPDB has no
 check by provider (ASN) or country, so provider and country views have no
 AbuseIPDB part. The score is shown as a badge coloured by its value: grey for
-0, orange for 1–49 and red for 50 and above.
+0, amber (attention) for 1–49 and dark orange (serious) for 50 and above.
 
 Once a key is saved the card shows it masked (last four characters) with
 "Change" and "Remove key", and five settings: `ABUSE_ON` turns lookups off
