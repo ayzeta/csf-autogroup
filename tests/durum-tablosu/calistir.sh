@@ -50,6 +50,7 @@ dump() {
     run --lookup 151.80.7.9 --json > "$W/out/$1.lookup.json" 2>/dev/null
     run --inside 151.80.7.0/24 --json > "$W/out/$1.in24.json" 2>/dev/null
     run --inside 151.80.0.0/16 --json > "$W/out/$1.in16.json" 2>/dev/null
+    run --obj-state 151.80.7.9 151.80.7.0/24 151.80.0.0/16 --json > "$W/out/$1.now.json" 2>/dev/null   # Geçmiş öğelerinin kaydı (states)
 }
 quiet() { run "$@" >/dev/null 2>&1; }
 
@@ -506,7 +507,14 @@ for x in 7.1 7.2 8.1 200.1 201.1; do single 151.80.$x sshd; done; quiet
 mcheck "hiyerarşi: aynı sahibin tekilleri 2 duyurulan aralıkta (3 + 2, eşik 5) → şüpheli ağ; aralıklar eşiğin altında" "grep -q '\"type\":\"warn16\",\"cidr\":\"151.80.0.0/16\",\"n\":5,' \"\$(EVF)\" && ! grep -q '\"type\":\"warnpfx\"' \"\$(EVF)\""
 mk gcov; printf '%s\n' 'CC_DENY = "FR"' >> "$R/etc/csf/csf.conf"
 printf '151.80.7.0/24 # csf_autogroup: Auto-grouped /24 - Mon Nov 09 10:00:00 2026\n198.51.100.0/24 # csf_autogroup: Auto-grouped /24 - Mon Nov 09 10:00:00 2026\n' >> "$D"
-mcheck "ülke banı kapsaması CSF verisinden (gcov): FR bölgesindeki blok etiketli, dışındaki değil" "run --status --json 2>/dev/null | grep -o '\"gcov\":{[^}]*}' | grep -q '\"151.80.7.0/24\":\"FR\"' && ! run --status --json 2>/dev/null | grep -o '\"gcov\":{[^}]*}' | grep -q '198.51.100'"
+# 1.15.142: "gcov" alanı yerine listelerin tek durum kaydı ("sts"); kapatanlar arasında ülke banı CSF verisinden
+mcheck "ülke banı kapsaması CSF verisinden (sts kaydı): FR bölgesindeki blok ülke banıyla kapalı, dışındaki değil" "run --status --json 2>/dev/null | grep -oE '\"151\\.80\\.7\\.0/24\":\\{\"e\":\"[a-z]+\",\"k\":\\[[^]]*\\]' | grep -q '\"t\":\"cc\",\"a\":\"FR\",\"m\":\"all\"' && ! run --status --json 2>/dev/null | grep -oE '\"198\\.51\\.100\\.0/24\":\\{\"e\":\"[a-z]+\",\"k\":\\[[^]]*\\]' | grep -q '\"t\":\"cc\"'"
+# durum çıktısında aynı nesnede iki kez geçen anahtar yok (JSON.parse sonrakini sessizce alır; 1.15.142 ilk hâli "now" ile sunucu
+# saatini ezdi, panel tarih hesabında çöktü)
+mcheck "durum çıktısı: aynı nesnede tekrarlanan anahtar yok" "run --status --json 2>/dev/null | node '$REPO/tests/durum-tablosu/json-cift.js'"
+# aynı ülkenin bitişik iki bölge satırı bir /16'yı birlikte kapatır (birleştirme; eski geo_ranges_cover da böyle sayıyordu)
+printf '151.81.0.0/17\n151.81.128.0/17\n' > "$R/var/lib/csf/zone/fr.zone"; printf '151.81.0.0/16 # csf_autogroup: elle /16 - do not delete\n' >> "$D"
+mcheck "ülke banı kapsaması: bitişik iki bölge satırı bir /16'yı birlikte kapatır" "run --obj-state 151.81.0.0/16 2>/dev/null | grep -q '\"t\":\"cc\",\"a\":\"FR\",\"m\":\"all\"'"
 mk hown; for p in 7 8; do own 151.80.$p 16276 OVH 151.80.0.0/16; done; for p in 9 10; do own 151.80.$p 64500 BASKA 151.80.$p.0/24; done
 for x in 7.1 7.2 8.1 9.1 9.2 10.1; do single 151.80.$x sshd; done; quiet
 mcheck "hiyerarşi: aynı /16'da iki sahibin tekilleri (3 + 3, eşik 5) birbirine eklenmez → uyarı yok" "! grep -q '\"type\":\"warn16\"' \"\$(EVF)\""

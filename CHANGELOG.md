@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.15.142 — 2026-11-26
+
+- The lists, their menus and the History notes now decide "is this item
+  already closed by another ban" from the same state record as the cards. The
+  status output carries a record for every listed item and for the block and
+  network above it (`sts`). Before, two separate fields covered only part of
+  it: wide range bans (`wide`) and the country or provider code (`gcov`).
+  Rented-server lists, CSF block lists, Imunify360 and timed range bans were
+  missing. Both fields and the panel's own `outerCover` check are gone.
+- The state record joins adjacent country / provider ranges before checking.
+  A /16 covered by two adjacent /17 zone lines counts as covered, as the old
+  check counted it.
+- Looking up the covering country, provider or list ranges uses a binary
+  search over sorted ranges instead of scanning every range for every item.
+- A History row's menu offers no ban until that item's state record has
+  arrived (it is redrawn when it does), instead of guessing. When the block is
+  closed only by the plugin's own temporary ban, the History menu offers
+  "Make permanent", as the IP card does.
+
 ## 1.15.141 — 2026-11-26
 
 - The History "now" notes from 1.15.140 did not appear: the new `states` call

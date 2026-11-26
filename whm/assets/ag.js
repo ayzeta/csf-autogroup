@@ -3750,9 +3750,9 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   function tip24(a) { var o = partialOver(a + '.0/24'); return o && !partialAt(a + '.0/24') ? ' title="' + esc(t('ban24_full_h', svcNames(o.svc, o.extra) || o.ports)) + '"' : ''; }
   // kapsayan ban etiketi ("/16 içinde", "ülke banında", "sağlayıcı banında", "kiralık listede"): her listede aynı bileşen
   function coverTag(text, title, cls) { return '<span class="ag-ctag' + (cls ? ' ' + cls : '') + '" title="' + esc(title) + '">' + esc(text) + '</span>'; }
-  function ccPill(c) {          // ülke ya da sağlayıcı banının (CC_DENY) içinde kalan blok
-    var o = outerCover(c);
-    return o && o.kind === 'cc' ? coverTag(t(/ AS\d/.test(o.cidr) ? 'under_asn' : 'under_cc'), t('under_cc_h', o.cidr)) : '';
+  function ccPill(c) {          // ülke ya da sağlayıcı banının (CC_DENY) içinde kalan blok: tek durum kaydından
+    var o = nowCov(c);
+    return o && (o.kind === 'cc' || o.kind === 'asn') ? coverTag(t(o.kind === 'asn' ? 'under_asn' : 'under_cc'), t('under_cc_h', o.cidr)) : '';
   }
   function setsLoading() {      // lfd 10 dk içinde başladı: boş ülke/ASN kümesi henüz dolmamış olabilir
     var h = (S && S.health) || {}; return h.lfd_age >= 0 && h.lfd_age < 600;
@@ -5476,27 +5476,26 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       g: g,
       p: /\/24$/.test(c) ? (S.pending || []).filter(function (o) { return o.prefix + '.0/24' === c; })[0] : null,
       ig: (S.ignored || []).filter(function (o) { return o.cidr === c; })[0],
-      cov: g ? null : nowCov(c) || (S.groups || []).filter(function (o) { return o.kind !== 'partial' && o.cidr !== c && covers(o, x); })[0] || outerCover(x)
+      cov: g ? null : nowCov(c) || (S.groups || []).filter(function (o) { return o.kind !== 'partial' && o.cidr !== c && covers(o, x); })[0] || null
     };
   }
   // öğeyi tamamen kapatan başka ban: tek durum kaydı geldiyse ondan (öğenin kendi banı değil, kapsayan)
+  // kind: cc / asn (ülke / sağlayıcı), temp (süreli aralık banı), wide (başka bir tam aralık banı), ya da kapatanın türü (liste vb.);
+  // under: kapatan aralık (menüler kapsayandan geniş seviyeleri sunar; geçici ban kalıcıya alınabilir)
+  // nesnenin KENDİSİ dışındaki en geniş tam ban: önce ülke / sağlayıcı, sonra en geniş aralık banı, sonra öteki (liste, Imunify).
+  // Nesnenin kendi tekil banı da varsa onu değil kapsayanı söyler (ilk sürüm en güçlü kapatana bakıyordu: kendi tekil banı olan ve /16
+  // ya da ülke banının içinde kalan IP'ye menü "Bloğu banla" sunuyordu)
   function nowCov(c) {
-    var rec = NOWST[c]; if (!rec || rec.e !== 'ban') return null;
-    var mk = stMain(rec); if (!mk || mk.a === c || mk.a + '/32' === c) return null;
-    return { cidr: stName(mk), kind: /\//.test(mk.a) ? 'wide' : mk.t, bits: /\//.test(mk.a) ? bitsOf(mk.a) : 0 };
-  }
-  // Eklentinin listelerinde olmayan ama öğeyi zaten tamamen kapatan ban: başka kaynaklı geniş aralık ya da ülke/ASN banı.
-  // Ülke sahip önbelleğinden (/24 başına) bilinir; bir /16 için bilinen bütün blokları banlı ülkedeyse kapalı sayılır
-  // (ağ birden çok önek içerebilir; son karar banla penceresinde, motorun kendi kontrolünde).
-  function outerCover(x) {
-    var w = (S.wide || []).filter(function (r) { return covers({ cidr: r }, x); })[0];
-    if (w) return { cidr: w, kind: 'wide', self: w === x };       // self: öğenin kendisi başka kaynaktan banlı
-    // ülke / sağlayıcı banı (CC_DENY): motorun CSF verisinden hesabı (gcov; bölge dosyası ya da ip2asn — csf.pl kümeyi oradan
-    // doldurur). Önce panel Team Cymru sahip önbelleğiyle tahmin ediyordu; CSF'in yüklediği aralıklardan farklı olabiliyordu
-    // öğe ya da içinde olduğu blok / ağ (motor üstleri de hesaplar; tamamen kapalı üstün içindeki her şey kapalıdır)
-    var gc = S.gcov || {}, xb = bitsOf(x), ip0 = x.replace(/\/\d+$/, '');
-    var hit = gc[x] || gc[ip0] || (xb > 24 && gc[prefixOf(ip0) + '.0/24']) || (xb > 16 && gc[p16(ip0) + '.0.0/16']) || '';
-    return hit ? { cidr: covName({ kind: 'cc', what: hit }), kind: 'cc', bits: 0 } : null;   // gösterilen ad covName'den (ham ayar adı değil)
+    var rec = nowRec(c); if (!rec || (rec.e !== 'ban' && rec.e !== 'alw')) return null;
+    var own = function (k) { return k.a === c || k.a + '/32' === c; };
+    var all = (rec.k || []).filter(function (k) { return k.m === 'all' && !own(k); });
+    var mk = all.filter(function (k) { return k.t === 'cc' || k.t === 'asn'; })[0] ||
+      all.filter(function (k) { return /\//.test(k.a) && (k.t === 'cidr' || k.t === 'temp'); }).sort(function (a, b) { return bitsOf(a.a) - bitsOf(b.a); })[0] || all[0];
+    if (rec.e === 'alw') return null;
+    // kapsayan başka ban yok ama öğenin kendisi (eklentinin listesi dışında) tam banlı: menü kendisini yeniden banlamayı sunmaz
+    if (!mk) return (rec.k || []).some(function (k) { return k.m === 'all' && own(k); }) ? { self: true, cidr: c, kind: 'wide', bits: bitsOf(c), under: c } : null;
+    var rng = /\//.test(mk.a) && (mk.t === 'cidr' || mk.t === 'temp');
+    return { cidr: stName(mk), kind: mk.t === 'temp' ? 'temp' : rng ? 'wide' : mk.t, bits: rng ? bitsOf(mk.a) : (mk.t === 'cc' || mk.t === 'asn') ? 0 : 99, under: rng ? mk.a : c };
   }
   function covBits(cv) { return cv.bits != null ? cv.bits : bitsOf(cv.cidr); }
   // Geçmiş "şu an" notu tek durum kaydından (motor obj_state; IP kartı, aralık kartı, Etkisini ölç aynı kayıt). Kayıt gelene kadar not
@@ -5513,10 +5512,12 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       Object.keys(r.st || {}).forEach(function (k) { NOWST[k] = r.st[k]; }); NOWST_T = Date.now(); render();
     }, function () { NOWST_P = null; });
   }
+  // durum çıktısındaki "sts" (listeler ve üstleri; "now" sunucunun saatidir) ya da Geçmiş için istenen kayıt (NOWST)
+  function nowRec(c) { var r = S && S.sts && S.sts[c]; return r || NOWST[c] || null; }
   function stateNote(e, st) {    // yalnız öğenin en yeni satırında gösterilir
     if (!st) return '';
-    var rec = NOWST[e.cidr];
-    if (rec === undefined || rec === null) return '';
+    var rec = nowRec(e.cidr);
+    if (!rec) return '';
     if (rec.e === 'ban' || rec.e === 'part') {
       if (st.g) return t(st.g.kind === 'partial' ? 'st_part' : 'st_ban');
       var mk = stMain(rec);
@@ -5579,7 +5580,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   }
   function lvItems(c, mb) {
     // eklentinin listesinde olmayan kapsayan ban da (başka kaynaklı geniş aralık, ülke / sağlayıcı "her şey" banı): IP kartının coverBits'i gibi
-    var oc = outerCover(c); if (oc) mb = Math.min(mb, covBits(oc));
+    var oc = nowCov(c); if (oc && oc.kind !== 'temp') mb = Math.min(mb, covBits(oc));   // tek durum kaydı (süreli ban kalıcıya alınabilir)
     return lvOffer(c, mb, ownerOf(c).pfx).map(lvItem).filter(Boolean);
   }
   /* BİR ÖĞENİN EYLEMLERİ — TEK KAYNAK (1.15.95). Öğe: IP, blok (/24), duyurulan aralık, ağ (/16). Her ekran aynı işlevden okur:
@@ -5653,12 +5654,18 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   function itemMenu(c, e, st) {  // öğe için şu an geçerli eylemler — Genel bakış'taki satırlarla aynı işlevler (acts*)
     var items, bits = bitsOf(c), p16v = /\//.test(c) || /^\d/.test(c) ? p16(c) : '', p24 = pfxOf(String(c).split('/')[0]);
     if (st.r || st.g || st.p) items = objActs(st);
+    // Geçmiş öğesi (olay satırı) için kayıt henüz gelmedi: kapsayan bilinmiyor, ban önerilmez (tahmin yok; kayıt gelince yeniden çizilir).
+    // Kartın / listenin üst seviye önerileri (selfItems, lvItem) kaydı istenmemiş seviyeler için de çalışır: kural yalnız olay satırında
+    else if (e && e.type && !nowRec(c) && !st.cov && !st.ig) items = [];
     else if (!st.cov && !st.ig) {
       // artık hiçbir listede değil: kendisini yeniden banlamak (blok / ağ) ve üst seviyeleri (IP kartıyla aynı karar)
       items = !/^\d/.test(String(c)) ? [] : (bits === 32 ? [MI.ban1(String(c).replace(/\/32$/, ''))] : []).concat(bits === 16 ? [MI.ban16(p16v)] : bits === 24 ? [MI.ban24(p24)] : bits >= 8 && bits < 24 ? [MI.banpfx(c)] : []).concat(lvItems(c, 32));
     } else if (st.cov) {
       // bir banın içinde: kapsayandan geniş seviyeler; geçici ban kapsamaz sayılır (kalıcıya almak için blok yine sunulur; IP kartıyla aynı)
       items = lvItems(c, st.cov.kind === 'temp' ? bitsOf(st.cov.under) : Math.min(covBits(st.cov), bitsOf(st.cov.under)));
+      // blok YALNIZ kendi geçici banıyla kapalı: "Kalıcı yap" (IP kartının ipCardBtns ownT kuralıyla aynı; yeni ban değil, türü değişir)
+      var b24u = bits > 24 ? pfxOf(String(c).split('/')[0]) + '.0/24' : '';
+      if (st.cov.kind === 'temp' && st.cov.under === b24u) items = selfItems(b24u).filter(function (x) { return x.act === 'promote'; }).concat(items);
     } else items = [];
     items = items.concat([MI.ipcard(firstIp(c, e.ips))]);
     if (st.r || st.g || st.p) items.push(MI.goto(c));

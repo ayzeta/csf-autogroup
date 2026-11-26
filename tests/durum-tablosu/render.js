@@ -8,7 +8,7 @@ let src = fs.readFileSync(AGJS, 'utf8');
 // test kancaları yalnız bu kopyada: menü öğelerini topla, iç işlevleri dışarı ver
 src = src.replace(/function menu\(key, items\) \{/, m => m + ' if (globalThis.__MENU) globalThis.__MENU(key, items);');
 const tail = src.lastIndexOf('})();');
-src = src.slice(0, tail) + `globalThis.__AG = { set: function (s, l) { S = s; LANG = l || 'tr'; }, review: review, groupRows: groupRows,
+src = src.slice(0, tail) + `globalThis.__AG = { set: function (s, l, nw) { S = s; LANG = l || 'tr'; NOWST = nw || {}; NOWST_T = Date.now(); }, review: review, groupRows: groupRows,
   pending: pending, itemState: itemState, itemMenu: itemMenu, drActs: drActs, coverBits: coverBits, UI: UI };\n` + src.slice(tail);
 
 const el = () => new Proxy(function () {}, { get: (t, k) => k === 'length' ? 0 : k === Symbol.toPrimitive ? () => '' : el(), apply: () => el(), set: () => true });
@@ -21,6 +21,8 @@ globalThis.fetch = () => new Promise(() => {});
 globalThis.setInterval = () => 0; globalThis.setTimeout = () => 0;
 try { new Function(src)(); } catch (e) { console.error('yükleme hatası:', e.message); process.exit(1); }
 const AG = globalThis.__AG;
+// Geçmiş öğelerinin tek durum kaydı (panel states ucuyla alır; 1.15.142): dump() motorun --obj-state --json çıktısını yazar
+function nowOf(s) { try { return JSON.parse(fs.readFileSync(path.join(OUT, s + '.now.json'), 'utf8')).st || {}; } catch (e) { return {}; } }
 if (!AG) { console.error('ag.js dışa veremedi'); process.exit(1); }
 
 const IP = '151.80.7.9', BLK = '151.80.7.0/24', NET = '151.80.0.0/16', IN = c => String(c).startsWith('151.80');
@@ -41,7 +43,7 @@ function fail(s, msg) { fails++; lines.push('  ✗ ' + s + ': ' + msg); }
 for (const s of scen) {
   const st = JSON.parse(fs.readFileSync(path.join(OUT, s + '.status.json'), 'utf8'));
   const lk = JSON.parse(fs.readFileSync(path.join(OUT, s + '.lookup.json'), 'utf8'));
-  AG.set(st, 'tr');
+  AG.set(st, 'tr', nowOf(s));
   const menus = {}; globalThis.__MENU = (k, items) => { menus[k] = items; };
   const scr = {};
   // IP kartı
@@ -139,7 +141,7 @@ for (const s of scen) {
   lk.pfx = PFX; st.owners = st.owners && !Array.isArray(st.owners) ? st.owners : {};
   Object.keys(st.owners).forEach(k => { if (IN(k) && Array.isArray(st.owners[k])) st.owners[k][3] = PFX; });
   if (!st.owners['151.80.7']) st.owners['151.80.7'] = ['16276', 'FR', 'OVH, FR', PFX];
-  AG.set(st, 'tr');
+  AG.set(st, 'tr', nowOf(s));
   const menus = {}; globalThis.__MENU = (k, items) => { menus[k] = items; };
   AG.review(); AG.groupRows(); AG.pending();
   const card = htmlActs(AG.drActs(IP, AG.coverBits(lk), lk.pfx, '', lk)).filter(a => /^ban(24|16|pfx)$/.test(a[0]))

@@ -65,7 +65,7 @@ grep() { command grep -a "$@"; }
 # sayı, anahtar; Türkçe modda sıralama kuralı zaten C idi (LC_COLLATE=C)
 sort() { LC_ALL=C command sort "$@"; }
 
-VERSION="1.15.141"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.142"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -4184,13 +4184,12 @@ do_status() {
         for ba in "${ASB_A[@]}"; do asn_name "AS$ba"; jstr "$REPLY"; bn="$REPLY"; asn_setn "AS$ba"; bj+="${bj:+,}{\"asn\":\"$ba\",\"name\":$bn,\"how\":\"${ASB[$ba]}\",\"n\":$REPLY}"; done
         for ba in "${CLB_A[@]}"; do asn_name "AS$ba"; jstr "$REPLY"; bj+="${bj:+,}{\"asn\":\"$ba\",\"name\":$REPLY,\"how\":\"cloud\",\"src\":\"${CLB_S[$ba]}\",\"n\":-1}"; done
         printf '"asn_banned":[%s],"dports":["%s","%s"],' "$bj" "$(conf_val CC_DENY_PORTS_TCP | tr -cd '0-9,:')" "$(conf_val CC_DENY_PORTS_UDP | tr -cd '0-9,:')"
-        # panelin "zaten kapalı mı" kararları için: /23'ten geniş tam banlar (kaynağı ne olursa olsun) ve CC_DENY listesi
-        local wdj=() ccw
-        for gi in "${WD_TXT[@]}"; do wdj+=("\"$gi\""); done
-        ccw=$(conf_val CC_DENY | LC_ALL=C tr '[:lower:]' '[:upper:]' | tr -cd 'A-Z0-9,')
-        printf '"wide":[%s],"ccd":"%s",' "${wdj[*]}" "$ccw"
-        # listelerdeki aralıkları ve IP'leri tamamen kapatan CC_DENY kodu (CSF verisinden; panel kendi tahminini yapmaz)
-        local gq=() gcj="" gx
+        local ccw; ccw=$(conf_val CC_DENY | LC_ALL=C tr '[:lower:]' '[:upper:]' | tr -cd 'A-Z0-9,')
+        printf '"ccd":"%s",' "$ccw"
+        # listelerdeki her öğenin ve menülerinin önerdiği üstlerin (blok /24, ağ /16) TEK DURUM KAYDI (obj_state, 1.15.142): panelin
+        # "zaten kapalı mı" kararları ve liste etiketleri bundan okur. Önce ayrı iki alan vardı ("wide" geniş aralıklar, "gcov" ülke /
+        # sağlayıcı kodu): kiralık listeyi, blok listesini, Imunify'ı ve süreli aralık banını bilmiyorlardı
+        local gq=() gx
         # öğenin kendisi ve menülerinin önerdiği üstleri (blok /24, ağ /16): panel bir IP'nin kapsamasını içindeki bloktan da okur
         local gpend=""
         for gx in "${pending[@]}"; do [[ "$gx" =~ \"prefix\":\"([0-9.]+)\" ]] && gpend+="${BASH_REMATCH[1]}.0/24"$'\n'; done
@@ -4199,9 +4198,9 @@ do_status() {
             printf '%s' "$gpend"
             printf '%s\n' "${!SINGLE_NOTE[@]}"; tb_load; printf '%s\n' "${!TB_IP[@]}"     # tekil ve geçici banlar (Geçmiş / IP kartı menüleri)
           } | awk -F'[./]' 'NF >= 4 { print; if (NF == 4 || $5 + 0 > 24) print $1 "." $2 "." $3 ".0/24"; if (NF == 4 || $5 + 0 > 16) print $1 "." $2 ".0.0/16" }' | sort -u)
-        geo_ranges_cover "${gq[@]}"
-        for gx in "${!GEOC[@]}"; do gcj+="${gcj:+,}\"$gx\":\"${GEOC[$gx]}\""; done
-        printf '"gcov":{%s},' "$gcj"
+        st_prep
+        # alan adı "sts": "now" zaten sunucunun saati (ilk denemede ezdi, panelin tarih hesabı çöktü)
+        printf '"sts":{%s},' "$(printf '%s\n' "${gq[@]}" | obj_state | awk -F'\t' 'NF >= 3 { printf "%s\"%s\":%s", (n++ ? "," : ""), $1, $3 }')"
         prof asn_banned_json
         prov_json; printf '"prov":%s,' "$REPLY"
         prof prov_json
@@ -4675,31 +4674,6 @@ csf_geo_cover() {   # ALT ÜST KOD… → REPLY = aralığı kapsayan kodlar (bo
              } 2>/dev/null | sort -k1,1 -k2,2n | awk -v L="$lo" -v H="$hi" -v any="${GEO_ANY:-0}" '{ if ($1 != k) { k = $1; r[k] = L - 1 } if ($2 <= r[k] + 1 && $3 > r[k]) r[k] = $3 }
                     END { for (k in r) if (any == 1 || r[k] >= H) print k }' | sort | paste -sd' ' -)
 }
-# Aralıkları tamamen kapatan CC_DENY (tam ülke / sağlayıcı banı) kodu, CSF'in kendi verisinden (bölge dosyası, yoksa ip2asn; csf.pl
-# kümeyi oradan doldurur): ARALIK|IP… → GEOC[girdi] = ilk kapsayan kod. Panelin "ülke banının içinde" etiketi bunu okur; önce panel
-# Team Cymru sahip önbelleğiyle tahmin ediyordu (CSF'in yüklediği aralıklardan farklı olabilir)
-geo_ranges_cover() {
-    declare -gA GEOC=(); GEOC=(); local IFS=$' \t\n'     # çağıran (durum çıktısı) IFS=, ile çalışıyor
-    local c z an="" geo="$CSF_VAR/Geo/ip2asn-combined.tsv" x k; local -a fz=()
-    for c in $(conf_val CC_DENY | LC_ALL=C tr '[:lower:],' '[:upper:] '); do z="$CSF_VAR/zone/${c,,}.zone"
-        if [ -r "$z" ]; then fz+=("$z"); elif [[ "$c" =~ ^AS([0-9]+)$ ]] && [ -r "$geo" ]; then an+=" ${BASH_REMATCH[1]}"; fi
-    done
-    [ $# -gt 0 ] && { [ ${#fz[@]} -gt 0 ] || [ -n "$an" ]; } || return 0
-    while read -r k c; do [ -n "$c" ] && GEOC[$k]="$c"; done < <(
-        { for x in "$@"; do k="$x"; [[ "$x" == */* ]] || x="$x/32"; cidr_range "$x" 2>/dev/null && printf 'I %s %s %s\n' "$k" "$R_LO" "$R_HI"; done
-          [ ${#fz[@]} -gt 0 ] && awk -F'[./]' 'NF >= 4 && $1 ~ /^[0-9]+$/ { f = FILENAME; sub(/.*\//, "", f); sub(/[.]zone$/, "", f)
-                b = (NF == 5 ? $5 : 32); a = (($1 * 256 + $2) * 256 + $3) * 256 + $4; printf "R %s %.0f %.0f\n", toupper(f), a, a + 2 ^ (32 - b) - 1 }' "${fz[@]}"
-          [ -n "$an" ] && awk -F'\t' -v A="$an " 'index(A, " " $3 " ") && $1 ~ /^[0-9.]+$/ { split($1, p, "."); split($2, q, ".")
-                printf "R AS%s %.0f %.0f\n", $3, ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4], ((q[1] * 256 + q[2]) * 256 + q[3]) * 256 + q[4] }' "$geo"
-        } 2>/dev/null | sort -k1,1 -k2,2 -k3,3n | awk '
-            $1 == "R" { if ($2 != pk) { pk = $2; NK[++nk] = pk }                 # kod başına birleştirilmiş aralıklar (sıralı)
-                        n = N[pk] + 0; if (n && $3 <= H[pk, n] + 1) { if ($4 > H[pk, n]) H[pk, n] = $4 } else { N[pk] = ++n; L[pk, n] = $3; H[pk, n] = $4 }; next }
-            $1 == "I" { Q[++m] = $2; QL[m] = $3 + 0; QH[m] = $4 + 0 }
-            END { for (i = 1; i <= m; i++) for (j = 1; j <= nk; j++) { k = NK[j]
-                      lo = 1; hi = N[k]; r = 0                                   # ikili arama: başlangıcı QL ile aynı ya da küçük son aralık
-                      while (lo <= hi) { md = int((lo + hi) / 2); if (L[k, md] <= QL[i]) { r = md; lo = md + 1 } else hi = md - 1 }
-                      if (r && H[k, r] >= QH[i]) { print Q[i], k; break } } }')
-}
 # csf_geo_cover'ın toplu hâli (tur ve durum: birçok IP tek geçişte): IP… → GEOI[ip] = " KOD KOD " (CC_DENY / CC_DENY_PORTS'taki
 # kodlardan CSF verisinde IP'yi kapsayanlar), GEO_HAS = " verisi olan kodlar " (verisi olmayan kodda Cymru'ya bakılır)
 geo_ips_load() {
@@ -4766,7 +4740,11 @@ st_prep() {      # → ST_D (geçici dizin; süreç sonunda silinir): bir kez
           done
       fi
       bkl_lines | awk '{ print $1, $2, "bk:" $3 }'
-    } > "$ST_D/geo"
+    } | awk '{ if (!($3 in F)) F[$3] = NR; print $3, $1, $2, F[$3] }' | LC_ALL=C sort -k1,1 -k2,2n |
+        # aynı etiketin bitişik / örtüşen aralıkları birleşir (bir /16 iki bitişik /17 bölge satırıyla bütünüyle kapanabilir; eski
+        # geo_ranges_cover da böyle birleştiriyordu), sonra başa göre sıralı (ikili arama); 4. alan etiketin ilk sırası (kayıttaki sıra)
+        awk '{ if ($1 == t && $2 <= h + 1) { if ($3 > h) h = $3; next } if (t != "") printf "%.0f %.0f %s %s\n", l, h, t, q; t = $1; l = $2; h = $3; q = $4 }
+             END { if (t != "") printf "%.0f %.0f %s %s\n", l, h, t, q }' | LC_ALL=C sort -n -k1,1 > "$ST_D/geo"
     # kiralık listelerin kuralı: "ad kip tcp udp" (cl_pol: all | svc kapatılan portlar | exc açık kalan portlar)
     : > "$ST_D/clp"
     if [ "$CLOUD_ON" = 1 ]; then for x in $CLOUD_ACTIVE; do cl_pol "$x"; printf '%s %s %s %s\n' "$x" "${CP_K:-svc}" "${CP_T:--}" "${CP_U:--}" >> "$ST_D/clp"; done; fi
@@ -4824,7 +4802,10 @@ BEGIN { now = now + 0; AP2[1] = 4; AP2[2] = 3; AP2[3] = 2; AP2[0] = 1
                 pn++; rng(ad); PL[pn] = RL; PH[pn] = RH; PA[pn] = ad; PR[pn] = pr; PO[pn] = own; gsub(/_/, ":", pt); PT[pn] = pt }
             continue }
         if (l ~ /^[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+([\/][0-9]+)?$/) { dn++; rng(l); DL[dn] = RL; DH[dn] = RH; DA[dn] = l; DO[dn] = own } }
-    while ((getline l < gf) > 0) { split(l, x, " "); gn++; GL[gn] = x[1] + 0; GH[gn] = x[2] + 0; GS[gn] = x[3] }
+    # ülke / sağlayıcı / kiralık liste / blok listesi aralıkları başa göre sıralı; GX = o noktaya kadarki en büyük son (ikili arama:
+    # nesneyi kapsayan aralıklar başı nesnenin başından küçük olanlar içinde, geriye doğru GX nesnenin sonundan küçük olana kadar)
+    while ((getline l < gf) > 0) { split(l, x, " "); gn++; GL[gn] = x[1] + 0; GH[gn] = x[2] + 0; GS[gn] = x[3]; GQ[gn] = x[4] + 0
+        GX[gn] = (gn > 1 && GX[gn - 1] > GH[gn]) ? GX[gn - 1] : GH[gn] }
     while ((getline l < cpf) > 0) { split(l, x, " "); CK[x[1]] = x[2]; CT[x[1]] = (x[3] == "-" ? "" : x[3]); CU[x[1]] = (x[4] == "-" ? "" : x[4]) }
     while ((getline l < af) > 0) { split(l, x, " "); an++; AL[an] = x[1] + 0; AH[an] = x[2] + 0; AF[an] = x[3] + 0; t = l; sub(/^[^ ]+ [^ ]+ [^ ]+ /, "", t); AT[an] = t }
     while ((getline l < wf) > 0) if (l ~ /^[0-9]+[.][0-9]+[.][0-9]+ [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/) { split(l, x, " "); if (x[2] >= wcut) WT[x[1]] = x[2] }
@@ -4842,7 +4823,10 @@ BEGIN { now = now + 0; AP2[1] = 4; AP2[2] = 3; AP2[3] = 2; AP2[0] = 1
   n = split(substr(pa, 2), q, SUBSEP)
   for (i = 1; i <= n; i += 2) { k = q[i] SUBSEP q[i + 1]; addk("port", q[i], "ports", PC[k], PU[k], 0, q[i + 1]); delete PC[k]; delete PU[k]; delete PS[k] }
   for (i = 1; i <= tn; i++) { rng(TA[i]); if (RL <= lo && RH >= hi) { addk("temp", TA[i], TP[i] == "" ? "all" : "ports", TP[i], "", TE[i], 0); if (TD[i] ~ /out/) BIDIR = 1 } }
-  for (i = 1; i <= gn; i++) if (GL[i] <= lo && GH[i] >= hi) { split(GS[i], g, ":"); kk = GS[i]; if (kk in GSEEN) continue; GSEEN[kk] = 1
+  a = 1; b = gn; kx = 0; while (a <= b) { c = int((a + b) / 2); if (GL[c] <= lo) { kx = c; a = c + 1 } else b = c - 1 }
+  nm = 0; for (j = kx; j >= 1 && GX[j] >= hi; j--) if (GH[j] >= hi) { nm++; MQ[nm] = GQ[j]; MI2[nm] = j }
+  for (j = 2; j <= nm; j++) { q0 = MQ[j]; i0 = MI2[j]; z = j - 1; while (z >= 1 && MQ[z] > q0) { MQ[z + 1] = MQ[z]; MI2[z + 1] = MI2[z]; z-- } MQ[z + 1] = q0; MI2[z + 1] = i0 }
+  for (z = 1; z <= nm; z++) { i = MI2[z]; split(GS[i], g, ":"); kk = GS[i]; if (kk in GSEEN) continue; GSEEN[kk] = 1
       if (g[1] == "cc" || g[1] == "asn") addk(g[1], g[2], g[3] == "all" ? "all" : "ports", g[3] == "all" ? "" : ccpt, g[3] == "all" ? "" : ccpu, 0, 0)
       else if (g[1] == "cl") addk("cl", g[2], CK[g[2]] == "all" ? "all" : "ports", CK[g[2]] == "exc" ? "exc:" CT[g[2]] : CT[g[2]], CK[g[2]] == "exc" ? "exc:" CU[g[2]] : CU[g[2]], 0, 0)
       else if (g[1] == "bk") addk("bk", g[2], "all", "", "", 0, 0) }
