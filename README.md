@@ -814,6 +814,38 @@ restoring `config.env` is enough.
   covers it now). The last 24 hours of web requests (**Measure impact**) are
   read only when asked, because large logs can take a minute.
   `csf_autogroup.sh --src-ips ASnnn` (or `cl:list`) prints the same IP list as JSON.
+- **What Measure impact reads, and where it can fall short** — the cPanel site
+  logs (domlogs) of the last 24 hours. cPanel's statistics run (`cycle_hours`
+  in `cpanel.config`, about once a day at a time that drifts) empties each site
+  log and appends its lines to the user's monthly archive
+  (`~/logs/<log name>-<Mon>-<YYYY>.gz`, one gzip part per run). When a log
+  starts after the window, the missing hours are read from that archive: only
+  the parts written inside the window, never the whole month. Before any line
+  is used, the archive is checked:
+  - it belongs to the owner of the log;
+  - the part headers match the archive's own first part (look-alike bytes inside
+    compressed data are skipped);
+  - it decompresses without error from that point;
+  - every line is a log line.
+
+  If any check fails, the archive is not used. The same goes when archiving is
+  turned off for the user, or the previous month's archive is missing. In each
+  of these cases the result says how many sites could not be measured for the
+  full 24 hours, the shortest coverage, and why.
+
+  Log times are read with each line's own time-zone offset, so a web server
+  logging in another zone does not shift the window.
+
+  Requests count as "behind a CDN" (a ban on the visitor cannot cut them) only
+  for sites whose response headers show a CDN (Cloudflare, QUIC.cloud, Sucuri,
+  …). A site whose name points to another server that is not a CDN is hosted
+  elsewhere, so requests that do reach this server come directly and a ban cuts
+  them. When the web server logs the visitor's address from the proxy header
+  (LiteSpeed's *Use Client IP in Header*, Apache's `mod_remoteip`), a single
+  request cannot be told apart, so the whole CDN site counts as "may come
+  through the CDN".
+
+  Only web requests are measured.
 - **Measure impact** before saving: the last 24 hours of web logs, for that
   provider — response codes, successful requests, successful POSTs (payment
   notifications, webhooks), examples of failed requests (403, 404, 5xx…: code,

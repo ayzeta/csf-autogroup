@@ -65,7 +65,7 @@ grep() { command grep -a "$@"; }
 # sayı, anahtar; Türkçe modda sıralama kuralı zaten C idi (LC_COLLATE=C)
 sort() { LC_ALL=C command sort "$@"; }
 
-VERSION="1.15.136"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.137"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -3246,14 +3246,15 @@ csfr_trim() {    # tur: yükleme işaretlerinden yalnız Kontrol edilecekler pen
 # CDN arkasındaki site: banın sebebi olan web isteklerinin (ModSecurity "Access denied" satırlarındaki ad, acct_all) hedeflediği site
 # CDN_FILE'da (tools/cdn-sites.sh) ise güvenlik duvarı ziyaretçiyi değil CDN'i görür: ban o istekleri kesemez.
 CDN_OK=""; declare -A CDN_M=()
-cdn_hit() {      # IP SEBEP → 0 ve REPLY = "site (kim)" (ilk eşleşen; kim cdn-sites.sh'ın yazdığı gibi, "other" dahil)
+cdn_hit() {      # IP SEBEP → 0 ve REPLY = "site (kim)" (ilk eşleşen; yalnız CDN olduğu yanıt başlığından anlaşılan siteler — "other" sitenin
+    # web'inin başka sunucuda olduğunu söyler, CDN değil: oraya gelen istek doğrudan gelir, Etkisini ölç'le aynı ayrım)
     local p h s rid="" k; REPLY=""
     if [ -z "$CDN_OK" ]; then
         CDN_OK=1
         [ -r "$CDN_FILE" ] && while IFS='|' read -r s h _ k; do
             [ "$s" = "#t" ] || [ -z "$s" ] && continue
-            { [ -z "${CDN_M[$s]}" ] || [ "${CDN_M[$s]}" = other ]; } && CDN_M[$s]="$k"
-            { [ -z "${CDN_M[$h]}" ] || [ "${CDN_M[$h]}" = other ]; } && CDN_M[$h]="$k"
+            [ -n "$k" ] && [ "$k" != other ] || continue
+            CDN_M[$s]="$k"; CDN_M[$h]="$k"
         done < "$CDN_FILE"
     fi
     [ "${#CDN_M[@]}" -gt 0 ] || return 1
@@ -6544,6 +6545,119 @@ do_src_ips() {   # ANAHTAR (ASnnn | cl:ad) → JSON: o sağlayıcıya / kiralık
             printf "{\"ok\":true,\"n\":%d,\"ips\":[%s]}\n", n, o }' | st_fill
     rm -f "$rng" "$svm"
 }
+# ── Site günlüğü arşivi (Etkisini ölç, 1.15.137) ───────────────────────────────────────────────────────────────────────────────
+# cPanel'in istatistik işlemi (cpanel.config cycle_hours, varsayılan 24 saat; saati sunucuya ve yüke göre kayar) site günlüğünü
+# (domlog) boşaltıp satırları kullanıcının ev dizinindeki aylık arşive ekler: <ev>/logs/<günlük adı>-<Ay>-<Yıl>.gz. Ölçüldü
+# (lin, 2026-11-26): her çalışma arşive yeni bir gzip parçası ekler; parçanın başlığındaki zaman damgası o çalışmanın anıdır (parçanın
+# son satırı); ay arşivi bir önceki ayın son çalışmasından sonraki satırla başlar. Günlük dosyası pencerenin başından sonra başlıyorsa
+# eksik kısım arşivden okunur — yalnız pencereye düşen parçalar (ayın bütün arşivi sunucuda 578 MB, açması 68 sn ölçüldü).
+# Doğrulama (sessiz bozulma yok; tutmayan arşiv kullanılmaz ve sebebiyle bildirilir):
+#  - dosya yalnız günlüğün sahibinin ev dizininde, günlüğün kendi adıyla aranır ve o kullanıcıya ait olmalı;
+#  - parça başı adayı: "1f 8b 08" ve bayrak / sıkıştırma / işletim sistemi baytları dosyanın İLK parçasınınkiyle aynı, zaman damgası ilk
+#    parçanınkinden yeni ve dosyanın değişme anından eski (sıkıştırılmış verinin içinde aynı üç bayt rastgele çıkar: ölçülen dosyada 43
+#    adayın 17'si sahteydi, bazıları gzip -t'den de geçiyordu; hepsinin bayrağı farklıydı);
+#  - seçilen parçadan dosya sonuna kadar açma hatasız biter (gzip CRC) ve açılan HER satır günlük satırıdır ("adres … [gg/Ay/yyyy:").
+# Web günlüğü satırının zamanı → epoch, satırın KENDİ saat dilimi ekiyle ("[26/Nov/2026:15:01:58" "+0300]"). Önce satırın duvar saati
+# sunucunun yerel saatiyle karşılaştırılıyordu: web sunucusu başka saat diliminde yazıyorsa pencere saatlerce kayardı. Takvim hesabı
+# aritmetikle (gawk'ın mktime saat dilimi seçeneği 4.2'den beri; eski sürümlere bağlı kalmasın). Okunamazsa 0
+AWK_LGT='
+function lg_ep(d, z,  a, y, m, dd, mp, era, yoe, doy, doe, off) {
+    if (!match(d, /[0-9][0-9]\/[A-Z][a-z][a-z]\/[0-9][0-9][0-9][0-9]:[0-9][0-9]:[0-9][0-9]:[0-9][0-9]/)) return 0
+    split(substr(d, RSTART, RLENGTH), a, /[\/:]/)
+    m = index("JanFebMarAprMayJunJulAugSepOctNovDec", a[2]); if (!m || (m - 1) % 3) return 0; m = (m + 2) / 3
+    y = a[3] + 0; dd = a[1] + 0; if (m <= 2) y--
+    era = int(y / 400); yoe = y - era * 400; mp = (m + 9) % 12
+    doy = int((153 * mp + 2) / 5) + dd - 1; doe = yoe * 365 + int(yoe / 4) - int(yoe / 100) + doy
+    off = 0; if (match(z, /[-+][0-9][0-9][0-9][0-9]/)) off = (substr(z, RSTART + 1, 2) * 3600 + substr(z, RSTART + 3, 2) * 60) * (substr(z, RSTART, 1) == "-" ? -1 : 1)
+    return (era * 146097 + doe - 719468) * 86400 + a[4] * 3600 + a[5] * 60 + a[6] - off }'
+user_home() {    # KULLANICI → REPLY = ev dizini (passwd; test kökünde SIM_ROOT/etc/passwd); yoksa 1
+    local pw="/etc/passwd"; [ -n "${SIM_ROOT:-}" ] && [ -r "$SIM_ROOT/etc/passwd" ] && pw="$SIM_ROOT/etc/passwd"
+    REPLY=$(awk -F: -v u="$1" '$1 == u { print $6; exit }' "$pw" 2>/dev/null)
+    [ -n "$1" ] && [ -n "$REPLY" ]
+}
+lg_epoch() {     # günlük satırı → REPLY = satırın zamanı (epoch, satırdaki saat dilimiyle); okunamazsa 0
+    REPLY=0
+    [[ "$1" =~ \[([0-9]{2})/([A-Z][a-z]{2})/([0-9]{4}):([0-9]{2}:[0-9]{2}:[0-9]{2})\ ([-+][0-9]{4})\] ]] || return 1
+    REPLY=$(LC_ALL=C date -d "${BASH_REMATCH[1]} ${BASH_REMATCH[2]} ${BASH_REMATCH[3]} ${BASH_REMATCH[4]} ${BASH_REMATCH[5]}" +%s 2>/dev/null) || REPLY=0
+    [[ "$REPLY" =~ ^[0-9]+$ ]] || REPLY=0
+    [ "$REPLY" -gt 0 ]
+}
+gz_hdr() {       # DOSYA KONUM → REPLY = "bayrak xfl os mtime" (başlığın 10 baytı); okunamazsa 1
+    local h; h=$(tail -c +$(( $2 + 1 )) "$1" 2>/dev/null | head -c 10 | od -An -tu1 | tr -s ' \n' ' ')
+    local -a b=($h); [ "${#b[@]}" -eq 10 ] && [ "${b[0]}" = 31 ] && [ "${b[1]}" = 139 ] && [ "${b[2]}" = 8 ] || return 1
+    REPLY="${b[3]} ${b[8]} ${b[9]} $(( b[4] + b[5] * 256 + b[6] * 65536 + b[7] * 16777216 ))"
+}
+# ARŞİV SINCE_EPOCH SINCE_TKEY ÇIKIŞ → pencereye düşen satırlar ÇIKIŞ'a eklenir. REPLY: "ok BAŞ" (BAŞ: okunan ilk satırın zamanı; 0 =
+# arşivden okunacak satır yoktu), "first" (ayın ilk parçası pencerenin içinde: önceki ayın arşivi de gerekir; satırlar yine yazılır),
+# ya da hata: "owner", "nohdr", "bad" (açılamadı / günlük satırı olmayan satır)
+arch_part() {
+    local a="$1" se="$2" sk="$3" out="$4" u="$5" s0 f0 x0 o0 m0 fm o h start="" sm=0 st tmp
+    [ -r "$a" ] || { REPLY=none; return 1; }
+    [ "$(stat -c %U "$a" 2>/dev/null)" = "$u" ] || { REPLY=owner; return 1; }
+    gz_hdr "$a" 0 || { REPLY=nohdr; return 1; }
+    read -r f0 x0 o0 m0 <<< "$REPLY"; fm=$(stat -c %Y "$a")
+    # zaman damgası pencere başından yeni olan en eski geçerli aday (adaylar dosya sırasıyla)
+    while IFS=: read -r o _; do
+        [[ "$o" =~ ^[0-9]+$ ]] || continue
+        gz_hdr "$a" "$o" || continue
+        read -r f x os m <<< "$REPLY"
+        [ "$f" = "$f0" ] && [ "$x" = "$x0" ] && [ "$os" = "$o0" ] && [ "$m" -ge "$m0" ] && [ "$m" -le $(( fm + 86400 )) ] || continue
+        [ "$m" -gt "$se" ] && { start=$o; sm=$m; break; }
+    done < <(LC_ALL=C grep -obUaP '\x1f\x8b\x08' "$a" 2>/dev/null)
+    [ -n "$start" ] || { REPLY="ok 0"; return 0; }      # son parça da pencereden eski: arşivde pencereye düşen satır yok
+    tmp=$(mktemp) || { REPLY=bad; return 1; }
+    tail -c +$(( start + 1 )) "$a" | gzip -dc 2>/dev/null > "$tmp"; st=${PIPESTATUS[1]}
+    # her satır günlük satırı: "adres kimlik kullanıcı [gg/Ay/yyyy:ss:dd:ss +zzzz] " (ifade programın içinde: -v ile verilince awk
+    # kaçışları yutuyor, ifade bozuluyordu)
+    if [ "$st" != 0 ] || ! LC_ALL=C awk '$0 !~ /^[^ ]+ [^ ]+ [^ ]+ \[[0-9][0-9]\/[A-Z][a-z][a-z]\/[0-9][0-9][0-9][0-9]:[0-9][0-9]:[0-9][0-9]:[0-9][0-9] [-+][0-9][0-9][0-9][0-9]\] / { exit 1 }' "$tmp"; then rm -f "$tmp"; REPLY=bad; return 1; fi
+    lg_epoch "$(head -n 1 "$tmp")"; local fe="$REPLY"
+    LC_ALL=C awk -v se="$se" "$AWK_LGT"'{ e = lg_ep($4, $5); if (e >= se) print }' "$tmp" >> "$out"
+    rm -f "$tmp"
+    # başlangıç ayın ilk parçası değilse önceki parça pencereden önce yazılmış: pencere bütünüyle kapsanır (aradaki boşluk = istek yok)
+    if [ "$start" = 0 ] && [ "$fe" -gt "$se" ]; then REPLY="first $fe"; else REPLY="ok 0"; fi
+}
+# LİSTE (günlük dosyaları) SINCE_EPOCH SINCE_TKEY DİZİN → pencerenin başından sonra başlayan günlükler arşivden tamamlanır (dosyalar
+# DİZİN/<günlük adı> olarak listeye eklenir: site adı ve port ölçümde dosya adından); REPLY = kapsama JSON'u
+# {"since":…,"n":site,"a":arşivden tamamlanan,"s":tamamı ölçülemeyen,"from":onların en geç başlangıcı,"r":{sebep:sayı}}
+arch_fill() {
+    local lf="$1" se="$2" sk="$3" od="$4" f b u home fe cf n=0 na=0 ns=0 worst=0 r mo pm out
+    local -A seen=() rs=()
+    mkdir -p "$od" || { REPLY='{}'; return 1; }
+    mo=$(LC_ALL=C date +%b-%Y); pm=$(LC_ALL=C date -d "$(date +%Y-%m-01) -1 day" +%b-%Y)
+    while IFS= read -r f; do
+        b="${f##*/}"; [ -n "${seen[$b]}" ] && continue; seen[$b]=1; n=$((n + 1))   # aynı günlük iki dizinde (domlogs ve domlogs/KULLANICI)
+        lg_epoch "$(head -c 8192 "$f" 2>/dev/null | head -n 1)"; fe="$REPLY"
+        [ "$fe" -gt 0 ] && [ "$fe" -le "$se" ] && continue                         # günlük pencerenin başını zaten kapsıyor
+        [ "$fe" -gt 0 ] || fe=$(stat -c %Y "$f")                                   # boş günlük: boşaltıldığı an
+        u="${f%/*}"; u="${u##*/}"; user_home "$u" || { u=$(stat -c %G "$f" 2>/dev/null); user_home "$u"; }
+        home="$REPLY"
+        out="$od/$b"; cf="$fe"; r=""
+        if [ -z "$home" ]; then r=nouser
+        else
+            arch_part "$home/logs/$b-$mo.gz" "$se" "$sk" "$out" "$u"
+            case "$REPLY" in
+                ok\ *)    cf="$se" ;;                                              # pencere bütünüyle kapsandı
+                first\ *) cf="${REPLY#first }"                                     # ayın ilk parçası pencerenin içinde: önceki ayın arşivi
+                          local cur; cur=$(mktemp); [ -s "$out" ] && mv "$out" "$cur"
+                          arch_part "$home/logs/$b-$pm.gz" "$se" "$sk" "$out" "$u"
+                          case "$REPLY" in
+                              ok\ *) cf="$se" ;;
+                              first\ *) cf="${REPLY#first }" ;;
+                              none) r=noprev ;;                                    # önceki ayın arşivi yok: bu ayın başından ölçülür
+                              *) r="$REPLY"; : > "$out" ;;
+                          esac
+                          [ -s "$cur" ] && cat "$cur" >> "$out"; rm -f "$cur" ;;
+                none)     r=noarch ;;
+                *)        r="$REPLY"; : > "$out" ;;
+            esac
+        fi
+        [ -s "$out" ] && { printf '%s\n' "$out" >> "$lf"; na=$((na + 1)); }
+        [ -n "$r" ] && rs[$r]=$(( ${rs[$r]:-0} + 1 ))
+        if [ "$cf" -gt $(( se + 600 )) ]; then ns=$((ns + 1)); [ "$cf" -gt "$worst" ] && worst=$cf; fi
+    done < <(cat "$lf")
+    local rj="" k; for k in "${!rs[@]}"; do rj+="${rj:+,}\"$k\":${rs[$k]}"; done
+    REPLY="{\"since\":$se,\"n\":$n,\"a\":$na,\"s\":$ns,\"from\":$worst,\"r\":{$rj}}"
+}
 do_asn_impact() { # ANAHTAR (ASnnn | cl:ad | bk:ad | net:CIDR) → son 24 saatin web günlüklerinde bu sağlayıcıdan / kiralık listeden / CSF
     # blok listesinden / adresten (tek IP /32 ya da aralık /8–/32: IP ve aralık kartı) gelen istekler
     local a="$1" n="" dir="" d files rng rc
@@ -6661,21 +6775,22 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad | bk:ad | net:CIDR) → son 24 saatin
     else bjf=$(mktemp) && PERM_SVM="$svm" BLK_SVM="$bsm" asn_bans_json "$rng" "$alw" "$clfa" "$cweb" "$cok" > "$bjf" 2>/dev/null; fi; rm -f "$svm" "$bsm"
     if [ -n "$IMP_STATES" ]; then : > "$lst"
     else find -L "$dir" -type f -mmin -1440 ! -name '*bytes_log*' ! -name '*.offset*' ! -name '*.gz' 2>/dev/null > "$lst"; fi
-    since=$(date -d '24 hours ago' +%Y%m%d%H%M%S)
+    local se0 arcd="" covj=""; se0=$(( $(date +%s) - 86400 ))
+    since=$(date -d "@$se0" +%Y%m%d%H%M%S)
+    # günlüğü pencereden sonra başlayan siteler arşivden tamamlanır; gerçekte ölçülen kapsam cevapta (cov): ekran "son 24 saat" demez
+    if [ -z "$IMP_STATES" ] && arcd=$(mktemp -d); then arch_fill "$lst" "$se0" "$since" "$arcd"; covj="$REPLY"; fi
     # dosyalar tek awk'a verilir (xargs çok dosyada gruplara bölüp yalnız son grubun sonucunu bırakıyordu)
-    awk -v sts="$IMP_STATES" -v rf="$rng" -v lf="$lst" -v since="$since" -v af="$alw" -v cf="$clf" -v cdf="$CDN_FILE" -v cweb="$cweb" -v cact="$cwl" -v ban="$ban" -v bkey="$bkey" -v bkey2="$([ -n "$bkey" ] && date -d "@$(( bsince + 120 ))" +%Y%m%d%H%M%S)" -v bsince="$bsince" -v bweb="$bweb" -v now="$(date +%s)" '
+    awk -v sts="$IMP_STATES" -v rf="$rng" -v lf="$lst" -v since="$since" -v af="$alw" -v cf="$clf" -v cdf="$CDN_FILE" -v cweb="$cweb" -v cact="$cwl" -v ban="$ban" -v bkey="$bkey" -v bkey2="$([ -n "$bkey" ] && date -d "@$(( bsince + 120 ))" +%Y%m%d%H%M%S)" -v bsince="$bsince" -v bweb="$bweb" -v now="$(date +%s)" -v se0="$se0" "$AWK_LGT"'
         BEGIN { while ((getline l < rf) > 0) { split(l, x, " "); m++; LO[m] = x[1] + 0; HI[m] = x[2] + 0 }
                 while ((getline l < cf) > 0) { split(l, x, " "); cn++; CL[cn] = x[1] + 0; h = x[2] + 0   # 4. alan: kapattığı web portları (8 = 80, 4 = 443)
                     if (cn == 1 || h > CP[cn - 1]) { CP[cn] = h; CN[cn] = x[3]; CF[cn] = x[4] } else { CP[cn] = CP[cn - 1]; CN[cn] = CN[cn - 1]; CF[cn] = CF[cn - 1] } }
                 while ((getline l < af) > 0) { split(l, x, " "); an++; AL[an] = x[1] + 0; h = x[2] + 0
                     if (an == 1 || h > AP[an - 1]) { AP[an] = h; AN[an] = x[3] } else { AP[an] = AP[an - 1]; AN[an] = AN[an - 1] } }
-                while ((getline l < cdf) > 0) { split(l, x, "|"); if (x[1] != "#t" && x[1] != "") { CDN[x[1]] = (CDN[x[1]] == "" || CDN[x[1]] == "other") ? x[4] : CDN[x[1]] } }
+                # CDN arkasındaki site: yalnız yanıt başlığından CDN olduğu anlaşılan ("other" = DNS başka sunucuya gidiyor, CDN değil:
+                # buraya gelen istek doğrudan gelir, ban keser — ölçüldü 2026-11-26, 14 sitenin 11 tanesi böyleydi, hepsi "ban kesemez" sayılıyordu)
+                while ((getline l < cdf) > 0) { split(l, x, "|"); if (x[1] != "#t" && x[1] != "" && x[4] != "" && x[4] != "other") CDN[x[1]] = x[4] }
                 while ((getline l < lf) > 0) if (l != "") ARGV[ARGC++] = l
                 split("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec", MN, " "); for (i = 1; i <= 12; i++) MI[MN[i]] = sprintf("%02d", i) }
-        function tkey(s,  a) { # "[05/Oct/2026:04:00:00" → 20261005040000 (günlüğün yerel saati)
-            if (!match(s, /\[[0-9][0-9]\/[A-Z][a-z][a-z]\/[0-9][0-9][0-9][0-9]:[0-9][0-9]:[0-9][0-9]:[0-9][0-9]/)) return 0
-            s = substr(s, RSTART + 1, RLENGTH - 1); split(s, a, /[\/:]/)
-            return a[3] MI[a[2]] a[1] a[4] a[5] a[6] }
         function inr(ip,  p, v, a, b, c) {
             if (split(ip, p, ".") != 4) return 0
             v = ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4]; a = 1; b = m
@@ -6701,7 +6816,7 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad | bk:ad | net:CIDR) → son 24 saatin
             return "[" o "]" }
         function js(s) { gsub(/\\/, "/", s); gsub(/"/, "", s); gsub(/[[:cntrl:]]/, " ", s); return "\"" s "\"" }   # JSON için: ters bölü ve tırnak sadeleşir
         { ip = $1; if (!(ip in SEEN)) SEEN[ip] = inr(ip); if (!SEEN[ip]) next
-          k = tkey($4); if (k != 0 && k < since) next
+          ep = lg_ep($4, $5); if (ep && ep < se0) next; k = ep ? strftime("%Y%m%d%H%M%S", ep) : 0   # satırın saat dilimiyle
           tot++; IPS[ip] = 1
           site = FILENAME; sub(/.*\//, "", site); sub(/-ssl_log$/, "", site)
           if (!(ip in AW)) AW[ip] = alw(ip); w = AW[ip]; if (w != "" && !(site in CDN)) { atot++; AIP[ip] = 1 }   # CDN sitesindeki istek kendi kovasında
@@ -6785,8 +6900,8 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad | bk:ad | net:CIDR) → son 24 saatin
               printf "\"crawl\":%s,", crawl()
               printf "\"after\":{\"web\":%d,\"since\":%d,\"req\":%d,\"ips\":%d,\"ok\":%d,\"last\":\"%s\",\"late\":%d,\"ex\":[%s]},", bweb, bsince, btot, nbip, bok, blast, blate, aex
               printf "\"open\":{\"req\":%d,\"ips\":%d,\"ok\":%d,\"codes\":%s,\"last\":\"%s\",\"pt\":%s,\"top\":%s},\"ban\":%s}\n",
-                  otot, noip, ook, obj(OC), olast, obj(OPT), topip(OR, 10, OOK, OSM), js(ban) }' /dev/null | grep . | { IFS= read -r L; b=$(cat "$bjf" 2>/dev/null); [ -n "$b" ] && L="${L%\}},\"bans\":$b}"; printf '%s\n' "$L" | st_fill; } || echo '{"ok":true,"total":0,"ips":0,"ok2xx":0,"codes":{},"posts":[],"bots":[],"sites":[]}'
-    rm -f "$rng" "$lst" "$alw" "$clf" "$clfa" "$bjf"
+                  otot, noip, ook, obj(OC), olast, obj(OPT), topip(OR, 10, OOK, OSM), js(ban) }' /dev/null | grep . | { IFS= read -r L; b=$(cat "$bjf" 2>/dev/null); [ -n "$b" ] && L="${L%\}},\"bans\":$b}"; [ -n "$covj" ] && L="${L%\}},\"cov\":$covj}"; printf '%s\n' "$L" | st_fill; } || echo '{"ok":true,"total":0,"ips":0,"ok2xx":0,"codes":{},"posts":[],"bots":[],"sites":[]}'
+    rm -f "$rng" "$lst" "$alw" "$clf" "$clfa" "$bjf"; [ -n "$arcd" ] && rm -rf "$arcd"
 }
 svc_health() {   # izinli servis kaynaklarından uyarı süresinden uzun süredir indirilemeyenler → bildirim
     local st="$(dirname "$SAYAC_FILE")/services/status" n c t e f bad="" badr="" now; now=$(date +%s)

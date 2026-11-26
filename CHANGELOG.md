@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.15.137 — 2026-11-26
+
+- **Measure impact** could show much less than "the last 24 hours". cPanel's
+  statistics run empties each site log about once a day and moves its lines to
+  the user's monthly archive, so a measurement taken soon after that run saw
+  only a few minutes or hours. The missing hours are now read from the archive,
+  but only the parts written inside the window, never the whole month.
+- The archive is checked before it is used:
+  - it belongs to the owner of the log;
+  - its part headers match its own first part;
+  - it decompresses without error;
+  - every line is a log line.
+
+  An archive that fails any check is not used.
+- The result now states the coverage it actually measured: how many sites were
+  completed from the archive, and how many could not be measured for the full
+  24 hours, with the shortest coverage and the reason.
+- Sites whose name points to another server that is not a CDN were counted as
+  "behind a CDN, a ban cannot cut these". Requests that reach this server for
+  such a site come directly, and a ban cuts them, so they are now counted as
+  open. Only sites whose response headers show a CDN stay in the CDN group. The
+  same rule applies to the reason given for a violation under a ban.
+- Log times are read with each line's own time-zone offset. Before, they were
+  compared with the server's local time, so a web server logging in another
+  zone shifted the window.
+
 ## 1.15.136 — 2026-11-26
 
 An address's current state is computed in one place. Before, the engine

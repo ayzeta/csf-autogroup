@@ -6,7 +6,8 @@
 # o sitenin istekleri "CDN arkasında olabilir" sayılır.
 #
 # Çıktı (OUT): ilk satır "#t|EPOCH", sonra dışarı giden her ad için "site|ad|adresler|kim"
-#   kim: QUIC.cloud, Cloudflare, Sucuri, CloudFront, Fastly, Akamai ya da "other" (başka adres; CDN olmayabilir)
+#   kim: QUIC.cloud, Cloudflare, Sucuri, CloudFront, Fastly, Akamai ya da "other" (başka adres, yanıt başlığında CDN yok: sitenin
+#   web'i başka sunucuda — motor bunu CDN saymaz, buraya gelen istek doğrudan gelir; ölçüldü 2026-11-26, 14 sitenin 11'i böyleydi)
 # Kullanım (motor günde bir çalıştırır; elle de çalışır):
 #   bash tools/cdn-sites.sh                 yenile
 #   bash tools/cdn-sites.sh --if-older 1    dosya 1 günden yeniyse dokunma

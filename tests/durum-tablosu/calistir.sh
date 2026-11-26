@@ -558,7 +558,7 @@ mcheck "izlenen blok kalıcı tekillerle yeniden eşiğe gelince silinmez işare
 mk impcdn; mkdir -p "$R/var/lib/csf/Geo" "$R/domlogs"
 printf '151.80.0.0\t151.80.255.255\t16276\tFR\tOVH\n' > "$R/var/lib/csf/Geo/ip2asn-combined.tsv"
 echo "DOMLOGS=$R/domlogs" >> "$R/app/config.env"
-TL=$(LC_ALL=C date -d '-1 hour' '+%d/%b/%Y:%H:%M:%S +0000')
+TL=$(LC_ALL=C date -d '-1 hour' '+%d/%b/%Y:%H:%M:%S %z')
 printf '151.80.7.9 - - [%s] "GET / HTTP/1.1" 200 10 "-" "Mozilla/5.0"\n' "$TL" > "$R/domlogs/dogrudan.test"
 printf '151.80.7.9 - - [%s] "GET /a HTTP/1.1" 200 10 "-" "Mozilla/5.0"\n151.80.8.4 - - [%s] "GET /b HTTP/1.1" 404 10 "-" "curl"\n' "$TL" "$TL" > "$R/domlogs/cdnsite.test-ssl_log"
 printf '#t|%s\ncdnsite.test|www.cdnsite.test|203.0.113.80|QUIC.cloud\n' "$NOW" > "$R/var/lib/csf_autogroup/cdn_sites"
@@ -569,7 +569,7 @@ mk impaf; mkdir -p "$R/var/lib/csf/Geo" "$R/domlogs"
 printf '66.249.64.0\t66.249.95.255\t15169\tUS\tGOOGLE\n' > "$R/var/lib/csf/Geo/ip2asn-combined.tsv"
 echo "DOMLOGS=$R/domlogs" >> "$R/app/config.env"
 printf '66.249.64.0/19 # csf_autogroup: service googlebot\n' > "$R/etc/csf/csf_autogroup.services.allow"
-TL=$(LC_ALL=C date -d '-1 hour' '+%d/%b/%Y:%H:%M:%S +0000')
+TL=$(LC_ALL=C date -d '-1 hour' '+%d/%b/%Y:%H:%M:%S %z')
 printf '66.249.66.1 - - [%s] "GET /gizli HTTP/1.1" 403 10 "-" "Googlebot/2.1"\n66.249.66.1 - - [%s] "GET /gizli HTTP/1.1" 403 10 "-" "Googlebot/2.1"\n66.249.66.2 - - [%s] "GET / HTTP/1.1" 200 10 "-" "Googlebot/2.1"\n' "$TL" "$TL" "$TL" > "$R/domlogs/site.test"
 mcheck "Etkisini ölç: izinli servisin 403 aldığı istek örnekte (kod · site · istek ×2, servis, örnek IP); başarılı istek listede değil" "run --asn-impact AS15169 --json 2>/dev/null | grep -q '\"afails\":\[\[\"403 · site.test · GET /gizli\",2,0,\"googlebot\",\"66.249.66.1\"\]\]'"
 
@@ -701,6 +701,31 @@ IN1=$(run --inside 151.80.10.0/24 --states 151.80.10.5 --json 2>/dev/null)
 mcheck "tek durum: aralık kartı (--inside) süreli aralık banını görür (kartın hükmü engelli) ve IP satırının kaydı tek durum kaydıyla aynı" "printf '%s' '$IN1' | grep -q '\"st\":{\"e\":\"ban\",\"k\":\[{\"t\":\"temp\",\"a\":\"151.80.10.0/24\"' && printf '%s' '$IN1' | grep -qF \"\\\"151.80.10.5\\\":\$(sto 151.80.10.5 | cut -f2)\" && run --inside 151.80.10.0/24 --states 'x;y' --json 2>/dev/null | grep -q bad_states"
 mk st2; printf 'CC_DENY = "AS16276"\nCC_DENY_PORTS = "FR"\nCC_DENY_PORTS_TCP = "22"\n' >> "$R/etc/csf/csf.conf"
 mcheck "tek durum: sağlayıcı banı (CC_DENY) → engelli; ülke port listesi (CC_DENY_PORTS) kısmi kapatan olarak aynı kayıtta" "run --obj-state 151.80.7.9 2>/dev/null | grep -qE '	ban	.*\"t\":\"asn\",\"a\":\"AS16276\",\"m\":\"all\".*\"t\":\"cc\",\"a\":\"FR\",\"m\":\"ports\",\"tcp\":\"22\"'"
+# Etkisini ölç arşivi (1.15.137): cPanel site günlüğünü her istatistik çalışmasında boşaltıp kullanıcının aylık arşivine yeni gzip parçası
+# olarak ekler (sunucuda ölçüldü). Günlük pencerenin başından sonra başlıyorsa eksik kısım arşivden; başlık imzası ilk parçadan, sahte
+# başlıklar (sıkıştırılmış verideki rastgele 1f 8b 08) elenir; bozuk arşiv kullanılmaz ve kapsam kısa bildirilir (sessiz bozulma yok)
+mk arc; mkdir -p "$R/domlogs/root" "$R/home/root/logs" "$R/var/lib/csf/Geo"; printf 'root:x:0:0:root:%s:/bin/bash\n' "$R/home/root" > "$R/etc/passwd"
+printf '151.80.0.0\t151.80.255.255\t16276\tFR\tOVH\n' > "$R/var/lib/csf/Geo/ip2asn-combined.tsv"
+printf 'DOMLOGS=%s\n' "$R/domlogs" >> "$R/app/config.env"
+agl() { printf '%s - - [%s] "GET /%s HTTP/1.1" 200 10 "-" "curl"\n' "$1" "$(LC_ALL=C date -d "@$2" '+%d/%b/%Y:%H:%M:%S %z')" "$3"; }
+AN=$(date +%s); AMO=$(LC_ALL=C date +%b-%Y); AGZ="$R/home/root/logs/site.test-$AMO.gz"
+{ agl 151.80.7.1 $((AN - 3600)) a; agl 151.80.7.2 $((AN - 1800)) b; } > "$R/domlogs/root/site.test"
+agl 151.80.7.3 $((AN - 60 * 3600)) x > "$W/out/arc.m1"
+{ agl 151.80.7.4 $((AN - 25 * 3600)) y; agl 151.80.7.5 $((AN - 20 * 3600)) c; agl 151.80.7.6 $((AN - 10 * 3600)) d; agl 151.80.7.7 $((AN - 3 * 3600)) e; } > "$W/out/arc.m2"
+python3 "$REPO/tests/durum-tablosu/gz-arsiv.py" "$AGZ" "$((AN - 50 * 3600)):$W/out/arc.m1" "$((AN - 2 * 3600)):$W/out/arc.m2@sahte"
+# CDN ayrımı: yalnız yanıt başlığından CDN olduğu anlaşılan site CDN kovasında; "other" (sitenin web'i başka sunucuda, sunucuda ölçüldü:
+# 14 sitenin 11'i) normal sayılır. Saat dilimi: cf.test'in ilk satırının gerçek zamanı pencereden önce (25 sa) ama +1400 diliminde
+# yazıldığı için duvar saati pencerenin içinde görünür; satırın kendi ekiyle sayılmaz (eski kod sayıyordu)
+printf '#t|%s\nsite.test|site.test|192.0.2.10|other\ncf.test|cf.test|104.16.0.1|Cloudflare\n' "$AN" > "$R/var/lib/csf_autogroup/cdn_sites"
+{ printf '151.80.7.9 - - [%s] "GET /eski HTTP/1.1" 200 10 "-" "curl"\n' "$(TZ=Etc/GMT-14 LC_ALL=C date -d "@$((AN - 25 * 3600))" '+%d/%b/%Y:%H:%M:%S %z')"; agl 151.80.7.8 $((AN - 3600)) f; } > "$R/domlogs/root/cf.test"
+AJ=$(run --asn-impact AS16276 --json 2>/dev/null)
+mcheck "Etkisini ölç arşivi: günlük pencereden sonra başlıyor → pencereye düşen arşiv satırları sayılır (2 + 3), pencere öncesi ve sahte başlıklar değil; kapsam tam" "printf '%s' '$AJ' | grep -q '\"open\":{\"req\":5,' && printf '%s' '$AJ' | grep -q '\"cov\":{\"since\":[0-9]*,\"n\":2,\"a\":1,\"s\":0,'"
+mcheck "Etkisini ölç: 'other' etiketli site (web'i başka sunucuda) açık sayılır, yalnız CDN olduğu bilinen site CDN kovasında; başka saat diliminde yazılmış pencere dışı satır sayılmaz" "printf '%s' '$AJ' | grep -q '\"cdn\":{\"req\":1,' && printf '%s' '$AJ' | grep -q '\"total\":6,'"
+head -c -12 "$AGZ" > "$AGZ.k" && cat "$AGZ.k" > "$AGZ"; rm -f "$AGZ.k"
+AJ=$(run --asn-impact AS16276 --json 2>/dev/null)
+mcheck "Etkisini ölç arşivi: bozuk arşiv kullanılmaz (yalnız günlüklerin 3 isteği), kapsam kısa ve sebebi 'bad'" "printf '%s' '$AJ' | grep -q '\"total\":3,' && printf '%s' '$AJ' | grep -q '\"cov\":{\"since\":[0-9]*,\"n\":2,\"a\":0,\"s\":1,\"from\":[1-9][0-9]*,\"r\":{\"bad\":1}}'"
+rm -f "$AGZ"; AJ=$(run --asn-impact AS16276 --json 2>/dev/null)
+mcheck "Etkisini ölç arşivi: arşiv yoksa kapsam kısa ve sebebi 'noarch'" "printf '%s' '$AJ' | grep -q '\"total\":3,' && printf '%s' '$AJ' | grep -q '\"r\":{\"noarch\":1}'"
 # sağlayıcı sıralaması: durum çıktısı sıralama ağırlığını verir (panel çubuğu ondan çizer); elle konan blok banı ağırlık almaz
 mk asnw; OF="$R/var/lib/csf_autogroup/owners"
 printf '151.80.7|9999|FR|AGIR-AS - Agir, FR|%s|\n151.80.8|9999|FR|AGIR-AS - Agir, FR|%s|\n' "$NOW" "$NOW" > "$OF"
@@ -745,7 +770,7 @@ mcheck "süreli aralık: Banı kaldır geçici listeden siler, tekiller yerinde"
 mk clmode; mkdir -p "$R/var/lib/csf_autogroup/cloud" "$R/domlogs"
 printf '151.80.0.0/16\n' > "$R/var/lib/csf_autogroup/cloud/gcp.txt"; printf '152.70.0.0/16\n' > "$R/var/lib/csf_autogroup/cloud/oracle.txt"; printf '45.32.0.0/16\n' > "$R/var/lib/csf_autogroup/cloud/vultr.txt"
 printf '%s\n' CLOUD_BAN=1 CLOUD_SOURCES=gcp,oracle,vultr 'CLOUD_MODES="gcp=exc:web: vultr=all::"' "DOMLOGS=$R/domlogs" >> "$R/app/config.env"
-TL=$(LC_ALL=C date -d '-1 hour' '+%d/%b/%Y:%H:%M:%S +0000')
+TL=$(LC_ALL=C date -d '-1 hour' '+%d/%b/%Y:%H:%M:%S %z')
 printf '151.80.7.9 - - [%s] "GET / HTTP/1.1" 200 10 "-" "curl"\n152.70.1.1 - - [%s] "GET / HTTP/1.1" 200 10 "-" "curl"\n' "$TL" "$TL" > "$R/domlogs/site.test"
 LG=$(run --lookup 151.80.7.9 --json 2>/dev/null); LO=$(run --lookup 152.70.1.1 --json 2>/dev/null); LV=$(run --lookup 45.32.1.1 --json 2>/dev/null)
 mcheck "kip: IP kartında hariç listesi exc + açık kalan portlar, kipsiz liste eski ortak portlar, her şey kipi all" "printf '%s' '$LG' | grep -q '\"kind\":\"cloud\",\"what\":\"gcp\",\"mode\":\"exc\",\"tcp\":\"80,443\",\"udp\":\"443\"' && printf '%s' '$LO' | grep -q '\"kind\":\"cloud\",\"what\":\"oracle\",\"mode\":\"svc\",\"tcp\":\"80,443\",\"udp\":\"443\"' && printf '%s' '$LV' | grep -q '\"kind\":\"cloud\",\"what\":\"vultr\",\"mode\":\"all\",\"tcp\":\"\",\"udp\":\"\"'"
@@ -801,7 +826,7 @@ done
 mk impnr; mkdir -p "$R/var/lib/csf/Geo" "$R/domlogs"
 printf '151.80.0.0\t151.80.255.255\t16276\tFR\tOVH\n' > "$R/var/lib/csf/Geo/ip2asn-combined.tsv"
 echo "DOMLOGS=$R/domlogs" >> "$R/app/config.env"
-printf '151.80.7.9 - - [%s] "GET / HTTP/1.1" 200 10 "-" "Mozilla/5.0"\n' "$(LC_ALL=C date -d '-1 hour' '+%d/%b/%Y:%H:%M:%S +0000')" > "$R/domlogs/site.test"
+printf '151.80.7.9 - - [%s] "GET / HTTP/1.1" 200 10 "-" "Mozilla/5.0"\n' "$(LC_ALL=C date -d '-1 hour' '+%d/%b/%Y:%H:%M:%S %z')" > "$R/domlogs/site.test"
 printf '151.80.7.0/24      # 3 IP\n151.80.8.0/24 # 4 IP do not delete\n151.80.9.0/24 # (sshd) elle, 5 IP\n' >> "$D"
 mcheck "Etkisini ölç: yorumunda sebep olmayan blok banları 'sebebi kayıtlı değil' (2), yorumda lfd sebebi olan o servis (ssh 1)" "run --asn-impact AS16276 --json 2>/dev/null | grep -o '\"svc\":{[^}]*}' | grep -q '\"norec\":2' && run --asn-impact AS16276 --json 2>/dev/null | grep -o '\"svc\":{[^}]*}' | grep -q '\"ssh\":1' && ! run --asn-impact AS16276 --json 2>/dev/null | grep -o '\"svc\":{[^}]*}' | grep -q other"
 
@@ -1189,12 +1214,12 @@ mcheck "blok listesi ayrıntısı: bk:AD anahtarı listedeki ihlal eden IP'yi ve
 # Etkisini ölç: 127.0.0.0/8 ve sunucunun kendi IP'leri "sunucunun kendisi" (izinli kova); CSF bunları LOCALINPUT'a sokmaz (lo), hiçbir
 # ban kesmez — "şu an açık, ban keser" sayılmaz (BOGON'da 127.0.0.1, kullanıcının canlı ekranı)
 if kok_on; then
-    mkdir -p "$R/domlogs"; echo "DOMLOGS=$R/domlogs" >> "$R/app/config.env"; TL=$(LC_ALL=C date -d '-1 hour' '+%d/%b/%Y:%H:%M:%S +0000')
+    mkdir -p "$R/domlogs"; echo "DOMLOGS=$R/domlogs" >> "$R/app/config.env"; TL=$(LC_ALL=C date -d '-1 hour' '+%d/%b/%Y:%H:%M:%S %z')
     printf '127.0.0.1 - - [%s] "GET /.git/HEAD HTTP/1.1" 403 10 "-" "curl"\n127.0.0.1 - - [%s] "GET / HTTP/1.1" 403 10 "-" "curl"\n198.18.0.5 - - [%s] "GET / HTTP/1.1" 200 10 "-" "curl"\n' "$TL" "$TL" "$TL" > "$R/domlogs/site.test"
 fi
 if kok_on; then
     mkdir -p "$R/domlogs"; grep -q '^DOMLOGS=' "$R/app/config.env" || echo "DOMLOGS=$R/domlogs" >> "$R/app/config.env"
-    TL=$(LC_ALL=C date -d '-1 hour' '+%d/%b/%Y:%H:%M:%S +0000'); TL3=$(LC_ALL=C date -d '-3 hour' '+%d/%b/%Y:%H:%M:%S +0000')
+    TL=$(LC_ALL=C date -d '-1 hour' '+%d/%b/%Y:%H:%M:%S %z'); TL3=$(LC_ALL=C date -d '-3 hour' '+%d/%b/%Y:%H:%M:%S %z')
     printf '151.80.7.9 - - [%s] "GET / HTTP/1.1" 200 10 "-" "curl"\n151.80.7.10 - - [%s] "GET / HTTP/1.1" 200 10 "-" "curl"\n' "$TL" "$TL3" > "$R/domlogs/site2.test"
     printf 'bk:SPAMDROP|all|||%s\n' "$(( $(date +%s) - 7200 ))" >> "$R/var/lib/csf_autogroup/covers"
 fi
