@@ -1186,6 +1186,11 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-note { font-size: 12px; color: var(--ag-text-3); margin-top: 8px; }
 .ag-sec .ag-warnbox { margin: 8px 0 0; }
 .ag-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+/* kutudan açılan pencere (adres düzenleyicisi, ayrıntı) tıklanan kutunun altında, ızgarada tam genişlik satır */
+.ag-tile-x { grid-column: 1 / -1; min-width: 0; }
+.ag-tile-x > .ag-urled, .ag-tile-x > .ag-srcd { margin-top: 0; }
+.ag-tile-x > .ag-urled + .ag-srcd { margin-top: 8px; }
+.ag-bkl > .ag-srcd { margin: 4px 0 10px; }
 .ag-tile { position: relative; border: 1px solid var(--ag-line); border-radius: 10px; background: var(--ag-card); min-width: 0; }
 .ag-tile.on { border-color: var(--ag-accent-line); background: var(--ag-accent-soft); }
 .ag-tile.ed { box-shadow: 0 0 0 2px var(--ag-accent-line); }

@@ -138,10 +138,33 @@ if command -v python3 >/dev/null 2>&1; then
     kes "bağlantı yarıda kesildi (8/12 önek): önceki liste korunur" kesik.json 10 "eksik aktarım"
     kes "yarım JSON (7/12 önek, curl başarılı): önceki liste korunur" yarim.json 10 "yarım ya da bozuk JSON"
     kes "tam yanıt kabul edilir" tam.json 12 -
+    # 1.15.133: indirilemeyen listenin SEBEBİ durum dosyasının hata alanında (önce hep "fetch"; panel "indirilemiyor" deyip nedenini
+    # söyleyemiyordu — canlıda Apple). Kod → metin motorda fe_text, panelde feText (aynı eşleme)
+    kod() {   # AD YOL SÜZGEÇ BEKLENEN_KOD
+        N=$((N + 1)); for i in $(seq 0 9); do echo "198.51.$((100 + i)).0/24"; done > "$TD/c/g.txt"; : > "$TD/log"
+        SRC="g|$KS/$2${3:+|$3}" CACHE="$TD/c" LOG_FILE="$TD/log" NOAPPLY=1 bash "$REPO/tools/cloud-ban.sh" >/dev/null 2>&1
+        local e; e=$(grep '^g|' "$TD/c/status" 2>/dev/null | cut -d'|' -f4)
+        if [ "$e" = "$4" ]; then echo "  ✓ indirilemedi sebebi: $1 → «${e:-boş}»"
+        else F=$((F + 1)); echo "  ✗ indirilemedi sebebi: $1 → «$e» (beklenen «$4»)"; fi
+    }
+    kod "sunucu 404 döndü" yok.json "" "http:404"
+    kod "bağlantı yarıda kesildi" kesik.json "" "partial"
+    kod "yarım JSON" yarim.json "" "badjson"
+    kod "süzgeç hiçbir aralık seçmedi" tam.json "j:yok=yok" "noflt"
+    kod "tam yanıt: hata yok" tam.json "" ""
     eval "$(awk '/^fetch_to\(\) \{/{f=1} f{print} f && /^}$/{exit}' "$REPO/tools/cloud-ban.sh")"
     N=$((N + 1))
-    if ! fetch_to "$TD/y" "$KS/yavas.json" 1 test && [ "$FETCH_ERR" = "süre aşımı (1 sn)" ] && [ ! -s "$TD/y" ]; then echo "  ✓ indirme: süre aşımı → reddedildi, dosya boş ($FETCH_ERR)"
-    else F=$((F + 1)); echo "  ✗ indirme: süre aşımı → FETCH_ERR «${FETCH_ERR:-}», dosya $(wc -c < "$TD/y" 2>/dev/null) bayt"; fi
+    if ! fetch_to "$TD/y" "$KS/yavas.json" 1 test && [ "$FETCH_ERR" = "süre aşımı (1 sn)" ] && [ "$FETCH_CODE" = "timeout:1" ] && [ ! -s "$TD/y" ]; then echo "  ✓ indirme: süre aşımı → reddedildi, dosya boş ($FETCH_ERR, $FETCH_CODE)"
+    else F=$((F + 1)); echo "  ✗ indirme: süre aşımı → FETCH_ERR «${FETCH_ERR:-}» FETCH_CODE «${FETCH_CODE:-}», dosya $(wc -c < "$TD/y" 2>/dev/null) bayt"; fi
+    # motorun metni (bildirim ve günlük): kod → cümle; bilinmeyen / eski "fetch" kaydı "kaydedilmemiş"
+    eval "$(awk '/^m\(\) \{/{f=1} f{print} f && /^}$/{exit}' "$REPO/csf_autogroup.sh")"
+    eval "$(awk '/^fe_text\(\) \{/{f=1} f{print} f && /^}$/{exit}' "$REPO/csf_autogroup.sh")"
+    eval "$(grep -m1 '^  M_FE_HTTP=' "$REPO/csf_autogroup.sh")"; eval "$(grep -m1 '^  M_FE_SHRINK=' "$REPO/csf_autogroup.sh")"
+    eval "$(grep -m1 '^  M_FE_OLD=' "$REPO/csf_autogroup.sh")"; eval "$(grep -m1 '^  M_FE_EMPTY=' "$REPO/csf_autogroup.sh")"
+    for x in "http:403|sunucu HTTP 403 döndü" "shrink:3:40|yalnız 3 IP / aralık geldi, öncekinin (40) yarısından az" "fetch|$M_FE_OLD" "timeout|$M_FE_TOOLTO"; do
+        N=$((N + 1)); fe_text "${x%%|*}"
+        if [ "$REPLY" = "${x#*|}" ]; then echo "  ✓ fe_text ${x%%|*} → $REPLY"; else F=$((F + 1)); echo "  ✗ fe_text ${x%%|*} → «$REPLY» (beklenen «${x#*|}»)"; fi
+    done
     # izinli servisler aynı denetimi kullanır (kendi kopyası değil): services-allow.sh fetch_to'yu cloud-ban.sh'tan alır, curl'ü doğrudan çağırmaz
     N=$((N + 1))
     if grep -q 'for fn in link_re page_link fetch_to' "$REPO/tools/services-allow.sh" && ! grep -qE '^[^#]*curl ' "$REPO/tools/services-allow.sh"; then

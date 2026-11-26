@@ -420,7 +420,10 @@ its own:
   (firewall problem, list filling up, run notices, allowed-IP violations /
   open services / violations under a ban, weekly summary) × two channels (email, Slack), each cell on
   or off. Run notices are the bans, suspicious ranges and networks, skips,
-  old-block removal and lists that can't be downloaded; the
+  old-block removal and lists that can't be downloaded (with the reason: the
+  HTTP status, a timeout, a DNS or TLS error, a cut-off transfer, a list with
+  no usable range, or one that shrank to less than half; the same reason shows
+  on the list's box under Providers); the
   allowed-IP violation and open-service records are the allowed / ignored /
   server-IP, open-service and violation-under-a-ban rows of *Needs review*,
   sent once per IP, range or ban per day (an ignored IP only once its failed

@@ -65,7 +65,7 @@ grep() { command grep -a "$@"; }
 # sayı, anahtar; Türkçe modda sıralama kuralı zaten C idi (LC_COLLATE=C)
 sort() { LC_ALL=C command sort "$@"; }
 
-VERSION="1.15.132"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.133"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -444,6 +444,13 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_SVC_FAIL_SUBJ="izinli servis listesi indirilemiyor (%s)"
   M_SVC_FAIL_BODY="Şu izinli servis listeleri uyarı süresinden uzun süredir indirilemiyor: %s. Eski listeler kullanılıyor; adres Sağlayıcılar → İzinli servisler → Kaynak adresleri'nden düzeltilebilir."
   M_SVC_FAIL_OK="İzinli servis listeleri yeniden indirilebiliyor"
+  # liste indirilemedi sebebi (durum dosyasının hata kodu → fe_text; panelde fe_* aynı metinler)
+  M_FE_HTTP="sunucu HTTP %s döndü"; M_FE_TIMEOUT="%s sn içinde inmedi (süre aşımı)"; M_FE_PARTIAL="aktarım yarıda kesildi"
+  M_FE_DNS="adres çözülemedi (DNS)"; M_FE_CONN="sunucuya bağlanılamadı"; M_FE_TLS="TLS / sertifika hatası (curl %s)"; M_FE_CURL="curl hatası %s"
+  M_FE_BADJSON="gelen JSON yarım ya da bozuk"; M_FE_NOLINK="sayfada liste bağlantısı bulunamadı"
+  M_FE_EMPTY="indi ama içinde kullanılabilir IPv4 aralığı yok"; M_FE_NOFLT="indi ama süzgeç hiçbir aralık seçmedi"
+  M_FE_SHRINK="yalnız %s IP / aralık geldi, öncekinin (%s) yarısından az"; M_FE_TOOLTO="indirme aracı süresinde bitmedi"
+  M_FE_OLD="sebebi kaydedilmemiş (eski sürüm; sonraki denemede yazılır)"
   M_SVCX_BAD_SUBJ="birleşik servis dosyası Apache denetiminden geçmedi"
   M_SVCX_BAD_BODY="Yeni izinli servis listesi Apache'nin yapılandırma denetiminden geçmediği için yazılmadı; önceki dosya korunuyor (%s). Apache'nin hatası: %s"
   M_SVCX_RLF_SUBJ="web sunucusu yeniden yüklenemedi"
@@ -734,6 +741,12 @@ else
   M_SVC_FAIL_SUBJ="allowed service list can't be downloaded (%s)"
   M_SVC_FAIL_BODY="These allowed service lists haven't downloaded for longer than the warning period: %s. The old lists are still used; fix the address under Providers → Allowed services → Source addresses."
   M_SVC_FAIL_OK="Allowed service lists download again"
+  M_FE_HTTP="the server returned HTTP %s"; M_FE_TIMEOUT="did not download within %s s (timeout)"; M_FE_PARTIAL="the transfer was cut off"
+  M_FE_DNS="the address did not resolve (DNS)"; M_FE_CONN="could not connect to the server"; M_FE_TLS="TLS / certificate error (curl %s)"; M_FE_CURL="curl error %s"
+  M_FE_BADJSON="the JSON received is cut off or broken"; M_FE_NOLINK="no list link found on the page"
+  M_FE_EMPTY="downloaded, but it holds no usable IPv4 range"; M_FE_NOFLT="downloaded, but the filter picked no range"
+  M_FE_SHRINK="only %s IPs / ranges came, less than half of the previous %s"; M_FE_TOOLTO="the download tool did not finish in time"
+  M_FE_OLD="reason not recorded (older version; written on the next try)"
   M_SVCX_BAD_SUBJ="combined services file failed the Apache test"
   M_SVCX_BAD_BODY="The new allowed services list was not written because it failed Apache's configuration test; the previous file is kept (%s). Apache's error: %s"
   M_SVCX_RLF_SUBJ="web server could not be reloaded"
@@ -853,6 +866,15 @@ m() {
         if [[ "$r" =~ ^[^0-9]*1([^0-9]|$) ]]; then r="${r//(s)/}"; else r="${r//(s)/s}"; fi
     fi
     printf '%s' "$r"
+}
+fe_text() {      # KOD → REPLY = liste indirilemedi sebebi (tools/cloud-ban.sh fetch_to ve iki aracın FETCH_CODE'u; panel feText aynı eşleme)
+    local c="$1" a b; a=$(cut -d: -f2 <<< "$c:"); b=$(cut -d: -f3 <<< "$c::")
+    case "${c%%:*}" in
+        http) REPLY=$(m "$M_FE_HTTP" "$a") ;; timeout) if [ -n "$a" ]; then REPLY=$(m "$M_FE_TIMEOUT" "$a"); else REPLY="$M_FE_TOOLTO"; fi ;;
+        partial) REPLY="$M_FE_PARTIAL" ;; dns) REPLY="$M_FE_DNS" ;; conn) REPLY="$M_FE_CONN" ;; tls) REPLY=$(m "$M_FE_TLS" "$a") ;;
+        curl) REPLY=$(m "$M_FE_CURL" "$a") ;; badjson) REPLY="$M_FE_BADJSON" ;; nolink) REPLY="$M_FE_NOLINK" ;; empty) REPLY="$M_FE_EMPTY" ;;
+        noflt) REPLY="$M_FE_NOFLT" ;; shrink) REPLY=$(m "$M_FE_SHRINK" "$a" "$b") ;; *) REPLY="$M_FE_OLD" ;;
+    esac
 }
 
 # LOG_MODE: tee = ekrana + dosyaya (normal çalışma) · file = yalnız dosyaya (--action, çıktı JSON'a
@@ -5810,18 +5832,18 @@ bkl_has() {      # IP → 0: etkin bir blok listesinde (REPLY = listenin adı)
     REPLY="${BKL_MEMO[$1]}"
 }
 cloud_health() { # uyarı süresinden uzun süredir indirilemeyen bulut listeleri → bildirim
-    local st="$CLOUD_DIR/status" n c t e f bad="" now; now=$(date +%s)
+    local st="$CLOUD_DIR/status" n c t e f bad="" badr="" now; now=$(date +%s)
     [ "$CLOUD_BAN" = 1 ] && [ -r "$st" ] || { ic_track IC_RUN CloudFail 0 "" "" "$M_CLOUD_FAIL_OK"; return 0; }
     while IFS='|' read -r n c t e f; do
         [ -n "$e" ] || continue
         [[ "$f" =~ ^[0-9]+$ ]] && [ "$f" -gt 0 ] || continue
-        [ $(( now - f )) -gt $(( CLOUD_FAIL_DAYS * 86400 )) ] && bad+="${bad:+, }$n"
+        [ $(( now - f )) -gt $(( CLOUD_FAIL_DAYS * 86400 )) ] && { fe_text "$e"; bad+="${bad:+, }$n"; badr+="${badr:+, }$n ($REPLY)"; }
     done < "$st"
     if [ -n "$bad" ] && ! grep -qF "CLOUD_FAIL $TODAY" "$SAYAC_FILE" 2>/dev/null; then
-        mail_add "$(m "$M_CLOUD_FAIL_SUBJ" "$bad")" "$(m "$M_CLOUD_FAIL_BODY" "$bad")" bad IE_RUN ic; cnt_add "CLOUD_FAIL $TODAY"
-        jstr "$bad"; ev cloud_fail "" "names=$REPLY"; log "$(m "$M_CLOUD_FAIL_BODY" "$bad")"
+        mail_add "$(m "$M_CLOUD_FAIL_SUBJ" "$bad")" "$(m "$M_CLOUD_FAIL_BODY" "$badr")" bad IE_RUN ic; cnt_add "CLOUD_FAIL $TODAY"
+        jstr "$bad"; ev cloud_fail "" "names=$REPLY"; log "$(m "$M_CLOUD_FAIL_BODY" "$badr")"
     fi
-    ic_track IC_RUN CloudFail "$([ -n "$bad" ] && echo 1 || echo 0)" "$(m "$M_CLOUD_FAIL_SUBJ" "$bad")" "$(m "$M_CLOUD_FAIL_BODY" "$bad")" "$M_CLOUD_FAIL_OK"
+    ic_track IC_RUN CloudFail "$([ -n "$bad" ] && echo 1 || echo 0)" "$(m "$M_CLOUD_FAIL_SUBJ" "$bad")" "$(m "$M_CLOUD_FAIL_BODY" "$badr")" "$M_CLOUD_FAIL_OK"
     return 0
 }
 prov_resolve() { # "auto" ayarları CSF'teki duruma göre çöz (bir kez, ayarlar okunduktan sonra)
@@ -6078,7 +6100,7 @@ prov_json() {    # → REPLY = durum JSON'u: izinli servisler (kaynak başına s
     if [ -r "$CLOUD_DIR/status" ]; then
         while IFS='|' read -r n c t e f; do
             [[ "$n" =~ ^[a-z0-9-]+$ ]] || continue
-            cs+="${cs:+,}{\"n\":\"$n\",\"c\":$(num "$c"),\"t\":$(num "$t"),\"f\":$(num "$f"),\"e\":\"${e//[^a-z]/}\"}"
+            cs+="${cs:+,}{\"n\":\"$n\",\"c\":$(num "$c"),\"t\":$(num "$t"),\"f\":$(num "$f"),\"e\":\"${e//[^a-z0-9:]/}\"}"
         done < "$CLOUD_DIR/status"
     fi
     local cflt=""
@@ -6516,18 +6538,18 @@ do_asn_impact() { # ANAHTAR (ASnnn | cl:ad | bk:ad | net:CIDR) → son 24 saatin
     rm -f "$rng" "$lst" "$alw" "$clf" "$clfa" "$bjf" "$xcf"
 }
 svc_health() {   # izinli servis kaynaklarından uyarı süresinden uzun süredir indirilemeyenler → bildirim
-    local st="$(dirname "$SAYAC_FILE")/services/status" n c t e f bad="" now; now=$(date +%s)
+    local st="$(dirname "$SAYAC_FILE")/services/status" n c t e f bad="" badr="" now; now=$(date +%s)
     [ "$SVC_ALLOW" = 1 ] && [ -r "$st" ] || { ic_track IC_RUN SvcFail 0 "" "" "$M_SVC_FAIL_OK"; return 0; }
     while IFS='|' read -r n c t e f; do
         [ -n "$e" ] || continue
         [[ "$f" =~ ^[0-9]+$ ]] && [ "$f" -gt 0 ] || continue      # ilk başarısızlık anı bilinmiyorsa (eski sürüm) bekle
-        [ $(( now - f )) -gt $(( SVC_FAIL_DAYS * 86400 )) ] && bad+="${bad:+, }$n"     # ayar: indirilemezse uyar (gün)
+        [ $(( now - f )) -gt $(( SVC_FAIL_DAYS * 86400 )) ] && { fe_text "$e"; bad+="${bad:+, }$n"; badr+="${badr:+, }$n ($REPLY)"; }     # ayar: indirilemezse uyar (gün); sebebiyle
     done < "$st"
     if [ -n "$bad" ] && ! grep -qF "SVC_FAIL $TODAY" "$SAYAC_FILE" 2>/dev/null; then
-        mail_add "$(m "$M_SVC_FAIL_SUBJ" "$bad")" "$(m "$M_SVC_FAIL_BODY" "$bad")" bad IE_RUN ic; cnt_add "SVC_FAIL $TODAY"
-        jstr "$bad"; ev svc_fail "" "names=$REPLY"; log "$(m "$M_SVC_FAIL_BODY" "$bad")"
+        mail_add "$(m "$M_SVC_FAIL_SUBJ" "$bad")" "$(m "$M_SVC_FAIL_BODY" "$badr")" bad IE_RUN ic; cnt_add "SVC_FAIL $TODAY"
+        jstr "$bad"; ev svc_fail "" "names=$REPLY"; log "$(m "$M_SVC_FAIL_BODY" "$badr")"
     fi
-    ic_track IC_RUN SvcFail "$([ -n "$bad" ] && echo 1 || echo 0)" "$(m "$M_SVC_FAIL_SUBJ" "$bad")" "$(m "$M_SVC_FAIL_BODY" "$bad")" "$M_SVC_FAIL_OK"
+    ic_track IC_RUN SvcFail "$([ -n "$bad" ] && echo 1 || echo 0)" "$(m "$M_SVC_FAIL_SUBJ" "$bad")" "$(m "$M_SVC_FAIL_BODY" "$badr")" "$M_SVC_FAIL_OK"
     return 0
 }
 svcx_health() {  # birleşik servis dosyası: Apache reddi / web sunucusu yeniden yüklenemedi → bildirim (IE_SVCX e-posta, IC_SVCX Slack) ve

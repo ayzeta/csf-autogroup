@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.15.133 — 2026-11-26
+
+- A list that can't be downloaded now says why, on its box under Providers
+  (for a box with several sources, which one), in the warning bar and in the
+  notification: the HTTP status the server returned, a timeout, a DNS, connect
+  or TLS error, a cut-off transfer or broken JSON, no list link found on the
+  page, a download with no usable IPv4 range (or none picked by the filter), or
+  a list that shrank to less than half. Before, the box only said "not
+  downloading". The warning bar also uses the list's name instead of its
+  internal key.
+- The address editor of a box, and the details of a rented-server list or a CSF
+  blocklist, open right under the box or row that was clicked instead of below
+  all of them (on a phone that meant scrolling to the end of the page).
+- No more scrolling by hand after a list changes under the finger: paging
+  through Active range bans, Watched blocks or the provider list, and "Show
+  less" on a long list, bring the card's top back into view when it had
+  scrolled off (History already did this); closing a provider's details with
+  the button at their bottom brings the provider row back into view.
+
 ## 1.15.132 — 2026-11-26
 
 - Allowed services: a built-in **Anthropic (Claude)** box

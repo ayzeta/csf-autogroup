@@ -49,5 +49,16 @@ a=$(grep -m1 "^AWK_EVC=" "$SHF" | grep -oE '"[a-z0-9_]+"\) *\?|"[a-z0-9_]+" *\?|
 j=$(awk '/^  function evCls\(e\)/ { p = 1 } p { print } p && /^  }/ { exit }' "$J" | grep -oE "=== '[a-z0-9_]+'|'[A-Z][0-9]?'" | sed "s/=== //" | tr -d "'" | tr '\n' ' ')
 a=$(printf '%s' "$a" | tr -d '"')
 if [ -z "$j" ] || [ "$a" != "$j" ]; then echo "DÜŞTÜ: evCls (panel) motorun AWK_EVC sınıflandırmasından farklı"; echo "  motor: $a"; echo "  panel: $j"; F=$((F + 1)); else echo "GEÇTİ: grafik sınıfı panelde ve motorda aynı"; fi
+# liste indirilemedi sebebi (1.15.133): motorun her M_FE_* metninin panelde fe_* karşılığı var, panel kutusu ve uyarı bandı kodu feText'ten
+# çevirir (önce yalnız "indirilemiyor" yazıyordu, sebep hiçbir yerde görünmüyordu)
+m=$(grep -oE 'M_FE_[A-Z]+=' "$SHF" | sort -u | sed 's/M_FE_//; s/=//' | tr 'A-Z' 'a-z' | tr '\n' ' ')
+miss=""; for k in $m; do grep -q "fe_$k: '" "$J" || miss+=" fe_$k"; done
+nf=$(grep -c "feText(c.fail.e)\|feText(x.e)" "$J")
+if [ -z "$m" ] || [ -n "$miss" ] || [ "$nf" -lt 2 ]; then echo "DÜŞTÜ: indirilemedi sebebi panelde yok (eksik:${miss:- -}, feText kullanımı $nf)"; F=$((F + 1)); else echo "GEÇTİ: indirilemedi sebebi motorda ve panelde aynı kodlar"; fi
+# kartın altındaki düğme listeyi değiştirince (sayfa çubuğu, "Daha az") kart başı görünür olur (1.15.133: Aktif aralık banları, İzlenenler,
+# sağlayıcı listesi sayfası kullanıcıyı sayfanın altında boşlukta bırakıyordu). pagerHtml'e verilen her eylem ve limless cardTop çağırır
+acts=$(grep -oE "pagerHtml\('[a-z]+'" "$J" | sed "s/pagerHtml('//; s/'//" | sort -u; echo limless)
+miss=""; for a in $acts; do awk -v a="$a" '$0 ~ "^    " a ": function" { p = 1 } p { print; if (/^    [a-z0-9_]+: function/ && $0 !~ "^    " a ":") exit; if (++n > 12) exit }' "$J" | grep -q 'cardTop(el)' || miss+=" $a"; done
+if [ -n "$miss" ]; then echo "DÜŞTÜ: listeyi değiştiren düğme kart başını göstermiyor (cardTop yok):$miss"; F=$((F + 1)); else echo "GEÇTİ: sayfa / kısaltma eylemleri kart başına döner ($(echo $acts))"; fi
 [ $F -eq 0 ] && echo "GEÇTİ: tek kaynak ($J)" || echo "DÜŞTÜ: $F kural"
 exit $F

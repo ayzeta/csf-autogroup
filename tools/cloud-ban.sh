@@ -78,17 +78,27 @@ fetch_to() {     # DOSYA ADRES SÜRE UA → 0 = liste TAMAMEN indi (DOSYA'da); d
     # kodu görülmüyordu, süre aşımında ya da bağlantı koptuğunda o ana kadar gelen parça ayrıştırılıp — önceki listenin yarısından
     # büyükse — eksik liste olarak kabul ediliyordu. Şimdi: curl sıfırdan farklı çıkarsa (HTTP hatası, süre aşımı, eksik aktarım,
     # bağlantı kopması) indirme yok sayılır; içerik JSON ise baştan sona ayrıştırılabilmeli (yarım JSON ayrıştırılamaz).
-    local f="$1" rc
-    FETCH_ERR=""
-    curl -fsSL --max-time "$3" -A "$4" "$2" > "$f" 2>/dev/null; rc=$?
+    # FETCH_CODE: durum dosyasının hata alanına giden kısa kod (panel, bildirim ve günlük sebebi buradan söyler; yalnız [a-z0-9:]).
+    # HTTP kodu -w ile: -f hatasında da yazılır (ölçüldü curl 7.76: 403 → rc 22 kod 403; süre aşımı 28 / DNS 6 → kod 000)
+    local f="$1" rc code
+    FETCH_ERR=""; FETCH_CODE=""
+    code=$(curl -fsSL --max-time "$3" -A "$4" -o "$f" -w '%{http_code}' "$2" 2>/dev/null); rc=$?
     if [ "$rc" != 0 ]; then
-        case "$rc" in 22) FETCH_ERR="HTTP hatası" ;; 28) FETCH_ERR="süre aşımı (${3} sn)" ;; 18) FETCH_ERR="eksik aktarım" ;;
-            *) FETCH_ERR="curl çıkış kodu $rc" ;; esac
+        code="${code//[^0-9]/}"
+        case "$rc" in
+            22) FETCH_ERR="HTTP ${code:-hatası}"; FETCH_CODE="http:${code:-0}" ;;
+            28) FETCH_ERR="süre aşımı (${3} sn)"; FETCH_CODE="timeout:$3" ;;
+            18) FETCH_ERR="eksik aktarım"; FETCH_CODE="partial" ;;
+            6)  FETCH_ERR="adres çözülemedi (DNS)"; FETCH_CODE="dns" ;;
+            7)  FETCH_ERR="bağlanılamadı"; FETCH_CODE="conn" ;;
+            35|51|58|59|60|77|80|83|90|91) FETCH_ERR="TLS / sertifika hatası (curl $rc)"; FETCH_CODE="tls:$rc" ;;
+            *)  FETCH_ERR="curl çıkış kodu $rc"; FETCH_CODE="curl:$rc" ;;
+        esac
         : > "$f"; return 1
     fi
     if [ "$(head -c 4096 "$f" | tr -d ' \t\r\n' | head -c 1)" = "{" ] || [ "$(head -c 4096 "$f" | tr -d ' \t\r\n' | head -c 1)" = "[" ]; then
         perl -MJSON::PP -e 'local $/; my $s = <STDIN>; JSON::PP->new->decode($s); exit 0' < "$f" 2>/dev/null ||
-            { FETCH_ERR="yarım ya da bozuk JSON"; : > "$f"; return 1; }
+            { FETCH_ERR="yarım ya da bozuk JSON"; FETCH_CODE="badjson"; : > "$f"; return 1; }
     fi
     return 0
 }
@@ -96,7 +106,7 @@ fetch() {        # DOSYA ADRES [DESEN] → 0 = tam liste DOSYA'da (FETCH_ERR'e b
     # bağlantı indirilir (Microsoft Service Tags her hafta yeni adla yayımlanır; sabit olan indirme sayfası — hazır Azure kutusu da böyle)
     local u="$2"
     if [ -n "${3:-}" ]; then
-        page_link "$u" "$3" || { FETCH_ERR="sayfada bağlantı bulunamadı"; : > "$1"; return 1; }
+        page_link "$u" "$3" || { FETCH_ERR="sayfada bağlantı bulunamadı"; FETCH_CODE="nolink"; : > "$1"; return 1; }
         fetch_to "$1" "$REPLY" 120 "$BUA"; return
     fi
     fetch_to "$1" "$u" 60 "$UA"
@@ -291,14 +301,16 @@ while IFS= read -r s; do
     [[ "$flt" == *"|"* ]] && { lnk="${flt#*|}"; flt="${flt%%|*}"; }; [ "$lnk" = "-" ] && lnk=""
     [[ "$name" =~ ^[a-z0-9-]+$ ]] || continue
     old="$CACHE/$name.txt"; prev=0; [ -s "$old" ] && prev=$(grep -c . "$old")
-    raw="$CACHE/$name.dl.$$"
+    raw="$CACHE/$name.dl.$$"; FETCH_ERR=""; FETCH_CODE=""
     if fetch "$raw" "$src" "$lnk"; then new=$(pick "$flt" < "$raw"); else new=""; fi
     rm -f "$raw"
     n=$(printf '%s' "$new" | grep -c .)
     ot=$(stat -c %Y "$old" 2>/dev/null || echo 0); err=""
     if [ "$n" -eq 0 ] || { [ "$prev" -gt 0 ] && [ "$n" -lt $(( prev / 2 )) ]; }; then
-        log "$name: liste alınamadı ya da beklenenden az (${FETCH_ERR:+$FETCH_ERR; }$n, önceki $prev); önceki liste korunuyor"
-        n=$prev; err="fetch"
+        # indi ama içinden aralık çıkmadıysa ya da yarıdan fazla küçüldüyse sebep o (panel ve bildirim "neden" der)
+        [ -n "$FETCH_CODE" ] || { if [ "$n" -gt 0 ]; then FETCH_CODE="shrink:$n:$prev"; elif [ -n "$flt" ] && [ "$flt" != "-" ]; then FETCH_CODE="noflt"; else FETCH_CODE="empty"; fi; }
+        log "$name: liste alınamadı ya da beklenenden az (${FETCH_ERR:+$FETCH_ERR; }$n, önceki $prev; $FETCH_CODE); önceki liste korunuyor"
+        n=$prev; err="$FETCH_CODE"
         [ -s "$CACHE/$name.fail" ] || date +%s > "$CACHE/$name.fail"
     else
         # geçici dosyaya yaz, sonra yer değiştir: başka bir okuyucu (csfpost.sh'taki --apply, dışarıdan okuyan araç) yarım dosya görmesin

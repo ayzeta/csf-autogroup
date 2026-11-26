@@ -1335,6 +1335,14 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
     if (awsT) { await tik(page, `${G} .ag-tile:has(.ag-tile-m b:text-is("${awsT}")) .ag-tile-ed`); await page.waitForTimeout(300); }
     const af = await page.$eval('.ag-urled-r[data-src="cl|b|aws"] [data-f="f"]', e => e.value).catch(() => null);
     check('kiralık liste: hazır AWS kutusunun süzgeci düzenleyicide görünür', af === 'service=EC2', JSON.stringify({ awsT, af }));
+    // kutudan açılan pencere tıklanan kutunun HEMEN altında (1.15.133; önce bütün kutuların altındaydı, telefonda sayfanın sonuna kaydırılıyordu)
+    const edPos = awsT ? await page.$eval(`${G} .ag-tile:has(.ag-tile-m b:text-is("${awsT}"))`, tl => {
+      const x = tl.nextElementSibling, ed = x && x.querySelector('.ag-urled');
+      if (!ed) return { ok: false, why: 'kutunun ardında düzenleyici yok' };
+      const a = tl.getBoundingClientRect(), b = ed.getBoundingClientRect();
+      return { ok: b.top >= a.bottom - 1 && b.top - a.bottom < 40, gap: Math.round(b.top - a.bottom) };
+    }).catch(e => ({ ok: false, why: String(e).slice(0, 80) })) : { ok: false, why: 'AWS kutusu yok' };
+    check('kutunun adres düzenleyicisi tıklanan kutunun hemen altında açılır', edPos.ok, JSON.stringify(edPos));
     if (awsT) { await tik(page, `${G} .ag-tile:has(.ag-tile-m b:text-is("${awsT}")) .ag-tile-rm`); await page.waitForTimeout(300); }
     // izinli servisler: hazır kutuya kendi kaynağınız, hazır alt kaynak silinir ve geri gelir
     const goo = (await names(SG)).find(t => /Google/.test(t)) || '';

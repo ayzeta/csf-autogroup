@@ -115,15 +115,15 @@ for s in "${SOURCES[@]}"; do
     [[ "$flt" == *"|"* ]] && { lnk="${flt#*|}"; flt="${flt%%|*}"; }   # adres bir sayfa: listenin bağlantısını bulan desen ("-" = yok)
     [ "$lnk" = "-" ] && lnk=""
     [[ "$name" =~ ^[A-Za-z0-9._-]+$ ]] || continue
-    old="$CACHE/$name.txt"; prev=0; [ -s "$old" ] && prev=$(grep -c . "$old"); FETCH_ERR=""
+    old="$CACHE/$name.txt"; prev=0; [ -s "$old" ] && prev=$(grep -c . "$old"); FETCH_ERR=""; FETCH_CODE=""
     if [[ "$src" == http* ]]; then
         # Microsoft 365 kendi posta sunucuları için /13'e kadar aralık yayımlıyor (40.96.0.0/13); yalnız bu kaynakta izin verilir
         mn=16; [[ "$name" == microsoft365* ]] && mn=12
         # sayfadan bağlantı bulma ve tam indirme denetimi cloud-ban.sh'tan (link_re, page_link, fetch_to: aynı kural, tek yer)
         for fn in link_re page_link fetch_to; do eval "$(awk "/^$fn\\(\\) \\{/{f=1} f{print} f && /^}\$/{exit}" "$(dirname "$0")/cloud-ban.sh")"; done
-        FETCH_ERR=""
+        FETCH_ERR=""; FETCH_CODE=""
         if [ -n "$lnk" ]; then           # sayfada desene uyan ilk bağlantı
-            if page_link "$src" "$lnk"; then src="$REPLY"; else src=""; FETCH_ERR="sayfada bağlantı bulunamadı"; fi
+            if page_link "$src" "$lnk"; then src="$REPLY"; else src=""; FETCH_ERR="sayfada bağlantı bulunamadı"; FETCH_CODE="nolink"; fi
         fi
         raw="$CACHE/$name.dl.$$"; new=""
         if [[ "$src" == https://* ]] && fetch_to "$raw" "$src" 60 "$UA"; then
@@ -145,8 +145,10 @@ for s in "${SOURCES[@]}"; do
         [ "$sc" -ge 3 ] && prev=0
     else rm -f "$shr" 2>/dev/null; fi
     if [ "$n" -eq 0 ] || { [ "$prev" -gt 0 ] && [ "$n" -lt $(( prev / 2 )) ]; }; then
-        log "$name: geçerli adres alınamadı ya da beklenenden az (${FETCH_ERR:+$FETCH_ERR; }$n, önceki $prev; indirilemedi, boş ya da /16'dan geniş); önceki liste korunuyor"
-        new=$(cat "$old" 2>/dev/null); n=$prev; err="fetch"
+        # sebep kodu durum dosyasına (panel, bildirim): indirme hatası fetch_to'dan; indi ama aralık çıkmadıysa / küçüldüyse burada
+        [ -n "$FETCH_CODE" ] || { if [ "$n" -gt 0 ]; then FETCH_CODE="shrink:$n:$prev"; elif [ -n "$flt" ] && [ "$flt" != "-" ]; then FETCH_CODE="noflt"; else FETCH_CODE="empty"; fi; }
+        log "$name: geçerli adres alınamadı ya da beklenenden az (${FETCH_ERR:+$FETCH_ERR; }$n, önceki $prev; $FETCH_CODE); önceki liste korunuyor"
+        new=$(cat "$old" 2>/dev/null); n=$prev; err="$FETCH_CODE"
         # ilk başarısızlık anı (bildirim 3 günü buradan sayar; hiç başarılı indirme olmasa da)
         [ "$CHECK" = 0 ] && [ ! -s "$CACHE/$name.fail" ] && date +%s > "$CACHE/$name.fail"
     elif [ "$CHECK" = 0 ]; then
