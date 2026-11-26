@@ -36,9 +36,8 @@ fi
 # kesildi (tests/senaryo/ornek; 2026-11-05, satır biçimi korunarak). Tam dosyalarda genel süzgeç eski ada bağlı awk ile aynı aralıkları
 # verdi (AWS 1904, Azure 2598).
 O="$H/ornek"; SF="$REPO/tools/src-filter.pl"
-eval "$(awk '/^ipv4_list\(\) \{/{f=1} f{print} f && /^}$/{exit}' "$REPO/tools/cloud-ban.sh")"
-eval "$(awk '/^link_re\(\) \{/{f=1} f{print} f && /^}$/{exit}' "$REPO/tools/cloud-ban.sh")"
-sz() { local exp="$1" lab="$2"; shift 2; N=$((N + 1)); local r; r=$("$@" | ipv4_list | paste -sd' ' -)
+UA=test; . "$REPO/tools/fetch-lib.sh"     # indirme kitaplığı (1.15.134: kiralık listeler ve izinli servisler ortak; önce cloud-ban.sh'tan kesiliyordu)
+sz() { local exp="$1" lab="$2"; shift 2; N=$((N + 1)); local r; r=$("$@" | ipv4_list 10 | paste -sd' ' -)
        if [ "$r" = "$exp" ]; then echo "  ✓ süzgeç: $lab → $r"; else FAILS=$((FAILS + 1)); echo "  ✗ süzgeç: $lab → «$r» (beklenen «$exp»)"; fi; }
 FAILS=0
 sz "23.254.120.0/21 3.5.140.0/22" "AWS j:service=EC2 (AMAZON kaydı alınmaz)" perl "$SF" 'j:service=EC2' < "$O/aws-ip-ranges.json"
@@ -53,7 +52,6 @@ N=$((N + 1)); if link_re 'a]b'; then FAILS=$((FAILS + 1)); echo "  ✗ hatalı b
 sz "79.76.96.0/19 89.168.64.0/18" "Oracle j:region=eu-frankfurt-1&tags=OCI (OSN ve öteki bölge alınmaz)" perl "$SF" 'j:region=eu-frankfurt-1&tags=OCI' < "$O/oracle-ip-ranges.json"
 sz "139.177.96.0/21 40.233.0.0/19 79.76.96.0/19 89.168.64.0/18" "Oracle j:tags=OCI (dizi içinde değer)" perl "$SF" 'j:tags=OCI' < "$O/oracle-ip-ranges.json"
 # sayfadaki bağlantı göreli de olabilir: Cloudflare sayfası "/ips-v4/#" yazıyor, Microsoft mutlak adres (iki gerçek sayfa, ağsız)
-eval "$(awk '/^page_link\(\) \{/{f=1} f{print} f && /^}$/{exit}' "$REPO/tools/cloud-ban.sh")"
 for pl in "cloudflare-ips-sayfasi.html|https://www.cloudflare.com/ips/|www.cloudflare.com/ips-v4|https://www.cloudflare.com/ips-v4" \
           "microsoft-indirme-sayfasi.html|https://www.microsoft.com/en-us/download/details.aspx?id=56519|download.microsoft.com/*ServiceTags_Public_*.json|https://download.microsoft.com/download/"; do
     IFS='|' read -r pf pu pd pe < <(printf '%s\n' "$pl"); N=$((N + 1))
@@ -152,7 +150,6 @@ if command -v python3 >/dev/null 2>&1; then
     kod "yarım JSON" yarim.json "" "badjson"
     kod "süzgeç hiçbir aralık seçmedi" tam.json "j:yok=yok" "noflt"
     kod "tam yanıt: hata yok" tam.json "" ""
-    eval "$(awk '/^fetch_to\(\) \{/{f=1} f{print} f && /^}$/{exit}' "$REPO/tools/cloud-ban.sh")"
     N=$((N + 1))
     if ! fetch_to "$TD/y" "$KS/yavas.json" 1 test && [ "$FETCH_ERR" = "süre aşımı (1 sn)" ] && [ "$FETCH_CODE" = "timeout:1" ] && [ ! -s "$TD/y" ]; then echo "  ✓ indirme: süre aşımı → reddedildi, dosya boş ($FETCH_ERR, $FETCH_CODE)"
     else F=$((F + 1)); echo "  ✗ indirme: süre aşımı → FETCH_ERR «${FETCH_ERR:-}» FETCH_CODE «${FETCH_CODE:-}», dosya $(wc -c < "$TD/y" 2>/dev/null) bayt"; fi
@@ -165,11 +162,22 @@ if command -v python3 >/dev/null 2>&1; then
         N=$((N + 1)); fe_text "${x%%|*}"
         if [ "$REPLY" = "${x#*|}" ]; then echo "  ✓ fe_text ${x%%|*} → $REPLY"; else F=$((F + 1)); echo "  ✗ fe_text ${x%%|*} → «$REPLY» (beklenen «${x#*|}»)"; fi
     done
-    # izinli servisler aynı denetimi kullanır (kendi kopyası değil): services-allow.sh fetch_to'yu cloud-ban.sh'tan alır, curl'ü doğrudan çağırmaz
-    N=$((N + 1))
-    if grep -q 'for fn in link_re page_link fetch_to' "$REPO/tools/services-allow.sh" && ! grep -qE '^[^#]*curl ' "$REPO/tools/services-allow.sh"; then
-        echo "  ✓ izinli servisler aynı tam indirme denetimini kullanır (fetch_to)"
-    else F=$((F + 1)); echo "  ✗ izinli servisler curl'ü doğrudan çağırıyor ya da fetch_to'yu almıyor"; fi
+    # iki araç da aynı kitaplığı okur (kendi kopyası yok): curl'ü doğrudan çağırmaz, ipv4_list / fetch_to / list_accept tanımlamaz
+    N=$((N + 1)); kx=""
+    for tf in services-allow.sh cloud-ban.sh; do
+        grep -q 'fetch-lib.sh' "$REPO/tools/$tf" || kx+=" $tf: kitaplığı okumuyor"
+        grep -qE '^(ipv4_list|link_re|page_link|fetch_to|list_accept)\(\)' "$REPO/tools/$tf" && kx+=" $tf: kopya işlev"
+        grep -nE '^[^#]*curl ' "$REPO/tools/$tf" | grep -v 'page_link\|fetch_to' | grep -q . && kx+=" $tf: doğrudan curl"
+    done
+    if [ -z "$kx" ]; then echo "  ✓ kiralık listeler ve izinli servisler tek indirme kitaplığını kullanır (tools/fetch-lib.sh)"
+    else F=$((F + 1)); echo "  ✗ indirme kitaplığı:$kx"; fi
+    # gerçekten küçülen liste (1.15.134): aynı küçük sayı üst üste 3 kez gelirse kabul edilir — izinli serviste vardı, kiralık listede
+    # yoktu (küçülen kiralık liste hiç güncellenmiyordu). Gerçek araçla, file:// kaynak
+    N=$((N + 1)); for i in $(seq 0 9); do echo "198.51.$((100 + i)).0/24"; done > "$TD/c/g.txt"; rm -f "$TD/c/g.shrink"
+    printf '203.0.113.0/24\n203.0.114.0/24\n' > "$TD/kucuk.txt"; kr=""
+    for k in 1 2 3; do SRC="g|file://$TD/kucuk.txt" CACHE="$TD/c" LOG_FILE="$TD/log" NOAPPLY=1 bash "$REPO/tools/cloud-ban.sh" >/dev/null 2>&1; kr+="$(grep -c . "$TD/c/g.txt") "; done
+    if [ "$kr" = "10 10 2 " ]; then echo "  ✓ kiralık liste gerçekten küçülünce 3. üst üste aynı indirmede kabul edilir (satır: $kr)"
+    else F=$((F + 1)); echo "  ✗ kiralık liste küçülme kuralı: satır sayıları $kr (beklenen 10 10 2)"; fi
     kill "$KP" 2>/dev/null; wait "$KP" 2>/dev/null; rm -rf "$TD"
 else echo "  - indirme denetimi atlandı (python3 yok)"; fi
 # tek tırnaklı programın (awk …) içindeki yorumda kesme işareti tırnağı kapatır; bash -n yakalamaz (dört kez oldu)

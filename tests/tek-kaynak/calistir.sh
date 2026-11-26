@@ -55,6 +55,17 @@ m=$(grep -oE 'M_FE_[A-Z]+=' "$SHF" | sort -u | sed 's/M_FE_//; s/=//' | tr 'A-Z'
 miss=""; for k in $m; do grep -q "fe_$k: '" "$J" || miss+=" fe_$k"; done
 nf=$(grep -c "feText(c.fail.e)\|feText(x.e)" "$J")
 if [ -z "$m" ] || [ -n "$miss" ] || [ "$nf" -lt 2 ]; then echo "DÜŞTÜ: indirilemedi sebebi panelde yok (eksik:${miss:- -}, feText kullanımı $nf)"; F=$((F + 1)); else echo "GEÇTİ: indirilemedi sebebi motorda ve panelde aynı kodlar"; fi
+# banı koyduran olay türleri (1.15.134): motorun EV_BAN_TYPES'ı ile panelin BAN_TYPES'ı aynı küme; panelde banın IP'leri (OWNERS.ev)
+# yalnız BAN_IPS_TYPES'tan (önce aralığın IP taşıyan son kaydından: ban altında ihlal kaydı banın IP'leri sanılıyordu)
+mb=$(grep -m1 '^EV_BAN_TYPES=' "$SHF" | sed 's/^EV_BAN_TYPES="//; s/".*//' | tr '|' '\n' | sort | tr '\n' ' ')
+pb=$(grep -m1 "^  var BAN_TYPES = \[" "$J" | grep -oE "'[a-z0-9_]+'" | tr -d "'" | sort | tr '\n' ' ')
+ow=$(grep -c "BAN_IPS_TYPES.indexOf(e.type) >= 0) o.ev = e" "$J")
+if [ -z "$mb" ] || [ "$mb" != "$pb" ] || [ "$ow" != 1 ]; then echo "DÜŞTÜ: banı koyduran olay kümesi motor ↔ panel farklı ya da OWNERS.ev türe bakmıyor (motor: $mb · panel: $pb · süzgeç $ow)"; F=$((F + 1)); else echo "GEÇTİ: banı koyduran olay kümesi motorda ve panelde aynı ($mb)"; fi
+# "servis kapalı mı" kararının UDP portları (1.15.134): yalnız svcLiveUdp'de (motorun svc_uports'u); başka yerde web için sabit UDP 443
+# yazılmaz (aralık kartı QUIC'e bakmadan istiyordu) ve SSH portu sabit '22' değil, sunucudan (svcTcp)
+out=$(grep -nE "=== 'web' \? \[443\]|k === 'ssh' \? String\(d\.ssh \|\| '22'\)|d\.ssh\)\.split\(','\)\.join\(', '\) : '22'" "$J")
+lv=$(grep -c "function svcLiveUdp(k)" "$J")
+if [ -n "$out" ] || [ "$lv" != 1 ]; then echo "DÜŞTÜ: servis portu kuralı kopyası (UDP 443 sabit ya da SSH '22'):"; echo "$out" | head -4; F=$((F + 1)); else echo "GEÇTİ: servis kapalı mı UDP kuralı tek yerde (svcLiveUdp), SSH portu sunucudan"; fi
 # kartın altındaki düğme listeyi değiştirince (sayfa çubuğu, "Daha az") kart başı görünür olur (1.15.133: Aktif aralık banları, İzlenenler,
 # sağlayıcı listesi sayfası kullanıcıyı sayfanın altında boşlukta bırakıyordu). pagerHtml'e verilen her eylem ve limless cardTop çağırır
 acts=$(grep -oE "pagerHtml\('[a-z]+'" "$J" | sed "s/pagerHtml('//; s/'//" | sort -u; echo limless)

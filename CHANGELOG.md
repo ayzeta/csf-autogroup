@@ -1,5 +1,47 @@
 # Changelog
 
+## 1.15.134 — 2026-11-26
+
+First part of a code-wide clean-up: the same question is now answered in one
+place. This release fixes the cases where two copies gave different answers.
+
+- Removing a block ban with "restore the singles" could write the wrong IPs
+  back to `csf.deny`: after a "violation under a ban" record on the same range,
+  it took that record's IPs (the violators) instead of the ban's own. The
+  removal record and the panel (the unban dialog's list, the IPs shown for a
+  ban) had the same mix-up. Only the events that put a ban in place are read
+  now, from one shared list.
+- `CC_IGNORE` and `CC_ALLOW` are checked against CSF's own data instead of
+  Team Cymru's answer for the first IP: `CC_IGNORE` the way LFD does it (CSF's
+  `iplookup`, per banned IP, only while `CC_LOOKUPS` is on, as in LFD), and
+  `CC_ALLOW` against CSF's zone files. The "Needs review" source text uses the
+  same check. Neither needs DNS any more.
+- A rented-server list that really got smaller (less than half of the previous
+  one) was never accepted; the "same smaller list three times in a row" rule
+  existed only for allowed services. Both now share one download library
+  (`tools/fetch-lib.sh`), which also replaces the copies of the download,
+  page-link and IPv4 functions.
+- Partial bans keep TCP and UDP ports apart (`ports` and the new `uports` in the
+  status output). Whether a provider ban already covers a partial ban compares
+  TCP with TCP and UDP with UDP; before, a UDP port was looked up in the TCP
+  list. UDP 443 counts only when the server serves HTTP/3, the same rule as
+  "is this service closed" (the range card's own copy of that rule ignored
+  HTTP/3 and never asked for DNS's UDP 53).
+- Owner info has one source per question: provider (ASN, name) from CSF's
+  `ip2asn` data and country from CSF's IP location data — the data CSF's own
+  country and provider bans use — and the announced range from Team Cymru
+  (CSF has none). Before, all of it came from Team Cymru, which can differ:
+  on a real server's 1,104 blocks the ASN differed in 22 and the country in
+  637, so a provider or country shown on screen was not always the one CSF
+  would block. Cached entries switch over on the next run without new DNS
+  queries; the IP card and the lists use the same lookup, and the card names
+  the source of each field.
+- The "Needs review" note wrote SSH port 22 instead of the server's SSH port.
+- Settings: the server-side gate (`api.php`) no longer rejects long values the
+  plugin accepts (many own lists, all default addresses); the plugin now
+  rejects an unknown source name or the same source twice in `SVC_URLS` /
+  `CLOUD_URLS`; the installer accepts the same alert addresses as the plugin.
+
 ## 1.15.133 — 2026-11-26
 
 - A list that can't be downloaded now says why, on its box under Providers

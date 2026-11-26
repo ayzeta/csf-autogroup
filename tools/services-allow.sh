@@ -39,14 +39,9 @@ SOURCES=(
 if [ -n "${SRC:-}" ]; then SOURCES=(); while IFS= read -r l; do [ -n "$l" ] && SOURCES+=("$l"); done <<< "$SRC"; fi
 CHECK=0; [ "${1:-}" = "--check" ] && CHECK=1
 UA="Mozilla/5.0 (compatible; csf-autogroup services-allow)"
+. "$(dirname "$0")/fetch-lib.sh" || exit 1     # ipv4_list, link_re, page_link, fetch_to, list_accept (kiralık listelerle ortak)
 
 log() { printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "services-allow: $1" | tee -a "$LOG_FILE" 2>/dev/null; }
-# IPv4 adres ve aralıkları çıkar; /16'dan geniş aralık ve geçersiz sekizli alınmaz (yanlış bir liste her şeyi açmasın)
-ipv4_list() {     # [EN GENİŞ ÖNEK, varsayılan 16]
-    local mn="${1:-16}"
-    grep -oE '(^|[^0-9.])[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?' | grep -oE '[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?' |
-        awk -F'[./]' -v mn="$mn" '{ ok = 1; for (i = 1; i <= 4; i++) if ($i > 255) ok = 0; if (NF == 5 && ($5 < mn || $5 > 32)) ok = 0; if (ok) print }' | sort -u
-}
 # EXCEPT: izinli servis listelerinde olsa da izinli sayılmayacak adresler (boşluk/virgül; IP ya da CIDR). Kapsayan aralık
 # o adresler dışarıda kalacak şekilde en az parçaya bölünür; böylece o adresin csf.deny'deki banı çalışır.
 except_filter() {
@@ -119,8 +114,6 @@ for s in "${SOURCES[@]}"; do
     if [[ "$src" == http* ]]; then
         # Microsoft 365 kendi posta sunucuları için /13'e kadar aralık yayımlıyor (40.96.0.0/13); yalnız bu kaynakta izin verilir
         mn=16; [[ "$name" == microsoft365* ]] && mn=12
-        # sayfadan bağlantı bulma ve tam indirme denetimi cloud-ban.sh'tan (link_re, page_link, fetch_to: aynı kural, tek yer)
-        for fn in link_re page_link fetch_to; do eval "$(awk "/^$fn\\(\\) \\{/{f=1} f{print} f && /^}\$/{exit}" "$(dirname "$0")/cloud-ban.sh")"; done
         FETCH_ERR=""; FETCH_CODE=""
         if [ -n "$lnk" ]; then           # sayfada desene uyan ilk bağlantı
             if page_link "$src" "$lnk"; then src="$REPLY"; else src=""; FETCH_ERR="sayfada bağlantı bulunamadı"; FETCH_CODE="nolink"; fi
@@ -136,15 +129,7 @@ for s in "${SOURCES[@]}"; do
     fi
     n=$(printf '%s' "$new" | grep -c .)
     ot=$(stat -c %Y "$old" 2>/dev/null || echo 0); err=""
-    shr="$CACHE/$name.shrink"
-    # yarıdan fazla küçülme: hata sayılır; ama aynı küçük liste 3 kez üst üste gelirse kaynak gerçekten küçülmüştür
-    if [ "$n" -gt 0 ] && [ "$prev" -gt 0 ] && [ "$n" -lt $(( prev / 2 )) ]; then
-        sc=$(cut -d'|' -f2 "$shr" 2>/dev/null); sn=$(cut -d'|' -f1 "$shr" 2>/dev/null)
-        if [ "$sn" = "$n" ]; then sc=$(( ${sc:-0} + 1 )); else sc=1; fi
-        [ "$CHECK" = 0 ] && printf '%s|%s\n' "$n" "$sc" > "$shr"
-        [ "$sc" -ge 3 ] && prev=0
-    else rm -f "$shr" 2>/dev/null; fi
-    if [ "$n" -eq 0 ] || { [ "$prev" -gt 0 ] && [ "$n" -lt $(( prev / 2 )) ]; }; then
+    if ! list_accept "$CACHE" "$name" "$n" "$prev" "$([ "$CHECK" = 0 ] && echo 1 || echo 0)"; then
         # sebep kodu durum dosyasına (panel, bildirim): indirme hatası fetch_to'dan; indi ama aralık çıkmadıysa / küçüldüyse burada
         [ -n "$FETCH_CODE" ] || { if [ "$n" -gt 0 ]; then FETCH_CODE="shrink:$n:$prev"; elif [ -n "$flt" ] && [ "$flt" != "-" ]; then FETCH_CODE="noflt"; else FETCH_CODE="empty"; fi; }
         log "$name: geçerli adres alınamadı ya da beklenenden az (${FETCH_ERR:+$FETCH_ERR; }$n, önceki $prev; $FETCH_CODE); önceki liste korunuyor"

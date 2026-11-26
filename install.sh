@@ -28,7 +28,9 @@ valid() {   # KEY VALUE
     local LC_ALL=C   # tr_TR'de "i" [a-z] aralığına girmez
     case "$1" in
         MSG_LANG)   [[ "$2" =~ ^(en|tr)$ ]] ;;
-        ALERT_MAIL) [ "$2" = whm ] || [[ "$2" =~ ^[A-Za-z0-9._%+-]+(@[A-Za-z0-9.-]+)?$ ]] ;;   # whm = WHM'deki iletişim adresi
+        # whm = WHM'deki iletişim adresi. Desen motorun cfg_check'iyle ve panelle AYNI (tests/ayar-tutarliligi karşılaştırır; 1.15.134'e
+        # kadar burada "a@.." gibi motorun reddettiği adresler geçiyordu)
+        ALERT_MAIL) [ "$2" = whm ] || { [[ "$2" =~ ^[A-Za-z0-9._%+-]+(@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*)?$ ]] && [ ${#2} -le 254 ]; } ;;
         CRON_MIN)   [[ "$2" =~ ^(\*/([1-9]|[1-5][0-9])|[0-9]|[1-5][0-9])$ ]] ;;   # crontab dakika alanı: */1–*/59 ya da 0–59 (önce */99, 75 de geçiyordu)
     esac
 }

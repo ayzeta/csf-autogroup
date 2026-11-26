@@ -65,7 +65,7 @@ grep() { command grep -a "$@"; }
 # sayı, anahtar; Türkçe modda sıralama kuralı zaten C idi (LC_COLLATE=C)
 sort() { LC_ALL=C command sort "$@"; }
 
-VERSION="1.15.133"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.134"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -357,7 +357,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_WL_NOTE="   Not: içinde izin listesinde kayıt var (%s)"
   M_MAILWL_BODY="Aşağıdaki bloklar ban eşiğine ulaştı ama CSF izin listeleriyle çakıştığı için banlanmadı.\nTekil banlar yerinde duruyor:"
   M_MAILWL_SUBJ="%s blok atlandı (izin listesi)"
-  M_CC_NOLOOKUP="UYARI: CC_IGNORE/CC_ALLOW veya csf.rignore tanımlı ama DNS sorgusu yapılamıyor (LOOKUP=0 ya da dig/host yok); bu kontroller atlandı"
+  M_CC_NOLOOKUP="UYARI: csf.rignore tanımlı ama DNS sorgusu yapılamıyor (LOOKUP=0 ya da dig/host yok); ters DNS denetimi atlandı"
   M_LOOKUP_OFF="UYARI: DNS sorguları art arda zaman aşımına uğradı, bu turda kapatıldı"
   M_CLEANCNT="Sayaç temizliği yapıldı (%s günden eski kayıtlar silindi)"
   M_LOGTRIM="Günlükten %s günden eski satırlar silindi (%s satır)"
@@ -451,6 +451,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_FE_EMPTY="indi ama içinde kullanılabilir IPv4 aralığı yok"; M_FE_NOFLT="indi ama süzgeç hiçbir aralık seçmedi"
   M_FE_SHRINK="yalnız %s IP / aralık geldi, öncekinin (%s) yarısından az"; M_FE_TOOLTO="indirme aracı süresinde bitmedi"
   M_FE_OLD="sebebi kaydedilmemiş (eski sürüm; sonraki denemede yazılır)"
+  M_OWN_SYNC="sahip önbelleği: %s bloğun sağlayıcı / ülke bilgisi CSF verisinden yeniden yazıldı"
   M_SVCX_BAD_SUBJ="birleşik servis dosyası Apache denetiminden geçmedi"
   M_SVCX_BAD_BODY="Yeni izinli servis listesi Apache'nin yapılandırma denetiminden geçmediği için yazılmadı; önceki dosya korunuyor (%s). Apache'nin hatası: %s"
   M_SVCX_RLF_SUBJ="web sunucusu yeniden yüklenemedi"
@@ -654,7 +655,7 @@ else
   M_WL_NOTE="   Note: contains a allow list entry (%s)"
   M_MAILWL_BODY="The following blocks reached the ban threshold but were NOT banned because they overlap a CSF allow list.\nThe single bans stay in place:"
   M_MAILWL_SUBJ="%s block(s) skipped (allow list)"
-  M_CC_NOLOOKUP="WARNING: CC_IGNORE/CC_ALLOW or csf.rignore is set but DNS lookups are unavailable (LOOKUP=0 or no dig/host); those checks were skipped"
+  M_CC_NOLOOKUP="WARNING: csf.rignore is set but DNS lookups are unavailable (LOOKUP=0 or no dig/host); the reverse DNS check was skipped"
   M_LOOKUP_OFF="WARNING: DNS lookups timed out repeatedly, disabled for this run"
   M_CLEANCNT="Counter cleaned (records older than %s days removed)"
   M_LOGTRIM="Log lines older than %s days removed (%s lines)"
@@ -747,6 +748,7 @@ else
   M_FE_EMPTY="downloaded, but it holds no usable IPv4 range"; M_FE_NOFLT="downloaded, but the filter picked no range"
   M_FE_SHRINK="only %s IPs / ranges came, less than half of the previous %s"; M_FE_TOOLTO="the download tool did not finish in time"
   M_FE_OLD="reason not recorded (older version; written on the next try)"
+  M_OWN_SYNC="owner cache: provider / country of %s blocks rewritten from CSF's data"
   M_SVCX_BAD_SUBJ="combined services file failed the Apache test"
   M_SVCX_BAD_BODY="The new allowed services list was not written because it failed Apache's configuration test; the previous file is kept (%s). Apache's error: %s"
   M_SVCX_RLF_SUBJ="web server could not be reloaded"
@@ -1006,10 +1008,15 @@ cfg_check() {    # KEY VALUE → 0 geçerli (CFG_VAL = normalleştirilmiş değe
                 case ",$CFG_VAL," in *",$x,"*) ;; *) CFG_VAL+="${CFG_VAL:+,}$x" ;; esac
             done
             return 0 ;;
-        SVC_URLS|CLOUD_URLS)      # yalnız https adresi; ad hazır kaynaklardan biri olmalı
-            local x u re='^[a-z0-9-]{1,40}[|]https://[A-Za-z0-9._~:/?#@=%+&-]{4,255}([|](-|[jt]:[A-Za-z0-9%._~=\&:-]{1,600})([|](-|[A-Za-z0-9._~/*:-]{3,300}))?)?$'; CFG_VAL=""
+        SVC_URLS|CLOUD_URLS)      # yalnız https adresi; ad hazır kaynaklardan biri olmalı, her kaynak bir kez
+            # (1.15.134: yorum bunu söylüyordu ama denetlenmiyordu; sayı sınırı da yoktu — PHP'nin uzunluk sınırı motordan dardı)
+            local x u e all=" " re='^[a-z0-9-]{1,40}[|]https://[A-Za-z0-9._~:/?#@=%+&-]{4,255}([|](-|[jt]:[A-Za-z0-9%._~=\&:-]{1,600})([|](-|[A-Za-z0-9._~/*:-]{3,300}))?)?$'; CFG_VAL=""
+            if [ "$k" = SVC_URLS ]; then for u in $SVC_CATALOG; do svc_urls "$u"; for e in $REPLY; do all+="${e%%|*} "; done; done
+            else all+="$CLOUD_CATALOG "; fi
             for x in $v; do
                 [[ "$x" =~ $re ]] || { CFG_ERR=$(m "$M_CFG_BAD" "$k" "$x" "$M_CFG_SVCU"); return 1; }
+                case "$all" in *" ${x%%|*} "*) ;; *) CFG_ERR=$(m "$M_CFG_BAD" "$k" "$x" "$(m "$M_CFG_ONEOF" "$(echo $all | tr ' ' ',' | sed 's/,/, /g')")"); return 1 ;; esac
+                case " $CFG_VAL " in *" ${x%%|*}|"*) CFG_ERR=$(m "$M_CFG_BAD" "$k" "$x" "$M_CFG_SVCU"); return 1 ;; esac
                 CFG_VAL+="${CFG_VAL:+ }$x"
             done
             return 0 ;;
@@ -1205,12 +1212,16 @@ jstr() {         # dizgi → REPLY = JSON dizgisi (tırnaklı, kaçışlı)
     s="${s//\\/\\\\}"; s="${s//\"/\\\"}"; s="${s//[[:cntrl:]]/ }"
     REPLY="\"$s\""
 }
-ev_ips_of() {    # CIDR → REPLY = olay kaydında o aralığın son IP listesi (JSON dizisi "[…]", yoksa boş). Ban kaldırılırken
+# Banı koyduran olay türleri — TEK TANIM (1.15.134). Banın IP'leri ve sebebi yalnız bu türlerden okunur: aynı aralığa sonradan
+# yazılan ban altında ihlal / açık servis kaydının IP'leri banın IP'leri değildir. Önce dört yerde dört ayrı liste vardı ve
+# ev_ips_of türe hiç bakmıyordu: ihlal kaydından sonra "kaldır + geri yükle" ihlal eden IP'leri csf.deny'ye yazabiliyordu
+EV_BAN_TYPES="add24|promote|temp24|manual_ban|manual_change"
+ev_ips_of() {    # CIDR → REPLY = olay kaydında o aralığın banını koyduran son kaydın IP listesi (JSON dizisi "[…]", yoksa boş). Ban kaldırılırken
     # kaldırma olayına kopyalanır: asıl ban kaydı, ban artık durmadığı için saklama süresinde silinir; "neden banlanmıştı"
     # sorusunun cevabı kaldırma kaydında kalsın. JSON dizgileri içindeki köşeli parantez ve kaçışlar sayılmaz.
     REPLY=""
     [ -r "$EVENTS_FILE" ] || return 0
-    REPLY=$(grep -F "\"cidr\":\"$1\"" "$EVENTS_FILE" 2>/dev/null | grep -F '"ips":[{' | tail -n 1 | awk '{
+    REPLY=$(grep -F "\"cidr\":\"$1\"" "$EVENTS_FILE" 2>/dev/null | grep -E "\"type\":\"($EV_BAN_TYPES)\"" | grep -F '"ips":[{' | tail -n 1 | awk '{
         i = index($0, "\"ips\":["); if (!i) exit
         s = substr($0, i); d = 0; q = 0; e = 0
         for (j = 7; j <= length(s); j++) { c = substr(s, j, 1)
@@ -1263,12 +1274,15 @@ allow_viol_events() {
     done
     [ "$DRY" = 1 ] || { for ip in "${!SEEN[@]}"; do printf '%s %s\n' "$ip" "$TODAY"; done; for ip in "${new[@]}"; do printf '%s %s\n' "$ip" "$TODAY"; done; } > "$seenf" 2>/dev/null
 }
-pb_load() {      # eklentinin kısmi banları (csf.deny gelişmiş satırları; bölünmüş olanlar tek kayıt) → PB_P portlar, PB_S servis,
+pb_load() {      # eklentinin kısmi banları (csf.deny gelişmiş satırları; bölünmüş olanlar tek kayıt) → PB_P TCP portları, PB_U UDP portları
+    # (1.15.134: önce ikisi tek listedeydi; sağlayıcı banı kapsaması UDP portunu TCP listesinde arıyordu), PB_S servis,
     local pl re_d='- ([A-Z][a-z]{2} [A-Z][a-z]{2} +[0-9]{1,2} [0-9:]{8} [0-9]{4})[[:space:]]*$'   # PB_X ek portlar, PB_D tarih
-    declare -gA PB_P=() PB_S=() PB_D=() PB_X=()
+    declare -gA PB_P=() PB_U=() PB_S=() PB_D=() PB_X=()
     while IFS= read -r pl; do
         adv_parse "$pl" || continue
-        PB_P[$ADV_CIDR]+="${PB_P[$ADV_CIDR]:+,}$ADV_PORTS"
+        PB_P[$ADV_CIDR]+=""                                           # anahtar her kısmi banda (yalnız UDP kapatan ban da listede)
+        if [ "$ADV_PROTO" = udp ]; then PB_U[$ADV_CIDR]+="${PB_U[$ADV_CIDR]:+,}$ADV_PORTS"
+        else PB_P[$ADV_CIDR]+="${PB_P[$ADV_CIDR]:+,}$ADV_PORTS"; fi
         [[ "$pl" =~ $RE_SV ]] && PB_S[$ADV_CIDR]="${BASH_REMATCH[1]}"
         [[ "$pl" =~ $RE_PO ]] && PB_X[$ADV_CIDR]="${BASH_REMATCH[1]}"
         [[ "$pl" =~ $re_d ]] && PB_D[$ADV_CIDR]="${BASH_REMATCH[1]}"
@@ -1825,36 +1839,81 @@ cymru_line() {   # Cymru origin cevabı (çok satır olabilir) → REPLY = en da
     done <<< "$1"
     REPLY="$best"
 }
+# Sahip kaynağı — TEK KAYNAK (1.15.134). "Hangi sağlayıcı (ASN, ad), hangi ülke" CSF'in kendi verisinden: ASN ve ad ip2asn'den
+# (CC_DENY'deki ASnnnn bunu kullanır), ülke CSF'in iplookup'ından (CC_DENY / CC_IGNORE'un ülke verisi). Böylece ekranda görünen
+# sağlayıcı ve ülke, CSF'in ban / izin kararında kullandığıyla aynıdır. Ölçüldü (sunucu kopyası, 1.104 blok): Team Cymru ile ASN 22
+# blokta (Google AS15169 ↔ AS19527), ülke 637 blokta farklıydı (Cymru tahsis ülkesi, CSF IP konumu). Duyurulan aralık (BGP öneki)
+# CSF'te yok: yalnız Team Cymru'dan. CSF verisi yoksa (dosya yok, CC_LOOKUPS kapalı) o alan Cymru'dan, kaynağı işaretli.
+# Okuma: CSF'in perl'ü ile bir kez açılan yardımcı süreç (ip2asn başlangıç IP'sine göre sıralı: ikili arama; 1.104 IP 11 sn ölçüldü).
+CSO_ST=""
+CSO_PERL='$| = 1; my ($g, $lk) = @ARGV; my $F; my $sz = 0; if (open($F, "<", $g)) { $sz = -s $g }
+    my $L = 0; if ($lk) { $L = eval { require ConfigServer::LookUpIP; 1 } ? 1 : 0 }
+    sub n { my @p = split /\./, $_[0]; return (($p[0] * 256 + $p[1]) * 256 + $p[2]) * 256 + $p[3] }
+    sub at { my $o = shift; seek($F, $o, 0); my $x = <$F> if $o > 0; return <$F> }
+    sub asn { return ("", "") unless $sz; my $v = n($_[0]); my ($lo, $hi) = (0, $sz);
+        while ($hi - $lo > 1) { my $m = int(($lo + $hi) / 2); my $l = at($m); last unless defined $l; my @f = split /\t/, $l; if (n($f[0]) <= $v) { $lo = $m } else { $hi = $m } }
+        seek($F, $lo, 0); my $x = <$F> if $lo > 0; my $res = "";
+        while (my $r = <$F>) { my @f = split /\t/, $r; last if n($f[0]) > $v; $res = $r if n($f[1]) >= $v }
+        chomp $res; my @f = split /\t/, $res; return (($f[2] // "") =~ /^[1-9][0-9]*$/ ? ($f[2], $f[4] // "") : ("", "")) }
+    while (my $ip = <STDIN>) { chomp $ip; my ($a, $nm) = asn($ip); my $cc = "";
+        if ($L) { my @r = eval { ConfigServer::LookUpIP::iplookup($ip, 1) }; $cc = $r[0] // "" } $cc = "" unless $cc =~ /^[A-Z]{2}$/;
+        $nm =~ s/[\t\n|]/ /g; print "$a\t$cc\t$nm\n" }'
+csf_own_q() {    # IP → CSO_A (ASN), CSO_C (ülke), CSO_N (ad); bilinmeyen alan boş
+    CSO_A=""; CSO_C=""; CSO_N=""
+    if [ -z "$CSO_ST" ]; then
+        CSO_ST=0; local geo="$CSF_VAR/Geo/ip2asn-combined.tsv" p lk
+        lk=$(conf_val CC_LOOKUPS | tr -d ' '); [ "$lk" = 0 ] && lk=""
+        { [ -r "$geo" ] || [ -n "$lk" ]; } || return 0
+        p=$(sed -n '1s/^#![[:space:]]*\([^[:space:]]*\).*/\1/p' "$CSF_BIN" 2>/dev/null); [[ "$p" == *perl* ]] || p=perl
+        coproc CSOP { exec "$p" -I"$CSF_LIB" -e "$CSO_PERL" "$geo" "${lk:-0}" 2>/dev/null; }
+        CSO_ST=1
+    fi
+    [ "$CSO_ST" = 1 ] || return 0
+    { printf '%s\n' "$1" >&"${CSOP[1]}"; } 2>/dev/null || { CSO_ST=0; return 0; }
+    IFS=$'\t' read -r -t 10 CSO_A CSO_C CSO_N <&"${CSOP[0]}" || { CSO_ST=0; CSO_A=""; CSO_C=""; CSO_N=""; }
+}
+owner_resolve() { # IP [cymru] → RES_ASN, RES_NAME, RES_CC, RES_PFX, RES_REG, RES_ALLOC, RES_ASRC / RES_CSRC (csf|cymru|""), RES_DNS (Cymru
+    # cevap verdi mi). Sahibin TEK çözücüsü: tur önbelleği (owner_lookup) ve IP kartı (do_lookup) bunu çağırır
+    local a b c d txt casn="" ccc="" cname=""
+    RES_ASN=""; RES_NAME=""; RES_CC=""; RES_PFX=""; RES_REG=""; RES_ALLOC=""; RES_ASRC=""; RES_CSRC=""; RES_DNS=0
+    csf_own_q "$1"
+    IFS=. read -r a b c d <<< "$1"
+    if dns_q TXT "$d.$c.$b.$a.origin.asn.cymru.com"; then
+        RES_DNS=1
+        cymru_line "$REPLY"; txt="$REPLY"      # "60729 | 185.220.101.0/24 | DE | ripencc | 2017-09-12" (çok satırda en dar önek)
+        casn=$(printf '%s' "$txt" | cut -d'|' -f1 | awk '{print $1}')
+        RES_PFX=$(printf '%s' "$txt" | cut -d'|' -f2 | tr -d ' '); [[ "$RES_PFX" =~ ^[0-9.]+/[0-9]{1,2}$ ]] || RES_PFX=""
+        ccc=$(printf '%s' "$txt" | cut -d'|' -f3 | tr -d ' ')
+        RES_REG=$(printf '%s' "$txt" | cut -d'|' -f4 | tr -d ' ')
+        RES_ALLOC=$(printf '%s' "$txt" | cut -d'|' -f5 | tr -d ' ')
+    fi
+    if [ -n "$CSO_A" ]; then RES_ASN="$CSO_A"; RES_NAME="$CSO_N"; RES_ASRC=csf
+    elif [[ "$casn" =~ ^[0-9]+$ ]]; then
+        RES_ASN="$casn"; RES_ASRC=cymru
+        if [ -z "${ASNAME[$casn]+x}" ]; then
+            # "60729 | DE | ripencc | 2015-05-12 | ARTIKEL10, DE"
+            dns_q TXT "AS$casn.asn.cymru.com" && ASNAME[$casn]=$(printf '%s' "${REPLY%%$NL*}" | cut -d'|' -f5- | sed 's/^ *//')
+        fi
+        RES_NAME="${ASNAME[$casn]}"
+    fi
+    if [ -n "$CSO_C" ]; then RES_CC="$CSO_C"; RES_CSRC=csf; elif [ -n "$ccc" ]; then RES_CC="$ccc"; RES_CSRC=cymru; fi
+}
 owner_lookup() { # IP → OWN_LONG ("AS60729 ARTIKEL10, DE"), OWN_SHORT ("AS60729 DE"), OWN_ASN, OWN_CC; OWN_UNK=1 ise sorulamadı
     local p="${1%.*}" a b c d txt asn cc name
     OWN_UNK=0
     # süresi geçmiş kayıt yalnız tur tazelerken (OWN_REFRESH=1, backfill_owners) yeniden sorulur; panel istekleri eskisini gösterir
     if [ -z "${OWN_L[$p]+x}" ] || { [ "${OWN_REFRESH:-0}" = 1 ] && [ -n "${OWN_OLD[$p]+x}" ]; }; then
-        IFS=. read -r a b c d <<< "$1"
-        if ! dns_q TXT "$d.$c.$b.$a.origin.asn.cymru.com"; then
+        owner_resolve "$1"
+        if [ "$RES_DNS" = 0 ] && [ -z "$RES_ASN" ]; then
             OWN_UNK=1
             # sorulamadı: eski kayıt varsa o kalır (silinmez, "—" olmaz)
             [ -n "${OWN_L[$p]+x}" ] && { OWN_LONG="${OWN_L[$p]}"; OWN_SHORT="${OWN_S[$p]}"; OWN_ASN="${OWN_A[$p]}"; OWN_CC="${OWN_C[$p]}"; return; }
             OWN_LONG=""; OWN_SHORT=""; OWN_ASN=""; OWN_CC=""; return
         fi
-        unset 'OWN_OLD[$p]'
-        cymru_line "$REPLY"; txt="$REPLY"
-        # "60729 | 185.220.101.0/24 | DE | ripencc | 2017-09-12"
-        asn=$(printf '%s' "$txt" | cut -d'|' -f1 | awk '{print $1}')
-        cc=$(printf '%s' "$txt" | cut -d'|' -f3 | tr -d ' ')
-        OWN_P[$p]=$(printf '%s' "$txt" | cut -d'|' -f2 | tr -d ' '); [[ "${OWN_P[$p]}" =~ ^[0-9.]+/[0-9]{1,2}$ ]] || OWN_P[$p]=
-        OWN_A[$p]=""; OWN_C[$p]=""; OWN_L[$p]=""; OWN_S[$p]=""
-        if [[ "$asn" =~ ^[0-9]+$ ]]; then
-            if [ -z "${ASNAME[$asn]+x}" ]; then
-                # "60729 | DE | ripencc | 2015-05-12 | ARTIKEL10, DE"
-                dns_q TXT "AS$asn.asn.cymru.com" && \
-                    ASNAME[$asn]=$(printf '%s' "${REPLY%%$NL*}" | cut -d'|' -f5- | sed 's/^ *//')
-            fi
-            name="${ASNAME[$asn]}"
-            OWN_A[$p]="$asn"; OWN_C[$p]="$cc"
-            OWN_L[$p]="AS$asn ${name:-?}"; [ -z "$name" ] && [ -n "$cc" ] && OWN_L[$p]="AS$asn, $cc"
-            OWN_S[$p]="AS$asn${cc:+ $cc}"; OWN_N[$p]="$name"
-        fi
+        # Cymru cevap vermediyse duyurulan aralık bilinmiyor: eski kaydınki kalır (yalnız CSF verisi tazelendi), kayıt eskimiş kalır
+        if [ "$RES_DNS" = 1 ]; then unset 'OWN_OLD[$p]'; OWN_P[$p]="$RES_PFX"; fi
+        OWN_A[$p]=""; OWN_C[$p]=""; OWN_L[$p]=""; OWN_S[$p]=""; OWN_AS[$p]="$RES_ASRC"; OWN_CS[$p]="$RES_CSRC"
+        own_set "$p" "$RES_ASN" "$RES_CC" "$RES_NAME"
         OWN_NEW[$p]=1
     fi
     OWN_LONG="${OWN_L[$p]}"; OWN_SHORT="${OWN_S[$p]}"; OWN_ASN="${OWN_A[$p]}"; OWN_CC="${OWN_C[$p]}"
@@ -1863,7 +1922,29 @@ owner_lookup() { # IP → OWN_LONG ("AS60729 ARTIKEL10, DE"), OWN_SHORT ("AS6072
 # her turda boşuna yeniden sorulmasın. OWNER_TTL_DAYS'ten eski kayıt da okunur ve gösterilir (OWN_OLD); tur onu yeniden sorar,
 # sorgu başarısızsa eski bilgi kalır. Önce eski kayıt hiç okunmuyor ve dosyadan siliniyordu: aynı günlerde sorulmuş binlerce blok
 # aynı günlerde "—" oluyor, tur 50'şer yenileyene kadar listelerde kimi satırın sahibi var kiminin yok görünüyordu.
-declare -A OWN_N OWN_T OWN_NEW OWN_P OWN_OLD      # OWN_P: /24'ün sahibinin duyurduğu aralık (Team Cymru)
+declare -A OWN_N OWN_T OWN_NEW OWN_P OWN_OLD OWN_AS OWN_CS OWN_KEEP_T   # OWN_P: /24'ün sahibinin duyurduğu aralık (Team Cymru); OWN_AS / OWN_CS: ASN ve ülkenin kaynağı (csf|cymru)
+own_set() {      # BLOK ASN ÜLKE AD → OWN_A/C/N/L/S (önbellek satırının gösterim alanları; owners_load'un awk'ı ile aynı biçim)
+    local p="$1" asn="$2" cc="$3" name="$4"
+    [[ "$asn" =~ ^[0-9]+$ ]] || return 0
+    OWN_A[$p]="$asn"; OWN_C[$p]="$cc"; OWN_N[$p]="$name"
+    OWN_L[$p]="AS$asn ${name:-?}"; [ -z "$name" ] && [ -n "$cc" ] && OWN_L[$p]="AS$asn, $cc"
+    OWN_S[$p]="AS$asn${cc:+ $cc}"
+}
+owners_csf_sync() { # tur: kaynak alanı olmayan (1.15.134 öncesi, Team Cymru'dan yazılmış) kayıtların ASN / ad / ülkesi CSF verisinden yeniden
+    # (DNS sorgusu yok; duyurulan aralık ve zaman korunur). Bir kez: sonra her kayıt kaynağıyla yazılır
+    local p n=0
+    for p in "${!OWN_T[@]}"; do
+        [ -n "${OWN_AS[$p]}" ] && continue
+        csf_own_q "$p.1"; [ "$CSO_ST" = 1 ] || return 0
+        [ -n "$CSO_A$CSO_C" ] || { OWN_AS[$p]=cymru; OWN_CS[$p]=cymru; continue; }
+        local a="${OWN_A[$p]}" c="${OWN_C[$p]}" nm="${OWN_N[$p]}" as=cymru cs=cymru
+        [ -n "$CSO_A" ] && { a="$CSO_A"; nm="$CSO_N"; as=csf; }
+        [ -n "$CSO_C" ] && { c="$CSO_C"; cs=csf; }
+        OWN_AS[$p]="$as"; OWN_CS[$p]="$cs"; own_set "$p" "$a" "$c" "$nm"; OWN_NEW[$p]=1; OWN_KEEP_T[$p]=1; n=$((n + 1))
+    done
+    [ "$n" -gt 0 ] && log "$(m "$M_OWN_SYNC" "$n")"
+    return 0
+}
 owners_load() {  # sahip önbelleği → OWN_A/C/N/T/P/L/S (geçerli ve süresi dolmamış satırlar). Satırlar awk'ta süzülüp atamaya çevrilir,
     # tek eval ile yüklenir: banlı tekillerin her /24'ü bir satır, binlerce satırda satır başına bash read + düzenli ifade durum
     # çıktısını ~1 sn uzatıyordu. Değerler çift tırnak içinde, \ " $ ` kaçışlı.
@@ -1880,7 +1961,7 @@ owners_load() {  # sahip önbelleği → OWN_A/C/N/T/P/L/S (geçerli ve süresi 
             k = $1; l = ""; o = ""
             if ($5 + 0 < min + 0) printf "OWN_OLD[%s]=1;", k        # süresi geçmiş: gösterilir, tur yeniden sorar (backfill_owners)
             if ($2 != "") { l = "AS" $2 " " ($4 != "" ? $4 : "?"); if ($4 == "" && $3 != "") l = "AS" $2 ", " $3; o = "AS" $2 ($3 != "" ? " " $3 : "") }
-            printf "OWN_A[%s]=%s;OWN_C[%s]=%s;OWN_N[%s]=%s;OWN_T[%s]=%s;OWN_P[%s]=%s;OWN_L[%s]=%s;OWN_S[%s]=%s\n", k, q($2), k, q($3), k, q($4), k, q($5), k, q($6), k, q(l), k, q(o) }' "$OWNERS_FILE")"
+            printf "OWN_A[%s]=%s;OWN_C[%s]=%s;OWN_N[%s]=%s;OWN_T[%s]=%s;OWN_P[%s]=%s;OWN_L[%s]=%s;OWN_S[%s]=%s;OWN_AS[%s]=%s;OWN_CS[%s]=%s\n", k, q($2), k, q($3), k, q($4), k, q($5), k, q($6), k, q(l), k, q(o), k, q($7), k, q($8) }' "$OWNERS_FILE")"
     pa "own_awk"; [ -n "${AG_PROF:-}" ] && pc "own_satır" "$(wc -l < "$OWNERS_FILE")"
     eval "$ows"
     pa "own_eval"
@@ -1891,11 +1972,11 @@ owners_save() {  # yalnız yeni sorgu olduysa; atomik
     [ ${#OWN_NEW[@]} -gt 0 ] || return 0
     now=$(date +%s); tmp="$OWNERS_FILE.tmp.$$"
     for p in "${!OWN_A[@]}"; do
-        [ -n "${OWN_NEW[$p]+x}" ] && OWN_T[$p]="$now"
+        [ -n "${OWN_NEW[$p]+x}" ] && [ -z "${OWN_KEEP_T[$p]+x}" ] && OWN_T[$p]="$now"
         [ -n "${OWN_T[$p]}" ] || continue
         # süresi geçmiş ve tazelenmemiş kayıt gösterim için kalır; yenileme süresinin 4 katından eskisi (artık hiçbir listede değil) atılır
         [ -n "${OWN_OLD[$p]+x}" ] && [ "${OWN_T[$p]}" -lt $(( now - OWNER_TTL_DAYS * 4 * 86400 )) ] && continue
-        printf '%s|%s|%s|%s|%s|%s\n' "$p" "${OWN_A[$p]}" "${OWN_C[$p]}" "${OWN_N[$p]//|/ }" "${OWN_T[$p]}" "${OWN_P[$p]}"
+        printf '%s|%s|%s|%s|%s|%s|%s|%s\n' "$p" "${OWN_A[$p]}" "${OWN_C[$p]}" "${OWN_N[$p]//|/ }" "${OWN_T[$p]}" "${OWN_P[$p]}" "${OWN_AS[$p]}" "${OWN_CS[$p]}"
     done > "$tmp" && mv -f "$tmp" "$OWNERS_FILE"
 }
 deny_prefixes() {   # csf.deny'deki grupların ve tekillerin /24 önekleri (tekrarsız) → stdout
@@ -2412,23 +2493,21 @@ wl_check() {     # PREFIX24 "IP IP ..." → 0 = banlama (WL_HIT dolu; WL_RETRY=1
     read -r first _ <<< "$2"
     ip2int "$1.0"; lo=$REPLY; hi=$((lo + 255))
     wl_overlap "$lo" "$hi" && return 0
-    if { [ -n "$CC_LIST" ] || [ "${#RIGNORE[@]}" -gt 0 ]; } && [ "$LOOK_INIT" != 1 ]; then
+    # CC_ALLOW: güvenlik duvarının izin kümesi CSF'in bölge dosyalarından kurulur; aralığa değen kod varsa ban o adreslerde işlemez
+    # (wl_overlap gibi herhangi bir çakışma). CC_IGNORE: lfd'nin kendi kararı (csf_cc_ignore), tekil başına. İkisi de DNS istemez.
+    if [ -n "$CC_LIST" ]; then
+        vals=$(grep '^CC_ALLOW=' <<< "$CC_LIST" | cut -d= -f2-)
+        if [ -n "$vals" ]; then GEO_ANY=1 csf_geo_cover "$lo" "$hi" ${vals//,/ }; [ -n "$REPLY" ] && { WL_HIT="CC_ALLOW: ${REPLY%% *}"; return 0; }; fi
+        if grep -q '^CC_IGNORE=' <<< "$CC_LIST"; then
+            csf_cc_ignore $2
+            if [ "$CCI_OK" = 0 ]; then WL_HIT="CC_IGNORE"; WL_RETRY=1; return 0; fi
+            for ip in $2; do [ -n "${CCI_HIT[$ip]:-}" ] && { WL_HIT="CC_IGNORE: ${CCI_HIT[$ip]}"; return 0; }; done
+        fi
+    fi
+    if [ "${#RIGNORE[@]}" -gt 0 ] && [ "$LOOK_INIT" != 1 ]; then
         # Kullanıcı sorguları kapattı (LOOKUP=0) ya da dig/host yok: uyar, IP tabanlı kontrolle yetin.
         [ "$CC_WARNED" = 0 ] && { log "$M_CC_NOLOOKUP"; CC_WARNED=1; }
         return 1
-    fi
-    # CC_IGNORE / CC_ALLOW: ülke kodu ya da ASnnnn (lfd ile aynı listeler)
-    if [ -n "$CC_LIST" ]; then
-        owner_lookup "$first"
-        if [ "$OWN_UNK" = 1 ]; then WL_HIT="CC_IGNORE/CC_ALLOW"; WL_RETRY=1; return 0; fi
-        while IFS= read -r entry; do
-            name="${entry%%=*}"; vals="${entry#*=}"
-            for v in ${vals//,/ }; do
-                if { [ -n "$OWN_ASN" ] && [ "$v" = "AS$OWN_ASN" ]; } || { [ -n "$OWN_CC" ] && [ "$v" = "$OWN_CC" ]; }; then
-                    WL_HIT="$name: $v"; return 0
-                fi
-            done
-        done <<< "$CC_LIST"
     fi
     # csf.rignore: tekillerin ters DNS'i listedeki bir alan adıyla bitiyor ve ileri yönde doğrulanıyorsa
     if [ "${#RIGNORE[@]}" -gt 0 ]; then
@@ -2827,7 +2906,7 @@ blk_svc_map() {  # DOSYA → "CIDR servis": olay kaydında aralık banının day
     # csf.deny'deki blok satırının yorumu sebep taşımıyor; Etkisini ölç blok banının servisini "diğer" sayıyordu, hemen altında
     # aynı sağlayıcının ihlalleri "hepsi web" diyordu
     [ -r "$EVENTS_FILE" ] || { : > "$1"; return 0; }
-    grep -E '"type":"(add24|temp24|promote|manual_ban)"' "$EVENTS_FILE" 2>/dev/null | awk "$AWK_CLS"'
+    grep -E "\"type\":\"($EV_BAN_TYPES)\"" "$EVENTS_FILE" 2>/dev/null | awk "$AWK_CLS"'
         match($0, /"cidr":"[0-9.]+\/[0-9]+"/) { c = substr($0, RSTART + 8, RLENGTH - 9); delete N; b = ""; m = 0; r = $0
             while (match(r, /"why":"([^"\\]|\\.)*"/)) { k = cls(substr(r, RSTART + 7, RLENGTH - 8)); r = substr(r, RSTART + RLENGTH); if (k != "other" && k != "repeat") { N[k]++; if (N[k] > m) { m = N[k]; b = k } } }
             if (b != "") S[c] = b }
@@ -3537,7 +3616,7 @@ do_status() {
     local -A PCOV=(); local pcl=() gi2
     for gi2 in "${!g_tok[@]}"; do [ "${g_kind[gi2]}" = temp ] || pcl+=("${g_tok[gi2]}:${g_kind[gi2]}::"); done
     # kısmi banın port listesi bir kez (aşağıdaki kısmi ban satırları da kullanır; uniq_ports dört süreçli boru hattı)
-    local -A PB_PP=(); for c in "${!PB_P[@]}"; do PB_PP[$c]=$(uniq_ports "${PB_P[$c]}"); pcl+=("$c:partial:${PB_PP[$c]}:${PB_S[$c]}"); done
+    local -A PB_PP=() PB_UU=(); for c in "${!PB_P[@]}"; do PB_PP[$c]=$(uniq_ports "${PB_P[$c]}"); PB_UU[$c]=$(uniq_ports "${PB_U[$c]:-}"); pcl+=("$c:partial:${PB_PP[$c]}:${PB_S[$c]}:${PB_UU[$c]}"); done
     prov_covmap "${pcl[@]}"
     prof prov_covmap
     for gi in "${!g_tok[@]}"; do
@@ -3584,8 +3663,8 @@ do_status() {
         fi
         pa "gj kp · attack_json"
         REPLY=""; cidr_range "$c" && under_of "$R_LO" "$R_HI" "$c"
-        groups+=("{\"cidr\":\"$c\",\"since\":$psince,\"kind\":\"partial\",\"dnd\":false,\"n\":0,\"added\":${pa:-0},\"ttl\":0,\"svc\":\"${PB_S[$c]}\",\"extra\":\"${PB_X[$c]}\",\"ports\":\"$pp\"${REPLY:+,\"under\":\"$REPLY\"}${PCOV[$c]:+,\"pcov\":\"${PCOV[$c]}\"}}")
-        [ "$JSON" = 1 ] || gtext+=("$(printf '%-18s %-9s %s' "$c" "partial" "tcp $pp")")
+        groups+=("{\"cidr\":\"$c\",\"since\":$psince,\"kind\":\"partial\",\"dnd\":false,\"n\":0,\"added\":${pa:-0},\"ttl\":0,\"svc\":\"${PB_S[$c]}\",\"extra\":\"${PB_X[$c]}\",\"ports\":\"$pp\",\"uports\":\"${PB_UU[$c]}\"${REPLY:+,\"under\":\"$REPLY\"}${PCOV[$c]:+,\"pcov\":\"${PCOV[$c]}\"}}")
+        [ "$JSON" = 1 ] || gtext+=("$(printf '%-18s %-9s %s' "$c" "partial" "tcp $pp${PB_UU[$c]:+ udp ${PB_UU[$c]}}")")
     done
     pa "gj kısmi banlar"
     for c in "${!TG_TTL[@]}"; do
@@ -4115,9 +4194,9 @@ do_status() {
         # bloklarda da panel IP'leri ve sebebi gösterebilsin. Yalnız bu bloklar → çıktı şişmez.
         local evx=() want
         want=$( { printf '%s\n' "${g_tok[@]}" "${!TG_TTL[@]}" "${!PB_P[@]}"; printf '%s\n' "${pending[@]}" | sed -n 's/.*"prefix":"\([0-9.]*\)".*/\1.0\/24/p'; } | sort -u | paste -sd' ' -)
-        [ -r "$EVENTS_FILE" ] && [ -n "$want" ] && mapfile -t evx < <(awk -v want="$want" '
+        [ -r "$EVENTS_FILE" ] && [ -n "$want" ] && mapfile -t evx < <(awk -v want="$want" -v bt="\"type\":\"($EV_BAN_TYPES)\"" '
             BEGIN { n = split(want, w, " "); for (i = 1; i <= n; i++) W[w[i]] = 1 }
-            /"ips":\[\{/ && /"type":"(add24|promote|temp24|manual_ban)"/ && match($0, /"cidr":"[0-9.\/]+"/) {
+            /"ips":\[\{/ && $0 ~ bt && match($0, /"cidr":"[0-9.\/]+"/) {
                 c = substr($0, RSTART + 8, RLENGTH - 9); if (c in W) L[c] = $0 }
             END { for (c in L) print L[c] }' "$EVENTS_FILE" | grep -E '^\{"t":[0-9]+,.*\}$')
         printf '"evx":[%s],' "${evx[*]}"
@@ -4526,7 +4605,39 @@ do_inside() {    # CIDR → JSON (onay penceresi) ya da metin
 # IP'yi ya da aralığı kapsayan CSF ülke / ASN banları CSF'in kendi verisinden: lfd'nin yazdığı bölge dosyası (zone/xx.zone,
 # zone/asNNNN.zone); ASN'in bölge dosyası yoksa CSF'in ip2asn verisi. CSF banı bu veriye göre uygular (Sahip satırı Team Cymru'dan).
 # Aralık, kodun parçaları (bitişik olanlar birleştirilerek) onu baştan sona kapsıyorsa kapsanmış sayılır
-csf_geo_cover() {   # ALT ÜST KOD… → REPLY = aralığı kapsayan kodlar (boşlukla; verisi olmayan kodlar yok)
+# lfd'nin CC_IGNORE kararı — TEK KAYNAK (1.15.134). lfd.pl ignoreip: CC_IGNORE yalnız CC_LOOKUPS açıkken çalışır (kapalıysa lfd
+# başlarken kapatır); ülke / ASN CSF'in kendi coğrafi verisinden ConfigServer::LookUpIP::iplookup(ip, 1) ile (ASN yalnız
+# CC_LOOKUPS=3'te döner), eşleşme lfd'nin ifadesiyle ($config{CC_IGNORE} =~ /$cc/i). Ölçüldü WSL CSF 16.33 (lfd ~7790, LookUpIP.pm).
+# Önce eklenti Team Cymru'nun ilk IP için verdiği ülke / ASN'e bakıyordu: lfd'den farklı karar verebiliyordu. CSF kitaplığı her
+# çağrıda dosyaları taradığı için (~200 ms / süreç) sonuç dosyada önbellekli: imza CC_IGNORE + CC_LOOKUPS + Geo dosyalarının zamanı.
+# IP… → CCI_HIT[ip] = eşleşen kod (yoksa boş), CCI_OK=0: CSF kitaplığı çağrılamadı (karar verilemedi)
+declare -gA CCI_HIT=() CCI_SEEN=(); CCI_OK=1; CCI_SIG=""
+CSF_LIB="${CSF_LIB:-/usr/local/csf/lib}"
+csf_cc_ignore() {
+    local ign lk p f sig ip h line; local -a q=()
+    CCI_OK=1
+    ign=$(conf_val CC_IGNORE | tr -d ' '); lk=$(conf_val CC_LOOKUPS | tr -d ' ')
+    [ -n "$ign" ] && [ -n "$lk" ] && [ "$lk" != 0 ] || return 0
+    f="$(dirname "$SAYAC_FILE")/ccignore"
+    if [ -z "$CCI_SIG" ]; then
+        CCI_SIG="$ign|$lk|$(stat -c %Y "$CSF_VAR"/Geo/* 2>/dev/null | sort | paste -sd, -)"
+        if [ -r "$f" ] && [ "$(head -n 1 "$f")" = "$CCI_SIG" ]; then
+            while IFS='|' read -r ip h; do CCI_SEEN[$ip]=1; [ -n "$h" ] && CCI_HIT[$ip]="$h"; done < <(tail -n +2 "$f")
+        fi
+    fi
+    for ip in "$@"; do [ -n "${CCI_SEEN[$ip]:-}" ] || q+=("$ip"); done
+    [ ${#q[@]} -gt 0 ] || return 0
+    p=$(sed -n '1s/^#![[:space:]]*\([^[:space:]]*\).*/\1/p' "$CSF_BIN" 2>/dev/null); [[ "$p" == *perl* ]] || p=perl
+    local out; out=$("$p" -I"$CSF_LIB" -MConfigServer::LookUpIP -e 'my $ign = shift;
+        for my $ip (@ARGV) { my ($cc, $asn) = ConfigServer::LookUpIP::iplookup($ip, 1); ($asn) = split(/\s+/, defined $asn ? $asn : "");
+            my $h = ""; if (defined $cc and length $cc and $ign =~ /$cc/i) { $h = $cc } elsif (defined $asn and length $asn and $ign =~ /$asn/i) { $h = $asn }
+            print "$ip|$h\n" } print "OK\n"' "$ign" "${q[@]}" 2>/dev/null)
+    [ "${out##*$'\n'}" = OK ] || [ "$out" = OK ] || { CCI_OK=0; return 0; }
+    while IFS='|' read -r ip h; do [ "$ip" = OK ] && continue; CCI_SEEN[$ip]=1; [ -n "$h" ] && CCI_HIT[$ip]="$h"; done <<< "$out"
+    [ "$DRY" = 1 ] && return 0
+    { printf '%s\n' "$CCI_SIG"; for ip in "${!CCI_SEEN[@]}"; do printf '%s|%s\n' "$ip" "${CCI_HIT[$ip]:-}"; done; } > "$f.tmp.$$" 2>/dev/null && mv -f "$f.tmp.$$" "$f" || rm -f "$f.tmp.$$"
+}
+csf_geo_cover() {   # ALT ÜST KOD… → REPLY = aralığı kapsayan kodlar (boşlukla; verisi olmayan kodlar yok). GEO_ANY=1: aralığa değen kodlar
     local lo="$1" hi="$2" c z an="" geo="$CSF_VAR/Geo/ip2asn-combined.tsv"; local -a fz=(); shift 2
     for c in "$@"; do z="$CSF_VAR/zone/${c,,}.zone"
         if [ -r "$z" ]; then fz+=("$z"); elif [[ "$c" =~ ^AS([0-9]+)$ ]]; then an+=" ${BASH_REMATCH[1]}"; fi
@@ -4535,8 +4646,8 @@ csf_geo_cover() {   # ALT ÜST KOD… → REPLY = aralığı kapsayan kodlar (bo
                     e = a + 2 ^ (32 - b) - 1; if (e >= L && a <= H) { f = FILENAME; sub(/.*\//, "", f); sub(/[.]zone$/, "", f); printf "%s %.0f %.0f\n", toupper(f), a, e } }' "${fz[@]}"
                [ -n "$an" ] && [ -r "$geo" ] && awk -F'\t' -v L="$lo" -v H="$hi" -v A="$an " 'index(A, " " $3 " ") && $1 ~ /^[0-9.]+$/ { split($1, p, "."); split($2, q, ".")
                     a = ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4]; e = ((q[1] * 256 + q[2]) * 256 + q[3]) * 256 + q[4]; if (e >= L && a <= H) printf "AS%s %.0f %.0f\n", $3, a, e }' "$geo"
-             } 2>/dev/null | sort -k1,1 -k2,2n | awk -v L="$lo" -v H="$hi" '{ if ($1 != k) { k = $1; r[k] = L - 1 } if ($2 <= r[k] + 1 && $3 > r[k]) r[k] = $3 }
-                    END { for (k in r) if (r[k] >= H) print k }' | sort | paste -sd' ' -)
+             } 2>/dev/null | sort -k1,1 -k2,2n | awk -v L="$lo" -v H="$hi" -v any="${GEO_ANY:-0}" '{ if ($1 != k) { k = $1; r[k] = L - 1 } if ($2 <= r[k] + 1 && $3 > r[k]) r[k] = $3 }
+                    END { for (k in r) if (any == 1 || r[k] >= H) print k }' | sort | paste -sd' ' -)
 }
 # Aralıkları tamamen kapatan CC_DENY (tam ülke / sağlayıcı banı) kodu, CSF'in kendi verisinden (bölge dosyası, yoksa ip2asn; csf.pl
 # kümeyi oradan doldurur): ARALIK|IP… → GEOC[girdi] = ilk kapsayan kod. Panelin "ülke banının içinde" etiketi bunu okur; önce panel
@@ -4597,16 +4708,9 @@ do_lookup() {
     ptr_lookup "$ip"; host="$REPLY"
     if [ -n "$host" ] && resolve_a "$host" && printf '%s\n' "$REPLY" | grep -qxF "$ip"; then fwd=true; fi
     IFS=. read -r a b c d <<< "$ip"
-    if dns_q TXT "$d.$c.$b.$a.origin.asn.cymru.com"; then
-        cymru_line "$REPLY"; txt="$REPLY"      # "60729 | 185.220.101.0/24 | DE | ripencc | 2017-09-12" (çok satırda en dar önek)
-        asn=$(printf '%s' "$txt" | cut -d'|' -f1 | awk '{print $1}')
-        pfx=$(printf '%s' "$txt" | cut -d'|' -f2 | tr -d ' ')
-        cc=$(printf '%s' "$txt" | cut -d'|' -f3 | tr -d ' ')
-        reg=$(printf '%s' "$txt" | cut -d'|' -f4 | tr -d ' ')
-        alloc=$(printf '%s' "$txt" | cut -d'|' -f5 | tr -d ' ')
-        if [[ "$asn" =~ ^[0-9]+$ ]] && dns_q TXT "AS$asn.asn.cymru.com"; then
-            asname=$(printf '%s' "${REPLY%%$NL*}" | cut -d'|' -f5- | sed 's/^ *//')
-        fi
+    # sahip: listelerin önbelleğiyle aynı çözücü (ASN, ad, ülke CSF verisinden; duyurulan aralık Team Cymru'dan)
+    owner_resolve "$ip"; asn="$RES_ASN"; asname="$RES_NAME"; cc="$RES_CC"; pfx="$RES_PFX"; reg="$RES_REG"; alloc="$RES_ALLOC"
+    if [ -n "$asn" ]; then
         # önbellekteki sahip bu taze cevaptan farklıysa blok "eskimiş" işaretlenir; tur onu önce yeniden sorar (backfill_owners).
         # Kart taze sahibi, listeler önbelleği gösteriyordu: blok başka ASN'ye geçince ikisi çelişiyordu (173.46.80: liste AS47007,
         # kart AS212238). Panel sahip dosyasına yazmaz (turla yarışmasın): yalnız işaret dosyasına satır ekler
@@ -4704,7 +4808,8 @@ do_lookup() {
     if [ "$JSON" = 1 ]; then
         local o="{\"ok\":true,\"ip\":\"$ip\"" k v
         if self_overlap "$n" "$n"; then o+=",\"self\":true"; else o+=",\"self\":false"; fi   # sunucunun kendi adresi: ban konamaz
-        for k in host asname pfx cc reg alloc deny temp wl wle rig pend ign ign_by; do
+        local asrc="$RES_ASRC" csrc="$RES_CSRC"      # sağlayıcının ve ülkenin kaynağı (csf | cymru): kartın Kim bölümü yazar
+        for k in host asname pfx cc reg alloc asrc csrc deny temp wl wle rig pend ign ign_by; do
             v="${!k}"; jstr "$v"; o+=",\"$k\":$REPLY"
         done
         # izin bütün portları açıyor mu: motorun ölçütü (wl_full_idx; ineff ve izinli saldırgan sayımıyla aynı). Panel ban / izin
@@ -4892,6 +4997,11 @@ web_quic() {     # → 0: sunucuda UDP 443'ü dinleyen var (HTTP/3 / QUIC; LiteS
         fi
     fi
     [ "$WEBQ_MEMO" = 1 ]
+}
+udp_live() {     # "443,53,5000_5010" → REPLY = trafik taşıyan UDP portları: 443 yalnız sunucu HTTP/3 dinliyorsa (web_quic; svc_uports ile aynı
+    # kural), ötekiler olduğu gibi. Kısmi web banı UDP 443 satırını her zaman yazar; QUIC yoksa o satır bir şey kapatmaz, kapsama
+    # kararında sayılmaz (1.15.134: sağlayıcı kapsaması QUIC'e bakmadan UDP 443 istiyordu, "servis kapalı mı" kararı bakıyordu)
+    local p o=""; for p in ${1//,/ }; do [ "$p" = 443 ] && ! web_quic && continue; o+="${o:+,}$p"; done; REPLY="$o"
 }
 svc_uports() {   # SERVİS → REPLY = "servis kapalı mı" denetiminin istediği UDP portları: web 443 (sunucu HTTP/3 dinliyorsa: web_quic),
     # dns 53. Sağlayıcı / ülke banı, kiralık liste ve eklentinin kısmi banı kararları hepsi bunu kullanır: önce ban web için UDP 443'ü
@@ -7241,12 +7351,9 @@ aa_src_resolve() {  # IP → REPLY = lfd'nin yoksayma kaynağı: lfd.pl ignoreip
     # csf.rignore (ters DNS: önce lfd'nin kendi önbelleği csf.dnscache, yoksa sorgu). Bulunamazsa boş. En çok 10 DNS sorgusu/tur.
     local ip="$1" q="${1%.*}" v vals host fwd line
     REPLY=""
-    if [ -n "$CC_LIST" ]; then
-        if [ -z "${OWN_A[$q]+x}" ] && [ "$LOOK_INIT" = 1 ] && [ "$AA_SRC_Q" -lt 10 ]; then AA_SRC_Q=$((AA_SRC_Q + 1)); owner_lookup "$ip"; fi
-        vals=$(grep '^CC_IGNORE=' <<< "$CC_LIST" | cut -d= -f2-)
-        for v in ${vals//,/ }; do
-            if { [ -n "${OWN_A[$q]}" ] && [ "$v" = "AS${OWN_A[$q]}" ]; } || { [ -n "${OWN_C[$q]}" ] && [ "$v" = "${OWN_C[$q]}" ]; }; then REPLY="CC_IGNORE: $v"; return 0; fi
-        done
+    if grep -q '^CC_IGNORE=' <<< "$CC_LIST"; then
+        csf_cc_ignore "$ip"     # lfd'nin kendi kararı (wl_check ile aynı işlev; önce Team Cymru sahip önbelleğine bakıyordu)
+        [ -n "${CCI_HIT[$ip]:-}" ] && { REPLY="CC_IGNORE: ${CCI_HIT[$ip]}"; return 0; }
     fi
     [ "$(conf_val RELAYHOSTS)" = 1 ] && grep -qxF "$ip" /etc/relayhosts 2>/dev/null && { REPLY="RELAYHOSTS: /etc/relayhosts"; return 0; }
     if [ "${#RIGNORE[@]}" -gt 0 ]; then
@@ -7482,17 +7589,18 @@ perm_cls_preload() { # tekillerin PERMBLOCK olanları → PERM_CLS (tek tarama)
     [ ${#l[@]} -gt 0 ] && perm_cls_load "${l[@]}"
     return 0
 }
-prov_covmap() {  # "CIDR:TÜR:TCP:SERVİS" … → PCOV[CIDR]=ASNNN (çağıran local -A PCOV tanımlar)
+prov_covmap() {  # "CIDR:TÜR:TCP:SERVİS:UDP" … → PCOV[CIDR]=ASNNN (çağıran local -A PCOV tanımlar)
     # Ban, CSF'in o sağlayıcı için YÜKLEDİĞİ aralıkların içinde kalıyorsa (ipset ile doğrulanır; ASN verisi farklı olabilir)
     # ve sağlayıcı banı bu banın kapattığı her şeyi kapatıyorsa: tam ban için "her şey", kısmi ban için portları listede.
-    local IFS=$' \t\n' x c k tp sv a q="" el dt du rf ok pt
+    local IFS=$' \t\n' x c k tp sv up a q="" el dt du rf ok pt
     PCOV=()
     pa "pcov · öncesi"; asn_banned; pa "pcov · asn_banned"
     { [ ${#ASB_A[@]} -gt 0 ] && command -v ipset >/dev/null 2>&1; } || [ "$CLOUD_ON" = 1 ] || return 0
     dt=",$(conf_val CC_DENY_PORTS_TCP | tr -d ' '),"; du=",$(conf_val CC_DENY_PORTS_UDP | tr -d ' '),"
     local cx
     for x in "$@"; do
-        IFS=: read -r c k tp sv <<< "$x"
+        IFS=: read -r c k tp sv up <<< "$x"
+        udp_live "$up"; up="$REPLY"                                         # yalnız trafik taşıyan UDP portları (443: HTTP/3 varsa)
         cidr_range "$c" || continue
         el=""
         for a in "${ASB_A[@]}"; do
@@ -7500,7 +7608,7 @@ prov_covmap() {  # "CIDR:TÜR:TCP:SERVİS" … → PCOV[CIDR]=ASNNN (çağıran 
             elif [ "$k" = partial ] && [ -n "$tp" ]; then
                 ok=1
                 for pt in ${tp//,/ }; do port_in "$pt" "$dt" || { ok=0; break; }; done
-                [[ ",$sv," == *,web,* && "$du" != *,443,* ]] && ok=0          # web kısmi banı UDP 443'ü de kapatır
+                for pt in ${up//,/ }; do port_in "$pt" "$du" || { ok=0; break; }; done   # banın UDP satırları UDP listesinde
                 [ "$ok" = 1 ] && el+="${el:+,}$a"
             fi
         done
@@ -7508,7 +7616,7 @@ prov_covmap() {  # "CIDR:TÜR:TCP:SERVİS" … → PCOV[CIDR]=ASNNN (çağıran 
         if [ "$CLOUD_ON" = 1 ] && [ "$k" = partial ] && [ -n "$tp" ]; then
             for cx in $CLOUD_ACTIVE; do
                 cl_ports_closed "$cx" "$tp" || continue
-                [[ ",$sv," == *,web,* ]] && ! cl_port_closed "$cx" udp 443 && continue   # web kısmi banı UDP 443'ü de kapatır
+                ok=1; for pt in ${up//,/ }; do cl_port_closed "$cx" udp "$pt" || { ok=0; break; }; done; [ "$ok" = 1 ] || continue
                 el+="${el:+,}c_$cx"
             done
         fi
@@ -7796,7 +7904,7 @@ ev_reason() {    # CIDR → REPLY = "3 IP · (sshd) Failed SSH login" (olay kayd
     local id
     # yalnız banın kendi olayı: aynı adresin başka türden kaydı (ban altında ihlal, açık servis) banın sebebi değildir — gerçek CSF
     # denemesinde elle kısmi ban özet mailinde "3 IP · ModSecurity" ile listelendi (IP'ler sonradan gelen ihlal kaydınındı)
-    REPLY=$(grep -F "\"cidr\":\"$1\"" "$EVENTS_FILE" 2>/dev/null | grep -E '"type":"(add24|promote|temp24|manual_ban|manual_change)"' | grep -F '"ips":[{' | tail -n 1 | awk -v f="$M_H_RSUM" '
+    REPLY=$(grep -F "\"cidr\":\"$1\"" "$EVENTS_FILE" 2>/dev/null | grep -E "\"type\":\"($EV_BAN_TYPES)\"" | grep -F '"ips":[{' | tail -n 1 | awk -v f="$M_H_RSUM" '
         NR == 1 { s = $0; n = 0
                   while (match(s, /"why":"([^"\\]|\\.)*"/)) { w = substr(s, RSTART + 7, RLENGTH - 8); gsub(/\\"/, "\"", w); C[w]++; n++; s = substr(s, RSTART + RLENGTH) }
                   if (n) { b = ""; bm = 0; for (w in C) if (C[w] > bm) { bm = C[w]; b = w }; printf f, n, b }
@@ -8318,6 +8426,7 @@ declare -A TURN_B24=(); TURN_ADDED=(); RUN_T0=$(date +%s); RUN_LB=$(stat -c %s "
 prof start
 panel_init
 owners_load
+[ "$DRY" = 1 ] || owners_csf_sync      # 1.15.134 öncesi kayıtların sağlayıcı / ülkesi CSF verisinden (bir kez, DNS'siz)
 RUN_MODE=1
 logr "$M_START (v$VERSION)"
 if [ "$ENABLED" = 0 ]; then

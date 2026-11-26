@@ -270,14 +270,17 @@ switch ($a) {
                  'SVC_ALLOW', 'SVC_SOURCES', 'SVC_EXTRA', 'SVC_URLS', 'SVC_SKIP', 'SVC_EXCEPT', 'ASN_BAN', 'ASN_LIST', 'ASN_ALL', 'ASN_MODE', 'ASN_TCP', 'ASN_UDP',
                  'CLOUD_BAN', 'CLOUD_SOURCES', 'CLOUD_TCP', 'CLOUD_UDP', 'CLOUD_MODES', 'CLOUD_URLS', 'CLOUD_EXTRA', 'SRC_LABELS', 'ENABLED',
                  'CLOUD_REFRESH_DAYS', 'CLOUD_FAIL_DAYS', 'SVC_REFRESH_DAYS', 'SVC_FAIL_DAYS', 'GEO_REFRESH_DAYS', 'REFRESH_HOUR', 'OWNER_TTL_DAYS', 'IMUNIFY_REFRESH_MIN', 'BLOCK_ACTIVE_DAYS', 'SVC_EXPORT', 'SVC_EXPORT_RELOAD', 'ABUSE_ON', 'ABUSE_CACHE_H', 'ABUSE_IP_MAX', 'ABUSE_BLK_MAX', 'ABUSE_MAX_AGE'];
-        // listeler virgül, elle eklenen servisler boşluk ve "ad|adres" içerir; diğerleri tek değer
-        $re = ['SVC_EXTRA' => '/^[A-Za-z0-9._~:\/?#@=%+&|*, -]{0,16000}$/', 'SVC_SOURCES' => '/^[a-z0-9,]{0,300}$/', 'SVC_SKIP' => '/^[a-z0-9,-]{0,400}$/', 'SVC_EXCEPT' => '/^[0-9.\/, ]{0,4000}$/', 'SVC_URLS' => '/^[A-Za-z0-9._~:\/?#@=%+&|*, -]{0,6000}$/', 'ASN_LIST' => '/^[A-Za-z0-9, ]{0,800}$/', 'ASN_ALL' => '/^[A-Za-z0-9, ]{0,800}$/',
-               'ASN_TCP' => '/^[0-9,:]{0,600}$/', 'ASN_UDP' => '/^[0-9,:]{0,600}$/', 'CLOUD_TCP' => '/^[0-9,:]{0,600}$/', 'CLOUD_UDP' => '/^[0-9,:]{0,600}$/', 'CLOUD_MODES' => '/^[a-z0-9=:,\/ -]{0,12000}$/',
-               'CLOUD_SOURCES' => '/^[a-z0-9,]{0,300}$/', 'CLOUD_URLS' => '/^[A-Za-z0-9._~:\/?#@=%+&|*, -]{0,3000}$/', 'CLOUD_EXTRA' => '/^[A-Za-z0-9._~:\/?#@=%+&|*, -]{0,6000}$/', 'SRC_LABELS' => '/^[A-Za-z0-9._~%:= -]{0,40000}$/'];
+        // listeler virgül, elle eklenen servisler boşluk ve "ad|adres" içerir; diğerleri tek değer. Bu desenler YALNIZ karakter kümesi
+        // ön kapısıdır (kabuğa giden değerde beklenmedik karakter olmasın); geçerlilik ve sınırlar motorun cfg_check'inde, tek yerde.
+        // Uzunluk üst sınırları motorun kabul edebileceği en uzun değerden büyüktür (1.15.134: CLOUD_EXTRA 6000, SVC_URLS 6000,
+        // CLOUD_URLS 3000 idi; motor 50 kendi listesini / bütün kataloğu kabul ederken burada "bad_value" dönüyordu)
+        $re = ['SVC_EXTRA' => '/^[A-Za-z0-9._~:\/?#@=%+&|*, -]{0,65000}$/', 'SVC_SOURCES' => '/^[a-z0-9,]{0,300}$/', 'SVC_SKIP' => '/^[a-z0-9,-]{0,400}$/', 'SVC_EXCEPT' => '/^[0-9.\/, ]{0,4000}$/', 'SVC_URLS' => '/^[A-Za-z0-9._~:\/?#@=%+&|*, -]{0,65000}$/', 'ASN_LIST' => '/^[A-Za-z0-9, ]{0,800}$/', 'ASN_ALL' => '/^[A-Za-z0-9, ]{0,800}$/',
+               'ASN_TCP' => '/^[0-9,:]{0,600}$/', 'ASN_UDP' => '/^[0-9,:]{0,600}$/', 'CLOUD_TCP' => '/^[0-9,:]{0,600}$/', 'CLOUD_UDP' => '/^[0-9,:]{0,600}$/', 'CLOUD_MODES' => '/^[a-z0-9=:,\/ -]{0,30000}$/',
+               'CLOUD_SOURCES' => '/^[a-z0-9,]{0,300}$/', 'CLOUD_URLS' => '/^[A-Za-z0-9._~:\/?#@=%+&|*, -]{0,65000}$/', 'CLOUD_EXTRA' => '/^[A-Za-z0-9._~:\/?#@=%+&|*, -]{0,65000}$/', 'SRC_LABELS' => '/^[A-Za-z0-9._~%:= -]*$/'];
         $args = ['--config', 'set'];
         foreach ((array) ($_POST['v'] ?? []) as $k => $v) {
             $v = trim((string) $v);
-            if (!in_array($k, $keys, true) || !preg_match($re[$k] ?? '/^[A-Za-z0-9@._%+*\/:-]{0,254}$/', $v)) {
+            if (!in_array($k, $keys, true) || strlen($v) > 400000 || !preg_match($re[$k] ?? '/^[A-Za-z0-9@._%+*\/:-]{0,254}$/', $v)) {
                 ag_json(['ok' => false, 'code' => 2, 'message' => 'bad_value: ' . $k]);
             }
             $args[] = $k . '=' . $v;

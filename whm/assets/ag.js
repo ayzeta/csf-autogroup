@@ -112,7 +112,7 @@
       t_started: 'Tur başlatıldı.', t_wait_fresh: 'Güncel durum alınıyor; birkaç saniye sonra yeniden denenebilir.', t_done: 'Tur tamamlandı.', t_busy: 'Başka bir tur çalışıyor; birazdan yeniden denenebilir.', t_cron_busy: 'Bir tur zaten çalışıyor (büyük olasılıkla cron); bitince sonuçlar burada görünecek.',
       t_err: 'İşlem tamamlanamadı: {0}', e_bad_ip: 'geçerli bir IPv4 adresi değil', e_bad_input: 'girilen değer geçersiz', e_bad_asn: 'geçerli bir AS numarası değil (ör. AS16276)', e_busy: 'bir tur ya da işlem sürüyor, bitince yeniden denenebilir', e_confirm_mismatch: 'onay metni eşleşmedi', e_no_script: 'motor dosyası bulunamadı (kurulum denetlenmeli)', e_unknown: 'bilinmeyen istek', e_unsafe_repo: 'kurulum dosyasının sahibi root değil ya da başka kullanıcılar yazabiliyor; güvenlik için arayüzden güncellenmez, SSH ile update.sh çalıştırılmalı', e_uptodate: 'zaten güncel', e_session: 'oturum süresi doldu, sayfa yenilenmeli', e_bad_target: 'hedef geçersiz', e_bad_value: 'ayar değeri geçersiz', session: 'Oturum süresi doldu. Sayfa yenilenmeli.', t_copied: 'Kopyalandı.',
       l_host: 'Hostname', l_fwd: 'ad tekrar bu IP\'ye çözülüyor (doğrulandı)', l_nofwd: 'ad bu IP\'ye geri çözülmüyor (doğrulanamadı)', l_noptr: 'Ters DNS kaydı yok',
-      l_owner: 'Sahip', l_reg: 'Kayıt', l_fw: 'Güvenlik duvarı', l_wl: 'İzin listesi',
+      l_owner: 'Sahip', l_src: 'Veri kaynağı', src_prov: 'sağlayıcı: {0}', src_cc: 'ülke: {0}', src_pfx: 'duyurulan aralık: {0}', src_csf: 'CSF verisi', src_cymru: 'Team Cymru', src_h: 'Sağlayıcı ve ülke CSF\'in kendi verisinden (ban ve izin kararlarının kullandığı veri: ASN ip2asn\'den, ülke CSF\'in IP konum verisinden); CSF\'te verisi yoksa Team Cymru\'dan. Duyurulan aralık (BGP öneki) yalnız Team Cymru\'da var.', l_reg: 'Kayıt', l_fw: 'Güvenlik duvarı', l_wl: 'İzin listesi',
       l_pending: 'İzleniyor', l_ign: 'Susturuldu', l_none: 'Yok', l_perm_single: 'Kalıcı (tekil)',
       l_temp: 'Geçici', l_nolookup: 'Sahip ve hostname sorguları kapalı (Ayarlar → Kaynaklar ve yenileme → Sahip ve hostname sorgusu).',
       l_abuse: 'AbuseIPDB', l_bgp: 'bgp.he.net', l_copy: 'Kopyala', bad_ip: 'Geçerli bir IPv4 adresi ya da aralık (ör. 1.2.3.0/24) gerekli.', ipv6_no: 'IPv6 adresleri desteklenmiyor: eklenti yalnız IPv4 banlarını gruplar ve gösterir; IPv6 banları CSF ekranında olduğu gibi durur.',
@@ -230,7 +230,7 @@ ip_unban_lfd: 'Bu banı lfd koymuş; kaldırınca lfd aynı ihlali yeniden gör�
       t_started: 'Run started.', t_wait_fresh: 'Fetching the current status; try again in a few seconds.', t_done: 'Run finished.', t_busy: 'Another run is in progress, try again shortly.', t_cron_busy: 'A run is already in progress (most likely cron); results will show up here when it finishes.',
       t_err: 'Could not complete: {0}', e_bad_ip: 'not a valid IPv4 address', e_bad_input: 'the value is not valid', e_bad_asn: 'not a valid AS number (e.g. AS16276)', e_busy: 'a run or action is in progress; try again when it finishes', e_confirm_mismatch: 'the confirmation text did not match', e_no_script: 'engine file not found (check the install)', e_unknown: 'unknown request', e_unsafe_repo: 'an install file is not owned by root or is writable by others; for safety it is not updated from the panel, run update.sh over SSH', e_uptodate: 'already up to date', e_session: 'the session expired; reload the page', e_bad_target: 'invalid target', e_bad_value: 'invalid setting value', session: 'Session expired. Reload the page.', t_copied: 'Copied.',
       l_host: 'Hostname', l_fwd: 'the name resolves back to this IP (forward-confirmed)', l_nofwd: 'the name does not resolve back to this IP (not confirmed)', l_noptr: 'No reverse DNS',
-      l_owner: 'Owner', l_reg: 'Registry', l_fw: 'Firewall', l_wl: 'Allow list',
+      l_owner: 'Owner', l_src: 'Data source', src_prov: 'provider: {0}', src_cc: 'country: {0}', src_pfx: 'announced range: {0}', src_csf: 'CSF data', src_cymru: 'Team Cymru', src_h: 'Provider and country come from CSF\'s own data (what its ban and allow decisions use: ASN from ip2asn, country from CSF\'s IP location data); from Team Cymru when CSF has no data for it. The announced range (BGP prefix) exists only at Team Cymru.', l_reg: 'Registry', l_fw: 'Firewall', l_wl: 'Allow list',
       l_pending: 'Watched', l_ign: 'Muted', l_none: 'None', l_perm_single: 'Permanent (single)',
       l_temp: 'Temp', l_nolookup: 'Owner and hostname lookups are off (Settings → Sources and refresh → Owner and hostname lookups).',
       l_abuse: 'AbuseIPDB', l_bgp: 'bgp.he.net', l_copy: 'Copy', bad_ip: 'Enter a valid IPv4 address or range (e.g. 1.2.3.0/24).', ipv6_no: 'IPv6 addresses are not supported: the plugin groups and shows IPv4 bans only; IPv6 bans stay as they are in the CSF screen.',
@@ -651,6 +651,12 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     }
     e._norm = 1; return e;
   }
+  // Banı koyduran olay türleri: motorun EV_BAN_TYPES'ı ile aynı küme (tests/tek-kaynak karşılaştırır). Banın IP'leri yalnız bunlardan
+  // ve banın IP'lerini kopyalayan kaldırma kayıtlarından okunur; aynı aralığa sonradan yazılan ban altında ihlal / açık servis /
+  // izinli IP'den ihlal kaydının IP'leri banın değildir (1.15.134: Kaldır penceresi ihlal eden IP'leri "geri yüklenecek" diye
+  // listeliyordu, satır ve kartlar banın IP'leri yerine onları gösteriyordu)
+  var BAN_TYPES = ['add24', 'promote', 'temp24', 'manual_ban', 'manual_change'];
+  var BAN_IPS_TYPES = BAN_TYPES.concat(['manual_unban', 'expire', 'limit_gone']);
   var OWNERS = {};
   function indexOwners() {
     OWNERS = {};
@@ -661,7 +667,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       normEv(e);
       var o = OWNERS[e.cidr] || (OWNERS[e.cidr] = {});
       if (e.owner) { o.owner = e.owner; o.asn = e.asn; o.cc = e.cc; }
-      if (e.ips && e.ips.length) o.ev = e;
+      if (e.ips && e.ips.length && BAN_IPS_TYPES.indexOf(e.type) >= 0) o.ev = e;
     });
   }
   function prefixOf(cidr) { var p = String(cidr).split('/')[0].split('.'); return p[0] + '.' + p[1] + '.' + p[2]; }
@@ -1873,7 +1879,8 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       if (!/^\d{1,6}$/.test(v) || +v < r[0] || +v > r[1]) e[k] = t('range_v', r[0], r[1]);
     });
     // Yerel adresler de geçerli ("root", "root@localhost"); kural script'teki cfg_check ile aynı.
-    if (String(cv('ALERT_MAIL')) !== 'whm' && !/^[A-Za-z0-9._%+-]+(@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*)?$/.test(String(cv('ALERT_MAIL')))) e.ALERT_MAIL = t('mail_bad');
+    // motorun cfg_check'iyle aynı desen ve 254 karakter sınırı (tests/ayar-tutarliligi karşılaştırır)
+    if (String(cv('ALERT_MAIL')) !== 'whm' && (!/^[A-Za-z0-9._%+-]+(@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*)?$/.test(String(cv('ALERT_MAIL'))) || String(cv('ALERT_MAIL')).length > 254)) e.ALERT_MAIL = t('mail_bad');
     if (!e.THRESHOLD_24 && !e.THRESHOLD_24_PERMANENT && +cv('THRESHOLD_24_PERMANENT') < +cv('THRESHOLD_24')) e.THRESHOLD_24_PERMANENT = t('rule_dnd');
     ['ASN_LIST', 'ASN_ALL'].forEach(function (k) { if (!/^(AS\d{1,10}(,AS\d{1,10}){0,49})?$/.test(String(cv(k) || '').toUpperCase().replace(/\s/g, ''))) e[k] = t('bad_asn_list'); });
     // motorun cfg_check deseniyle aynı (tests/senaryo/ayar-deseni.js de sınar)
@@ -2163,6 +2170,14 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     if (k === 'timeout') return p[1] ? t('fe_timeout', p[1]) : t('fe_toolto');
     if (k === 'http' || k === 'tls' || k === 'curl' || k === 'shrink') return t('fe_' + k, num(+p[1] || 0), num(+p[2] || 0));
     return /^(partial|dns|conn|badjson|nolink|empty|noflt)$/.test(k) ? t('fe_' + k) : t('fe_old');
+  }
+  // IP kartı "Kim": sağlayıcının, ülkenin ve duyurulan aralığın kaynağı (motorun owner_resolve'u: asrc / csrc; aralık hep Team Cymru)
+  function ownSrc(d) {
+    var nm = function (x) { return t(x === 'csf' ? 'src_csf' : 'src_cymru'); }, p = [];
+    if (d.asn && d.asrc) p.push(t('src_prov', nm(d.asrc)));
+    if (d.cc && d.csrc) p.push(t('src_cc', nm(d.csrc)));
+    if (d.pfx) p.push(t('src_pfx', t('src_cymru')));
+    return p.length ? fact(t('l_src'), '<span title="' + esc(t('src_h')) + '">' + esc(p.join(' · ')) + '</span>') : '';
   }
   function svName(n) {           // izinli servis kaynağı: "google-common", "extra-odeme", "extra-google--yeni"
     n = String(n || ''); var LB = srcLabels();
@@ -3351,7 +3366,8 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   // Servis seçimi iki kipte aynı liste; "giden" servisler yalnız "hariç" kipinde (diğer kip yalnız gelen bağlantıları kapatır)
   var SVC_IN = ['web', 'ssh', 'ftp', 'cp', 'smtp', 'mread', 'dns'], SVC_OUT = ['mout', 'wout'];
   function svcPorts(k, d, exc) {
-    if (k === 'ssh') return d && d.ssh ? String(d.ssh).split(',').join(', ') : '22';
+    // SSH portu sunucudan (svcTcp: durum JSON svcp.ssh); önce d verilmeyince sabit '22' yazıyordu (Kontrol notu, SSH'si 22 olmayan sunucuda)
+    if (k === 'ssh') return (d && d.ssh ? String(d.ssh).split(',') : svcTcp('ssh')).join(', ');
     if (k === 'ftp') return '21' + (exc && d && d.ftp_pasv ? ' · ' + t('svc_pasv', String(d.ftp_pasv).replace('_', '–')) : '');
     // cp: motorun listesiyle aynı (2081, 2084–2085, 2088–2094 cPanel portu değil; "2077–2096" yazmak yanıltırdı)
     if (k === 'smtp' || k === 'mread') return svcTcp(k).join(', ');   // sunucudan okunan (motor mail_ports)
@@ -4664,7 +4680,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
         impSec(ip, !ipOwnBan(ip, d) && !(mb > 32)) +   // son 24 saatte bu IP'den gelen istekler (yalnız tıklanınca)
         '<div class="ag-dr-sec">' + esc(t('s_lv')) + '</div>' + (mb <= 16 && !d.self ? '<div class="ag-muted ag-dr-note">' + esc(t('dr_covered')) + '</div>' : '') + lvT +
         '<div class="ag-dr-sec">' + esc(t('l_who')) + '</div>' + (d.lookup ? '' : '<div class="ag-fact ag-muted">' + t('l_nolookup') + '</div>') +
-        fact(t('l_owner'), owner) + (d.lookup ? fact(t('l_host'), host) : '') +
+        fact(t('l_owner'), owner) + (d.lookup ? fact(t('l_host'), host) : '') + ownSrc(d) +
         fact(t('l_reg'), d.reg ? esc(d.reg) + (d.alloc ? ' · ' + esc(/^\d{4}-\d\d-\d\d$/.test(d.alloc) ? dayStr(d.alloc) : d.alloc) : '') : '') +
         // AbuseIPDB itibarı (anahtar tanımlıysa; motor IP başına 24 saat önbellekte tutar)
         fact('AbuseIPDB', abuseHtml(d.abuse));   // sayfası kartın altındaki AbuseIPDB düğmesinde (ikinci bağlantı yok)
@@ -4681,6 +4697,10 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   var SVC_TCP = { web: [80, 443], ftp: [21], cp: [2077, 2078, 2079, 2080, 2082, 2083, 2086, 2087, 2095, 2096], min: [25], sync: [465, 587, 110, 995, 143, 993], dns: [53] },
     SVC_UDP = { web: [443], dns: [53] };
   function svcUdp(k) { return SVC_UDP[k] || []; }
+  // "servis kapalı mı" kararının istediği UDP portları — motorun svc_uports'u ile aynı kural, panelde TEK yer (1.15.134): DNS 53; web 443
+  // yalnız sunucu HTTP/3 dinliyorsa (durum JSON svcp.quic = motorun web_quic'i). Önce polCloses ve aralık kartının closedBy'ı ayrı
+  // yazıyordu: closedBy QUIC'e bakmadan UDP 443 istiyor, DNS'in UDP 53'ünü hiç istemiyordu (aynı kural kart ile ayrıntıda farklı karar)
+  function svcLiveUdp(k) { return k === 'dns' ? [53] : k === 'web' && (S.svcp || {}).quic ? [443] : []; }
   // CSF port listesi → okunur ad ("80,443" + "443" → "Web"; "22,80,443" → "Web, SSH"; kalanlar "port 8080, UDP 53"): her ekran aynı adı yazsın
   // csf.deny'nin port sınırlı satırları (eklentinin olmayanlar; --inside "ports" = "adres proto portlar", "portc" = satırın yorumu) adres
   // başına: lfd AUTHRELAY gibi bir banı posta portlarına ayrı satırlarla yazar; "4 port kuralı" bir IP'nin tek banıydı
@@ -4804,7 +4824,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     var P = svcTcp(k); if (!P.length) return false;
     // motorun cl_svc_closed'ı gibi UDP de: DNS 53; web 443 yalnız sunucu HTTP/3 dinliyorsa (durum JSON svcp.quic = motorun web_quic'i).
     // Önce yalnız TCP'ye bakıyordu: HTTP/3 dinleyen sunucuda yalnız TCP 80,443'ü kapatan kurala panel "Web kapalı", motor "açık" diyordu
-    var U = k === 'dns' ? [53] : k === 'web' && (S.svcp || {}).quic ? [443] : [];
+    var U = svcLiveUdp(k);
     if (p.mode === 'legacy') return portsIn(p.tcp, P) && (!U.length || portsIn(p.udp, U));
     var own = p.svc.reduce(function (a, s2) { return a.concat(svcTcp(s2)); }, []).join(',') + (xTcp(p.x) ? ',' + xTcp(p.x) : '');
     var ownU = p.svc.reduce(function (a, s2) { return a.concat(svcUdp(s2)); }, []).concat(xUdp(p.x) ? [xUdp(p.x)] : []).join(',');
@@ -4922,9 +4942,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       function closedBy(k) {
         if (coverL) return coverL;
         if (psv.indexOf(k) >= 0) return t('rg_by_part');
-        var P = k === 'ssh' ? String(d.ssh || '22').split(',').map(Number) : svcTcp(k);
-        // web: TCP 80/443 yetmez, UDP 443 (HTTP/3) de kapalı olmalı; kiralık liste ve sağlayıcı port listesi UDP'yi ayrı tutar
-        var U = k === 'web' ? [443] : [];
+        var P = svcTcp(k), U = svcLiveUdp(k);   // polCloses ile aynı port kuralı (SSH portu sunucudan, UDP svcLiveUdp)
         if (d.cloud && cpClosed(d.cloud_mode, d.cloud_tcp, d.cloud_udp, P, U)) return clName(d.cloud);
         if (d.ccport && portsIn(d.ccp_tcp, P) && (!U.length || portsIn(d.ccp_udp, U))) return d.ccport;
         return '';
@@ -5373,7 +5391,6 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     return hit ? { cidr: covName({ kind: 'cc', what: hit }), kind: 'cc', bits: 0 } : null;   // gösterilen ad covName'den (ham ayar adı değil)
   }
   function covBits(cv) { return cv.bits != null ? cv.bits : bitsOf(cv.cidr); }
-  var BAN_TYPES = ['add24', 'promote', 'temp24', 'manual_ban', 'manual_change'];
   function stateNote(e, st) {    // yalnız öğenin en yeni satırında gösterilir
     if (!st) return '';
     if (st.g) return t(st.g.kind === 'partial' ? 'st_part' : 'st_ban');

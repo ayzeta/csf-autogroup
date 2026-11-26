@@ -539,11 +539,15 @@ The plain-text part looks like this:
    - 185.220.101.47   tor-exit-47.artikel10.org  (smtpauth) Failed SMTP AUTH login
 ```
 
-- **Owner** — ASN, organisation and country, from
+- **Owner** — ASN and organisation from CSF's own ASN data (`ip2asn`, the data
+  `CC_DENY` uses for `ASnnnn`), country from CSF's own IP location data (what
+  `CC_DENY` and `CC_IGNORE` use), so the provider and country you see are the ones
+  CSF acts on. The announced range (BGP prefix) comes from
   [Team Cymru's](https://www.team-cymru.com/ip-asn-mapping) free DNS service (no
-  account or API key). Cached for `OWNER_TTL_DAYS` (default 30 days); after that a
-  run looks it up again (a limited number of blocks per run) and the old info is
-  used until then.
+  account or API key); when CSF has no data for a field, that field comes from
+  Team Cymru too. The IP card names the source of each. Cached for
+  `OWNER_TTL_DAYS` (default 30 days); after that a run looks it up again (a
+  limited number of blocks per run) and the old info is used until then.
 - **Hostname** — each IP's reverse DNS.
 - **Reason** — why LFD banned it, from the ban's own comment. ModSecurity bans
   show the rule's message (e.g. `ModSecurity 1302: WP LOGIN VIEW RATE LIMIT…`),
@@ -553,8 +557,9 @@ The plain-text part looks like this:
 Lookups are plain DNS queries (`dig` or `host`) with a short timeout. Set
 `LOOKUP=0` to turn them off: cached owners are still used, new blocks get none
 (suspicious range and network counts go by owner and announced range), and
-`CC_IGNORE`, `CC_ALLOW` and `csf.rignore` can't be checked, so blocks they would
-protect are banned too. Alert emails end with a link to the plugin
+`csf.rignore` can't be checked, so blocks it would protect are banned too.
+`CC_IGNORE` and `CC_ALLOW` don't need DNS: they are checked against CSF's own
+data (see the table below). Alert emails end with a link to the plugin
 (`https://server:2087/ → Plugins → CSF Auto-Group`).
 
 ### Allow lists
@@ -569,7 +574,8 @@ every list CSF uses to say "don't block this". If **any** entry overlaps the
 | `csf.ignore` (+ `Include`) | IPs and CIDRs |
 | `GLOBAL_ALLOW`, `GLOBAL_IGNORE`, `DYNDNS`, temp allows (`csf -ta`) | CSF's cached lists in `/var/lib/csf` |
 | Server's own IPs | a `/24` containing one of this server's addresses |
-| `CC_IGNORE`, `CC_ALLOW` in `csf.conf` | the block's country code or `ASnnnn` |
+| `CC_IGNORE` in `csf.conf` | each banned IP's country code or `ASnnnn`, looked up the way LFD does it (CSF's own `iplookup` and geo data, matched like LFD); like LFD, only while `CC_LOOKUPS` is on |
+| `CC_ALLOW` in `csf.conf` | CSF's zone files for those codes (the same data CSF loads into its allow sets); any overlap with the `/24` counts |
 | `csf.rignore` | a banned IP whose reverse DNS matches (forward-confirmed, like LFD) |
 | Imunify360 whitelist (only with Imunify360) | the server's local whitelist: manual entries and search engine bots Imunify whitelisted; expired entries are ignored, refreshed every `IMUNIFY_REFRESH_MIN` minutes (default 60) |
 

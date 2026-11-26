@@ -57,6 +57,11 @@ SVC=$(cat_of SVC_CATALOG); CLD=$(cat_of CLOUD_CATALOG)
     printf 'CLOUD_REFRESH_DAYS\t%s\n' 1 30; printf 'CLOUD_FAIL_DAYS\t%s\n' 3 30; printf 'SVC_REFRESH_DAYS\t%s\n' 1 7; printf 'SVC_FAIL_DAYS\t%s\n' 1 3
     printf 'REFRESH_HOUR\t%s\n' off 0 4 23; printf 'GEO_REFRESH_DAYS\t%s\n' 7 25 90;printf 'OWNER_TTL_DAYS\t%s\n' 1 30 180; printf 'ABUSE_CACHE_H\t%s\n' 1 24 168; printf 'ABUSE_IP_MAX\t%s\n' 1 1000 100000; printf 'ABUSE_BLK_MAX\t%s\n' 1 100 10000; printf 'ABUSE_MAX_AGE\t%s\n' 1 90 365; printf 'IMUNIFY_REFRESH_MIN\t%s\n' 10 60 1440; printf 'BLOCK_ACTIVE_DAYS\t%s\n' 1 30 365
     printf 'LOG_KEEP_DAYS\t%s\n' 1 365; printf 'EVENTS_DAYS\t%s\n' 30 180 730; printf 'RUN_DAYS\t%s\n' 31 365; printf 'PERM_WINDOW_DAYS\t%s\n' 30 90 365; printf 'BANLOG_DAYS\t%s\n' 30 90 730
+    # uzun ama geçerli değerler (1.15.134): motorun kabul ettiği en uzun biçimlere yakın; api.php'nin ön kapısı bunları reddetmemeli
+    # (CLOUD_EXTRA 6000, SVC_URLS 6000, CLOUD_URLS 3000 karakterle kesiyordu)
+    printf 'CLOUD_EXTRA\t'; for i in $(seq 1 50); do printf '%sliste-%02d|https://ornek.com/%s/ips.json|j:service=EC2&region=eu-north-1|-' "$([ "$i" -gt 1 ] && echo ' ')" "$i" "$(printf 'a%.0s' $(seq 1 120))"; done; echo
+    grep -oE '[a-z0-9-]+\|https://[A-Za-z0-9.-]+\.[A-Za-z]{2,}[^ "]*' "$ENG" | sort -u | awk -F'|' -v svc=" $SVC " '{ b = $1; sub(/-.*/, "", b) } index(svc, " " b " ") && !S[$1]++' |
+        paste -sd' ' - | sed 's/^/SVC_URLS\t/'
 } > "$W/values.tsv"
 
 # ── panel: api.php'deki anahtar listesi ve desenler (php ile, dosya çalıştırılmadan okunur) ──
@@ -76,6 +81,11 @@ while IFS=$'\t' read -r key val; do
     out=$(env SIM_ROOT="$R" PATH="$W/bin:/usr/bin:/bin" AG_BY=test bash "$R/app/csf_autogroup.sh" --config set "$key=$val" --json 2>&1)
     [[ "$out" == *'"ok":true'* ]] || printf 'MOTOR\t%s\t%s\t%s\n' "$key" "$val" "$(printf '%s' "$out" | tr '\n' ' ' | cut -c1-200)" >> "$W/engine.out"
 done < "$W/values.tsv"
+# motor bilinmeyen kaynak adını ve aynı kaynağın iki adresini reddeder (SVC_URLS / CLOUD_URLS; 1.15.134'e kadar yorum söylüyordu, kod yapmıyordu)
+for bad in 'SVC_URLS=yok-boyle|https://ornek.com/a.json' 'CLOUD_URLS=yok|https://ornek.com/a.json' 'CLOUD_URLS=aws|https://ornek.com/a.json aws|https://ornek.com/b.json'; do
+    out=$(env SIM_ROOT="$R" PATH="$W/bin:/usr/bin:/bin" AG_BY=test bash "$R/app/csf_autogroup.sh" --config set "$bad" --json 2>&1)
+    [[ "$out" == *'"ok":true'* ]] && printf 'MOTOR\t%s\t-\tgeçersiz değer kabul edildi\n' "$bad" >> "$W/engine.out"
+done
 # yazılabilir mi: --config set yalnız CFG_KEYS'tekileri yazar, öteki anahtar için "Değişiklik yok" (ok) der. CLOUD_MODES bir kez
 # yalnız PROV_KEYS'e eklenmişti: panel kaydı motor tarafından sessizce atılıyordu (2026-11-06). Her anahtar ayar listesinde olmalı
 cl=$(env SIM_ROOT="$R" PATH="$W/bin:/usr/bin:/bin" AG_BY=test bash "$R/app/csf_autogroup.sh" --config get 2>/dev/null | awk '{ print $1 }')
@@ -122,6 +132,13 @@ while read -r k v; do
 done < <(printf '%s\n' "$dj")
 [ "$nd" -ge 20 ] || printf 'VARSAYILAN\t-\t-\tyalnız %s anahtarın varsayılanı karşılaştırılabildi: test deseni dosya başını okuyamıyor\n' "$nd" >> "$W/engine.out"
 [ -n "$dj" ] || printf 'VARSAYILAN\t-\t-\t--config get varsayılan listesi okunamadı\n' >> "$W/engine.out"
+# ALERT_MAIL (1.15.134): kurulum betiği, panel ve motor aynı deseni ve 254 karakter sınırını kullanır (install.sh "a@.." kabul ediyordu)
+me=$(grep -A6 '^        ALERT_MAIL)' "$ENG" | grep -oE '=~ \^[^ ]+\$ \]\]' | head -n 1 | sed 's/^=~ //; s/ ]]$//')
+mi=$(grep -E '^ *ALERT_MAIL\)' "$REPO/install.sh" | grep -oE '=~ \^[^ ]+\$ \]\]' | head -n 1 | sed 's/^=~ //; s/ ]]$//')
+mp=$(grep -F "String(cv('ALERT_MAIL')) !== 'whm'" "$REPO/whm/assets/ag.js" | grep -oE '!/\^[^/]+\$/' | head -n 1 | sed 's/^!\///; s/\/$//')
+if [ -z "$me" ] || [ "$me" != "$mi" ] || [ "$me" != "$mp" ]; then printf 'ALERT_MAIL\t-\t-\tdesen farklı: motor «%s» kurulum «%s» panel «%s»\n' "$me" "$mi" "$mp" >> "$W/engine.out"; fi
+grep -E '^ *ALERT_MAIL\)' "$REPO/install.sh" | grep -q -- '-le 254' && grep -F "String(cv('ALERT_MAIL')).length > 254" "$REPO/whm/assets/ag.js" | grep -q . ||
+    printf 'ALERT_MAIL\t-\t-\t254 karakter sınırı kurulumda ya da panelde yok\n' >> "$W/engine.out"
 n=$(grep -c . "$W/values.tsv"); bad=$(cat "$W/panel.out" "$W/engine.out" | grep -c .)
 if [ "$bad" -eq 0 ]; then echo "Ayar tutarlılığı: $n değerin hepsi panelden ve motordan geçiyor"; exit 0; fi
 echo "Ayar tutarlılığı: $n değerden $bad tanesi reddedildi"; cat "$W/panel.out" "$W/engine.out" | sed 's/^/  ✗ /'

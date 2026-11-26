@@ -37,10 +37,13 @@ mk() {   # ad → temiz kök: boş listeler, sınırlar, taklit araçlar
     # CSF'in bölge dosyaları: ülke / ASN banı yalnız bunlar varken işler (csf.pl); test ağı 151.80.0.0/16 = AS16276 FR (taklit DNS)
     mkdir -p "$R/var/lib/csf/zone"; for z in fr as16276; do echo 151.80.0.0/16 > "$R/var/lib/csf/zone/$z.zone"; done
     cp "${AG_ENGINE:-$REPO/csf_autogroup.sh}" "$R/app/csf_autogroup.sh"   # AG_ENGINE: yeni kuralı eski motorla sınamak için
+    # CSF'in iplookup'ı (lfd'nin CC_IGNORE kararı) taklit modülden: gerçek CSF kurulu makinede de gerçek coğrafi veri okunmasın
+    mkdir -p "$W/lib/ConfigServer"; cp "$REPO/tests/durum-tablosu/LookUpIP.pm" "$W/lib/ConfigServer/LookUpIP.pm"
     printf '%s\n' "MSG_LANG=tr" "ALERT_MAIL=" "DENY_FILE=$D" "CSF_CONF=$R/etc/csf/csf.conf" "CSF_BIN=$W/bin/csf" \
-        "CSF_VAR=$R/var/lib/csf" "LOG_FILE=$R/autogroup.log" "SAYAC_FILE=$C" "IMUNIFY_BIN=$W/bin/imunify360-agent" > "$R/app/config.env"
+        "CSF_VAR=$R/var/lib/csf" "LOG_FILE=$R/autogroup.log" "SAYAC_FILE=$C" "IMUNIFY_BIN=$W/bin/imunify360-agent" "CSF_LIB=$W/lib" > "$R/app/config.env"
 }
-run() { kok_on || return 0; env SIM_ROOT="$R" PATH="$W/bin:/usr/bin:/bin" AG_BY=root bash "$R/app/csf_autogroup.sh" "$@"; }
+# $R/bin: yalnız o köke özel taklit araçlar (ör. ipset; ortak $W/bin'e konsa "ipset yok" varsayan kurallar değişir)
+run() { kok_on || return 0; env SIM_ROOT="$R" PATH="$R/bin:$W/bin:/usr/bin:/bin" AG_BY=root bash "$R/app/csf_autogroup.sh" "$@"; }
 single() { printf '%s\n' "$1 # lfd: ($2) Failed login from $1 (FR/France/-): 5 in the last 3600 secs - ${3:-$DT}" >> "$D"; }   # 3. parametre: tarih
 dump() {
     run --status --json > "$W/out/$1.status.json" 2>/dev/null
@@ -389,8 +392,9 @@ mk wlet;printf 'tcp|in|d=22|s=151.80.7.9 # ofis\n' >> "$A"; printf '%s|151.80.7.
 mcheck "IP kartı: gelen yön satırı + geçici 'in' ban → wle in_ok" "run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"wle\":\"in_ok\"'"
 mk wletio; printf 'tcp|in|d=22|s=151.80.7.9 # ofis\n' >> "$A"; printf '%s|151.80.7.9||inout|3600|lfd: (sshd) Failed SSH login from 151.80.7.9\n' "$NOW" >> "$T"
 mcheck "IP kartı: gelen yön satırı + geçici 'inout' ban → wle in_x" "run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"wle\":\"in_x\"'"
-# Hiçbir listede olmayan yoksayma: kaynak lfd'nin sırasıyla aranır — CC_IGNORE (sahip önbellekten), csf.rignore (lfd'nin dnscache'i)
-mkl aacc; printf 'CC_IGNORE = "FR"\n' >> "$R/etc/csf/csf.conf"; printf '151.80.7|16276|FR|OVH - OVH SAS, FR|%s|151.80.0.0/16\n' "$NOW" >> "$R/var/lib/csf_autogroup/owners"; lfdi 600 151.80.7.9
+# Hiçbir listede olmayan yoksayma: kaynak lfd'nin sırasıyla aranır — CC_IGNORE (lfd'nin iplookup'ı, CSF verisi; 1.15.134'e kadar sahip
+# önbelleğinden), csf.rignore (lfd'nin dnscache'i)
+mkl aacc; printf 'CC_IGNORE = "FR"\nCC_LOOKUPS = "1"\n' >> "$R/etc/csf/csf.conf"; printf '151.80.7|16276|FR|OVH - OVH SAS, FR|%s|151.80.0.0/16\n' "$NOW" >> "$R/var/lib/csf_autogroup/owners"; lfdi 600 151.80.7.9
 mcheck "yoksayma kaynağı CC_IGNORE (ülke, sahip önbellekten) satırda" "rvrow 151.80.7.9 | grep -q '\"wl\":\"CC_IGNORE: FR\".*\"full\":0'"
 mkl aarig; printf 'googlebot.com\n' > "$R/etc/csf/csf.rignore"; printf '151.80.7.9|151.80.7.9|crawl-151-80-7-9.googlebot.com\n' > "$R/var/lib/csf/csf.dnscache"; lfdi 600 151.80.7.9
 mcheck "yoksayma kaynağı csf.rignore (lfd'nin ters DNS önbelleğinden, sorgusuz)" "rvrow 151.80.7.9 | grep -q '\"wl\":\"csf.rignore: googlebot.com (151.80.7.9 = crawl-151-80-7-9.googlebot.com)\"'"
@@ -820,6 +824,11 @@ NDT=$(LC_ALL=C date -d "+2 min" "+%a %b %d %H:%M:%S %Y"); single 151.80.7.9 sshd
 mcheck "kaldırma · 2 geri yüklenen + 1 yeni tekil = eşik 3: blok banlanır" "grep -q '^151.80.7.0/24' '$D'"
 mk ubno; ubev; quiet --action unban 151.80.7.0/24
 mcheck "kaldırma · geri yükle seçili değilse tekil geri gelmez" "! grep -q 'kaldırılınca geri yüklendi' '$D' && ! grep -q '^151.80.7.0/24' '$D'"
+# 1.15.134 (P0, ev_ips_of): ban altında ihlal kaydı banın aralığıyla ve ihlal eden IP'lerle yazılır; geri yükleme ve kaldırma kaydı
+# yalnız banı koyduran olayın IP'lerini alır (önce aralığın SON kaydını alıyordu: ihlal eden 151.80.7.99 csf.deny'ye yazılıyordu)
+mk ubub; ubev; printf '{"t":%s,"type":"under_ban","cidr":"151.80.7.0/24","ck":"ban","n":1,"ips":[{"ip":"151.80.7.99","why":"(sshd) Failed SSH login"}],"total":1}\n' "$(( NOW - 3600 ))" >> "$R/var/lib/csf_autogroup/events.jsonl"
+quiet --action unban 151.80.7.0/24 --restore
+mcheck "kaldırma · ban altında ihlal kaydından sonra geri yükleme banın 3 tekilini alır, ihlal eden IP'yi değil; kaldırma kaydı da banın IP'lerini taşır" "[ \$(grep -c 'kaldırılınca geri yüklendi' '$D') = 3 ] && ! grep -q '^151.80.7.99 ' '$D' && grep '\"type\":\"manual_unban\"' '$R/var/lib/csf_autogroup/events.jsonl' | grep -q '151.80.7.3' && ! grep '\"type\":\"manual_unban\"' '$R/var/lib/csf_autogroup/events.jsonl' | grep -q '151.80.7.99'"
 mk keep2; evl 175 add24 1; evl 20 run 2; quiet
 mcheck "saklama · süresi dolmamış kayıt varken dosya yeniden yazılmaz (yalnız tur satırı eklenir)" "grep -q '151.80.1.0' '$R/var/lib/csf_autogroup/events.jsonl' && grep -q '151.80.2.0' '$R/var/lib/csf_autogroup/events.jsonl'"
 
@@ -962,8 +971,45 @@ mcheck "izinli servisten ihlal: tek IP 'izinli' satırı servis adıyla (service
 mcheck "izinli servisten ihlal: aynı kayıttan 4 IP grup satırı, blok banlanmaz" "rvrow 151.80.8.0/24 | grep -q '\"type\":\"allow_grp\".*\"n\":4' && ! grep -q '^151.80.8.0/24' '$D'"
 # /16'dan geniş duyurulan aralık banı (1.15.88, /8–/23): izin denetimi aralığın bütün bloklarını sorar — /11'in ilk /16'sı 151.64, CC_IGNORE
 # kapsamındaki blok 151.80.7 (FR). Önce yalnız ilk /16'nın blokları soruluyordu (izinli blok sorulmadan banlanırdı)
-mk wpfx; printf 'CC_IGNORE = "FR"\n' >> "$R/etc/csf/csf.conf"; single 151.80.7.9 sshd
+mk wpfx; printf 'CC_IGNORE = "FR"\nCC_LOOKUPS = "1"\n' >> "$R/etc/csf/csf.conf"; single 151.80.7.9 sshd
 mcheck "geniş duyurulan aralık (/11): ilk /16 dışındaki bloğun CC_IGNORE kaydı da sorulur, ban durur" "run --action banpfx 151.64.0.0/11 2>&1 | grep -q 'CC_IGNORE' && ! grep -q '^151.64.0.0/11' '$D'"
+# 1.15.134 (P0, CC_IGNORE / CC_ALLOW tek kaynak): otomatik blok banının izin denetimi lfd ve CSF ile AYNI veriden karar verir.
+# CC_IGNORE = lfd'nin iplookup'ı (CSF'in coğrafi verisi; CC_LOOKUPS kapalıyken lfd CC_IGNORE'u kapatır), CC_ALLOW = CSF'in bölge
+# dosyaları. Önce ikisi de Team Cymru'nun ilk IP için verdiği ülkeye bakıyordu (taklit DNS: 151.80 = FR).
+mk ccoff; printf 'CC_IGNORE = "FR"\n' >> "$R/etc/csf/csf.conf"; for i in 1 2 3; do single 151.80.7.$i sshd; done; quiet
+mcheck "CC_IGNORE · CC_LOOKUPS kapalıyken lfd gibi yok sayılır: blok banlanır" "grep -q '^151.80.7.0/24' '$D'"
+mk ccdat; printf 'CC_IGNORE = "FR"\nCC_LOOKUPS = "1"\n' >> "$R/etc/csf/csf.conf"; mkdir -p "$R/var/lib/csf/Geo"; echo '151.80.7. DE AS3320' > "$R/var/lib/csf/Geo/ccmap"
+for i in 1 2 3; do single 151.80.7.$i sshd; done; quiet
+mcheck "CC_IGNORE · karar CSF'in verisinden (151.80.7 = DE), Team Cymru'dan (FR) değil: blok banlanır" "grep -q '^151.80.7.0/24' '$D'"
+mk ccign; printf 'CC_IGNORE = "DE"\nCC_LOOKUPS = "1"\n' >> "$R/etc/csf/csf.conf"; mkdir -p "$R/var/lib/csf/Geo"; echo '151.80.7. DE AS3320' > "$R/var/lib/csf/Geo/ccmap"
+for i in 1 2 3; do single 151.80.7.$i sshd; done; quiet
+mcheck "CC_IGNORE · CSF'in verisi DE diyorsa (Cymru FR) blok banlanmaz, atlanma kaydı CC_IGNORE: DE" "! grep -q '^151.80.7.0/24' '$D' && grep -q 'CC_IGNORE: DE' '$R/var/lib/csf_autogroup/events.jsonl'"
+mk ccalw; printf 'CC_ALLOW = "DE"\n' >> "$R/etc/csf/csf.conf"; echo 151.80.7.0/24 > "$R/var/lib/csf/zone/de.zone"
+for i in 1 2 3; do single 151.80.7.$i sshd; done; quiet
+mcheck "CC_ALLOW · CSF'in bölge dosyası (de.zone) bloğu kapsıyorsa blok banlanmaz (Cymru FR dese de)" "! grep -q '^151.80.7.0/24' '$D' && grep -q 'CC_ALLOW: DE' '$R/var/lib/csf_autogroup/events.jsonl'"
+# 1.15.134 (P0, kısmi ban TCP / UDP): sağlayıcı banının bir kısmi banı kapsayıp kapsamadığı TCP portları TCP listesiyle, UDP portları
+# UDP listesiyle karşılaştırılır (önce pb_load ikisini tek listede topluyordu: UDP 5000 TCP listesinde aranıp "kapsıyor" deniyordu)
+pcudp() {   # CC_DENY_PORTS_UDP değeri → sağlayıcı AS16276 port listesiyle banlı (taklit ipset kümesi), 151.80.7.0/24 kısmi banlı (TCP 8080, UDP 5000)
+    printf 'CC_DENY_PORTS = "AS16276"\nCC_DENY_PORTS_TCP = "80,443,8080,5000"\nCC_DENY_PORTS_UDP = "%s"\n' "$1" >> "$R/etc/csf/csf.conf"
+    mkdir -p "$R/bin"; printf '#!/bin/bash\n[ "$1" = list ] || exit 1\n[ "$2" = -n ] && { [ "$3" = cc_as16276 ] && echo cc_as16276 && exit 0; exit 1; }\n[ "$2" = cc_as16276 ] || exit 1\nprintf "Name: cc_as16276\\nMembers:\\n151.80.0.0/16\\n"\n' > "$R/bin/ipset"; chmod +x "$R/bin/ipset"
+    local mk="csf_autogroup: kısmi ban [svc=;ports=8080,5000/udp] - do not delete - $DT"
+    printf '%s\n' "tcp|in|d=8080|s=151.80.7.0/24 # $mk" "udp|in|d=5000|s=151.80.7.0/24 # $mk" >> "$D"; }
+# 1.15.134 (P0-7, sahip kaynağı): sağlayıcı (ASN, ad) CSF'in ip2asn'inden, ülke CSF'in iplookup'ından; duyurulan aralık Team Cymru'dan.
+# Taklit: Cymru (taklit DNS) 151.80 = AS16276 FR; CSF verisi 151.80.7 = AS3320 DE, 151.80.8 = AS16276 NL. Önce hepsi Cymru'dandı:
+# ekrandaki sağlayıcı / ülke CSF'in ban kararında kullandığından farklı olabiliyordu (ölçüldü: 1.104 blokta ASN 22, ülke 637 farklı)
+mk own1; printf 'CC_LOOKUPS = "1"\n' >> "$R/etc/csf/csf.conf"; mkdir -p "$R/var/lib/csf/Geo"
+printf '151.80.0.0\t151.80.6.255\t16276\tFR\tOVH\n151.80.7.0\t151.80.7.255\t3320\tDE\tDTAG Deutsche Telekom AG\n151.80.8.0\t151.80.255.255\t16276\tFR\tOVH\n' > "$R/var/lib/csf/Geo/ip2asn-combined.tsv"
+printf '151.80.7. DE\n151.80.8. NL\n151.80. FR\n' > "$R/var/lib/csf/Geo/ccmap"
+printf '151.80.8|16276|FR|OVH - OVH SAS, FR|%s|151.80.0.0/16\n' "$(( NOW - 86400 ))" > "$R/var/lib/csf_autogroup/owners"   # 1.15.134 öncesi biçim (kaynaksız)
+for i in 1 2; do single 151.80.7.$i sshd; done; quiet
+mcheck "sahip kaynağı · tur yeni bloğun sağlayıcısını ve ülkesini CSF verisinden yazar (AS3320 DE), duyurulan aralık Cymru'dan" "grep -q '^151.80.7|3320|DE|DTAG Deutsche Telekom AG|[0-9]*|151.80.0.0/16|csf|csf\$' '$R/var/lib/csf_autogroup/owners'"
+mcheck "sahip kaynağı · eski biçimdeki kayıt turda CSF verisine geçer (NL), zamanı ve duyurulan aralığı korunur" "grep -q '^151.80.8|16276|NL|OVH|$(( NOW - 86400 ))|151.80.0.0/16|csf|csf\$' '$R/var/lib/csf_autogroup/owners'"
+mcheck "sahip kaynağı · IP kartı aynı çözücüden: AS3320, DE, kaynak csf, duyurulan aralık Cymru'dan" "run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"asname\":\"DTAG Deutsche Telekom AG\",\"pfx\":\"151.80.0.0/16\",\"cc\":\"DE\".*\"asrc\":\"csf\",\"csrc\":\"csf\"'"
+pcg() { run --status --json 2>/dev/null | grep -oE '\{"cidr":"151\.80\.7\.0/24","since":\{[^}]*\},[^}]*\}'; }   # kısmi banın grup nesnesi
+mk pcudp; pcudp ""
+mcheck "kısmi ban UDP 5000 kapatıyor, sağlayıcı yalnız TCP'de: kapsamıyor (pcov yok), ports TCP, uports UDP ayrı" "pcg | grep -q '\"ports\":\"8080\",\"uports\":\"5000\"' && ! pcg | grep -q pcov"
+mk pcudp2; pcudp "5000"
+mcheck "aynı kısmi ban, sağlayıcı UDP 5000'i de kapatıyor: kapsıyor (pcov AS16276)" "pcg | grep -q '\"pcov\":\"AS16276\"'"
 mk wpfx2
 mcheck "geniş duyurulan aralık (/12) banlanır: csf.deny'de tek satır, eklentinin yorumuyla" "quiet --action banpfx 151.80.0.0/12; grep -q '^151.80.0.0/12 # csf_autogroup:' '$D'"
 mcheck "duyurulan aralık eylemi /16 almaz (ağ banı ban16)" "! run --action banpfx 151.80.0.0/16 >/dev/null 2>&1 && ! grep -q '^151.80.0.0/16' '$D'"
