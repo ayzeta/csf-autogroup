@@ -348,7 +348,7 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-since span { flex: 1; }
 .ag-since b { color: var(--ag-text); font-weight: 600; margin-right: 4px; }
 .ag-newdot { width: 7px; height: 7px; border-radius: 50%; background: var(--ag-accent); box-shadow: 0 0 0 3px var(--ag-accent-soft); display: inline-block; flex: none; }
-.ag-okbar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: var(--ag-radius); background: var(--ag-ok-soft); border: 1px solid var(--ag-ok-line); color: var(--ag-ok); font-size: 13px; }
+.ag-okbar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: var(--ag-radius); background: var(--ag-neutral-soft); border: 1px solid var(--ag-line); color: var(--ag-text-2); font-size: 13px; }   /* "bakılacak bir şey yok": tamam renksiz (görsel dil) */
 .ag-okbar svg { width: 17px; height: 17px; flex: none; }
 .ag-okbar b { font-weight: 600; }
 .ag-okbar span { margin-left: auto; opacity: .8; font-size: 12.5px; }
@@ -550,8 +550,8 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-band-s b { display: block; font-size: 14.5px; font-weight: 700; }
 .ag-band-s > div > span { display: block; font-size: 12px; color: var(--ag-text-3); }
 .ag-band.st-bad .ag-band-s b { color: var(--ag-d-leak); }
-.ag-pulse { width: 36px; height: 36px; border-radius: 50%; background: var(--ag-ok-soft); display: flex; align-items: center; justify-content: center; flex: none; }
-.ag-pulse i { width: 12px; height: 12px; border-radius: 50%; background: #10b981; box-shadow: 0 0 0 5px rgba(16, 185, 129, .18); }
+.ag-pulse { width: 36px; height: 36px; border-radius: 50%; background: var(--ag-neutral-soft); display: flex; align-items: center; justify-content: center; flex: none; }
+.ag-pulse i { width: 12px; height: 12px; border-radius: 50%; background: #9aa1ad; box-shadow: 0 0 0 5px rgba(154, 161, 173, .18); }   /* sağlık tamam: renksiz; yalnız sorun renklenir */
 .st-run .ag-pulse { background: var(--ag-info-soft); } .st-run .ag-pulse i { background: #3b82f6; box-shadow: 0 0 0 5px rgba(59, 130, 246, .2); animation: ag-pulse 1.2s ease-in-out infinite; }
 .st-bad .ag-pulse { background: #fff7ed; } .st-bad .ag-pulse i { background: var(--ag-d-leak); box-shadow: 0 0 0 5px rgba(194, 65, 12, .18); }
 .ag-band-m small, .ag-band-g small { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ag-text-3); }
@@ -1176,7 +1176,7 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-lay .ag-kpi-g { align-self: start; }
 .ag-st { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 650; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
 .ag-st i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.ag-st.on { color: var(--ag-ok); background: var(--ag-ok-soft); } .ag-st.off { color: var(--ag-text-3); background: var(--ag-neutral-soft); } .ag-st.warn { color: var(--ag-warn); background: var(--ag-warn-soft); }
+.ag-st.on { color: var(--ag-text); background: var(--ag-neutral-soft); } .ag-st.off { color: var(--ag-text-3); background: var(--ag-neutral-soft); } .ag-st.warn { color: var(--ag-warn); background: var(--ag-warn-soft); }   /* katman açık / kapalı ayardır (kural): renksiz; yalnız sorun (warn) renklenir — görsel dil */
 .ag-pc .ag-card-h { flex-wrap: nowrap; align-items: center; }
 .ag-pc .ag-card-h h2 { flex: none; }
 .ag-pc.changed { box-shadow: inset 3px 0 0 var(--ag-accent), var(--ag-shadow); }
@@ -1211,7 +1211,7 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-tile-subs .ag-chip-xs svg { width: 12px; height: 12px; }
 .ag-tile-subs .ag-chip-xs .ag-muted { font-size: 11px; }
 .ag-tile .ag-tile-m em.bad { color: var(--ag-warn); }
-.ag-tile .ag-tile-m em.pot { color: var(--ag-d-warn-t); margin-top: 1px; }
+.ag-tile .ag-tile-m em.pot { color: var(--ag-text-2); margin-top: 1px; }   /* ölçüm (listedeki ihlal eden IP sayısı): renksiz — görsel dil */
 .ag-tile .ag-tile-m em.pot.pot0 { color: var(--ag-accent); }   /* ihlal yokken yalnız "Ayrıntı": uyarı rengi değil */
 .ag-tile-acts { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; }
 .ag-tile-rm { width: 26px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--ag-line); background: var(--ag-card); color: var(--ag-text-3); border-radius: 6px; padding: 0; cursor: pointer; }

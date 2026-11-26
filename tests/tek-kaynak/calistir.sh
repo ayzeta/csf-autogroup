@@ -101,6 +101,9 @@ rd=$(grep -oE "[a-z]+: 'ag-pill-(ban|temp|prom|part)'" "$J" | cut -d: -f1 | sort
 # mail / Slack: aynı dil — engel olmayan şeye kırmızı, işleme mor / mavi / turkuaz / pembe, "tamam"a yeşil yok (önce sorun kırmızı, kalıcıya alma
 # mor, elle ban kırmızı rozet)
 ml=$(grep -cE '#(b91c1c|dc2626|7c3aed|0d9488|2563eb|db2777|047857)' "$SHF")
+# 1.15.146: Geçmiş "şu an" notu satırın DURUM ÇİPİ (rengi tek durum kaydından, noteSt); tamam / açık / ölçüm renksiz (yeşil yalnız izinli)
+ns=$(grep -c "addrPill(noteSt(e.cidr), note" "$J"); okc=$(grep -cE '^\.ag-(okbar|st\.on|hc\.ok) .*--ag-ok\b|^\.ag-pulse i .*#10b981' "${J%.js}.css")
+[ "$ns" = 1 ] && [ "$okc" = 0 ] || ml=$((ml + 1000))
 if [ "$ev" != 0 ] || [ "$sc" != 1 ] || [ "$sk" != 0 ] || [ "$rd" != "part perm prom temp " ] || [ "$ml" != 0 ]; then
     echo "DÜŞTÜ: görsel dil standardı bozuk (Geçmiş rozetinde durum rengi $ev; izinli yeşil $sc; pembe sınıf $sk; kırmızı adlar: $rd; mailde eski renk $ml satır)"; F=$((F + 1))
 else echo "GEÇTİ: görsel dil — renk yalnız durum çipi ve önem işareti"; fi

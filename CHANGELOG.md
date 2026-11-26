@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.15.146 — 2026-11-27
+
+- The "now" note on a History row is the address's state chip, coloured by
+  its current state (blocked, partly blocked, allowed, or plain); the event
+  badge itself has no colour since 1.15.145.
+- Things that are simply fine are plain: the "protection running" dot, the
+  "nothing to review" bar and the *On* marker of each layer on the Providers
+  tab. The count of offending IPs on a rented-server list box is plain too
+  (it is a measurement).
+
 ## 1.15.145 — 2026-11-27
 
 - Colours follow one rule everywhere (panel, emails, Slack). Colour marks two

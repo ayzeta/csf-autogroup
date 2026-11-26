@@ -1625,7 +1625,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
         '<div class="ag-ev-b"><div class="ag-ev-t">' + newDot(NEW_TYPES.indexOf(e.type) >= 0 ? e.t : 0) +
         // adres de IP kartını açsın (diğer tablolar gibi): tek IP kendisi, blok/ağ için ilk kayıtlı IP ya da ağın .1'i
         (e.cidr ? cidrLink(e.cidr) : '') + evPill(e) + tm + '</div>' +
-        '<div class="ag-ev-d">' + evDetail(e, note ? ' ' + addrPill('n', note, t('st_tip'), 'ag-pill-xs ag-ev-st', e.cidr) : '', tm2) + '</div></div>' +
+        '<div class="ag-ev-d">' + evDetail(e, note ? ' ' + addrPill(noteSt(e.cidr), note, t('st_tip'), 'ag-pill-xs ag-ev-st', e.cidr) : '', tm2) + '</div></div>' +
         '<div class="ag-ev-m">' + (mitems ? menu('hm:' + key, mitems) : '<span class="ag-ev-m0"></span>') + '</div></div>' +   // menüsüz satırda yer tutucu: zaman sütunu kaymasın
         (open ? ipTable(e.ips, e.total) : '') + '</div>';
     }
@@ -5551,6 +5551,9 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   }
   // durum çıktısındaki "sts" (listeler ve üstleri; "now" sunucunun saatidir) ya da Geçmiş için istenen kayıt (NOWST)
   function nowRec(c) { var r = S && S.sts && S.sts[c]; return r || NOWST[c] || null; }
+  // "şu an" notunun rengi = durum çipi (görsel dil, 1.15.146): tek durum kaydının etkin hâli. Olay rozeti renksiz olduğundan nesnenin
+  // şu anki hâli yalnız burada renklenir; kayıt yoksa ya da banlı / izinli değilse renksiz
+  function noteSt(c) { var r = nowRec(c); return !r ? 'n' : r.e === 'ban' ? 'perm' : r.e === 'part' ? 'part' : r.e === 'alw' ? 'allow' : 'n'; }
   function stateNote(e, st) {    // yalnız öğenin en yeni satırında gösterilir
     if (!st) return '';
     var rec = nowRec(e.cidr);
