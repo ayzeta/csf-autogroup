@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.15.143 — 2026-11-27
+
+- The IP card's *Wider levels* rows (block, announced range, network) read the
+  same state record as the rest of the card. Before, a row only looked at the
+  plugin's own range bans and the CSF range lines: a block closed by a country
+  ban showed "not banned" while the card's country row said the country was
+  banned, and rented-server lists, CSF block lists and Imunify360 were not
+  considered at all. A level inside a wider partial ban now says which
+  services are closed.
+- The History menu no longer offers **Ban IP** for an address that is allowed
+  now, the same as its IP card (an allow comes before any ban; the allow has to
+  be removed first).
+- The remove window of an automatic block ban lists the singles that removing
+  will actually restore, from the same function the removal uses. Before, it
+  listed every address of the ban, including ones that are banned now, inside
+  another range ban or allowed, which the removal skips; the count and the
+  "banned again on the next run" warning could be wrong. Skipped addresses are
+  now counted in a note.
+- Every *Needs review* row carries its drop-off date from the engine; the panel
+  no longer works it out on its own.
+- Whether a block is still watched is decided by one rule everywhere. The
+  *Watched* list counted whole days from seconds and could differ by a day
+  from the IP card around a daylight-saving change.
+
 ## 1.15.142 — 2026-11-26
 
 - The lists, their menus and the History notes now decide "is this item

@@ -65,7 +65,7 @@ grep() { command grep -a "$@"; }
 # sayı, anahtar; Türkçe modda sıralama kuralı zaten C idi (LC_COLLATE=C)
 sort() { LC_ALL=C command sort "$@"; }
 
-VERSION="1.15.142"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.143"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -107,6 +107,10 @@ BLOCK_EXPIRE_DAYS="${BLOCK_EXPIRE_DAYS:-365}"   # bu süreden eski blok banları
 BLOCK_EXPIRE_AUTO="${BLOCK_EXPIRE_AUTO:-0}"     # 1 = eski blok banları her turda kaldırılır
 REPEAT16_MIN="${REPEAT16_MIN:-3}"               # şüpheli ağ, kontrol süresi içinde bu kadar ayrı günde işaretlenirse "tekrar eden"
 SAYAC_RETENTION_DAYS="${SAYAC_RETENTION_DAYS:-180}"
+# İzleme sınırı TEK ÖLÇÜT (1.15.143): sayaç satırının tarihi bu günden eski değilse blok izleniyor. Durum (İzlenenler), IP kartı, aralık
+# kartı (--inside), tek durum kaydı (obj_state w), özet, tur temizliği ve eylemler aynı sınırı kullanır. Önce İzlenenler listesi
+# saniyeden gün sayıyordu (yaz saati geçişinde bir gün ayrışabiliyordu)
+watch_cut() { date -d "$SAYAC_RETENTION_DAYS days ago" +%Y-%m-%d; }
 BLOCK_ACTIVE_DAYS="${BLOCK_ACTIVE_DAYS:-30}"  # bu süre içinde denenen (sayacına paket gelen) blok "eski" sayılmaz, kaldırılmaz
 CLOUD_REFRESH_DAYS="${CLOUD_REFRESH_DAYS:-1}" # kiralık sunucu listeleri bu kadar günde bir yeniden indirilir
 CLOUD_FAIL_DAYS="${CLOUD_FAIL_DAYS:-3}"       # bir kiralık sunucu listesi bu kadar gün indirilemezse bildirilir
@@ -217,6 +221,7 @@ while [ $# -gt 0 ]; do
         --asn-impact) MODE=asnimpact ;;
         --src-ips) MODE=srcips ;;
         --obj-state) MODE=objstate ;;   # tek durum kaydı (sınama ve araçlar): anahtarlar argüman ya da stdin
+        --restore-plan) MODE=rplan ;;   # kaldırma penceresi: otomatik blok banı kalkınca geri yüklenecek tekiller (restore_plan)
         --abuse-block) MODE=abuseblk ;;   # aralık kartındaki düğme: AbuseIPDB blok sorgusu (/16–/31; kart açılınca sorulmaz)
         --prov-apply) MODE=prov ;;
         --keep)    CLEAN=0 ;;
@@ -3712,7 +3717,7 @@ do_status() {
         pending+=("{\"prefix\":\"$c\",\"since\":\"$u\",\"days_left\":$left,\"temp_ttl\":$ttl,\"s\":${count24[$c]:-0},\"t\":${TPK_N[$c]:-0}${gu:+,\"under\":\"$gu\"}}")
         [ "$JSON" = 1 ] || ptext+=("$(printf '%-18s %s · %s' "$c.0/24" "$u" "$(m "$M_S_DAYSLEFT" "$left")")")
     done < <( { for gi in "${!WD_LO[@]}"; do echo "W ${WD_LO[gi]} ${WD_HI[gi]} ${WD_TXT[gi]}"; done; echo "#--"; cat "$SAYAC_FILE" 2>/dev/null; } |
-        awk -v now="$now" -v ret="$SAYAC_RETENTION_DAYS" '
+        awk -v now="$now" -v ret="$SAYAC_RETENTION_DAYS" -v wcut="$(watch_cut)" '
             !S && $0 == "#--" { S = 1; next }
             !S { n++; WL[n] = $2 + 0; WH[n] = $3 + 0; WT[n] = $4; next }
             $1 ~ /^[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?\.[0-9][0-9]?[0-9]?$/ && $2 ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/ && NF == 2 {
@@ -3720,7 +3725,7 @@ do_status() {
                 age = int((now - ep) / 86400); g = "-"; split($1, o, ".")
                 if (o[1] + 0 <= 255 && o[2] + 0 <= 255 && o[3] + 0 <= 255) { lo = ((o[1] * 256 + o[2]) * 256 + o[3]) * 256
                     for (i = 1; i <= n; i++) if (WL[i] <= lo && WH[i] >= lo + 255) { g = WT[i]; break } }
-                if (ret - age >= 0) print $1, $2, ret - age, g }')
+                if ($2 >= wcut) print $1, $2, (ret - age > 0 ? ret - age : 0), g }')
 
     prof pending
     # Kontrol edilecekler: son REVIEW_DAYS gündeki /16 uyarıları ve beyaz liste atlamaları,
@@ -3788,7 +3793,7 @@ do_status() {
                 for x in $(grep -oE '"ip":"[0-9.]+"' <<< "$line" | cut -d'"' -f4); do [ -n "${RVPX[$x]}" ] || { lx=1; break; }; done
                 [ "$lx" = 0 ] && continue
             fi
-            review+=("$line")
+            review+=("${line%\}},\"drop\":$(( t + REVIEW_DAYS * 86400 ))}")   # düşme tarihi (P15): satır zamanı + kontrol süresi
             rtext+=("$(printf '%-18s %s · %s' "$c" "$ty" "$(date -d "@$t" '+%d.%m %H:%M')")")
             pa "rv_ev rtext"
         done < <(LC_ALL=C grep -E '"type":"(warnpfx|warn16|warn16t|skip_wl)"' "$EVENTS_FILE" | tac)   # yalnız bu türler, önce süzülür sonra ters çevrilir
@@ -3857,7 +3862,7 @@ do_status() {
                 hj+=",\"n\":$hn,\"perm\":$hp,\"temp\":$ht,\"subnets\":${#hc[@]},\"total\":$hn,\"ips\":[$hw]"
             fi
             day_epoch "$u"
-            review+=("{\"t\":$REPLY,\"type\":\"$ty\",\"cidr\":\"$c\",\"day\":\"$u\",\"hist\":true${W16D[$c]:+,\"rep\":${W16D[$c]}}$hj}")
+            review+=("{\"t\":$REPLY,\"type\":\"$ty\",\"cidr\":\"$c\",\"day\":\"$u\",\"hist\":true${W16D[$c]:+,\"rep\":${W16D[$c]}}$hj,\"drop\":$(( REPLY + REVIEW_DAYS * 86400 ))}")
             rtext+=("$(printf '%-18s %s · %s' "$c" "$ty" "$(date -d "$u" '+%d.%m')")")
         done < <(sort -k2,2r "$SAYAC_FILE")        # blok başına en yeni tarih
     fi
@@ -3947,7 +3952,7 @@ do_status() {
         part_thr "$aac"; [ "$aan" -ge "$REPLY" ] || continue
         ign_covers "$aac" && continue
         pws="\"svc\":\"${PB_S[$aac]}\",\"extra\":\"${PB_X[$aac]}\",\"since\":$pjs,\"n\":$aan,\"last\":$ATK_LAST"
-        rv_attach "$aac" po "$pws" || { seen[$aac]=1; review+=("{\"t\":$(( ATK_FIRST > 0 ? ATK_FIRST : now )),\"type\":\"part_open\",\"cidr\":\"$aac\",$pws}"); }
+        rv_attach "$aac" po "$pws" || { seen[$aac]=1; review+=("{\"t\":$(( ATK_FIRST > 0 ? ATK_FIRST : now )),\"type\":\"part_open\",\"cidr\":\"$aac\",$pws,\"drop\":$(( ATK_LAST + REVIEW_DAYS * 86400 ))}"); }
         rtext+=("$(printf '%-18s %s · %s' "$aac" "part_open" "$aan")")
     done
     # Ban altında ihlal (cov_decide "under"; sgl_elig → SGL_U): bir kapsama servisi kapatırken sonradan banlanan tekiller. Aralık
@@ -3984,7 +3989,7 @@ do_status() {
         jstr "${UCS[$urk]}"; uri="$REPLY"; jstr "$CVN"
         ubj="\"ck\":\"$CVK\",\"cn\":$REPLY,\"cm\":\"$CVM\",\"tcp\":\"$CVT\",\"udp\":\"$CVU\",\"since\":${URK[$urk]%%|*},\"n\":$aan,\"last\":${URL[$urk]},\"csfr\":${URC[$urk]:-0},\"cr_t\":${URR[$urk]:-0},\"cr_iv\":$(( CW_IV / 60 )),\"cdn\":${UCD[$urk]:-0},\"cdn_s\":$uri,\"total\":$aan,\"ips\":[$uj]"
         # adresin satırı varsa ona eklenir ("seen" olup satırı düşmüş adres kendi satırını alır)
-        rv_attach "$urk" ub "$ubj" || { seen[$urk]=1; review+=("{\"t\":${URT[$urk]},\"type\":\"under_ban\",\"cidr\":\"$urk\",$ubj}"); }
+        rv_attach "$urk" ub "$ubj" || { seen[$urk]=1; review+=("{\"t\":${URT[$urk]},\"type\":\"under_ban\",\"cidr\":\"$urk\",$ubj,\"drop\":$(( ${URL[$urk]} + REVIEW_DAYS * 86400 ))}"); }
         rtext+=("$(printf '%-18s %s · %s' "$urk" "under_ban" "$aan")")
     done
     prof review_allowban
@@ -4351,7 +4356,7 @@ inside_scan() {  # CIDR
     done
     # IN_WATCH bütün sayaç satırları (ban konunca hepsi temizlenir); IN_WATCHA yalnız izleme süresi içindekiler (kart "izleniyor"
     # der; turun ölçütü, süresi dolan satır turun sonunda silinir)
-    local wcut; wcut=$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d'); IN_WATCHA=()
+    local wcut; wcut=$(watch_cut); IN_WATCHA=()
     while read -r x xd _; do
         [[ "$x" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] && [ -z "${seen[w$x]}" ] || continue
         ip2int "$x.0"; (( REPLY >= lo && REPLY <= hi )) || continue
@@ -4852,7 +4857,7 @@ BEGIN { now = now + 0; AP2[1] = 4; AP2[2] = 3; AP2[3] = 2; AP2[0] = 1
   print key "\t" e "\t" o "}" }'
 obj_state() {    # stdin: anahtarlar (IP / CIDR, satır başına) → stdout "anahtar<TAB>e<TAB>json"
     st_prep || return 1
-    LC_ALL=C awk -v now="$(date +%s)" -v today="$TODAY" -v wcut="$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')" \
+    LC_ALL=C awk -v now="$(date +%s)" -v today="$TODAY" -v wcut="$(watch_cut)" \
         -v tbf="$ST_D/tb" -v dnf="$DENY_FILE" -v gf="$ST_D/geo" -v cpf="$ST_D/clp" -v af="$ST_D/alw" -v wf="$SAYAC_FILE" -v igf="$IGNORE_FILE" \
         -v imrf="$ST_D/imr" -v imsf="$ST_D/ims" -v lfbio="$(conf_val LF_BLOCKINONLY)" -v ccpt="$(conf_val CC_DENY_PORTS_TCP | tr -cd '0-9,:')" -v ccpu="$(conf_val CC_DENY_PORTS_UDP | tr -cd '0-9,:')" "$AWK_ST"
 }
@@ -4982,7 +4987,7 @@ do_lookup() {
     fi
     local p24="${ip%.*}"
     line=$(grep -m1 -E "^${p24//./\\.} [0-9]{4}-[0-9]{2}-[0-9]{2}$" "$SAYAC_FILE" 2>/dev/null)
-    [ -n "$line" ] && [[ ! "${line#* }" < "$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')" ]] && pend="${line#* }"   # turun ölçütü: süresi içinde
+    [ -n "$line" ] && [[ ! "${line#* }" < "$(watch_cut)" ]] && pend="${line#* }"   # turun ölçütü: süresi içinde
     # IP'yi içine alan her yoksayma (tek IP, /24, /16, izin ya da duyurulan aralık): motorun bildirim kuralıyla aynı
     local ign_by="" ign_t=""
     if ign_covers "$ip" && ign_until "$IGN_HIT"; then
@@ -5001,6 +5006,12 @@ do_lookup() {
         if [ "$wff" = 3 ] && [ "$wle" = in_ok ]; then o+=",\"wfull\":1,\"wfin\":1"; else o+=",\"wfull\":$([ "$wff" = 1 ] && echo 1 || echo 0)"; fi
         [ -n "$ign_t" ] && o+=",\"ign_t\":$ign_t"
         obj_state1 "$ip"; o+=",\"st\":$REPLY"    # tek durum kaydı (Etkisini ölç, aralık kartı, kaynak ayrıntısı aynı işlevden)
+        # üst seviyelerin kaydı (kartın Blok / Duyurulan aralık / Ağ satırları "kapalı mı, neyin içinde"yi buradan okur): blok, ağ ve
+        # /8–/23 duyurulan aralık (blok ya da ağa eşit değilse)
+        local lvk="${ip%.*}.0/24"$'\n'"${ip%.*.*}.0.0/16" lvj
+        if [[ "$pfx" =~ ^[0-9.]+/([0-9]+)$ ]] && [ "${BASH_REMATCH[1]}" -ge 8 ] && [ "${BASH_REMATCH[1]}" -lt 24 ] && [ "${BASH_REMATCH[1]}" != 16 ]; then lvk+=$'\n'"$pfx"; fi
+        lvj=$(printf '%s\n' "$lvk" | obj_state | awk -F'\t' 'NF >= 3 { printf "%s\"%s\":%s", (n++ ? "," : ""), $1, $3 }')
+        o+=",\"lvs\":{$lvj}"
         # IP'nin kendi izni (panelden kaldırılabilen): csf.allow'daki kendi satırı ve geçici izin (kalan saniye)
         local al_l al_t
         al_l=$(grep -m1 -E "^${ip//./\\.}([[:space:]]|$)" "$CSF_DIR/csf.allow" 2>/dev/null)
@@ -5348,11 +5359,37 @@ restore_save() { # CIDR SATIRLAR → kapsananların kopyası; ilk satırda banı
     mkdir -p "$RESTORE_DIR" 2>/dev/null; chmod 700 "$RESTORE_DIR" 2>/dev/null
     { printf '#t|%s\n' "$(date +%s)"; printf '%s\n' "$2"; } > "$rf.tmp" 2>/dev/null && mv -f "$rf.tmp" "$rf"
 }
+# Otomatik blok banı kalkarken geri yüklenecek tekiller — TEK SEÇİM (P13, 1.15.143): kaldırma eylemi ve kaldırma penceresinin önizlemesi
+# (--restore-plan) aynı işlevden. Olay kaydında banı koyduran IP'lerden atlananlar: şu an csf.deny'de duran, başka bir aralık banının
+# kapsadığı, izin listesindeki (ban işlemez). Önce pencere olay kaydındaki IP'lerin hepsini sayıyordu (fazla sayı, yanlış eşik uyarısı)
+restore_plan() { # CIDR → stdout "IP<TAB>sebep" satırları (sırası olay kaydındaki gibi)
+    local t="$1" rip rwhy rv evl; local -A RH=()
+    ev_ips_of "$t"; evl="$REPLY"; [ -n "$evl" ] || return 0   # load_whitelist REPLY'yi ezer (önizleme kipinde liste yüklü değil)
+    while read -r rip _; do [ -n "$rip" ] && RH[$rip]=1; done < "$DENY_FILE"
+    [ "$WL_LOADED" = 1 ] || load_whitelist
+    while IFS=$'\t' read -r rip rwhy; do
+        [ -n "$rip" ] && [ -z "${RH[$rip]}" ] || continue
+        ip2int "$rip"; rv=$REPLY
+        wl_overlap "$rv" "$rv" && continue
+        RH[$rip]=1; printf '%s\t%s\n' "$rip" "$rwhy"
+    done < <(printf '%s\n' "$evl" | awk -v t="$t" -v df="$DENY_FILE" '
+        function ipn(a,  p) { split(a, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
+        BEGIN { while ((getline l < df) > 0) { sub(/[ \t#].*/, "", l)       # csf.deny aralıkları (kaldırılan hariç)
+                    if (l ~ /^[0-9.]+\/[0-9]+$/ && l != t) { split(l, c, "/"); b = c[2] + 0; lo = ipn(c[1]); sz = 2 ^ (32 - b); lo -= lo % sz; n++; LO[n] = lo; HI[n] = lo + sz - 1 } } }
+        { s = $0
+          while (match(s, /\{"ip":"[0-9.]+"[^}]*\}/)) {
+              e = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
+              ip = e; sub(/^\{"ip":"/, "", ip); sub(/".*/, "", ip)
+              w = ""; if (match(e, /"why":"([^"\\]|\\.)*"/)) { w = substr(e, RSTART + 7, RLENGTH - 8); gsub(/\\"/, "\"", w); gsub(/\\\\/, "\\", w) }
+              if (ip in S) continue; S[ip] = 1
+              v = ipn(ip); cov = 0; for (i = 1; i <= n; i++) if (v >= LO[i] && v <= HI[i]) { cov = 1; break }
+              if (!cov) print ip "\t" w } }')
+}
 unban_full_core() { # CIDR → tam banı kaldır; RESTORE=1 ise kapsananları geri yükle; banın izin istisnaları da gider.
     # Hepsi tek kilitli yazım ve tek csf -r (satır başına csf -d / -dr yerine) → UB_RN (geri yüklenen), UB_ERR
     local t="$1" rf since now delta rl body k ts nd dl="" al="" cl="" n=0 tokf subf cut
     local -A PRC=()
-    cut=$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')
+    cut=$(watch_cut)
     UB_RN=0; UB_ERR=""
     restore_file "$t"; rf="$REPLY"
     local -A HAVE=()
@@ -5395,30 +5432,12 @@ unban_full_core() { # CIDR → tam banı kaldır; RESTORE=1 ise kapsananları ge
     # IP'ler blok kalkınca tamamen açılıp deneme haklarını baştan kazanmasın. Atlananlar: şu an banlı, başka bir aralık banının
     # kapsadığı, izin listesindeki (ban zaten işlemez) IP. Satır lfd biçiminde: "IP # lfd: sebep - not - tarih"
     if [ "$RESTORE" = 1 ] && [ ! -s "$rf" ]; then
-        ev_ips_of "$t"
-        if [ -n "$REPLY" ]; then
-            local rip rwhy rdt rv; local -A RH=()
-            while read -r k _; do [ -n "$k" ] && RH[$k]=1; done < "$DENY_FILE"
-            [ "$WL_LOADED" = 1 ] || load_whitelist
-            rdt=$(LC_ALL=C date '+%a %b %e %H:%M:%S %Y')
-            while IFS=$'\t' read -r rip rwhy; do
-                [ -n "$rip" ] && [ -z "${RH[$rip]}" ] || continue
-                ip2int "$rip"; rv=$REPLY
-                wl_overlap "$rv" "$rv" && continue
-                RH[$rip]=1; dl+="$rip # lfd: ${rwhy:-$M_H_NOREASON} - $(m "$M_RESTORED_NOTE" "$t") - $rdt"$'\n'; n=$((n + 1))
-            done < <(printf '%s\n' "$REPLY" | awk -v t="$t" -v df="$DENY_FILE" '
-                function ipn(a,  p) { split(a, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
-                BEGIN { while ((getline l < df) > 0) { sub(/[ \t#].*/, "", l)       # csf.deny aralıkları (kaldırılan hariç)
-                            if (l ~ /^[0-9.]+\/[0-9]+$/ && l != t) { split(l, c, "/"); b = c[2] + 0; lo = ipn(c[1]); sz = 2 ^ (32 - b); lo -= lo % sz; n++; LO[n] = lo; HI[n] = lo + sz - 1 } } }
-                { s = $0
-                  while (match(s, /\{"ip":"[0-9.]+"[^}]*\}/)) {
-                      e = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
-                      ip = e; sub(/^\{"ip":"/, "", ip); sub(/".*/, "", ip)
-                      w = ""; if (match(e, /"why":"([^"\\]|\\.)*"/)) { w = substr(e, RSTART + 7, RLENGTH - 8); gsub(/\\"/, "\"", w); gsub(/\\\\/, "\\", w) }
-                      if (ip in S) continue; S[ip] = 1
-                      v = ipn(ip); cov = 0; for (i = 1; i <= n; i++) if (v >= LO[i] && v <= HI[i]) { cov = 1; break }
-                      if (!cov) print ip "\t" w } }')
-        fi
+        local rip rwhy rdt
+        rdt=$(LC_ALL=C date '+%a %b %e %H:%M:%S %Y')
+        while IFS=$'\t' read -r rip rwhy; do
+            [ -n "$rip" ] || continue
+            dl+="$rip # lfd: ${rwhy:-$M_H_NOREASON} - $(m "$M_RESTORED_NOTE" "$t") - $rdt"$'\n'; n=$((n + 1))
+        done < <(restore_plan "$t")
     fi
     tokf=$(mktemp) || { UB_ERR="$(m "$M_A_UNBANFAIL" "$t" "mktemp")"; return 1; }
     printf '%s\n' "$t" > "$tokf"
@@ -5482,7 +5501,7 @@ orphans_clean() { # banı CSF ekranından (eklenti dışından) kaldırılmış 
                 [ "$o" != "$f" ] && [ -f "$o" ] && grep -q "^${c//./\\.} " "$o" 2>/dev/null && continue 2
             done
             # ban gitti: izlenen blokların süresi dolmamış sayaç satırları geri döner (banlar kendiliğinden geri yüklenmez)
-            local cut rl k ts; cut=$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')
+            local cut rl k ts; cut=$(watch_cut)
             while IFS= read -r rl; do
                 rl="${rl#cnt|}"; read -r k ts _ <<< "$rl"
                 [[ "$ts" < "$cut" ]] || grep -qE "^${k//./\\.} " "$SAYAC_FILE" 2>/dev/null || echo "$rl" >> "$SAYAC_FILE"
@@ -8319,10 +8338,10 @@ digest_build() { # → DG_SUBJ, DG_BODY
         h_card "$M_H_IMT" "$hr" "" "$(m "$M_H_IMS" "$IM_TOTAL")"; DGH+="$REPLY"; hr=""
     fi
     # süresi dolacak terfi kayıtları
-    DG_BODY+="$NL$M_DG_EXP$NL"
+    DG_BODY+="$NL$M_DG_EXP$NL"; local wcx; wcx=$(watch_cut)
     while read -r p u; do
-        [[ "$p" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ && "$u" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || continue
-        age=$(( (now - $(date -d "$u" +%s)) / 86400 )); left=$(( SAYAC_RETENTION_DAYS - age ))
+        [[ "$p" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ && "$u" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || continue; [[ "$u" < "$wcx" ]] && continue   # izleme sınırı (watch_cut): süresi dolan blok listelenmez
+        age=$(( (now - $(date -d "$u" +%s)) / 86400 )); left=$(( SAYAC_RETENTION_DAYS - age )); [ "$left" -lt 0 ] && left=0
         [ "$left" -le 14 ] || continue
         ev_reason "$p.0/24"; local xr="$REPLY" xo="${OWN_L[$p]}"
         DG_BODY+="$(m "$M_DG_EXPL" "$p.0/24" "$left")${xo:+ · $xo}${xr:+ · $xr}$NL"; exp=$((exp + 1))
@@ -8609,6 +8628,10 @@ prov_resolve     # "auto" ayarlar: CSF'te elle kurulmuş sağlayıcı banı / iz
 case "$MODE" in
     status) LOG_MODE=quiet; do_status; exit $? ;;
     lookup) LOG_MODE=quiet; do_lookup "${ARGS[0]}"; exit $? ;;
+    rplan) LOG_MODE=quiet                        # {"ok":true,"ips":[{"ip","why"}]}: kaldırma eyleminin geri yükleyeceği tekiller, aynı işlevden
+        cidr_range "${ARGS[0]:-}" && [[ "${ARGS[0]}" == */* ]] || { echo '{"ok":false,"error":"bad_input"}'; exit 2; }
+        _o=""; while IFS=$'\t' read -r _i _w; do jstr "$_w"; _o+="${_o:+,}{\"ip\":\"$_i\",\"why\":$REPLY}"; done < <(restore_plan "${ARGS[0]}")
+        echo "{\"ok\":true,\"ips\":[$_o]}"; exit 0 ;;
     objstate) LOG_MODE=quiet
         for _k in "${ARGS[@]}"; do [[ "$_k" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}(/([89]|[12][0-9]|3[0-2]))?$ ]] || { echo '{"ok":false,"error":"bad_input"}'; exit 2; }; done
         st_prep || exit 1
@@ -8743,7 +8766,7 @@ for prefix in $(printf '%s\n' "${!count24[@]}" | sort -V); do
     fi
     # izlenen blok (geçici banı bitmiş ya da CSF'in liste sınırıyla silinmiş) yeniden geldi: silinmez işaretli kalıcı ban
     dnd24=0; [ "$n" -ge "$THRESHOLD_24_PERMANENT" ] && dnd24=1
-    awk -v p="$prefix" -v d="$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')" '$1 == p && $2 >= d { f = 1 } END { exit !f }' "$SAYAC_FILE" 2>/dev/null && dnd24=1
+    awk -v p="$prefix" -v d="$(watch_cut)" '$1 == p && $2 >= d { f = 1 } END { exit !f }' "$SAYAC_FILE" 2>/dev/null && dnd24=1
     if [ "$dnd24" = 1 ]; then
         comment=$(m "$M_C24_DND" "$n")
     else
@@ -8841,7 +8864,7 @@ for prefix in $(printf '%s\n' "${!temp_count24[@]}" | sort -V); do
         fi
         # izleniyor mu: sayaç satırı izleme süresi içinde olmalı (süresi dolmuş satırlar turun SONUNDA silinir; o turda
         # süresi dolan blok kalıcıya değil yeniden geçiciye gitsin)
-        if awk -v p="$prefix" -v d="$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')" '$1 == p && $2 >= d { f = 1 } END { exit !f }' "$SAYAC_FILE" 2>/dev/null; then
+        if awk -v p="$prefix" -v d="$(watch_cut)" '$1 == p && $2 >= d { f = 1 } END { exit !f }' "$SAYAC_FILE" 2>/dev/null; then
             csf_run -d "${prefix}.0/24" "$(m "$M_TC24_PERM" "$n")"
             if perm_added "${prefix}.0/24"; then
                 DC_LO+=("$lo"); DC_HI+=($((lo + 255))); DC_TXT+=("${prefix}.0/24")
@@ -9033,7 +9056,7 @@ slack_on && slack_queue_flush
 prof "turn bildirim"
 # ── Counter retention + log rotation ────────────────────────────────────────
 if [ "$DRY" != 1 ] && [ -f "$SAYAC_FILE" ]; then
-    cutoff=$(date -d "$SAYAC_RETENTION_DAYS days ago" '+%Y-%m-%d')
+    cutoff=$(watch_cut)
     awk -v d="$cutoff" '$2 >= d' "$SAYAC_FILE" > "${SAYAC_FILE}.tmp" && mv "${SAYAC_FILE}.tmp" "$SAYAC_FILE"
     logr "$(m "$M_CLEANCNT" "$SAYAC_RETENTION_DAYS")"
 fi

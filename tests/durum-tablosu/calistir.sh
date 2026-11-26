@@ -68,6 +68,7 @@ mk b16p_b24f;  quiet --action ban16 151.80 --mode svc --svc ssh; quiet --action 
 mk b16f_other; printf '%s\n' "151.80.0.0/16 # Manually denied: hosting range - $DT" >> "$D"; single 151.80.8.4 sshd; dump b16f_other
 mk cc;         printf '%s\n' 'CC_DENY = "FR"' >> "$R/etc/csf/csf.conf"; single 151.80.7.5 sshd; quiet; dump cc
 mk wl;         printf '%s\n' "151.80.7.0/24 # müşteri" >> "$A"; for x in 1 2 3 4 5 6; do single 151.80.7.$x sshd; done; quiet; dump wl
+mk alwip;      printf '%s\n' "151.80.7.9 # ofis" >> "$A"; dump alwip          # tek IP izni: Geçmiş menüsü "IP'yi banla" sunmaz (kartla aynı)
 mk review16;   for x in 7.1 7.2 8.1 8.2 9.1 10.1; do single 151.80.$x sshd; done; quiet; dump review16
 mk partopen;   quiet --action ban24 151.80.7 --mode svc --svc web
                for x in 1 2 3; do single 151.80.7.$x sshd "$(LC_ALL=C date -d '+1 min' '+%a %b %d %H:%M:%S %Y')"; done; dump partopen
@@ -78,6 +79,9 @@ mcheck() { kok_on || { SKIPN=$((SKIPN + 1)); return; }; [ -n "$2" ] || { ML+="  
     if eval "$2"; then ML+="  ✓ $1"$'\n'; ilerle "  ✓ $1"; else ML+="  ✗ motor: $1"$'\n'; MF=$((MF + 1)); ilerle "  ✗ $1"; fi; }
 R="$W/roots/b24part"
 mcheck "web kısmi banı UDP 443'ü de kapatır (HTTP/3)" "grep -q '^udp|in|d=443|s=151.80.7.0/24 ' '$R/etc/csf/csf.deny'"
+# P15 (1.15.143): Kontrol edilecekler'in HER satırı düşme tarihini motordan taşır ("drop"; panel hesaplamaz). Önce yalnız izinli satırlarda
+# vardı, öteki türlerde panel son kayıt + kontrol süresinden kendisi hesaplıyordu
+mcheck "düşme tarihi motordan: Kontrol edilecekler'in her satırında drop (şüpheli ağ, açık servis, izinli)" "node -e 'let n=0; for (const k of [\"review16\",\"partopen\",\"wl\"]) { const s=JSON.parse(require(\"fs\").readFileSync(\"$W/out/\"+k+\".status.json\",\"utf8\")); for (const r of s.review||[]) { n++; if (!(r.drop > r.t - 1)) process.exit(1) } } process.exit(n ? 0 : 2)'"
 mk b24exc; quiet --action ban24 151.80.7 --mode exc --svc web
 mcheck "istisnada Web açıkken UDP 443 iki yönde açık" "grep -q '^udp|in|d=443|s=151.80.7.0/24 ' '$A' && grep -q '^udp|out|s=443|d=151.80.7.0/24 ' '$A'"
 # "Başka portlar"da /udp: son eksiz TCP, "443/udp" ve "5000-5010/udp" UDP (kısmi ban, istisna satırları, kiralık liste kuralı)
@@ -903,6 +907,11 @@ printf '151.80.7.0/24 # Auto-grouped /24: 2 kalıcı tekil nedeniyle kalıcı ba
 mcheck "kaldırma · 2 tekil geri yüklenince blok banlanmaz (eşik 3)" "! grep -q '^151.80.7.0/24' '$D'"
 NDT=$(LC_ALL=C date -d "+2 min" "+%a %b %d %H:%M:%S %Y"); single 151.80.7.9 sshd "$NDT"; quiet
 mcheck "kaldırma · 2 geri yüklenen + 1 yeni tekil = eşik 3: blok banlanır" "grep -q '^151.80.7.0/24' '$D'"
+# P13 (1.15.143): kaldırma penceresinin önizlemesi (--restore-plan) ile kaldırma eylemi AYNI tekilleri seçer (restore_plan). İzinli
+# (151.80.7.2) ve zaten banlı (151.80.7.3) IP önizlemede de yok; önce pencere olay kaydının üç IP'sini birden gösteriyordu
+mk ubpl; ubev; printf '151.80.7.2 # izin\n' >> "$A"; printf '151.80.7.3 # lfd: (sshd) Failed SSH login - %s\n' "$DT" >> "$D"
+RPL=$(run --restore-plan 151.80.7.0/24 2>/dev/null); quiet --action unban 151.80.7.0/24 --restore
+mcheck "kaldırma önizlemesi = kaldırma eylemi: izinli ve zaten banlı IP ikisinde de yok, yalnız 151.80.7.1 geri gelir" "[ '$RPL' = '{\"ok\":true,\"ips\":[{\"ip\":\"151.80.7.1\",\"why\":\"(sshd) Failed SSH login\"}]}' ] && [ \$(grep -c 'kaldırılınca geri yüklendi' '$D') = 1 ] && grep -q '^151.80.7.1 # lfd: .*kaldırılınca geri yüklendi' '$D'"
 mk ubno; ubev; quiet --action unban 151.80.7.0/24
 mcheck "kaldırma · geri yükle seçili değilse tekil geri gelmez" "! grep -q 'kaldırılınca geri yüklendi' '$D' && ! grep -q '^151.80.7.0/24' '$D'"
 # 1.15.134 (P0, ev_ips_of): ban altında ihlal kaydı banın aralığıyla ve ihlal eden IP'lerle yazılır; geri yükleme ve kaldırma kaydı

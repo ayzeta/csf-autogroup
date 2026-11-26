@@ -9,7 +9,7 @@ let src = fs.readFileSync(AGJS, 'utf8');
 src = src.replace(/function menu\(key, items\) \{/, m => m + ' if (globalThis.__MENU) globalThis.__MENU(key, items);');
 const tail = src.lastIndexOf('})();');
 src = src.slice(0, tail) + `globalThis.__AG = { set: function (s, l, nw) { S = s; LANG = l || 'tr'; NOWST = nw || {}; NOWST_T = Date.now(); }, review: review, groupRows: groupRows,
-  pending: pending, itemState: itemState, itemMenu: itemMenu, drActs: drActs, coverBits: coverBits, UI: UI };\n` + src.slice(tail);
+  pending: pending, itemState: itemState, itemMenu: itemMenu, drActs: drActs, coverBits: coverBits, UI: UI, lvBanOf: typeof lvBanOf === 'function' ? lvBanOf : null };\n` + src.slice(tail);
 
 const el = () => new Proxy(function () {}, { get: (t, k) => k === 'length' ? 0 : k === Symbol.toPrimitive ? () => '' : el(), apply: () => el(), set: () => true });
 globalThis.window = { AG_BOOT: {}, addEventListener() {}, location: { search: '' }, matchMedia: () => ({ matches: false, addEventListener() {} }) };
@@ -28,7 +28,7 @@ if (!AG) { console.error('ag.js dışa veremedi'); process.exit(1); }
 const IP = '151.80.7.9', BLK = '151.80.7.0/24', NET = '151.80.0.0/16', IN = c => String(c).startsWith('151.80');
 const BAN = /^(ban16|ban24|banforce|promote)$/;
 const scen = fs.readdirSync(OUT).filter(f => f.endsWith('.status.json')).map(f => f.replace('.status.json', ''));
-const order = ['none', 'single', 'temp', 'watched', 'b24auto', 'b24full', 'b24part', 'b16full', 'b16part', 'b16p_b24f', 'b16f_other', 'cc', 'wl', 'review16', 'partopen'];
+const order = ['none', 'single', 'temp', 'watched', 'b24auto', 'b24full', 'b24part', 'b16full', 'b16part', 'b16p_b24f', 'b16f_other', 'cc', 'wl', 'alwip', 'review16', 'partopen'];
 scen.sort((a, b) => order.indexOf(a) - order.indexOf(b));
 
 const strip = h => h.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').trim();
@@ -96,9 +96,11 @@ for (const s of scen) {
     const g = scr['Geçmiş ' + BLK] || [];
     if (g.some(x => x[0] === 'banforce') || !g.some(x => x[0] === 'chg')) fail(s, `Geçmiş ${BLK}: açık servis satırında "Banı değiştir" yok ya da "Yine de banla" var (${g.map(x => x[2]).join(' · ')})`);
   }
-  // K4: IP kartı ile Geçmiş'teki aynı IP aynı ban eylemlerini sunar (Geçmiş bir şey sunuyorsa)
-  const ka = scr['IP kartı ' + IP].filter(x => BAN.test(x[0])).map(x => x[0]).sort().join(','),
-        ha = scr['Geçmiş ' + IP].filter(x => BAN.test(x[0])).map(x => x[0]).sort().join(',');
+  // K4: IP kartı ile Geçmiş'teki aynı IP aynı ban eylemlerini sunar (Geçmiş bir şey sunuyorsa). "IP'yi banla" da (ban1; 1.15.142:
+  // Geçmiş izinli IP'ye sunuyordu, kart sunmuyordu — kayıt artık sayfada, menü kartın kararını verir)
+  const BAN4 = /^(ban16|ban24|banforce|promote|ban1)$/;
+  const ka = scr['IP kartı ' + IP].filter(x => BAN4.test(x[0])).map(x => x[0]).sort().join(','),
+        ha = scr['Geçmiş ' + IP].filter(x => BAN4.test(x[0])).map(x => x[0]).sort().join(',');
   if (ka !== ha) fail(s, `IP kartı [${ka || '—'}] ile Geçmiş [${ha || '—'}] farklı ban eylemleri sunuyor (${IP})`);
   // K7: bir liste satırının ⋯ menüsü ile Geçmiş'in aynı öğe için menüsü aynı eylemleri sunar (tek kaynak: acts*). Öğe birden çok
   // listedeyse Geçmiş en önce gelenin eylemlerini sunar (Kontrol edilecekler → aralık banı → izlenen); yalnız o liste karşılaştırılır.
@@ -152,6 +154,22 @@ for (const s of scen) {
     const cb = c === BLK ? 24 : 32;
     const want = card.filter(x => x.b < cb).map(x => x.k).sort().join(','), got = menus[k].map(i => i.act).filter(a => /^ban(24|16|pfx)$/.test(a)).sort().join(',');
     if (want !== got) fail(s, `K8 ${c}: liste menüsü [${got || '—'}] ≠ IP kartının üst seviyeleri [${want || '—'}] (duyurulan aralık ${PFX})`);
+  });
+}
+// K9: IP kartının seviye satırları (blok, duyurulan aralık, ağ) motorun seviye kaydıyla (lookup "lvs", obj_state) aynı kararı verir:
+// kayıt kapalı diyorsa satır "banlı değil" demez, kısmi diyorsa kısmi der. Önce satır kararı eklentinin gruplarından ve kapsama kaydından
+// çıkarıyordu: ülke banı (cc kökü) bloğu kapatırken "/24: banlı değil" (1.15.144'e kadar)
+for (const s of scen) {
+  const st = JSON.parse(fs.readFileSync(path.join(OUT, s + '.status.json'), 'utf8'));
+  const lk = JSON.parse(fs.readFileSync(path.join(OUT, s + '.lookup.json'), 'utf8'));
+  AG.set(st, 'tr', nowOf(s));
+  if (!lk.lvs) { fail(s, 'K9: IP sorgusu seviye kayıtlarını (lvs) vermiyor'); continue; }
+  if (!AG.lvBanOf) { fail(s, 'K9: IP kartının seviye satırı tek durum kaydından okunmuyor (lvBanOf yok)'); continue; }
+  Object.entries(lk.lvs).forEach(([c, rec]) => {
+    const r = AG.lvBanOf(lk, IP, c, Number(c.split('/')[1]));
+    const want = rec.e === 'ban' ? 'kapalı' : rec.e === 'part' ? 'kısmi' : rec.e === 'none' ? 'açık' : null;
+    const got = !r ? 'açık' : r.k === 'part' ? 'kısmi' : 'kapalı';
+    if (want && want !== got) fail(s, `K9 ${c}: kayıt "${rec.e}" ama IP kartının seviye satırı "${r ? r.s : 'banlı değil'}"`);
   });
 }
 console.log((QUIET ? lines.filter(l => l.startsWith('  ✗')) : lines).join('\n'));

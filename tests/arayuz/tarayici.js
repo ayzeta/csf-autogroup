@@ -454,16 +454,26 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
   // geçici blok banını kaldırma penceresi: motor geçici blokta yalnız csf -tr yapar (geri yükleme yok, csf -r yok) → pencerede geri
   // yükleme kutusu ve "kalıcı listeden kaldırılır" yok; aynı olay kaydıyla kalıcı blokta kutu var (karşılaştırma). Düğme sayfaya
   // eklenip tıklanır: test verisinde geçici blok banı olmayabilir
-  for (const kd of ['temp', 'perm']) {
+  // 1.15.143 (P13): kalıcı blokta geri yüklenecekler MOTORDAN (a=restore_plan; motorun seçimi durum tablosunda gerçek veriyle sınanır).
+  // Burada motorun iki cevabı verilir: iki tekil (kutu, iki satır) ve hiçbiri (olay kaydının IP'leri banlı / izinli: kutu yok, not var)
+  let rplan = null;
+  const rpr = async route => { const pd = route.request().postData() || '';
+    if (!/^a=restore_plan/.test(pd) || !rplan) return route.fallback();
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, ips: rplan }) }); };
+  await page.route('**/api.php', rpr);
+  for (const kd of ['temp', 'perm', 'permskip']) {
+    rplan = kd === 'perm' ? [{ ip: '203.0.113.5', why: '(sshd) Failed SSH login' }, { ip: '203.0.113.6', why: '(sshd) Failed SSH login' }] : [];
     await page.evaluate(k => { const b = document.createElement('button'); b.id = 'ag-test-ub'; b.setAttribute('data-act', 'unban'); b.setAttribute('data-c', '203.0.113.0/24');
-      b.setAttribute('data-kind', k); b.setAttribute('data-dnd', '0'); b.setAttribute('data-restore', '0'); document.getElementById('ag-app').appendChild(b); }, kd);
+      b.setAttribute('data-kind', k === 'permskip' ? 'perm' : k); b.setAttribute('data-dnd', '0'); b.setAttribute('data-restore', '0'); document.getElementById('ag-app').appendChild(b); }, kd);
     await page.click('#ag-test-ub'); await page.waitForSelector('.ag-modal [data-m="ok"]', { timeout: 8000 }).catch(() => {});
-    const ub = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); return m ? { box: !!m.querySelector('#ag-restore'), txt: m.innerText } : null; });
-    if (kd === 'temp') check('geçici blok banını kaldır: geri yükleme kutusu ve "kalıcı listeden" yok', !!ub && !ub.box && !/kalıcı listeden|permanent list/.test(ub.txt), JSON.stringify(ub && { box: ub.box, txt: ub.txt.slice(0, 160) }));
-    else check('kalıcı otomatik blok banını kaldır: aynı kayıtla geri yükleme kutusu var', !!ub && ub.box, JSON.stringify(ub && { box: ub.box }));
+    const ub = await page.evaluate(() => { const m = document.querySelector('.ag-modal'); return m ? { box: !!m.querySelector('#ag-restore'), n: m.querySelectorAll('.ag-rs-l').length, txt: m.innerText } : null; });
+    if (kd === 'permskip') check('kalıcı blok: motor hiçbir tekili geri yüklemeyecekse kutu yok, atlananlar notta', !!ub && !ub.box && /geri yüklenmez|not restored/.test(ub.txt), JSON.stringify(ub && { box: ub.box, txt: ub.txt.slice(0, 300) }));
+    else if (kd === 'temp') check('geçici blok banını kaldır: geri yükleme kutusu ve "kalıcı listeden" yok', !!ub && !ub.box && !/kalıcı listeden|permanent list/.test(ub.txt), JSON.stringify(ub && { box: ub.box, txt: ub.txt.slice(0, 160) }));
+    else check('kalıcı otomatik blok banını kaldır: motorun geri yükleyeceği tekillerle kutu var (2 satır)', !!ub && ub.box && ub.n === 2, JSON.stringify(ub && { box: ub.box, n: ub.n }));
     await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('.ag-modal'), null, { timeout: 5000 }).catch(() => {});
     await page.evaluate(() => { const b = document.getElementById('ag-test-ub'); if (b) b.remove(); });
   }
+  await page.unroute('**/api.php', rpr);
   // Tur süresi ipucu: calistir.sh'nin olay kaydına eklediği tur (motorun durum çıktısından): kısmen inen liste "indirilemedi" der
   const tips = await page.$$eval('.ag-spark i', L => L.map(i => i.title));
   check('Tur süresi ipucu turu uzatan işleri yazar (yenilenen, inemeyen, csf -r)', tips.some(x => /izinli servis listeleri yenilendi/.test(x) &&

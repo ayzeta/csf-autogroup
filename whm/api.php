@@ -169,6 +169,12 @@ switch ($a) {
         }
         ag_json(ag_run_json(array_merge(['--obj-state'], $kl, ['--json']), 45));
 
+    case 'restore_plan':                            // kaldırma penceresi: otomatik blok banı kalkınca geri yüklenecek tekiller (motor restore_plan;
+        // kaldırma eylemi aynı işlevden seçer)
+        $c = trim((string) ($_POST['c'] ?? ''));
+        if (!preg_match('/^([0-9]{1,3}\.){3}[0-9]{1,3}\/([89]|[12][0-9]|3[0-2])$/', $c)) ag_json(['ok' => false, 'error' => 'bad_input']);
+        ag_json(ag_run_json(['--restore-plan', $c], 30));
+
     case 'inside':                                  // elle /16 ya da /24 banının onay penceresi: içindekiler
         $bits = (string) ($_POST['bits'] ?? '');
         $target = trim((string) ($_POST['target'] ?? ''));

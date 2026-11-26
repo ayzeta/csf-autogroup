@@ -79,8 +79,19 @@ pv=$(awk '/^  function verdict\(d, mb\)/ { p = 1 } p { print } p && /^  }$/ { ex
 pc=$(awk '/^  function coverBits\(d\)/ { p = 1 } p { print } p && /^  }$/ { exit }' "$J" | grep -c "(d.covers")
 pa=$(grep -c "function fullAllow(d) { return d.st ? " "$J")
 pi=$(awk '/^  function impState\(st\)/ { p = 1 } p { print } p && /^  }$/ { exit }' "$J" | grep -c "stToks(st)")
-if [ "$sx" != 0 ] || [ "$pv" != 1 ] || [ "$pc" != 0 ] || [ "$pa" != 1 ] || [ "$pi" != 1 ]; then
-    echo "DÜŞTÜ: şu anki durum tek kayıttan değil (motorda eski hesap $sx; hüküm kayıttan $pv; mb covers'tan $pc; izin kayıttan $pa; Etkisini ölç $pi)"; F=$((F + 1))
-else echo "GEÇTİ: şu anki durum tek kayıttan (motor obj_state; IP kartı hükmü, kapsayan ban, izin, Etkisini ölç)"; fi
+# 1.15.143: IP'nin kendi banı (ipOwnBan) ve IP kartının seviye satırları (lvBanOf, motor lookup "lvs") da kayıttan
+po=$(awk '/^  function ipOwnBan\(ip, d\)/ { p = 1 } p { print } p && /^  }$/ { exit }' "$J" | grep -c "if (d.st)")
+pl=$(awk '/^  function lvBanOf\(d, ip, cidr, bits\)/ { p = 1 } p { print } p && /^  }$/ { exit }' "$J" | grep -c "recCov(rec, cidr)")
+if [ "$sx" != 0 ] || [ "$pv" != 1 ] || [ "$pc" != 0 ] || [ "$pa" != 1 ] || [ "$pi" != 1 ] || [ "$po" != 1 ] || [ "$pl" != 1 ]; then
+    echo "DÜŞTÜ: şu anki durum tek kayıttan değil (motorda eski hesap $sx; hüküm kayıttan $pv; mb covers'tan $pc; izin kayıttan $pa; Etkisini ölç $pi; kendi banı $po; seviye satırı $pl)"; F=$((F + 1))
+else echo "GEÇTİ: şu anki durum tek kayıttan (motor obj_state; IP kartı hükmü, kapsayan ban, izin, kendi banı, seviye satırları, Etkisini ölç)"; fi
+# DÜŞME TARİHİ (P15, 1.15.143): Kontrol edilecekler satırının listeden düşme tarihi motorun "drop" alanı; panel tarih hesaplamaz
+rd=$(awk '/^  function rvDrop\(e\)/ { p = 1 } p { print } p && /^  }$/ { exit }' "$J" | grep -cE "86400|review_days")
+if [ "$rd" != 0 ]; then echo "DÜŞTÜ: düşme tarihini panel hesaplıyor (rvDrop'ta $rd satır gün hesabı)"; F=$((F + 1)); else echo "GEÇTİ: düşme tarihi motordan (rvDrop yalnız metni seçer)"; fi
+# İZLEME SINIRI (M-K, 1.15.143): "blok izleniyor mu" tek ölçüt (watch_cut). Sınırı kendisi hesaplayan yer (SAYAC_RETENTION_DAYS days ago)
+# ya da İzlenenler listesinin eski gün hesabı (ret - age >= 0; yaz saati geçişinde IP kartından bir gün ayrışıyordu) geri gelmez
+wc=$(grep -c 'SAYAC_RETENTION_DAYS days ago' "$SHF"); wa=$(grep -c 'ret - age >= 0' "$SHF")
+if [ "$wc" != 1 ] || [ "$wa" != 0 ]; then echo "DÜŞTÜ: izleme sınırı tek yerde değil (sınırı hesaplayan $wc yer, eski gün hesabı $wa)"; F=$((F + 1))
+else echo "GEÇTİ: izleme sınırı tek ölçüt (watch_cut)"; fi
 [ $F -eq 0 ] && echo "GEÇTİ: tek kaynak ($J)" || echo "DÜŞTÜ: $F kural"
 exit $F

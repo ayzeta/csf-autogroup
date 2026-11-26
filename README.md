@@ -225,8 +225,9 @@ settings, with no prompts. `config.env` is left untouched.
   is from its threshold and its ban button) and *Who*;
   changing a threshold shows its effect on the current entries; suspicious
   networks show the services hit.
-- **One answer for "is this address blocked now"** — the IP card, the range
-  card, **Measure impact** and the rented-list / provider details all read the
+- **One answer for "is this address blocked now"** — the IP card (including its
+  block, announced range and network rows), the range card, the lists, the
+  History menus, **Measure impact** and the rented-list / provider details all read the
   same state record, computed in one place in the engine from everything that
   can block or allow an address: `csf.deny` (single IPs, ranges, port lines),
   `csf.tempban` (a line with ports is a partial ban), country and provider bans
