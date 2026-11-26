@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.15.139 — 2026-11-26
+
+- Four **Measure impact** texts in Turkish still spoke to the reader in the
+  second person ("your sites", "your allows"). They now name the thing itself
+  ("the sites on the server", "the allows in csf.allow"). The text check that
+  should have caught them missed the dative ending; it now covers it.
+
 ## 1.15.138 — 2026-11-26
 
 - **Measure impact** timed out on a real server with 1.15.137. Right after
