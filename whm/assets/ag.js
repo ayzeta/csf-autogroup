@@ -998,7 +998,8 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     }).join('');
     var xstep = days === 7 ? 1 : 7, ax = '';
     for (i = 0; i < days; i += xstep) {
-      ax += '<span style="left:' + (i * 100 / days).toFixed(2) + '%">' + esc(fmtD(D.start + (off + i) * 86400 + 43200, { day: 'numeric', month: 'short' })) + '</span>';
+      // sağ kenara yakın etiket sağa yaslanır: telefonda son tarih kartın kenarında kesiliyordu (390 px canlı, "26 Kas")
+      ax += '<span style="' + (i * 100 / days > 80 ? 'right:0' : 'left:' + (i * 100 / days).toFixed(2) + '%') + '">' + esc(fmtD(D.start + (off + i) * 86400 + 43200, { day: 'numeric', month: 'short' })) + '</span>';
     }
     // toplam tıklanır: Geçmiş o türe ve bu döneme süzülür (grafikle aynı sınıflandırma ve aynı gün tekilleştirmesi: sayı aynı)
     var totals = SERIES.map(function (s) {
@@ -1800,7 +1801,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       // neden izleniyor: geçici blok banının IP'leri ve sebepleri (olay kaydından)
       var pitems = ev && ev.ips && ev.ips.length ? [MI.toggle(key, open)] : [];
       var left = Math.max(0, p.days_left), ret = S.config.retention || 180, pct = Math.max(0, Math.min(100, left * 100 / ret));
-      var urg = left < 7 ? ' bad' : left < 30 ? ' warn' : '';
+      var urg = left < 30 ? ' warn' : '';   // izleme bitiyor: dikkat (amber); kırmızı yalnız engel, koyu turuncu ciddi sorun
       var first = firstIp(cidr, ev && ev.ips);
       return '<div class="ag-item" data-row="' + esc(cidr) + '"><div class="ag-tr ag-tr-p">' +
         '<div class="ag-td ag-td-stack">' + cidrLink(cidr) +

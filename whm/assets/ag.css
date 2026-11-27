@@ -461,8 +461,8 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-left .ag-days { margin-top: 0; width: 64px; }
 .ag-left.warn span { color: var(--ag-warn); font-weight: 600; }
 .ag-left.warn .ag-days i { background: #d97706; }
-.ag-left.bad span { color: var(--ag-bad); font-weight: 600; }
-.ag-left.bad .ag-days i { background: #dc2626; }
+.ag-left.bad span { color: var(--ag-d-leak); font-weight: 600; }   /* liste %90+ dolu: ciddi (kırmızı yalnız engel) */
+.ag-left.bad .ag-days i { background: var(--ag-d-leak); }
 
 /* ── En çok saldıran ağlar ──────────────────────────────────────── */
 .ag-asn-r { display: flex; gap: 12px; padding: 10px 18px; border-top: 1px solid var(--ag-line-soft); align-items: flex-start; }
@@ -1170,7 +1170,7 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-lay-i:hover .ag-kpi { border-color: var(--ag-accent-line); }
 .ag-lay-i:focus { outline: none; }
 .ag-lay-i:focus-visible .ag-kpi { border-color: var(--ag-accent); box-shadow: 0 0 0 3px var(--ag-accent-soft); }
-.ag-lay .ag-kpi { grid-template-columns: 40px minmax(0, 1fr) auto; grid-template-areas: "ic l g" "ic v g" "ic m m"; column-gap: 14px; }
+.ag-lay .ag-kpi { grid-template-columns: 40px minmax(0, 1fr) auto; grid-template-areas: "ic l g" "ic v v" "ic m m"; column-gap: 14px; }
 /* kardeş kutular eşit boy (C1): kutu ızgara hücresini doldurur, içerik üstten; durum rozeti üst köşede (her kutuda aynı yerde) */
 .ag-lay-i > .ag-kpi { height: 100%; box-sizing: border-box; align-content: start; }
 .ag-lay .ag-kpi-g { align-self: start; }

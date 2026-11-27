@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.15.147 — 2026-11-27
+
+- *Watched*: the days left show amber when the watch is about to end, never
+  red (the end of a watch is not a block). A permanent list 90% full shows
+  dark orange (serious), like the other list warnings.
+- On a phone the last date under the activity chart was cut off at the card
+  edge; it is now aligned to the right.
+- On the Providers tab the unit next to a layer's number (*IP / range*) could
+  run past its cell on wide screens.
+
 ## 1.15.146 — 2026-11-27
 
 - The "now" note on a History row is the address's state chip, coloured by
