@@ -146,7 +146,7 @@ k2=$(grep -c "fact(t('l_owner'), d.asn || ownerOf(ip + '/32').asn ? '' : owner)"
 k3=$(grep -c "if (watchHeld(p.prefix)) return \[MI.forget(p.prefix)\];" "$J")
 k4=$(grep -c "t('ab_rep'\|t('ab_rep_w'" "$J"); k4b=$(grep -c "abRep(a)" "$J")
 k5=$(grep -c "label: tempAt(pfx3 + '.0/24') ? t('promote') : t('ban24_perm')" "$J")
-k6=$(grep -c "Object.keys(A).filter(function (k) { return k !== 'manual'; })" "$J")
+k6=$(grep -c "Object.keys(A).filter(function (k) { return !manualOnly(k); })" "$J"); grep -q "return /^csf_autogroup:/.test(x.why || ''); }));" "$J" || k6=x
 # (7) sağlayıcı kartı: başlık öteki kartlar gibi (ülke adıyla), servis dağılımı bir kez, port listesi uyarısı yalnız banlıyken
 k7=$(grep -c "esc(t('asc_kind')) + (info.cc ? ' · <span class=\"ag-own-s\">' + ccTag(info.cc)" "$J"); k7b=$(grep -c "(top.svc ? '<div>' + esc(t('p_svc'" "$J")
 k7c=$(grep -c "known.length && !ctx.bk && (ctx.banned || !ctx.card)" "$J")

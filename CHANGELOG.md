@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.15.151 — 2026-11-27
+
+- A range whose only entry is a single IP banned by hand from the panel no
+  longer says "all violations above are cut" (1.15.150 looked for the wrong
+  class: the plugin counts its own manual single ban as "other"; now a
+  service whose IPs are all manual bans is not a violation).
+
 ## 1.15.150 — 2026-11-27
 
 - Names and reasons are no longer cut short with "…". Provider and owner

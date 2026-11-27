@@ -5064,8 +5064,11 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       }
       var A = d.attacks || {};
       if (!Object.keys(A).length && gev && gev.ips) gev.ips.forEach(function (x) { var k = x.svc || svcOfReason(x.why); A[k] = (A[k] || 0) + 1; });
-      // elle ban ihlal değil: aralıkta yalnız elle tekil ban varken "yukarıdaki ihlallerin hepsi kesiliyor" deniyordu (1.15.150, canlı)
-      var keys = Object.keys(A).filter(function (k) { return k !== 'manual'; }), openSv = [], closedSv = [];
+      // elle ban ihlal değil: aralıkta yalnız elle tekil ban varken "yukarıdaki ihlallerin hepsi kesiliyor" deniyordu (1.15.150, canlı
+      // 104.207.40.0/24). Motor eklentinin elle tekil banını "other" sınıfıyla sayar; ölçüt ipWhyCell'in "elle ban"ıyla aynı (sebep
+      // "csf_autogroup:" ile başlar): bir servisin bütün IP'leri elle ban ise o servis ihlal sayılmaz
+      function manualOnly(k) { var L = (d.attack_ips || {})[k] || []; return k === 'manual' || (L.length > 0 && L.every(function (x) { return /^csf_autogroup:/.test(x.why || ''); })); }
+      var keys = Object.keys(A).filter(function (k) { return !manualOnly(k); }), openSv = [], closedSv = [];
       keys.forEach(function (k) {
         if (k === 'other' || k === 'repeat' || k === 'scan') return;
         var by = closedBy(k);
