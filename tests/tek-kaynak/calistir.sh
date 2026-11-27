@@ -107,6 +107,11 @@ ns=$(grep -c "addrPill(noteSt(e.cidr), note" "$J"); okc=$(grep -cE '^\.ag-(okbar
 if [ "$ev" != 0 ] || [ "$sc" != 1 ] || [ "$sk" != 0 ] || [ "$rd" != "part perm prom temp " ] || [ "$ml" != 0 ]; then
     echo "DÜŞTÜ: görsel dil standardı bozuk (Geçmiş rozetinde durum rengi $ev; izinli yeşil $sc; pembe sınıf $sk; kırmızı adlar: $rd; mailde eski renk $ml satır)"; F=$((F + 1))
 else echo "GEÇTİ: görsel dil — renk yalnız durum çipi ve önem işareti"; fi
+# SERVİS ↔ PORT HARİTASI (T-2, 1.15.148): panel portları motordan okur (durum JSON svcp / svcpu); kendi tablosu (SVC_TCP / SVC_UDP) yok.
+# Motorda kısmi banın UDP portları yalnız svc_wudp'de (part_ports'ta sabit 443 / 53 yok)
+pt=$(grep -cE "SVC_TCP|SVC_UDP" "$J"); pu=$(awk '/^part_ports\(\) \{/ { p = 1 } p { print } p && /^\}/ { exit }' "$SHF" | grep -cE '"(443|53)"|,\}443|,\}53')
+if [ "$pt" != 0 ] || [ "$pu" != 0 ]; then echo "DÜŞTÜ: servis-port haritası tek tanımda değil (panel tablosu $pt satır; part_ports sabit UDP $pu)"; F=$((F + 1))
+else echo "GEÇTİ: servis-port haritası motordan (svc_ports / svc_wudp → svcp / svcpu)"; fi
 # İZLEME SINIRI (M-K, 1.15.143): "blok izleniyor mu" tek ölçüt (watch_cut). Sınırı kendisi hesaplayan yer (SAYAC_RETENTION_DAYS days ago)
 # ya da İzlenenler listesinin eski gün hesabı (ret - age >= 0; yaz saati geçişinde IP kartından bir gün ayrışıyordu) geri gelmez
 wc=$(grep -c 'SAYAC_RETENTION_DAYS days ago' "$SHF"); wa=$(grep -c 'ret - age >= 0' "$SHF")

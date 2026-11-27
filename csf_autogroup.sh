@@ -65,7 +65,7 @@ grep() { command grep -a "$@"; }
 # sayı, anahtar; Türkçe modda sıralama kuralı zaten C idi (LC_COLLATE=C)
 sort() { LC_ALL=C command sort "$@"; }
 
-VERSION="1.15.147"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.148"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -4177,8 +4177,12 @@ do_status() {
         printf '"last_run":%s,' "${last:-null}"
         jstr "$cronm"; printf '"cron_min":%s,"runs":%s,' "$REPLY" "$runsj"
         local wq=0; web_quic && wq=1       # panelin "Web kapalı mı" kararı motorla aynı ölçütle (UDP 443 yalnız HTTP/3 dinleniyorsa)
-        local mps mpr; mail_ports smtp; mps="$REPLY"; mail_ports mread; mpr="$REPLY"; ssh_ports   # servis çiplerinin portları (sunucudan okunur)
-        printf '"svcp":{"ssh":"%s","smtp":"%s","mread":"%s","quic":%s},' "$REPLY" "$mps" "$mpr" "$wq"
+        # servis → TCP portları TEK TANIMDAN (svc_ports; T-2, 1.15.148): panelin kendi port tablosu (SVC_TCP) kalktı, bütün servisler
+        # buradan. ssh / smtp / mread sunucudan okunur (sshd -T, Exim / Dovecot'un dinlediği portlar); eski anahtarlar (min, sync, mout,
+        # wout) eski kayıtları okumak için
+        local svj="" svk
+        local svu=""; for svk in web ssh ftp cp smtp mread dns min sync mout wout; do svc_ports "$svk"; svj+="\"$svk\":\"$REPLY\","; svc_wudp "$svk"; [ -n "$REPLY" ] && svu+="${svu:+,}\"$svk\":\"$REPLY\""; done
+        printf '"svcp":{%s"quic":%s},"svcpu":{%s},' "$svj" "$wq" "$svu"
         # ev_start: olay kaydının ilk satırının zamanı — panel, kaydı olmayan eski ban / izleme için "kayıt şu tarihte başladı" der
         local evs; evs=$(head -c 200 "$EVENTS_FILE" 2>/dev/null | sed -n '1s/^{"t":\([0-9]*\).*/\1/p')
         printf '"cron_interval":%s,"ev_start":%s,"daily":{"start":%s,%s},"owners":{%s},"asn_top":[%s],"blocks_top":[%s],"imunify":%s,' \
@@ -5238,15 +5242,16 @@ ftp_passive() {  # FTP'nin pasif port aralığı (dosya aktarımı) → REPLY "3
 chunks15() {     # "1,2,…" → 15'erlik gruplar (iptables multiport tek kuralda en çok 15 port alır)
     tr ',' '\n' <<< "$1" | awk 'NF { a[++n] = $1 } END { for (i = 1; i <= n; i += 15) { s = a[i]; for (j = i + 1; j < i + 15 && j <= n; j++) s = s "," a[j]; print s } }'
 }
+svc_wudp() {     # SERVİS → REPLY = kısmi banın o servis için YAZDIĞI UDP portları (TEK TANIM, T-2 1.15.148; panel durum JSON "svcpu"):
+    # web 443 — HTTP/3 (QUIC) UDP 443'ten çalışır, LiteSpeed ve yeni Apache/nginx'te açık olabilir, satır her zaman yazılır; DNS 53
+    case "$1" in web) REPLY="443" ;; dns) REPLY="53" ;; *) REPLY="" ;; esac
+}
 part_ports() {   # BSVC + BPORTS → REPLY = kapatılacak TCP portları; PART_UDPP = UDP'de de kapanacaklar; 1 = boş ya da geçersiz
-    # UDP: DNS 53; web 443 — HTTP/3 (QUIC) UDP 443'ten çalışır, LiteSpeed ve yeni Apache/nginx'te açık olabilir
     local x all=""
     PART_UDPP=""; PART_URNG=""
     for x in ${BSVC//,/ }; do
         case "$x" in
-            web) svc_ports web; all+="${all:+,}$REPLY"; PART_UDPP+="${PART_UDPP:+,}443" ;;
-            ssh|ftp|cp|smtp|mread|min|sync) svc_ports "$x"; all+="${all:+,}$REPLY" ;;
-            dns) all+="${all:+,}53"; PART_UDPP+="${PART_UDPP:+,}53" ;;
+            web|ssh|ftp|cp|smtp|mread|min|sync|dns) svc_ports "$x"; all+="${all:+,}$REPLY"; svc_wudp "$x"; [ -n "$REPLY" ] && PART_UDPP+="${PART_UDPP:+,}$REPLY" ;;
             *) return 1 ;;
         esac
     done

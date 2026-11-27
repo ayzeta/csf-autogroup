@@ -639,7 +639,7 @@ mcheck "IP kartı: adresin port satırları tek grup (sonuç kutusunda adres bir
 # posta portları sunucudan (her sunucuda farklı olabilir): exim.conf daemon_smtp_ports (WHM "exim on another port" 26 ekler), yoksa
 # varsayılan; durum JSON svcp çiplerin portlarını verir. Taklit kökte ss'e bakılmaz (makinenin süreçleri test verisi değil)
 printf '%s\n' '# exim' 'daemon_smtp_ports = 25 : 26 : 465 : 587' 'tls_on_connect_ports = 465' > "$R/exim.conf"
-mcheck "posta portları: exim.conf'tan (25, 26, 465, 587), dosya yoksa varsayılan 25, 465, 587; IMAP/POP varsayılanı" "EXIM_CONF='$R/exim.conf' run --status --json 2>/dev/null | grep -q '\"svcp\":{\"ssh\":\"[0-9,]*\",\"smtp\":\"25,26,465,587\",\"mread\":\"110,143,993,995\",\"quic\":[01]}' && EXIM_CONF='$R/yok.conf' run --status --json 2>/dev/null | grep -q '\"smtp\":\"25,465,587\"'"
+mcheck "posta portları: exim.conf'tan (25, 26, 465, 587), dosya yoksa varsayılan 25, 465, 587; IMAP/POP varsayılanı" "EXIM_CONF='$R/exim.conf' run --status --json 2>/dev/null | grep -q '\"smtp\":\"25,26,465,587\",\"mread\":\"110,143,993,995\",' && EXIM_CONF='$R/yok.conf' run --status --json 2>/dev/null | grep -q '\"smtp\":\"25,465,587\"'"
 mcheck "posta portları: SMTP servisli kısmi ban sunucunun portlarını kapatır (26 dahil)" "EXIM_CONF='$R/exim.conf' run --action ban24 151.80.9 --mode svc --svc smtp >/dev/null 2>&1; grep -q '^tcp|in|d=25,26,465,587|s=151.80.9.0/24 ' '$D'"
 # sahip önbelleği: süresi geçmiş kayıt gösterilir (önce okunmuyor, listelerde "—" kalıyordu); kısmi ban, susturulan ve tekilin bloğu
 # haritada; IP kartının taze sorgusu önbellekten farklı sahip görünce blok işaretlenir ve tur onu yeniden sorar

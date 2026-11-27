@@ -4760,11 +4760,10 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   // Tıklanan aralığın kendisi: aralık banlı mı (tam / kısmi / değil), saldırılan servisler kapalı mı açık mı, içindeki banlar,
   // Kontrol edilecekler'deki kaydı, sahibi. Veri: --inside (ban penceresinin taramasıyla aynı).
   var RANGE_RE = /^(\d{1,3}\.){3}\d{1,3}\/([89]|[12]\d|3[01])$/;   // /8–/31 aralık kartı (tıklanan aralık neyse kart o); /32 tek IP → IP kartı
-  // motorun svc_ports / part_ports haritasıyla birebir (cPanel 6, posta eşitleme 4 portla eksikti: "kapalı" denen serviste 2077–2080,
-  // 110, 143 açık kalabiliyordu); UDP: web HTTP/3 443, DNS 53
-  var SVC_TCP = { web: [80, 443], ftp: [21], cp: [2077, 2078, 2079, 2080, 2082, 2083, 2086, 2087, 2095, 2096], min: [25], sync: [465, 587, 110, 995, 143, 993], dns: [53] },
-    SVC_UDP = { web: [443], dns: [53] };
-  function svcUdp(k) { return SVC_UDP[k] || []; }
+  // servis → port haritası MOTORDAN (T-2, 1.15.148): durum JSON svcp (TCP; motorun svc_ports'u) ve svcpu (kısmi banın yazdığı UDP; svc_wudp).
+  // Önce panelin kendi port tablosu (TCP ve UDP) vardı, elle eşit tutuluyordu: bir kez cPanel 6, posta eşitleme 4 portla eksik kalmıştı
+  function portsOf(v) { return v ? String(v).split(',').filter(Boolean).map(Number) : []; }
+  function svcUdp(k) { return portsOf((S.svcpu || {})[k]); }
   // "servis kapalı mı" kararının istediği UDP portları — motorun svc_uports'u ile aynı kural, panelde TEK yer (1.15.134): DNS 53; web 443
   // yalnız sunucu HTTP/3 dinliyorsa (durum JSON svcp.quic = motorun web_quic'i). Önce polCloses ve aralık kartının closedBy'ı ayrı
   // yazıyordu: closedBy QUIC'e bakmadan UDP 443 istiyor, DNS'in UDP 53'ünü hiç istemiyordu (aynı kural kart ile ayrıntıda farklı karar)
@@ -4881,11 +4880,8 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     var nm = svcNames(p.svc.join(','), p.x);
     return p.mode === 'all' || (p.mode === 'exc' && !nm) ? t('cm_all') : p.mode === 'exc' ? t('cm_exc', nm) : t('cm_svc', nm);
   }
-  // ssh, smtp, mread portları sunucudan (durum JSON svcp: sshd -T, Exim / Dovecot'un dinlediği portlar); min / sync eski kayıtların sabit portları
-  function svcTcp(k) {
-    var P = S.svcp || {}, v = k === 'ssh' ? P.ssh || (((S.prov || {}).cloud || {}).ssh) || '22' : k === 'smtp' ? P.smtp || '25,465,587' : k === 'mread' ? P.mread || '110,143,993,995' : '';
-    return v ? String(v).split(',').map(Number) : SVC_TCP[k] || [];
-  }
+  // servisin TCP portları motordan (svcp; ssh / smtp / mread sunucudan okunur: sshd -T, Exim / Dovecot'un dinlediği portlar)
+  function svcTcp(k) { return portsOf((S.svcp || {})[k]); }
   function polCloses(p, k) {       // politika servisin bütün TCP portlarını kapatıyor mu (giden servisler hiç; servisi belli olmayan yalnız "her şey"de)
     if (p.mode === 'all') return true;
     if (k === 'mout' || k === 'wout') return false;

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.15.148 — 2026-11-27
+
+- The panel takes every service's ports from the engine (the status carries
+  the TCP ports of each service and the UDP ports a partial ban writes for
+  it). Before, the panel kept its own copy of the table, kept equal by hand;
+  once it had missed six cPanel ports and four mail ports. The engine's partial
+  ban takes its UDP ports from the same definition.
+
 ## 1.15.147 — 2026-11-27
 
 - *Watched*: the days left show amber when the watch is about to end, never
