@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.15.154 — 2026-11-27
+
+- The run card shows a run in progress again (blue pulsing dot). The panel
+  worked out the server's clock from when the status reply arrived rather
+  than when it was asked for; with a slow status reply it thought the server
+  was about ten seconds behind, asked too late at the cron tick and missed
+  a short run every time. The check at the cron tick also no longer waits
+  for a status request that was already on its way.
+
 ## 1.15.153 — 2026-11-27
 
 - A panel tab left open while the plugin was updated (from another tab, the

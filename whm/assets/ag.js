@@ -3103,9 +3103,15 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     return p;
   }
   function refreshNow(light) {
+    // sunucu saati farkı isteğin GÖNDERİLDİĞİ ana göre: motor d.now'u isteğin başında ölçer, cevap ~10 sn sonra gelir. Cevap anına göre
+    // hesaplanınca panel sunucuyu ~10 sn geride sanıyor, tur anı yoklamasını geç yapıyor ve 6 sn'lik turu hiç yakalamıyordu (canlı 20:00
+    // ölçümü: sunucu 20:00:01–07 running=true, panel hep yeşil)
+    // Gönderim anı cevap anından geçen süre (performance.now, saat ayarından etkilenmez) çıkarılarak bulunur
+    var p0 = performance.now();
     return api('status').then(function (d) {
       if (!d || d.ok === false) { throw new Error((d && (d.message || d.error)) || 'status'); }
-      S = d; BACK = false; if (STALE !== 'work') STALE = false; LANG = d.lang === 'tr' ? 'tr' : 'en'; try { localStorage.setItem('ag-lang', LANG); } catch (e) {} CLOCK = d.now - Date.now() / 1000; LAST_OK = d.now; tzSet(d); setConn(null); NET_FAIL = 0;
+      var sent = Date.now() / 1000 - (performance.now() - p0) / 1000;
+      S = d; BACK = false; if (STALE !== 'work') STALE = false; LANG = d.lang === 'tr' ? 'tr' : 'en'; try { localStorage.setItem('ag-lang', LANG); } catch (e) {} CLOCK = d.now - sent; LAST_OK = d.now; tzSet(d); setConn(null); NET_FAIL = 0;
       if (SEEN0 === null) { SEEN0 = d.last_seen || 0; setTimeout(function () { api('seen').catch(function () {}); }, 1500); }
       document.documentElement.lang = LANG;
       if (wasRunning && !d.running) toast(t('t_done'), 'ok');
@@ -3142,7 +3148,10 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     if (document.hidden || !S || BACK) return;
     var el = document.getElementById('ag-next'); if (el && !S.running) el.textContent = nextIn() || '—';
     var left = nextLeft();                                  // cron tiki: 60 sn'lik yoklamayı beklemeden 3 sn sonra sor, run olayı gelene kadar 5 sn'de bir sürer
-    if (left === 0 && !DUE_HIT) { DUE_HIT = true; schedule(3000); } else if (left > 5) DUE_HIT = false;
+    // tur anı yoklaması yoldaki isteği beklemez: o istek tikten önce sorulmuştur (tur çalışmıyor der) ve ~10 sn sürer; beklenirse tur
+    // (canlıda ~6 sn) yeni istek gitmeden biter, "tur çalışıyor" hiç görünmez
+    if (left === 0 && !DUE_HIT) { DUE_HIT = true; setTimeout(function () { if (document.hidden) { HIDDEN_DUE = true; return; } if (REF_P) refreshNow(); else refresh(); }, 3000); }
+    else if (left > 5) DUE_HIT = false;
   }, 1000);
   function schedule(ms) {
     clearTimeout(pollTimer);

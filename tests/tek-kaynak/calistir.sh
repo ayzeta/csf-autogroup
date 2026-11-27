@@ -171,5 +171,9 @@ else echo "GEÇTİ: izleme sınırı tek ölçüt (watch_cut)"; fi
 # şeridi; önce başlık yeni sürümü yazıp ekran eski CSS / JS ile çalışıyordu
 if [ "$(grep -c "BOOT.version !== S.version" "$J")" != 1 ] || [ "$(grep -c "return verStale() + '<div class=\"ag-head\">" "$J")" != 1 ]; then echo "DÜŞTÜ: eski dosyalarla açık sayfa için sürüm şeridi yok"; F=$((F + 1))
 else echo "GEÇTİ: eski dosyalarla açık sayfa sürüm şeridiyle yenilenmeyi ister"; fi
+# TUR ANI (1.15.154): sunucu saati farkı isteğin gönderildiği ana göre (cevap anına göre ~10 sn kayıyordu) ve tur anı yoklaması yoldaki
+# isteği beklemez; ikisi yokken 6 sn'lik tur panelde hiç "çalışıyor" görünmedi (canlı ölçüm 2026-11-27 20:00)
+if [ "$(grep -c "CLOCK = d.now - sent;" "$J")" != 1 ] || [ "$(grep -c "CLOCK = d.now - Date.now()" "$J")" != 0 ] || [ "$(grep -c "if (REF_P) refreshNow(); else refresh();" "$J")" != 1 ]; then echo "DÜŞTÜ: tur anı yoklaması saat kaymasına ya da yoldaki isteğe takılıyor"; F=$((F + 1))
+else echo "GEÇTİ: tur anı yoklaması doğru saatte, yoldaki isteği beklemeden"; fi
 [ $F -eq 0 ] && echo "GEÇTİ: tek kaynak ($J)" || echo "DÜŞTÜ: $F kural"
 exit $F
