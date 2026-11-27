@@ -3143,15 +3143,17 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       schedule(60000);
     });
   }
-  var DUE_HIT = false;
+  // cron tiki geçti mi: nextLeft tikte 0 olmaz, son saniyeden (1) doğrudan bir sonraki tura kalan süreye (ör. 900) atlar — 1.15.154'e
+  // kadar "left === 0" aranıyordu, tur anı yoklaması hiç çalışmadı (canlıda 00:15 ölçüldü). Atlama aranır (sekme saniye kaçırsa da).
+  function tickPassed(prev, left) { return prev >= 0 && prev <= 5 && left > prev; }
+  var PREV_LEFT = -1;
   setInterval(function () {
-    if (document.hidden || !S || BACK) return;
+    if (document.hidden || !S || BACK) { PREV_LEFT = -1; return; }
     var el = document.getElementById('ag-next'); if (el && !S.running) el.textContent = nextIn() || '—';
-    var left = nextLeft();                                  // cron tiki: 60 sn'lik yoklamayı beklemeden 3 sn sonra sor, run olayı gelene kadar 5 sn'de bir sürer
-    // tur anı yoklaması yoldaki isteği beklemez: o istek tikten önce sorulmuştur (tur çalışmıyor der) ve ~10 sn sürer; beklenirse tur
-    // (canlıda ~6 sn) yeni istek gitmeden biter, "tur çalışıyor" hiç görünmez
-    if (left === 0 && !DUE_HIT) { DUE_HIT = true; setTimeout(function () { if (document.hidden) { HIDDEN_DUE = true; return; } if (REF_P) refreshNow(); else refresh(); }, 3000); }
-    else if (left > 5) DUE_HIT = false;
+    var left = nextLeft(), tick = tickPassed(PREV_LEFT, left); PREV_LEFT = left;
+    // tik: 60 sn'lik yoklamayı beklemeden 3 sn sonra sor, run olayı gelene kadar 5 sn'de bir sürer (runDue). Yoldaki isteği beklemez:
+    // o istek tikten önce sorulmuştur (tur çalışmıyor der) ve ~10 sn sürer; beklenirse tur (canlıda ~6 sn) yeni istek gitmeden biter
+    if (tick) setTimeout(function () { if (document.hidden) { HIDDEN_DUE = true; return; } if (REF_P) refreshNow(); else refresh(); }, 3000);
   }, 1000);
   function schedule(ms) {
     clearTimeout(pollTimer);

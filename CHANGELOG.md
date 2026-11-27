@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.15.155 — 2026-11-28
+
+- The check at the cron tick now actually runs. The countdown jumps from
+  the last second straight to the next run's full interval and never reads
+  zero, so the extra status request at the tick was never sent and a short
+  run was only seen by chance.
+
 ## 1.15.154 — 2026-11-27
 
 - The run card shows a run in progress again (blue pulsing dot). The panel

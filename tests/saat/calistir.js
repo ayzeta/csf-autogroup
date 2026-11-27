@@ -10,7 +10,7 @@ const fs = require('fs'), path = require('path');
 let src = fs.readFileSync(path.join(__dirname, '../../whm/assets/ag.js'), 'utf8');
 const tail = src.lastIndexOf('})();');
 src = src.slice(0, tail) + `globalThis.__AG = { set: function (s, l) { S = s; LANG = l || 'tr'; CLOCK = s.now - Date.now() / 1000; tzSet(s); },
-  stamp: stamp, dayStr: dayStr, nextLeft: nextLeft, fmtDT: fmtDT };\n` + src.slice(tail);
+  stamp: stamp, dayStr: dayStr, nextLeft: nextLeft, fmtDT: fmtDT, at: function (t) { CLOCK = t - Date.now() / 1000; } };\n` + src.slice(tail);
 const el = () => new Proxy(function () {}, { get: (t, k) => k === 'length' ? 0 : k === Symbol.toPrimitive ? () => '' : el(), apply: () => el(), set: () => true });
 globalThis.window = { AG_BOOT: {}, addEventListener() {}, location: { search: '' }, matchMedia: () => ({ matches: false, addEventListener() {} }) };
 globalThis.document = { getElementById: () => el(), querySelector: () => el(), querySelectorAll: () => [], addEventListener() {}, createElement: el, body: el(), documentElement: el(), hidden: true };
@@ -18,7 +18,10 @@ globalThis.location = window.location; globalThis.addEventListener = () => {};
 globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
 globalThis.navigator = { language: 'tr' };
 globalThis.fetch = () => new Promise(() => {});
-globalThis.setInterval = () => 0; globalThis.setTimeout = () => 0;
+const INTERVALS = [], TIMEOUTS = [];
+globalThis.setInterval = (f, ms) => { INTERVALS.push({ f, ms }); return 0; };
+globalThis.setTimeout = (f, ms) => { TIMEOUTS.push({ f, ms }); return 0; };
+globalThis.clearTimeout = () => {};
 try { new Function(src)(); } catch (e) { console.error('yükleme hatası:', e.message); process.exit(1); }
 const AG = globalThis.__AG;
 let N = 0, F = 0;
@@ -40,5 +43,23 @@ AG.set({ now: T, tz: 'Bilinmeyen/Yer', tzo: 10800, cron_min: '0', enabled: true 
 check('tarayıcının tanımadığı ad: sabit farka düşer (13:40)', AG.stamp(T) === '11.11 13:40', AG.stamp(T));
 AG.set({ now: T, tz: 'Europe/Istanbul', tzo: 10800, enabled: true }, 'en');
 check('İngilizce biçim de sunucu saatiyle', /13:40/.test(AG.stamp(T)), AG.stamp(T));
+// Tur anı yoklaması (1.15.155): panelin saniyelik sayacı gerçek nextLeft ile 13:44:55 → 13:45:10 ilerletilir; tikten sonra bir kez,
+// 3 sn sonra durum sorulmalı. 1.15.154'e kadar "left === 0" aranıyordu; nextLeft tikte 1'den 900'e atladığı için hiç kurulmuyordu.
+const tickIv = INTERVALS.find(x => x.ms === 1000 && /nextLeft\(\)/.test(String(x.f)));
+check('saniyelik sayaç bulundu', !!tickIv);
+if (tickIv) {
+  AG.set({ now: T, tz: 'Europe/Istanbul', tzo: 10800, cron_min: '*/15', cron_interval: 900, enabled: true, running: false }, 'tr');
+  document.hidden = false;
+  const t0 = Date.UTC(2026, 10, 11, 10, 44, 55) / 1000;   // İstanbul 13:44:55
+  const probes = [];
+  for (let i = 0; i <= 15; i++) {
+    AG.at(t0 + i); const n = TIMEOUTS.length; tickIv.f();
+    TIMEOUTS.slice(n).forEach(x => { if (/refresh/.test(String(x.f))) probes.push({ at: i, ms: x.ms }); });
+  }
+  check('tik geçince bir kez yoklama kurulur (13:45:00, 3 sn sonra)', probes.length === 1 && probes[0].at === 5 && probes[0].ms === 3000, JSON.stringify(probes));
+  probes.length = 0; AG.at(t0 + 20); tickIv.f(); document.hidden = true; tickIv.f(); document.hidden = false;
+  AG.at(t0 + 300); tickIv.f();
+  check('gizli sekmeden dönüşte yanlış tik sayılmaz', TIMEOUTS.filter(x => /refreshNow/.test(String(x.f))).length === 1, String(TIMEOUTS.length));
+}
 console.log(`Saat: ${N} denetim, ${F} beklenmeyen`);
 process.exit(F ? 1 : 0);
