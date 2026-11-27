@@ -65,7 +65,7 @@ grep() { command grep -a "$@"; }
 # sayı, anahtar; Türkçe modda sıralama kuralı zaten C idi (LC_COLLATE=C)
 sort() { LC_ALL=C command sort "$@"; }
 
-VERSION="1.15.151"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.152"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1883,7 +1883,7 @@ CSO_PERL='$| = 1; my ($g, $lk) = @ARGV; my $F; my $sz = 0; if (open($F, "<", $g)
         chomp $res; my @f = split /\t/, $res; return (($f[2] // "") =~ /^[1-9][0-9]*$/ ? ($f[2], $f[4] // "") : ("", "")) }
     while (my $ip = <STDIN>) { chomp $ip; my ($a, $nm) = asn($ip); my $cc = "";
         if ($L) { my @r = eval { ConfigServer::LookUpIP::iplookup($ip, 1) }; $cc = $r[0] // "" } $cc = "" unless $cc =~ /^[A-Z]{2}$/;
-        $nm =~ s/[\t\n|]/ /g; print "$a\t$cc\t$nm\n" }'
+        $nm =~ s/[\t\n|]/ /g; print "$a|$cc|$nm\n" }'
 csf_own_q() {    # IP → CSO_A (ASN), CSO_C (ülke), CSO_N (ad); bilinmeyen alan boş
     CSO_A=""; CSO_C=""; CSO_N=""
     if [ -z "$CSO_ST" ]; then
@@ -1896,7 +1896,9 @@ csf_own_q() {    # IP → CSO_A (ASN), CSO_C (ülke), CSO_N (ad); bilinmeyen ala
     fi
     [ "$CSO_ST" = 1 ] || return 0
     { printf '%s\n' "$1" >&"${CSOP[1]}"; } 2>/dev/null || { CSO_ST=0; return 0; }
-    IFS=$'\t' read -r -t 10 CSO_A CSO_C CSO_N <&"${CSOP[0]}" || { CSO_ST=0; CSO_A=""; CSO_C=""; CSO_N=""; }
+    # ayraç "|" (adda temizlenir): sekme IFS boşluğu sayılır, ardışık iki sekme birleşir → ASN boşken ülke ASN yerine geçiyordu ("ASUS")
+    IFS='|' read -r -t 10 CSO_A CSO_C CSO_N <&"${CSOP[0]}" || { CSO_ST=0; CSO_A=""; CSO_C=""; CSO_N=""; }
+    [[ "$CSO_A" =~ ^[0-9]+$ ]] || CSO_A=""; [[ "$CSO_C" =~ ^[A-Z]{2}$ ]] || CSO_C=""
 }
 owner_resolve() { # IP [cymru] → RES_ASN, RES_NAME, RES_CC, RES_PFX, RES_REG, RES_ALLOC, RES_ASRC / RES_CSRC (csf|cymru|""), RES_DNS (Cymru
     # cevap verdi mi). Sahibin TEK çözücüsü: tur önbelleği (owner_lookup) ve IP kartı (do_lookup) bunu çağırır

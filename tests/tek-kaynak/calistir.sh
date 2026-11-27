@@ -152,6 +152,8 @@ k7=$(grep -c "esc(t('asc_kind')) + (info.cc ? ' · <span class=\"ag-own-s\">' + 
 k7c=$(grep -c "known.length && !ctx.bk && (ctx.banned || !ctx.card)" "$J")
 # (8) geçici banın kalan süresi "Kendi banı" satırında (yalnız açılır CSF satırının içindeydi)
 [ "$(grep -c "statePill('temp', t('l_temp')) + (d.tleft > 0 ?" "$J")" = 1 ] || k7c=x
+# 1.15.152: blokları birden çok sağlayıcıya ait aralıkta başlık tek sağlayıcı yazmaz (oa yok), Sahip satırı sağlayıcıları sayar
+[ "$(grep -c "oa = mixH ? null :" "$J")" = 1 ] && [ "$(grep -c "fact(t('l_owner'), mixH ||" "$J")" = 1 ] || k2b=x
 if [ "$k1" != 2 ] || [ "$k1b" != 2 ] || [ "$k2" != 1 ] || [ "$k2b" != 1 ] || [ "$k3" != 1 ] || [ "$k4" != 1 ] || [ "$k4b" -lt 2 ] || [ "$k5" != 1 ] || [ "$k6" != 1 ] || [ "$k7" != 1 ] || [ "$k7b" != 0 ] || [ "$k7c" != 1 ]; then
     echo "DÜŞTÜ: kart tutarlılığı (başlık ülke adı $k1, Ülke satırı $k1b, sahip tekrarı $k2/$k2b, banlı izleme $k3, AbuseIPDB metni $k4/$k4b, Kalıcı yap adı $k5, elle ban ihlal $k6, sağlayıcı kartı $k7/$k7b/$k7c)"; F=$((F + 1))
 else echo "GEÇTİ: kart tutarlılığı (ülke adıyla, sahip bir kez, banlı blokta izleme, AbuseIPDB sıfır bildirim, ban eylemi adı, elle ban ihlal değil)"; fi

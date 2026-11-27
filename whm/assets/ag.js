@@ -4642,7 +4642,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       if (!d.ok) { body.innerHTML = empty('alert', d.error === 'bad_ip' ? t('bad_ip') : (d.error || d.message || '?')); return; }
       var host = d.host ? '<span class="ag-mono">' + esc(d.host) + '</span> ' + statePill(d.fwd ? 'ok' : 'n', d.fwd ? t('l_fwd') : t('l_nofwd'))
         : '<span class="ag-muted">' + t('l_noptr') + '</span>';
-      var owner = d.asn ? ownerHtml({ asn: d.asn, cc: d.cc, name: d.asname || '', label: 'AS' + d.asn + ' ' + (d.asname || '') }) : d.cc ? flag(d.cc) : '';   // bayrak başta (öteki listeler gibi)
+      var owner = d.asn ? ownerHtml({ asn: d.asn, cc: d.cc, name: d.asname || '', label: 'AS' + d.asn + ' ' + (d.asname || '') }) : '';   // bayrak başta (öteki listeler gibi); ASN'siz yalnız ülke Sahip satırı açmaz (ülke Üst seviyeler'in Ülke satırında, adıyla)
       var mb = coverBits(d);                                         // IP'yi kapsayan en geniş tam ban (ban düğmeleri buna göre)
       function ccDiff(w) {
         var as = /^AS/.test(w), cy = as ? (d.asn ? 'AS' + d.asn : '') : (d.cc || '');
@@ -5194,7 +5194,10 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       // Ağı banla), izlenen blokta "İzlemeyi yeniden başlat" yoktu, kısmi banda "Banı değiştir" yoktu. Aralık sunucunun kendi
       // adresini içeriyorsa ban önerilmez (motor da reddeder)
       var acts = objItems(cidr, rv ? rv.ips : null).filter(function (x) { return !(d.self && BAN_ACT.test(x.act)); }).map(miBtn);
-      var oo = ownerOf(cidr), oa = oo.asn ? [0, String(oo.asn)] : /^AS(\d+)/.exec(d.owner || '');
+      // blokları birden çok sağlayıcıya ait aralıkta başlık tek sağlayıcı yazmaz (173.46.80.0/20: başlık AS212238, Sahip satırı "2 ayrı
+      // sağlayıcı"); sağlayıcılar yalnız Sahip satırında
+      var mixH = rangeMix(cidr);
+      var oo = ownerOf(cidr), oa = mixH ? null : oo.asn ? [0, String(oo.asn)] : /^AS(\d+)/.exec(d.owner || '');
       body.innerHTML = fact(t('l_fw'), verdictH + (acts.length ? '<div class="ag-dr-acts">' + acts.join('') + '</div>' : '')) +
         (watchH ? fact(t('l_pending'), watchH) : '') +
         fact(t('s_review'), rvH) +
@@ -5212,7 +5215,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
         (d.self ? fact(t('rg_self_l'), esc(t('in_self', d.self))) : '') +
         (d.abk ? fact('AbuseIPDB', '<div id="ag-ab-blk">' + abuseBlkHtml(d, bits) + '</div>') : '') +
         // listelerle aynı biçim (bayrak · AS rozeti · kurum); sahip haritasında yoksa motorun verdiği metin, sorgulanıp yoksa "sağlayıcı yok"
-        fact(t('l_owner'), (function () { var o = ownerOf(cidr); if (oa) return ''; return o.asn ? '<span class="ag-own-s ag-own-f">' + ownerHtml(o) + '</span>' : d.owner ? esc(shortOwner(d.owner)) : o.none ? ownNone(o) : ''; })() + rangeMix(cidr));
+        fact(t('l_owner'), mixH || (function () { var o = ownerOf(cidr); if (oa) return ''; return o.asn ? '<span class="ag-own-s ag-own-f">' + ownerHtml(o) + '</span>' : d.owner ? esc(shortOwner(d.owner)) : o.none ? ownNone(o) : ''; })());
       var sub = dr.querySelector('#ag-dr-sub'), so = ownerOf(cidr);   // sahip IP kartı başlığıyla aynı bileşen (sağlayıcı kartını açar, A1)
       // sahip haritasında olmayan aralık (/16 ve genişi): motorun sahip metninden aynı bileşen ("AS9121 Ad, TR"); başlıkta yalnız AS rozeti
       // kalıyor, ad ve ülke aşağıdaki Sahip satırında başka biçimde yazılıyordu (1.15.150, canlı 88.243.0.0/16). Sahip satırı o zaman yok
@@ -5285,15 +5288,20 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   // işleyiciler data-ip'yi açıyordu (aynı öğe yere göre başka kart açıyordu)
   // aralığın sahibi bilinen blokları birden çok sağlayıcıya aitse (geniş duyurulan aralık, ör. bir /20'nin içinde iki ayrı ASN'in
   // /24'leri) Sahip bölümü bunu yazar: başlıktaki ve satırdaki tek sahip aralığın ilk bloğununkidir
-  function rangeMix(cidr) {
-    var b = bitsOf(cidr); if (!(b < 24)) return '';
+  // aralığın bloklarının sağlayıcıları (sahip haritasından); ikiden çoksa aralık tek sağlayıcıya ait değil
+  function rangeOwners(cidr) {
+    var b = bitsOf(cidr); if (!(b < 24)) return [];
     var lo = ipNum(cidr), hi = lo + Math.pow(2, 32 - b) - 1, seen = {}, L = [];
     Object.keys(S.owners || {}).forEach(function (k) {
       var v = ipNum(k + '.0'), o = S.owners[k];
       if (!(v >= lo && v <= hi) || !o || !o[0] || o[0] === '-' || seen[o[0]]) return;
       seen[o[0]] = 1; L.push('AS' + o[0] + ' ' + shortName(ownName(o[2] || '')));
     });
-    return L.length > 1 ? '<div class="ag-muted" style="margin-top:3px">' + addrHtml(t('rg_own_mix', num(L.length), L.slice(0, 4).join(', ') + (L.length > 4 ? ' …' : ''))) + '</div>' : '';
+    return L;
+  }
+  function rangeMix(cidr) {
+    var L = rangeOwners(cidr);
+    return L.length > 1 ? addrHtml(t('rg_own_mix', num(L.length), L.join(', '))) : '';
   }
   function cidrLink(c) { return '<span class="ag-cidr" data-ip="' + esc(c) + '">' + esc(c) + '</span>'; }
   // metin içindeki her IP / aralık tıklanır (kart açar); "self" (bulunulan kartın / pencerenin kendi adresi) bağlantı olmaz, işaretlenir.

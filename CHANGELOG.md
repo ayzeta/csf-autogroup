@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.15.152 — 2026-11-27
+
+- Provider data read from CSF's own files no longer shifts when a field is
+  empty: an IP missing from CSF's ASN data showed its country code as the
+  provider ("ASUS" on the IP card), and an IP without a country showed the
+  provider name as its country.
+- A range whose blocks belong to more than one provider no longer shows a
+  single provider in its card header; the Owner row lists all of them.
+- Allow list and rental list boxes: the description line no longer runs
+  under the "Addresses" and remove buttons in the top corner.
+
 ## 1.15.151 — 2026-11-27
 
 - A range whose only entry is a single IP banned by hand from the panel no

@@ -1097,6 +1097,10 @@ for i in 1 2; do single 151.80.7.$i sshd; done; quiet
 mcheck "sahip kaynağı · tur yeni bloğun sağlayıcısını ve ülkesini CSF verisinden yazar (AS3320 DE), duyurulan aralık Cymru'dan" "grep -q '^151.80.7|3320|DE|DTAG Deutsche Telekom AG|[0-9]*|151.80.0.0/16|csf|csf\$' '$R/var/lib/csf_autogroup/owners'"
 mcheck "sahip kaynağı · eski biçimdeki kayıt turda CSF verisine geçer (NL), zamanı ve duyurulan aralığı korunur" "grep -q '^151.80.8|16276|NL|OVH|$(( NOW - 86400 ))|151.80.0.0/16|csf|csf\$' '$R/var/lib/csf_autogroup/owners'"
 mcheck "sahip kaynağı · IP kartı aynı çözücüden: AS3320, DE, kaynak csf, duyurulan aralık Cymru'dan" "run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"asname\":\"DTAG Deutsche Telekom AG\",\"pfx\":\"151.80.0.0/16\",\"cc\":\"DE\".*\"asrc\":\"csf\",\"csrc\":\"csf\"'"
+# 1.15.152: CSF verisinde bir alan boşken öteki alanlar kaymaz. Önce sekme ayraçlı okunuyordu (bash ardışık sekmeleri birleştirir):
+# ip2asn'de olmayan IP'de ülke ASN yerine geçiyordu (canlı kopyada IP kartı "Sağlayıcı ASUS"), ülkesi olmayan IP'de ad ülke yerine
+printf '151.82.0.0\t151.82.255.255\t5000\tXX\tKayit Adi\n' >> "$R/var/lib/csf/Geo/ip2asn-combined.tsv"; printf '151.81. US\n' >> "$R/var/lib/csf/Geo/ccmap"
+mcheck "sahip kaynağı · ASN'si bulunmayan IP'de ülke ASN yerine geçmez; ülkesi bulunmayan IP'de ad ülke yerine geçmez" "! run --lookup 151.81.1.5 --json 2>/dev/null | grep -q '\"asn\":\"US\"' && run --lookup 151.82.1.5 --json 2>/dev/null | grep -q '\"asname\":\"Kayit Adi\"' && ! run --lookup 151.82.1.5 --json 2>/dev/null | grep -q '\"cc\":\"Kayit'"
 pcg() { run --status --json 2>/dev/null | grep -oE '\{"cidr":"151\.80\.7\.0/24","since":\{[^}]*\},[^}]*\}'; }   # kısmi banın grup nesnesi
 mk pcudp; pcudp ""
 mcheck "kısmi ban UDP 5000 kapatıyor, sağlayıcı yalnız TCP'de: kapsamıyor (pcov yok), ports TCP, uports UDP ayrı" "pcg | grep -q '\"ports\":\"8080\",\"uports\":\"5000\"' && ! pcg | grep -q pcov"
