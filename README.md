@@ -135,7 +135,9 @@ settings, with no prompts. `config.env` is left untouched.
   icons, chart, emails). The *state* of an address: red filled = blocked
   (permanent or timed; red only ever means blocked), red outline = partly
   blocked, green = allowed, plain = not banned. The *importance* of a finding,
-  detection or health problem: amber = attention, dark orange filled = serious.
+  detection or health state: green = fine (protection running, nothing to
+  review, safe to ban), amber = attention, dark orange filled = serious.
+  Changes in the summary boxes (▲ / ▼) carry no colour.
   Actions (ban, remove, allow, mute, settings) and routine events carry no
   colour; indigo marks only things to click. *Terms* has a *Colours* section.
 - **Needs review** — suspicious ranges, suspicious networks and allow-list-skipped blocks from the review
@@ -191,8 +193,10 @@ settings, with no prompts. `config.env` is left untouched.
   the review period (*Days kept in the list*, default 7 days) after its last attempt,
   warning or violation. Rows are re-checked against today's data and drop earlier
   when they no longer apply. To silence a row before that, use Mute.
-- **Active range bans** — a sortable, paged table with each block's owner,
-  searchable by CIDR, AS number or organisation. Filters show their counts.
+- **Active bans** — the plugin's range bans and the single-IP bans set from
+  the panel (lfd's single bans are not listed): a sortable, paged table with
+  each entry's owner, searchable by CIDR, AS number or organisation. Filters
+  show their counts (*Single IP* shows the single-IP bans).
   Watched blocks that reached the temp threshold again are tagged *came back,
   permanent*; temp block bans show their time left. **⋯ → IPs** lists the IPs
   and ban reasons behind any block (from the event log). The
@@ -262,7 +266,7 @@ settings, with no prompts. `config.env` is left untouched.
   singles, temp bans, offenders, and the IPs a ban or watch rests on) with
   their state now (permanent, temp with time left, not banned) and reason.
 - **Inside a wider ban** — a block inside a banned `/16` (or any wider range) is
-  tagged *inside /16* in Active range bans and Watched, and listed under
+  tagged *inside /16* in Active bans and Watched, and listed under
   *Bans no longer needed* in the Providers tab.
 - **Ban announced range** — the IP card offers to ban the range the IP's owner
   announces, from /8 to /23 (a /16 is the network ban). Between /17 and /23 it
@@ -359,7 +363,7 @@ removal is there to free space in the list.
   `443/udp`, a port without a suffix is TCP). Everything else stays open, and connections from this
   server to the range are not affected. Web includes UDP 443 (HTTP/3) and DNS
   includes UDP 53. It is one `csf.deny` line (split per 15
-  ports), shown as *partial* in Active range bans; it doesn't cover the range, so
+  ports), shown as *partial* in Active bans; it doesn't cover the range, so
   nothing inside is removed and watching continues.
 - **Everything except** — a full ban, but the services you pick stay open,
   including outgoing mail and outgoing web (this server calling APIs, backups or
@@ -387,7 +391,7 @@ full one.
 
 | Button | Does |
 |--------|------|
-| Ban network (/16) | permanent `/16` ban, added as `do not delete`: from Needs review, **⋯** in Active range bans and Watched, and the IP card |
+| Ban network (/16) | permanent `/16` ban, added as `do not delete`: from Needs review, **⋯** in Active bans and Watched, and the IP card |
 | Ban block (/24) | permanent `/24` ban from the IP card |
 | Change ban | change what a CSF Auto-Group ban blocks (everything / selected services / everything except) |
 | Ban anyway | ban a allow-list-skipped `/24` (overrides the allow list) |

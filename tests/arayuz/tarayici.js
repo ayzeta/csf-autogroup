@@ -1066,7 +1066,7 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
       }
     }
     // Süreli aralık banı (gerçek CSF): Bloğu banla penceresinde süre yalnız "Her şey"de; süre seçilince açıklama, kapsananlar kaldırılmaz;
-    // 1 sa ile onay → kartın Blok satırı kalan süreyi gösterir → Aktif aralık banları satırı "elle · süre", ⋯ → Banı kaldır (yazarak)
+    // 1 sa ile onay → kartın Blok satırı kalan süreyi gösterir → Aktif banlar satırı "elle · süre", ⋯ → Banı kaldır (yazarak)
     const b24 = await page.$('.ag-drawer .ag-lv-t [data-act="ban24"]');
     if (b24) {
       await tik(page, '.ag-drawer .ag-lv-t [data-act="ban24"]'); await page.waitForSelector('.ag-modal #ag-ttl', { timeout: 30000 }).catch(() => {});
@@ -1085,7 +1085,7 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
       await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('.ag-drawer'), null, { timeout: 5000 }).catch(() => {});
       const gr = '198.51.100.0/24', gm = await page.$(`.ag-item[data-row="${gr}"] [data-act="menu"]`);
       const pill = await page.evaluate(c => { const r = document.querySelector(`.ag-item[data-row="${c}"] .ag-td-state`); return r ? r.textContent.trim() : ''; }, gr);
-      check('aralık banı: Aktif aralık banları satırı "elle · kalan süre", menüde Banı değiştir yok', /^(elle|manual) · \d/.test(pill), pill);
+      check('aralık banı: Aktif banlar satırı "elle · kalan süre", menüde Banı değiştir yok', /^(elle|manual) · \d/.test(pill), pill);
       if (gm) {
         await tik(page, `.ag-item[data-row="${gr}"] [data-act="menu"]`); await page.waitForTimeout(400);
         const acts = await page.evaluate(c => Array.from(document.querySelectorAll(`.ag-item[data-row="${c}"] .ag-menu [data-act]`)).map(b => b.getAttribute('data-act')), gr);

@@ -1,5 +1,70 @@
 # Changelog
 
+## 1.15.149 — 2026-11-27
+
+- The health dot and the CSF / lfd / cron chips in the Overview status bar
+  are green again while protection runs. 1.15.146 had made them grey, which
+  read as "stopped". The green dot now pulses slowly while protection is
+  healthy (a run in progress keeps its faster blue pulse); a paused or
+  unhealthy plugin keeps its problem colour and a still dot.
+  The "On" badge of the protection layers on the Providers tab is green as
+  well (grey "On" was hard to tell from "Off").
+- Colour rule corrected: green means allowed *or fine* (protection running,
+  nothing to review, safe to ban), at the good end of the importance scale.
+  The ▲ / ▼ changes in the summary boxes and "stays open" in the ban
+  summary are plain now; a falling ban count is not "good" and a rising one
+  is not "attention".
+- Blocked badges are filled red with white text (permanent, temporary,
+  made permanent); before they were pale pink with a light border and hard
+  to tell from the red outline of a partial ban.
+- Owner names are shortened by one rule everywhere. A name given as
+  "AS28126 - BRISANET …" showed as "- BRISANET …"; History printed the
+  owner text stored with the event ("3xK Tech GmbH, DE") while the lists
+  showed today's owner — History now uses the same owner as the lists. The
+  IP card and range card headers show the owner the same way (flag, AS,
+  name) instead of "AS28126 · BR".
+- A "violation under a ban" of a provider, country or rented-server list
+  (no range, one IP) shows that IP, its state and its menu in History; the
+  row had no address.
+- An allowed-service box says which of its sub-lists were removed (e.g.
+  "Removed: GPTBot"); its catalogue description still named them.
+- Every collapsible section shows ▸ / ▾ ("Closed lists", "Excluded from
+  allowed services", "CSF line", "How it works"); the browser's own marker
+  was hidden, so they looked like plain headings.
+- The plugin's own csf.deny comment shows as "manual single ban (root)"
+  instead of the raw "csf_autogroup: … - do not delete", and its service
+  as "manual ban" instead of "other".
+- IP and range cards: the "Allow list" line shows allow entries only. lfd's
+  ignore sources (csf.ignore, csf.rignore, CC_IGNORE…) get their own
+  "Ignore (lfd)" line, and a reverse-DNS / country check that could not be
+  done is a note, not a list entry (a banned range read "Allow list:
+  csf.rignore" when only the DNS lookup had failed). An allow in csf.allow
+  with a port range no longer cuts the result sentence ("csf.allow (tcp in
+  d=1"), and an incoming-only allow no longer claims to beat every ban.
+- Range card: the section is "Bans on this range" (it also lists partial
+  bans); counts read "7 of them closed by …" and name the closer when it is
+  a blocklist, country, provider or rented list; a range banned by a line
+  outside the plugin shows that ban. Level rows of the IP card show a
+  level's own ban first (and "also inside …"), and say when a partly banned
+  block is watched.
+- "Active range bans" is now "Active bans" (list, summary box, mail): it
+  also holds the single-IP bans set from the panel (full or partial), and
+  the box counted them as ranges. A "Single IP" filter shows those. lfd's
+  single bans are still kept apart.
+- AbuseIPDB: the report count says its window ("0 reports, last 90 days"),
+  since the last report date can be older than the window.
+- The restore note of a single ("restored when 172.94.9.0/24 was removed")
+  is no longer cut off by the reason's length limit.
+- Smaller: no empty strip above the first section of the IP card; the
+  registry is written in capitals (LACNIC); a list ring at "0%" draws no
+  dot; "Nothing to look at" wraps cleanly on phones; provider bars and list
+  rings are neutral grey instead of the interface's indigo.
+- The current-state record of every listed address is built faster: allow
+  list and csf.deny entries are looked up by range instead of being scanned
+  in full for each address. The output is the same; on a large allow list
+  the status took about 0.4 s less, and the IP card, range card and Measure
+  impact use the same function.
+
 ## 1.15.148 — 2026-11-27
 
 - The panel takes every service's ports from the engine (the status carries

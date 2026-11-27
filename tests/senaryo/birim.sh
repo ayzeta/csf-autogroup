@@ -224,4 +224,13 @@ N=$((N + 1)); if ms=$(bash "$H/mangle-sira.sh" 2>&1); then echo "  ✓ ${ms##*$'
 N=$((N + 1)); if ms=$(timeout 60 bash "$H/guard-kural.sh" 2>&1); then echo "  ✓ ${ms##*$'\n'}"; else F=$((F + 1)); printf '%s\n' "$ms" | grep '✗'; fi
 # posta portları: ss -ltnp tek çağrı + kısa süreli dosya (ayrı betik, taklit ss)
 N=$((N + 1)); if ms=$(bash "$H/mail-ss.sh" 2>&1); then echo "  ✓ ${ms##*$'\n'}"; else F=$((F + 1)); printf '%s\n' "$ms" | grep '✗'; fi
+# short_reason: geri yüklenen tekilin notu sebep sınırına girmez, tam kalır (1.15.149; canlıda "- 172.94.9.0/..." diye kesiliyordu)
+eval "$(awk '/^short_reason\(\) \{/{f=1} f{print} f && /^}$/{exit}' "$REPO/csf_autogroup.sh")"
+m() { local f="$1"; shift; printf "$f" "$@"; }; modsec_msg() { REPLY=""; }
+sr() { N=$((N + 1)); short_reason "$1" "${3:-}"; if [ "$REPLY" = "$2" ]; then echo "  ✓ short_reason → $REPLY"; else F=$((F + 1)); echo "  ✗ short_reason → «$REPLY» (beklenen «$2»)"; fi; }
+sr "# lfd: Tekrar ban (PERMBLOCK): son 72 saat içinde en az 4 geçici ban aldı, kalıcıya alındı - 172.94.9.0/24 kaldırılınca geri yüklendi - Thu Nov 27 10:00:00 2026" \
+   "Tekrar ban (PERMBLOCK): son 72 saat içinde en az 4 geçici ban aldı, kalıcıya alındı - 172.94.9.0/24 kaldırılınca geri yüklendi"
+sr "# lfd: (sshd) Failed SSH login from 1.2.3.4 (CN/China/-): 5 in the last 3600 secs - restored when 1.2.3.0/24 was removed - Thu Nov 27 10:00:00 2026" \
+   "(sshd) Failed SSH login - restored when 1.2.3.0/24 was removed" "1.2.3.4"
+sr "# lfd: (sshd) Failed SSH login from 1.2.3.4 (CN/China/-): 5 in the last 3600 secs - Thu Nov 27 10:00:00 2026" "(sshd) Failed SSH login" "1.2.3.4"
 echo "Birim: $N durum, $F beklenmeyen"; [ "$F" -eq 0 ]

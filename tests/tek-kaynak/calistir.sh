@@ -102,11 +102,37 @@ rd=$(grep -oE "[a-z]+: 'ag-pill-(ban|temp|prom|part)'" "$J" | cut -d: -f1 | sort
 # mor, elle ban kırmızı rozet)
 ml=$(grep -cE '#(b91c1c|dc2626|7c3aed|0d9488|2563eb|db2777|047857)' "$SHF")
 # 1.15.146: Geçmiş "şu an" notu satırın DURUM ÇİPİ (rengi tek durum kaydından, noteSt); tamam / açık / ölçüm renksiz (yeşil yalnız izinli)
-ns=$(grep -c "addrPill(noteSt(e.cidr), note" "$J"); okc=$(grep -cE '^\.ag-(okbar|st\.on|hc\.ok) .*--ag-ok\b|^\.ag-pulse i .*#10b981' "${J%.js}.css")
-[ "$ns" = 1 ] && [ "$okc" = 0 ] || ml=$((ml + 1000))
+# 1.15.149: SAĞLIK göstergesi (koruma bandının noktası ve CSF / lfd / Cron çipleri) önem ölçeğinin "iyi" ucu: yeşil ZORUNLU. 1.15.146'da
+# renksiz (gri) yapılmıştı, çalışan koruma "durmuş" diye okundu (kullanıcı). Sağlayıcılar'daki katmanın "Açık" rozeti de aynı sınıf (gri
+# "Açık" kapalıyla karışıyordu) → yeşil. "Bakılacak bir şey yok" çubuğu (okbar) bilgi: renksiz kalır
+# Yeşil = izinli ya da iyi. Değişim oku (▲ / ▼) ve ban özetindeki "Açık kalır" bilgi: yeşil / amber değil (azalan ban "iyi" değil)
+ns=$(grep -c "addrPill(noteSt(e.cidr), note" "$J"); okc=$(grep -cE '^\.ag-okbar .*--ag-ok\b|^\.ag-kpi-d\.(up|dn)[^}]*color: (#|var\(--ag-(ok|warn)\))|^\.ag-sum-k\.ok \{[^}]*--ag-ok\b' "${J%.js}.css")
+hg=$(grep -cE '^\.ag-pulse i \{.*background: var\(--ag-ok\).*animation: ag-pulse|^\.st-bad \.ag-pulse \{.*\.ag-pulse i \{.*animation: none|^\.ag-hc\.ok \{.*color: var\(--ag-ok\)|^\.ag-st\.on \{ color: var\(--ag-ok\)' "${J%.js}.css")
+[ "$ns" = 1 ] && [ "$okc" = 0 ] && [ "$hg" = 4 ] || ml=$((ml + 1000))
 if [ "$ev" != 0 ] || [ "$sc" != 1 ] || [ "$sk" != 0 ] || [ "$rd" != "part perm prom temp " ] || [ "$ml" != 0 ]; then
     echo "DÜŞTÜ: görsel dil standardı bozuk (Geçmiş rozetinde durum rengi $ev; izinli yeşil $sc; pembe sınıf $sk; kırmızı adlar: $rd; mailde eski renk $ml satır)"; F=$((F + 1))
 else echo "GEÇTİ: görsel dil — renk yalnız durum çipi ve önem işareti"; fi
+# Engelli rozeti DOLU (1.15.149): kalıcı / kalıcıya alındı / süreli rozetin zemini kırmızı (soluk pembe zemin kısmi banın çerçevesinden
+# ayırt edilmiyordu, canlıda "elle" tam ban çerçeveli göründü); kısmi şeffaf
+fl=$(grep -cE '^\.ag-pill-(ban|prom|temp) \{ background: var\(--ag-d-(ban|prom|temp-t)\); color: #fff' "${J%.js}.css")
+if [ "$fl" != 3 ]; then echo "DÜŞTÜ: engelli rozeti dolu değil ($fl / 3)"; F=$((F + 1)); else echo "GEÇTİ: engelli rozeti dolu kırmızı, kısmi çerçeveli"; fi
+# SAHİP ADI tek kısaltma kuralı (1.15.149): "tanıtıcı - Ad, ÜLKE" kısaltması yalnız shortName'de; Geçmiş sahibi listelerle aynı kaynaktan
+# (ownerOf). Önce 4 kopya vardı; biri "AS28126 - BRISANET"i "- BRISANET" yaptı, Geçmiş olaydaki eski metni ham basıyordu
+sn=$(grep -c "replace(/^\[^ \]+ - /" "$J"); so=$(grep -c "var oc = /^\\\\d/.test(e.cidr || '') ? ownerOf(" "$J")
+if [ "$sn" != 0 ] || [ "$so" != 1 ]; then echo "DÜŞTÜ: sahip adı kısaltması tek işlevde değil (kopya $sn, Geçmiş sahip haritasından $so)"; F=$((F + 1)); else echo "GEÇTİ: sahip adı tek kısaltma kuralından, Geçmiş listelerle aynı kaynaktan"; fi
+# Geçmiş: geniş kapsamanın ban altında ihlali (aralıksız, tek IP) satırın adresi olarak çizilir (1.15.149; önce adressiz ve menüsüzdü)
+ua=$(grep -c "if (!e.cidr && e.type === 'under_ban' && e.ips && e.ips.length === 1" "$J")
+if [ "$ua" != 1 ]; then echo "DÜŞTÜ: aralıksız ban altında ihlal satırı adressiz"; F=$((F + 1)); else echo "GEÇTİ: aralıksız ban altında ihlal satırı IP'siyle"; fi
+# Açılır bölüm işareti (1.15.149): panelin her <details> sınıfı ▸ / ▾ işaret kuralında (ag-im-more kendi işaretini çizer). Önce summary block
+# olunca tarayıcı üçgeni kayboluyordu, açılır bölüm düz başlık gibi duruyordu
+dm=""; for c in $(grep -oE '<details class="ag-[a-z0-9-]+' "$J" | sed 's/.*class="//' | sort -u); do
+    [ "$c" = ag-im-more ] && continue; grep -qF ".$c[open] > summary::before" "${J%.js}.css" || dm+="$c "; done
+if [ -n "$dm" ]; then echo "DÜŞTÜ: açılır bölüm işaretsiz: $dm"; F=$((F + 1)); else echo "GEÇTİ: her açılır bölümde ▸ / ▾ işareti"; fi
+# İzin / yoksayma ayrımı (1.15.149): kartlar "İzin listesi" satırına yalnız izin kaydı yazar; lfd'nin yoksayma kaynakları (wlKind) ayrı satırda,
+# doğrulanamayan ters DNS / ülke (wl_retry) not olarak. Önce aralık kartı d.wl'yi süzmeden basıyordu (canlıda 103.47.145.0/24 "İzin listesi:
+# csf.rignore"); sonuç cümlesi kaynak adını ilk ":"de kesiyordu ("csf.allow (tcp in d=1")
+w1=$(grep -c "fact(t('l_wl'), d.wl ? addrHtml(d.wl, cidr)" "$J"); w2=$(grep -c "String(d.wl || '').replace(/:\.\*\$/, '')" "$J"); w3=$(grep -c "wlKind(d.wl)" "$J")
+if [ "$w1" != 0 ] || [ "$w2" != 0 ] || [ "$w3" -lt 3 ]; then echo "DÜŞTÜ: izin / yoksayma ayrımı (ham satır $w1, ilk ':'de kesme $w2, wlKind $w3)"; F=$((F + 1)); else echo "GEÇTİ: kartlarda izin listesi yalnız izin kaydı; yoksayma ve doğrulanamayan ayrı"; fi
 # SERVİS ↔ PORT HARİTASI (T-2, 1.15.148): panel portları motordan okur (durum JSON svcp / svcpu); kendi tablosu (SVC_TCP / SVC_UDP) yok.
 # Motorda kısmi banın UDP portları yalnız svc_wudp'de (part_ports'ta sabit 443 / 53 yok)
 pt=$(grep -cE "SVC_TCP|SVC_UDP" "$J"); pu=$(awk '/^part_ports\(\) \{/ { p = 1 } p { print } p && /^\}/ { exit }' "$SHF" | grep -cE '"(443|53)"|,\}443|,\}53')

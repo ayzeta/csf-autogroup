@@ -65,7 +65,7 @@ grep() { command grep -a "$@"; }
 # sayı, anahtar; Türkçe modda sıralama kuralı zaten C idi (LC_COLLATE=C)
 sort() { LC_ALL=C command sort "$@"; }
 
-VERSION="1.15.148"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.149"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -503,11 +503,11 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_S_LAST="Son çalışma"; M_S_NEVER="henüz yok"; M_S_RUNNING="şu an çalışıyor"
   M_S_USAGE="Doluluk"; M_S_PERM="kalıcı"; M_S_TEMP="geçici"
   M_S_REVIEW="Kontrol edilecekler (%s gün)"; M_S_PENDING="İzlenenler"
-  M_S_GROUPS="Aktif aralık banları"; M_S_IGNORED="Susturulanlar"; M_S_RECENT="Son işlemler"
+  M_S_GROUPS="Aktif banlar"; M_S_IGNORED="Susturulanlar"; M_S_RECENT="Son işlemler"
   M_S_NONE="yok"; M_S_DAYSLEFT="%s gün kaldı"; M_S_TTL="geçici ban %s kaldı"
   M_L_HOST="Hostname"; M_L_FWD="ileri yönde doğrulandı"; M_L_NOFWD="ileri yönde doğrulanamadı"
   M_L_OWNER="Sahibi"; M_L_PREFIX="Duyurulan blok"; M_L_REG="Kayıt"; M_L_DENY="csf.deny"
-  M_L_TEMP="Geçici liste"; M_L_WL="İzin listesi"; M_L_CLOUD="Kiralık liste"; M_L_BKL="Blok listesi"; M_AB_LINE="puan %s/100 · %s bildirim (%s kişi) · son %s · %s"; M_AB_LIM="bugünkü sorgu sınırı doldu (%s/%s)"; M_AB_ERR="sorgulanamadı (HTTP %s): %s"; M_AB_BAD="AbuseIPDB anahtarı yalnız harf ve rakam olmalı (20–200 karakter)"; M_L_PENDING="İzleniyor"; M_L_IGN="Susturuldu"; M_L_ACCT="Denemeler"
+  M_L_TEMP="Geçici liste"; M_L_WL="İzin listesi"; M_L_CLOUD="Kiralık liste"; M_L_BKL="Blok listesi"; M_AB_LINE="puan %s/100 · %s bildirim (%s kişi%s) · son bildirim %s · %s"; M_AB_WIN=", son %s günde"; M_AB_LIM="bugünkü sorgu sınırı doldu (%s/%s)"; M_AB_ERR="sorgulanamadı (HTTP %s): %s"; M_AB_BAD="AbuseIPDB anahtarı yalnız harf ve rakam olmalı (20–200 karakter)"; M_L_PENDING="İzleniyor"; M_L_IGN="Susturuldu"; M_L_ACCT="Denemeler"
   M_BKL_BAD="Liste adı ya da işlem geçersiz (beklenen: AD on|off)"; M_BKL_NONE="%s listesi csf.blocklists dosyasında yok"; M_BKL_NOTMINE="%s listesini eklenti açmadı; elle açılan listeyi eklenti kapatmaz (csf.blocklists dosyasından kapatılır)"; M_BKL_ON="%s blok listesi açıldı; csf ve lfd yeniden başladı, lfd listeyi indiriyor"; M_BKL_OFF="%s blok listesi kapatıldı; csf ve lfd yeniden başladı"
   M_SVCX_WROTE="Birleşik servis dosyası yazıldı: %s IP / aralık (%s)"; M_SVCX_SHRINK="Birleşik servis dosyası yazılmadı: yeni liste %s IP / aralık, öncekinin (%s) yarısından az (%s)"; M_SVCX_FAIL="Birleşik servis dosyası yazılamadı (%s)"; M_SVCX_RELOAD="Web sunucusu yeniden yüklendi: %s"; M_SVCX_RELOADF="Web sunucusu yeniden yüklenemedi: %s (çıkış %s): %s"; M_SVCX_BAD="Birleşik servis dosyası yazılmadı: Apache yeni listeyi (%s adres) ModSecurity kuralında kabul etmedi, önceki dosya korunuyor (%s): %s"
   M_H_NOREASON="geçici ban (günlükte sebep yok)"
@@ -801,11 +801,11 @@ else
   M_S_LAST="Last run"; M_S_NEVER="none yet"; M_S_RUNNING="running now"
   M_S_USAGE="Usage"; M_S_PERM="permanent"; M_S_TEMP="temp"
   M_S_REVIEW="Needs review (%s days)"; M_S_PENDING="Watched"
-  M_S_GROUPS="Active range bans"; M_S_IGNORED="Muted"; M_S_RECENT="Recent actions"
+  M_S_GROUPS="Active bans"; M_S_IGNORED="Muted"; M_S_RECENT="Recent actions"
   M_S_NONE="none"; M_S_DAYSLEFT="%s days left"; M_S_TTL="temp ban %s left"
   M_L_HOST="Hostname"; M_L_FWD="forward-confirmed"; M_L_NOFWD="not forward-confirmed"
   M_L_OWNER="Owner"; M_L_PREFIX="Announced prefix"; M_L_REG="Registry"; M_L_DENY="csf.deny"
-  M_L_TEMP="Temp list"; M_L_WL="Allow list"; M_L_CLOUD="Rented-server list"; M_L_BKL="Blocklist"; M_AB_LINE="score %s/100 · %s reports (%s users) · last %s · %s"; M_AB_LIM="daily query limit reached (%s/%s)"; M_AB_ERR="could not query (HTTP %s): %s"; M_AB_BAD="The AbuseIPDB key must be letters and digits only (20–200 characters)"; M_L_PENDING="Watched"; M_L_IGN="Muted"; M_L_ACCT="Attempts"
+  M_L_TEMP="Temp list"; M_L_WL="Allow list"; M_L_CLOUD="Rented-server list"; M_L_BKL="Blocklist"; M_AB_LINE="score %s/100 · %s reports (%s users%s) · last report %s · %s"; M_AB_WIN=", last %s days"; M_AB_LIM="daily query limit reached (%s/%s)"; M_AB_ERR="could not query (HTTP %s): %s"; M_AB_BAD="The AbuseIPDB key must be letters and digits only (20–200 characters)"; M_L_PENDING="Watched"; M_L_IGN="Muted"; M_L_ACCT="Attempts"
   M_BKL_BAD="Invalid list name or action (expected: NAME on|off)"; M_BKL_NONE="List %s is not in csf.blocklists"; M_BKL_NOTMINE="List %s was not turned on by the plugin; the plugin does not turn off a list turned on by hand (turn it off in csf.blocklists)"; M_BKL_ON="Blocklist %s turned on; csf and lfd restarted, lfd is downloading the list"; M_BKL_OFF="Blocklist %s turned off; csf and lfd restarted"
   M_SVCX_WROTE="Combined services file written: %s IPs / ranges (%s)"; M_SVCX_SHRINK="Combined services file not written: the new list has %s IPs / ranges, less than half of the previous %s (%s)"; M_SVCX_FAIL="Combined services file could not be written (%s)"; M_SVCX_RELOAD="Web server reloaded: %s"; M_SVCX_RELOADF="Web server reload failed: %s (exit %s): %s"; M_SVCX_BAD="Combined services file not written: Apache did not accept the new list (%s addresses) in a ModSecurity rule, the previous file is kept (%s): %s"
   M_H_NOREASON="temp ban (no reason in the log)"
@@ -2089,13 +2089,19 @@ short_reason() { # "# lfd: (sshd) Failed SSH login from IP (CC/..): 5 in ... - S
     local r="$1" w
     r="${r#"${r%%[![:space:]]*}"}"; r="${r#\#}"; r="${r#"${r%%[![:space:]]*}"}"; r="${r#lfd: }"; r="${r#lfd - }"
     r="${r% - [A-Z][a-z][a-z] [A-Z][a-z][a-z] *}"
+    # geri yüklenen tekilin notu ("… - 172.94.9.0/24 kaldırılınca geri yüklendi", iki dilde) ayrılır: 100 karakter sınırı yalnız sebebe
+    # uygulanır, not sonda tam kalır (1.15.149; sınır adresin ortasına denk geliyordu: "- 172.94.9.0/...")
+    local rn=""
+    if [[ "$r" =~ ^(.*)\ -\ ([0-9.]+/[0-9]+\ kaldırılınca\ geri\ yüklendi|restored\ when\ [0-9.]+/[0-9]+\ was\ removed)$ ]]; then
+        r="${BASH_REMATCH[1]}"; rn="${BASH_REMATCH[2]}"
+    fi
     # "(PERMBLOCK) IP (CC/…) has had more than 3 temp blocks in the last 86400 secs": IP'den kesilince yalnız "(PERMBLOCK)"
     # kalıyordu; neden kalıcıya alındığı (LF_PERMBLOCK_COUNT / _INTERVAL) okunur metne çevrilir ("PERMBLOCK" sözcüğü kalır:
     # panel servisi ondan tanır)
     if [[ "$r" =~ \(PERMBLOCK\).*more\ than\ ([0-9]+)\ temp\ blocks\ in\ the\ last\ ([0-9]+)\ secs ]]; then
         local pn=$(( BASH_REMATCH[1] + 1 )) ps="${BASH_REMATCH[2]}"
         if (( ps % 3600 == 0 )); then w=$(m "$M_T_H" $(( ps / 3600 ))); elif (( ps % 60 == 0 )); then w=$(m "$M_T_M" $(( ps / 60 ))); else w=$(m "$M_T_S" "$ps"); fi
-        REPLY=$(m "$M_PERMB" "$w" "$pn"); return 0
+        REPLY=$(m "$M_PERMB" "$w" "$pn")${rn:+ - $rn}; return 0
     fi
     [[ "$r" == *"$2"* ]] && [ -n "${r%%"$2"*}" ] && r="${r%%"$2"*}"
     r="${r%"${r##*[![:space:]]}"}"
@@ -2107,7 +2113,7 @@ short_reason() { # "# lfd: (sshd) Failed SSH login from IP (CC/..): 5 in ... - S
         r="ModSecurity $w${REPLY:+: $REPLY}"
     fi
     (( ${#r} > 100 )) && r="${r:0:97}..."
-    REPLY="$r"
+    REPLY="$r${rn:+ - $rn}"
 }
 ip_line() {      # IP NOTE WITH_OWNER(0|1) → REPLY = "   - IP  hostname  [ASN CC]  sebep"
     local host="-" why out
@@ -4196,6 +4202,7 @@ do_status() {
         printf '"asn_banned":[%s],"dports":["%s","%s"],' "$bj" "$(conf_val CC_DENY_PORTS_TCP | tr -cd '0-9,:')" "$(conf_val CC_DENY_PORTS_UDP | tr -cd '0-9,:')"
         local ccw; ccw=$(conf_val CC_DENY | LC_ALL=C tr '[:lower:]' '[:upper:]' | tr -cd 'A-Z0-9,')
         printf '"ccd":"%s",' "$ccw"
+        prof "asn_banned_json (banlı sağlayıcılar)"
         # listelerdeki her öğenin ve menülerinin önerdiği üstlerin (blok /24, ağ /16) TEK DURUM KAYDI (obj_state, 1.15.142): panelin
         # "zaten kapalı mı" kararları ve liste etiketleri bundan okur. Önce ayrı iki alan vardı ("wide" geniş aralıklar, "gcov" ülke /
         # sağlayıcı kodu): kiralık listeyi, blok listesini, Imunify'ı ve süreli aralık banını bilmiyorlardı
@@ -4208,10 +4215,12 @@ do_status() {
             printf '%s' "$gpend"
             printf '%s\n' "${!SINGLE_NOTE[@]}"; tb_load; printf '%s\n' "${!TB_IP[@]}"     # tekil ve geçici banlar (Geçmiş / IP kartı menüleri)
           } | awk -F'[./]' 'NF >= 4 { print; if (NF == 4 || $5 + 0 > 24) print $1 "." $2 "." $3 ".0/24"; if (NF == 4 || $5 + 0 > 16) print $1 "." $2 ".0.0/16" }' | sort -u)
+        prof "asn_banned_json (sts listesi ${#gq[@]})"
         st_prep
+        prof "sts st_prep"
         # alan adı "sts": "now" zaten sunucunun saati (ilk denemede ezdi, panelin tarih hesabı çöktü)
         printf '"sts":{%s},' "$(printf '%s\n' "${gq[@]}" | obj_state | awk -F'\t' 'NF >= 3 { printf "%s\"%s\":%s", (n++ ? "," : ""), $1, $3 }')"
-        prof asn_banned_json
+        prof "sts obj_state"
         prov_json; printf '"prov":%s,' "$REPLY"
         prof prov_json
         local msj=() msid
@@ -4822,17 +4831,31 @@ BEGIN { now = now + 0; AP2[1] = 4; AP2[2] = 3; AP2[3] = 2; AP2[0] = 1
     while ((getline l < igf) > 0) { split(l, x, " "); if (x[2] >= today) { ign++; IGC[ign] = x[1]; IGU[ign] = x[2] } }
     while ((getline l < imrf) > 0) { split(l, x, " "); ch = x[2]; CN[ch]++; CR[ch, CN[ch]] = l " " }
     while ((getline l < imsf) > 0) { split(l, x, " "); s = x[2]; SN[s]++; rng(x[3]); SL[s, SN[s]] = RL; SH[s, SN[s]] = RH; SX[s, SN[s]] = (l ~ / nomatch/) }
+    for (i = 1; i <= tn; i++) { rng(TA[i]); TL[i] = RL; TH[i] = RH }
+    # izin ve csf.deny aralıkları başa göre sıralı dizinle (ülke aralıklarındaki gibi ikili arama + o noktaya kadarki en büyük son):
+    # öğe başına bütün satırları taramak 584 öğe × binlerce izin kaydında durum çıktısının en büyük bölümüydü (2026-11-27 ölçümü)
+    srt(AL, an, AO, AX, AH); srt(DL, dn, DO2, DX, DH)
 }
+# I dizisinin 1..n öğelerini değere göre sıralar: O[k] = k. sıradaki öğenin dizini, X[k] = ilk k öğenin en büyük sonu (H)
+function srt(I, n, O, X, H,  i, k, V) {
+    for (i = 1; i <= n; i++) V[i] = I[i]
+    PROCINFO["sorted_in"] = "@val_num_asc"; k = 0; for (i in V) O[++k] = i + 0; delete PROCINFO["sorted_in"]
+    for (k = 1; k <= n; k++) X[k] = (k > 1 && X[k - 1] > H[O[k]]) ? X[k - 1] : H[O[k]] }
+# sıralı dizinde başı lo dan küçük ya da eşit son sıra (ikili arama)
+function bs(I, O, n, lo,  a, b, c, r) { a = 1; b = n; r = 0; while (a <= b) { c = int((a + b) / 2); if (I[O[c]] <= lo) { r = c; a = c + 1 } else b = c - 1 } return r }
 { key = $1; if (key == "") next; rng(key); lo = RL; hi = RH; isip = (key !~ /\//)
   KS = ""; NK = 0; FULL = 0; PART = 0; BIDIR = 0
-  for (i = 1; i <= dn; i++) if (DL[i] <= lo && DH[i] >= hi) { addk(DL[i] == DH[i] ? "ip" : "cidr", DA[i], "all", "", "", 0, DO[i]); if (lfbio != 1) BIDIR = 1 }
+  # kapsayan csf.deny satırları dosya sırasıyla (kayıttaki sıra eskisiyle aynı)
+  nm = 0; for (j = bs(DL, DO2, dn, lo); j >= 1 && DX[j] >= hi; j--) { i = DO2[j]; if (DH[i] >= hi) MQ[++nm] = i }
+  for (j = 2; j <= nm; j++) { q0 = MQ[j]; z = j - 1; while (z >= 1 && MQ[z] > q0) { MQ[z + 1] = MQ[z]; z-- } MQ[z + 1] = q0 }
+  for (z = 1; z <= nm; z++) { i = MQ[z]; addk(DL[i] == DH[i] ? "ip" : "cidr", DA[i], "all", "", "", 0, DO[i]); if (lfbio != 1) BIDIR = 1 }
   pa = ""
   for (i = 1; i <= pn; i++) if (PL[i] <= lo && PH[i] >= hi) { k = PA[i] SUBSEP PO[i]
       if (PR[i] == "udp") PU[k] = PU[k] (PU[k] == "" ? "" : ",") PT[i]; else PC[k] = PC[k] (PC[k] == "" ? "" : ",") PT[i]
       if (!(k in PS)) { PS[k] = 1; pa = pa SUBSEP k } }
   n = split(substr(pa, 2), q, SUBSEP)
   for (i = 1; i <= n; i += 2) { k = q[i] SUBSEP q[i + 1]; addk("port", q[i], "ports", PC[k], PU[k], 0, q[i + 1]); delete PC[k]; delete PU[k]; delete PS[k] }
-  for (i = 1; i <= tn; i++) { rng(TA[i]); if (RL <= lo && RH >= hi) { addk("temp", TA[i], TP[i] == "" ? "all" : "ports", TP[i], "", TE[i], 0); if (TD[i] ~ /out/) BIDIR = 1 } }
+  for (i = 1; i <= tn; i++) { if (TL[i] <= lo && TH[i] >= hi) { addk("temp", TA[i], TP[i] == "" ? "all" : "ports", TP[i], "", TE[i], 0); if (TD[i] ~ /out/) BIDIR = 1 } }
   a = 1; b = gn; kx = 0; while (a <= b) { c = int((a + b) / 2); if (GL[c] <= lo) { kx = c; a = c + 1 } else b = c - 1 }
   nm = 0; for (j = kx; j >= 1 && GX[j] >= hi; j--) if (GH[j] >= hi) { nm++; MQ[nm] = GQ[j]; MI2[nm] = j }
   for (j = 2; j <= nm; j++) { q0 = MQ[j]; i0 = MI2[j]; z = j - 1; while (z >= 1 && MQ[z] > q0) { MQ[z + 1] = MQ[z]; MI2[z + 1] = MI2[z]; z-- } MQ[z + 1] = q0; MI2[z + 1] = i0 }
@@ -4848,8 +4871,10 @@ BEGIN { now = now + 0; AP2[1] = 4; AP2[2] = 3; AP2[3] = 2; AP2[0] = 1
       else if (r == "A") IMA = IMS }
   # izin: en güçlüsü (1 bütün portlar > 2 sunucunun kendi IP si > 3 yalnız gelen yönde bütün portlar > 0 tek portluk). 3, ban iki
   # yönlüyse işlemez (IP kartının wfin kuralı: tekil / aralık banı LF_BLOCKINONLY 1 değilse iki yönlü, geçici satırın yönü satırdan)
-  al = ""; self = 0; aff = -1; ap = 0
-  for (i = 1; i <= an; i++) if (AL[i] <= lo && AH[i] >= hi) { if (AF[i] == 2) self = 1; q2 = AP2[AF[i]]; if (q2 > ap) { ap = q2; aff = AF[i]; al = AT[i] } }
+  # eşit güçte iki satır kapsıyorsa dosyada önce gelen (eskisi gibi)
+  al = ""; self = 0; aff = -1; ap = 0; ai = 0
+  for (j = bs(AL, AO, an, lo); j >= 1 && AX[j] >= hi; j--) { i = AO[j]; if (AH[i] >= hi) { if (AF[i] == 2) self = 1; q2 = AP2[AF[i]]
+      if (q2 > ap || (q2 == ap && i < ai)) { ap = q2; aff = AF[i]; al = AT[i]; ai = i } } }
   if (isip && IMA != "" && ap < 4) { aff = 1; al = "Imunify360: " IMA }
   e = FULL ? "ban" : (PART ? "part" : "none")
   if (aff == 1 || aff == 2 || (aff == 3 && !BIDIR)) e = "alw"
@@ -6073,14 +6098,15 @@ abuse_check() {  # IP → 0 ve REPLY = JSON nesnesi {"s","r","u","l","ut","isp",
     code="${body##*$'\n'}"; body="${body%$'\n'*}"; [[ "$code" =~ ^[0-9]+$ ]] || code=0
     abuse_today; printf '%s %s\n' "$(date +%F)" "$(( REPLY + 1 ))" > "$ABUSE_DIR/count" 2>/dev/null
     REPLY=$(printf '%s' "$body" | perl -MJSON::PP -e '
-        local $/; my $in = <STDIN>; my ($code, $now) = @ARGV; my $J = JSON::PP->new->canonical;
+        local $/; my $in = <STDIN>; my ($code, $now, $w) = @ARGV; my $J = JSON::PP->new->canonical;
         my $d = eval { $J->decode($in) };
         if ($code == 200 && ref $d eq "HASH" && ref $d->{data} eq "HASH") { my $x = $d->{data};
             print $J->encode({ s => ($x->{abuseConfidenceScore} // 0) + 0, r => ($x->{totalReports} // 0) + 0, u => ($x->{numDistinctUsers} // 0) + 0,
                 l => $x->{lastReportedAt} // "", ut => $x->{usageType} // "", isp => $x->{isp} // "", dom => $x->{domain} // "",
-                tor => $x->{isTor} ? JSON::PP::true : JSON::PP::false, wl => $x->{isWhitelisted} ? JSON::PP::true : JSON::PP::false, t => $now + 0 }) }
+                tor => $x->{isTor} ? JSON::PP::true : JSON::PP::false, wl => $x->{isWhitelisted} ? JSON::PP::true : JSON::PP::false, t => $now + 0,
+                w => $w + 0 }) }   # w: sorgu penceresi (gün). Bildirim sayısı yalnız bu pencereyi sayar, son bildirim tarihi daha eski olabilir
         else { my $m = (ref $d eq "HASH" && ref $d->{errors} eq "ARRAY" && ref $d->{errors}[0] eq "HASH") ? ($d->{errors}[0]{detail} // "") : "";
-            print $J->encode({ err => $m, code => $code + 0, t => $now + 0 }) }' "$code" "$now" 2>/dev/null)
+            print $J->encode({ err => $m, code => $code + 0, t => $now + 0 }) }' "$code" "$now" "$ABUSE_MAX_AGE" 2>/dev/null)
     [ -n "$REPLY" ] || REPLY="{\"err\":\"\",\"code\":$code,\"t\":$now}"
     if [[ "$REPLY" == *'"err"'* ]]; then printf '%s' "$REPLY" > "$e.tmp.$$" && mv -f "$e.tmp.$$" "$e"
     else printf '%s' "$REPLY" > "$c.tmp.$$" && mv -f "$c.tmp.$$" "$c"; rm -f "$e"; fi
@@ -6095,7 +6121,8 @@ abuse_text() {   # JSON (abuse_check) → REPLY = düz metin satırı: "puan 100
     f() { printf '%s' "$j" | sed -n "s/.*\"$1\":\(\"\([^\"]*\)\"\|\([0-9a-z]*\)\).*/\2\3/p"; }
     if [[ "$j" == *'"err"'* ]]; then REPLY=$(m "$M_AB_ERR" "$(f code)" "$(f err)"); return; fi
     if [[ "$j" == *'"lim"'* ]]; then REPLY=$(m "$M_AB_LIM" "$(f n)" "$(f lim)"); return; fi
-    REPLY=$(m "$M_AB_LINE" "$(f s)" "$(f r)" "$(f u)" "$(f l | cut -c1-10)" "$(f ut)")
+    local wd; wd=$(f w); [ -n "$wd" ] && [ "$wd" != 0 ] && wd=$(m "$M_AB_WIN" "$wd") || wd=""   # sayının penceresi (eski önbellekte yok)
+    REPLY=$(m "$M_AB_LINE" "$(f s)" "$(f r)" "$(f u)" "$wd" "$(f l | cut -c1-10)" "$(f ut)")
     [ "$(f tor)" = true ] && REPLY+=" · Tor"
 }
 # Aralık (blok) sorgusu: check-block ucu. Belge (docs.abuseipdb.com, 2026-11-24 okundu): GET network=CIDR, maxAgeInDays (standart planda

@@ -130,11 +130,11 @@
 .ag-kpi-ic.ok { background: var(--ag-ok-soft); color: var(--ag-ok); }
 .ag-kpi-ic.n { background: var(--ag-neutral-soft); color: var(--ag-text-2); }
 .ag-kpi-d { font-size: 11.5px; font-weight: 650; margin-left: 8px; letter-spacing: 0; white-space: nowrap; }
-.ag-kpi-d.up { color: #b45309; } .ag-kpi-d.dn { color: #047857; } .ag-kpi-d.eq { color: var(--ag-text-3); font-weight: 550; }
+.ag-kpi-d.up, .ag-kpi-d.dn { color: var(--ag-text-2); }   /* değişim yönü bilgi: ok yeter, renk yok (azalan ban "iyi", artan "dikkat" değil) */ .ag-kpi-d.eq { color: var(--ag-text-3); font-weight: 550; }
 .ag-kpi-v .warn { color: var(--ag-warn); }
 .ag-ring { width: 46px; height: 46px; flex: none; }
 .ag-ring circle { fill: none; stroke-width: 4; stroke: var(--ag-neutral-soft); }
-.ag-ring circle + circle { stroke: var(--ag-accent); stroke-linecap: round; }
+.ag-ring circle + circle { stroke: #64748b; stroke-linecap: round; }   /* doluluk: nötr; dolarken amber / koyu turuncu (aşağıda) */
 .ag-ring.warn circle + circle { stroke: #d97706; } .ag-ring.bad circle + circle { stroke: var(--ag-d-leak); }   /* liste doluyor: önem (ciddi), engel değil */
 .ag-kpi-l { grid-area: l; font-size: 12px; color: var(--ag-text-3); font-weight: 600; }
 .ag-kpi-v { grid-area: v; font-size: 24px; font-weight: 700; letter-spacing: -.02em; margin-top: 2px; line-height: 1.2; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -185,9 +185,12 @@
 .ag-pill-info { background: var(--ag-info-soft); color: var(--ag-info); border-color: var(--ag-info-line); }
 .ag-pill-acc  { background: var(--ag-accent-soft); color: var(--ag-accent); border-color: var(--ag-accent-line); }
 .ag-pill-n    { background: var(--ag-neutral-soft); color: var(--ag-text-2); border-color: var(--ag-line); }
-.ag-pill-ban { background: var(--ag-d-ban-s); color: var(--ag-d-ban-t); border-color: var(--ag-d-ban-l); }
-.ag-pill-prom { background: var(--ag-d-prom-s); color: var(--ag-d-prom-t); border-color: var(--ag-d-prom-l); }
-.ag-pill-temp { background: var(--ag-d-temp-s); color: var(--ag-d-temp-t); border-color: var(--ag-d-temp-l); }
+/* engelli = DOLU kırmızı, beyaz yazı (1.15.149; önce soluk pembe zemin + açık kenar kısmi banın çerçevesinden ayırt edilmiyordu: canlıda
+   "elle" tam ban çerçeveli göründü). Kısmi (part) çerçeveli kalır. İçindeki adres bağlantısı beyaz */
+.ag-pill-ban { background: var(--ag-d-ban); color: #fff; border-color: var(--ag-d-ban); }
+.ag-pill-prom { background: var(--ag-d-prom); color: #fff; border-color: var(--ag-d-prom); }
+.ag-pill-temp { background: var(--ag-d-temp-t); color: #fff; border-color: var(--ag-d-temp-t); }   /* #ef4444 üzerinde beyaz kontrast 3,8: koyu ton */
+.ag-pill-ban .ag-cidr, .ag-pill-prom .ag-cidr, .ag-pill-temp .ag-cidr, .ag-pill-leak .ag-cidr { color: inherit; text-decoration-color: rgba(255, 255, 255, .6); }
 .ag-pill-part { background: var(--ag-d-part-s); color: var(--ag-d-part-t); border-color: var(--ag-d-part-l); }
 
 .ag-pill-dw { background: var(--ag-d-warn-s); color: var(--ag-d-warn-t); border-color: var(--ag-d-warn-l); }
@@ -352,6 +355,8 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-okbar svg { width: 17px; height: 17px; flex: none; }
 .ag-okbar b { font-weight: 600; }
 .ag-okbar span { margin-left: auto; opacity: .8; font-size: 12.5px; }
+/* telefonda açıklama alt satırda: aynı satırda "yok." tek başına kırılıyordu (1.15.149, canlıda 390 px) */
+@media (max-width: 560px) { .ag-okbar { flex-wrap: wrap; row-gap: 2px; } .ag-okbar span { margin-left: 27px; flex-basis: 100%; } }
 .ag-link { background: none; border: 0; padding: 0; color: var(--ag-accent); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
 .ag-link { text-decoration: underline; text-decoration-color: var(--ag-accent-line); text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .ag-link:hover { text-decoration-color: currentColor; }
@@ -471,8 +476,8 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-asn-m .ag-pill-xs { white-space: normal; max-width: 100%; height: auto; line-height: 1.35; padding-top: 2px; padding-bottom: 2px; }   /* uzun not dar kartta alta kayar, taşmaz */
 .ag-asn-t { display: flex; gap: 7px; align-items: center; white-space: nowrap; overflow: hidden; font-size: 13px; }
 .ag-asn-b { height: 6px; border-radius: 3px; background: var(--ag-neutral-soft); margin: 7px 0 5px; overflow: hidden; display: flex; }
-.ag-asn-b i { display: block; height: 100%; background: linear-gradient(90deg, #6366f1, #4338ca); }
-.ag-asn-b i.o { background: #c7d2fe; }
+.ag-asn-b i { display: block; height: 100%; background: #64748b; }   /* miktar: nötr (indigo yalnız tıklanan öğe; 1.15.149) */
+.ag-asn-b i.o { background: #cbd5e1; }
 
 /* sekme şeridi: dar sütunda (WHM menüsü açıkken sağ sütun) sığmayan sekme alt satıra geçer, kesilmez */
 .ag-chips-full { width: 100%; display: flex; flex-wrap: wrap; }
@@ -550,10 +555,12 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-band-s b { display: block; font-size: 14.5px; font-weight: 700; }
 .ag-band-s > div > span { display: block; font-size: 12px; color: var(--ag-text-3); }
 .ag-band.st-bad .ag-band-s b { color: var(--ag-d-leak); }
-.ag-pulse { width: 36px; height: 36px; border-radius: 50%; background: var(--ag-neutral-soft); display: flex; align-items: center; justify-content: center; flex: none; }
-.ag-pulse i { width: 12px; height: 12px; border-radius: 50%; background: #9aa1ad; box-shadow: 0 0 0 5px rgba(154, 161, 173, .18); }   /* sağlık tamam: renksiz; yalnız sorun renklenir */
+.ag-pulse { width: 36px; height: 36px; border-radius: 50%; background: var(--ag-ok-soft); display: flex; align-items: center; justify-content: center; flex: none; }
+/* sağlık: önem ölçeğinin "iyi" ucu yeşil (1.15.149). 1.15.146'da renksiz yapılmıştı: gri nokta "koruma durmuş" diye okundu (kullanıcı) */
+/* çalışıyor = yavaş nabız (2,4 sn); tur sırasında mavi hızlı nabız; sorun / duraklatılmış sabit (aşağıda animation: none) */
+.ag-pulse i { width: 12px; height: 12px; border-radius: 50%; background: var(--ag-ok); box-shadow: 0 0 0 5px rgba(16, 185, 129, .18); animation: ag-pulse 2.4s ease-in-out infinite; }
 .st-run .ag-pulse { background: var(--ag-info-soft); } .st-run .ag-pulse i { background: #3b82f6; box-shadow: 0 0 0 5px rgba(59, 130, 246, .2); animation: ag-pulse 1.2s ease-in-out infinite; }
-.st-bad .ag-pulse { background: #fff7ed; } .st-bad .ag-pulse i { background: var(--ag-d-leak); box-shadow: 0 0 0 5px rgba(194, 65, 12, .18); }
+.st-bad .ag-pulse { background: #fff7ed; } .st-bad .ag-pulse i { background: var(--ag-d-leak); box-shadow: 0 0 0 5px rgba(194, 65, 12, .18); animation: none; }
 .ag-band-m small, .ag-band-g small { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ag-text-3); }
 .ag-band-m b { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ag-band-m span { font-size: 12px; color: var(--ag-text-3); margin-left: 5px; white-space: nowrap; }
@@ -889,7 +896,7 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
 .ag-hchips { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
 .ag-hc { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; border-radius: 20px; font-size: 11px; font-weight: 650; border: 1px solid transparent; }
 .ag-hc svg { width: 11px; height: 11px; }
-.ag-hc.ok { background: var(--ag-neutral-soft); color: var(--ag-text-2); border-color: var(--ag-line); }   /* sağlıkta tamam renksiz (onay simgesi); yalnız sorun renklenir */
+.ag-hc.ok { background: var(--ag-ok-soft); color: var(--ag-ok); border-color: var(--ag-ok-line); }   /* sağlık iyi: yeşil (nokta ile aynı) */
 .ag-hc.warn { background: var(--ag-warn-soft); color: var(--ag-warn); border-color: var(--ag-warn-line); }
 .ag-hc.bad { background: var(--ag-d-leak); color: #fff; border-color: var(--ag-d-leak); }   /* sağlık sorunu: ciddi */
 /* eski blok banları çubuğu */
@@ -1129,7 +1136,7 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
 .ag-sum-r:first-child { border-top: 0; }
 .ag-sum-k { flex: 0 0 82px; font-weight: 650; }
 .ag-sum-k.bad { color: var(--ag-bad); }
-.ag-sum-k.ok { color: var(--ag-ok); }
+.ag-sum-k.ok { color: var(--ag-text-2); }   /* açık kalan servis bilgi: yeşil değil (yeşil izinli ya da iyi) */
 @media (max-width: 560px) {
   .ag-mode .ag-chips { flex-wrap: wrap; }
   .ag-mode .ag-chips .ag-chip { white-space: normal; height: auto; min-height: 30px; padding: 4px 8px; }
@@ -1152,6 +1159,7 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-verdict-a { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin: -2px 0 12px; font-size: 12px; }
 .ag-dr-sub { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ag-text-3); margin: 4px 0 8px; }
 .ag-dr-sec { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ag-text-3); margin: 22px 0 0; padding-top: 14px; border-top: 2px solid var(--ag-line-soft); }
+.ag-drawer-b > .ag-dr-sec:first-child { margin-top: 10px; padding-top: 0; border-top: 0; }   /* ilk bölüm: başlığın altında boş şerit ve çizgi kalmasın (1.15.149, canlıda görüldü) */
 .ag-hint-act { margin-top: 8px; }
 .ag-field-i:empty { display: none; }
 .ag-mode-hint .ag-link, .ag-modal-b .ag-warnbox .ag-link { font-size: inherit; }
@@ -1176,7 +1184,7 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-lay .ag-kpi-g { align-self: start; }
 .ag-st { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 650; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
 .ag-st i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.ag-st.on { color: var(--ag-text); background: var(--ag-neutral-soft); } .ag-st.off { color: var(--ag-text-3); background: var(--ag-neutral-soft); } .ag-st.warn { color: var(--ag-warn); background: var(--ag-warn-soft); }   /* katman açık / kapalı ayardır (kural): renksiz; yalnız sorun (warn) renklenir — görsel dil */
+.ag-st.on { color: var(--ag-ok); background: var(--ag-ok-soft); } .ag-st.off { color: var(--ag-text-3); background: var(--ag-neutral-soft); } .ag-st.warn { color: var(--ag-warn); background: var(--ag-warn-soft); }   /* katman açık: yeşil (koruma çalışıyor; 1.15.146 gri "Açık" kapalıyla karışıyordu), kapalı renksiz, sorun amber */
 .ag-pc .ag-card-h { flex-wrap: nowrap; align-items: center; }
 .ag-pc .ag-card-h h2 { flex: none; }
 .ag-pc.changed { box-shadow: inset 3px 0 0 var(--ag-accent), var(--ag-shadow); }
@@ -1291,6 +1299,12 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-ports .ag-muted { font-size: 12px; }
 .ag-ports-in { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
 .ag-ports-in label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ag-text-2); font-weight: 600; flex: 1; min-width: 180px; }
+/* açılır bölümlerin TEK işareti (1.15.149): summary'ye block verilince tarayıcının üçgeni çizilmiyordu ("Kapalı listeler (14)", "İzinli
+   servislerden hariç tutulanlar" düz başlık gibi duruyordu, canlıda görüldü). ag-im-more kendi işaretini sağda çizer */
+.ag-more2 > summary, .ag-how > summary, .ag-more > summary, .ag-raw > summary, .ag-dry-raw > summary { list-style: none; }
+.ag-more2 > summary::-webkit-details-marker, .ag-how > summary::-webkit-details-marker, .ag-more > summary::-webkit-details-marker, .ag-raw > summary::-webkit-details-marker, .ag-dry-raw > summary::-webkit-details-marker { display: none; }
+.ag-more2 > summary::before, .ag-how > summary::before, .ag-more > summary::before, .ag-raw > summary::before, .ag-dry-raw > summary::before { content: "▸"; display: inline-block; width: 1.1em; color: var(--ag-text-3); font-weight: 400; }
+.ag-more2[open] > summary::before, .ag-how[open] > summary::before, .ag-more[open] > summary::before, .ag-raw[open] > summary::before, .ag-dry-raw[open] > summary::before { content: "▾"; }
 .ag-more2 { margin-top: 10px; font-size: 12.5px; }
 .ag-more2 summary { cursor: pointer; color: var(--ag-text-2); font-weight: 600; width: max-content; }
 .ag-more2 .ag-ta { width: 100%; margin-top: 6px; font-family: var(--ag-mono); font-size: 12px; min-height: 60px; }
