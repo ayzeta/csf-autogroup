@@ -31,7 +31,7 @@ printf '%s\n' "MSG_LANG=tr" "ALERT_MAIL=" "LOOKUP=0" "DENY_FILE=$D" "CSF_CONF=$R
   "SVC_ALLOW=0" "CLOUD_BAN=1" "CLOUD_SOURCES=gcp,aws,azure,digitalocean" "CLOUD_TCP=80,443" "CLOUD_UDP=443" "ENABLED=1" > "$R/app/config.env"
 
 # ── veri ──
-awk -v now="$NOW" -v D="$D" -v O="$O" -v I="$A/imunify" -v L="$R/var/log/lfd.log" -v L1="$R/var/log/lfd.log.1" -v N="$A/services/asn_names" -v T="$T" '
+awk -v now="$NOW" -v D="$D" -v O="$O" -v I="$A/imunify" -v L="$R/var/log/lfd.log" -v L1="$R/var/log/lfd.log.1" -v N="$A/services/asn_names2" -v T="$T" '
   function pre(i) { return (60 + int(i / 250)) "." (i % 250) "." (i * 7 % 250) }
   function dt(s) { return strftime("%a %b %d %H:%M:%S %Y", now - s) }
   BEGIN { srand(42)

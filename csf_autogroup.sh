@@ -65,7 +65,7 @@ grep() { command grep -a "$@"; }
 # sayı, anahtar; Türkçe modda sıralama kuralı zaten C idi (LC_COLLATE=C)
 sort() { LC_ALL=C command sort "$@"; }
 
-VERSION="1.15.149"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.150"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -507,7 +507,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_S_NONE="yok"; M_S_DAYSLEFT="%s gün kaldı"; M_S_TTL="geçici ban %s kaldı"
   M_L_HOST="Hostname"; M_L_FWD="ileri yönde doğrulandı"; M_L_NOFWD="ileri yönde doğrulanamadı"
   M_L_OWNER="Sahibi"; M_L_PREFIX="Duyurulan blok"; M_L_REG="Kayıt"; M_L_DENY="csf.deny"
-  M_L_TEMP="Geçici liste"; M_L_WL="İzin listesi"; M_L_CLOUD="Kiralık liste"; M_L_BKL="Blok listesi"; M_AB_LINE="puan %s/100 · %s bildirim (%s kişi%s) · son bildirim %s · %s"; M_AB_WIN=", son %s günde"; M_AB_LIM="bugünkü sorgu sınırı doldu (%s/%s)"; M_AB_ERR="sorgulanamadı (HTTP %s): %s"; M_AB_BAD="AbuseIPDB anahtarı yalnız harf ve rakam olmalı (20–200 karakter)"; M_L_PENDING="İzleniyor"; M_L_IGN="Susturuldu"; M_L_ACCT="Denemeler"
+  M_L_TEMP="Geçici liste"; M_L_WL="İzin listesi"; M_L_CLOUD="Kiralık liste"; M_L_BKL="Blok listesi"; M_AB_LINE="puan %s/100 · %s · son bildirim %s · %s"; M_AB_REP="%s bildirim (%s kişi%s)"; M_AB_WIN=", son %s günde"; M_AB_NONE="bildirim yok"; M_AB_NONE_W="son %s günde bildirim yok"; M_AB_LIM="bugünkü sorgu sınırı doldu (%s/%s)"; M_AB_ERR="sorgulanamadı (HTTP %s): %s"; M_AB_BAD="AbuseIPDB anahtarı yalnız harf ve rakam olmalı (20–200 karakter)"; M_L_PENDING="İzleniyor"; M_L_IGN="Susturuldu"; M_L_ACCT="Denemeler"
   M_BKL_BAD="Liste adı ya da işlem geçersiz (beklenen: AD on|off)"; M_BKL_NONE="%s listesi csf.blocklists dosyasında yok"; M_BKL_NOTMINE="%s listesini eklenti açmadı; elle açılan listeyi eklenti kapatmaz (csf.blocklists dosyasından kapatılır)"; M_BKL_ON="%s blok listesi açıldı; csf ve lfd yeniden başladı, lfd listeyi indiriyor"; M_BKL_OFF="%s blok listesi kapatıldı; csf ve lfd yeniden başladı"
   M_SVCX_WROTE="Birleşik servis dosyası yazıldı: %s IP / aralık (%s)"; M_SVCX_SHRINK="Birleşik servis dosyası yazılmadı: yeni liste %s IP / aralık, öncekinin (%s) yarısından az (%s)"; M_SVCX_FAIL="Birleşik servis dosyası yazılamadı (%s)"; M_SVCX_RELOAD="Web sunucusu yeniden yüklendi: %s"; M_SVCX_RELOADF="Web sunucusu yeniden yüklenemedi: %s (çıkış %s): %s"; M_SVCX_BAD="Birleşik servis dosyası yazılmadı: Apache yeni listeyi (%s adres) ModSecurity kuralında kabul etmedi, önceki dosya korunuyor (%s): %s"
   M_H_NOREASON="geçici ban (günlükte sebep yok)"
@@ -805,7 +805,7 @@ else
   M_S_NONE="none"; M_S_DAYSLEFT="%s days left"; M_S_TTL="temp ban %s left"
   M_L_HOST="Hostname"; M_L_FWD="forward-confirmed"; M_L_NOFWD="not forward-confirmed"
   M_L_OWNER="Owner"; M_L_PREFIX="Announced prefix"; M_L_REG="Registry"; M_L_DENY="csf.deny"
-  M_L_TEMP="Temp list"; M_L_WL="Allow list"; M_L_CLOUD="Rented-server list"; M_L_BKL="Blocklist"; M_AB_LINE="score %s/100 · %s reports (%s users%s) · last report %s · %s"; M_AB_WIN=", last %s days"; M_AB_LIM="daily query limit reached (%s/%s)"; M_AB_ERR="could not query (HTTP %s): %s"; M_AB_BAD="The AbuseIPDB key must be letters and digits only (20–200 characters)"; M_L_PENDING="Watched"; M_L_IGN="Muted"; M_L_ACCT="Attempts"
+  M_L_TEMP="Temp list"; M_L_WL="Allow list"; M_L_CLOUD="Rented-server list"; M_L_BKL="Blocklist"; M_AB_LINE="score %s/100 · %s · last report %s · %s"; M_AB_REP="%s reports (%s users%s)"; M_AB_WIN=", last %s days"; M_AB_NONE="no reports"; M_AB_NONE_W="no reports in the last %s days"; M_AB_LIM="daily query limit reached (%s/%s)"; M_AB_ERR="could not query (HTTP %s): %s"; M_AB_BAD="The AbuseIPDB key must be letters and digits only (20–200 characters)"; M_L_PENDING="Watched"; M_L_IGN="Muted"; M_L_ACCT="Attempts"
   M_BKL_BAD="Invalid list name or action (expected: NAME on|off)"; M_BKL_NONE="List %s is not in csf.blocklists"; M_BKL_NOTMINE="List %s was not turned on by the plugin; the plugin does not turn off a list turned on by hand (turn it off in csf.blocklists)"; M_BKL_ON="Blocklist %s turned on; csf and lfd restarted, lfd is downloading the list"; M_BKL_OFF="Blocklist %s turned off; csf and lfd restarted"
   M_SVCX_WROTE="Combined services file written: %s IPs / ranges (%s)"; M_SVCX_SHRINK="Combined services file not written: the new list has %s IPs / ranges, less than half of the previous %s (%s)"; M_SVCX_FAIL="Combined services file could not be written (%s)"; M_SVCX_RELOAD="Web server reloaded: %s"; M_SVCX_RELOADF="Web server reload failed: %s (exit %s): %s"; M_SVCX_BAD="Combined services file not written: Apache did not accept the new list (%s addresses) in a ModSecurity rule, the previous file is kept (%s): %s"
   M_H_NOREASON="temp ban (no reason in the log)"
@@ -1926,6 +1926,24 @@ owner_resolve() { # IP [cymru] → RES_ASN, RES_NAME, RES_CC, RES_PFX, RES_REG, 
     fi
     if [ -n "$CSO_C" ]; then RES_CC="$CSO_C"; RES_CSRC=csf; elif [ -n "$ccc" ]; then RES_CC="$ccc"; RES_CSRC=cymru; fi
 }
+# SAHİP ADI tek kısaltma kuralı (panelin shortName'i ile aynı; 1.15.150): "tanıtıcı - Ad, ÜLKE" → "Ad"; CSF'in ASN verisinde tanıtıcı
+# tiresiz gelir: adın başında yinelenen ("M247 M247 Europe SRL") ve -AS ile biten ("TELLCOM-AS Superonline …") tanıtıcı atılır
+name_short() {   # AD → REPLY
+    local n="$1" w r
+    [[ "$n" =~ ^(AS[0-9]+[[:space:]]+)?([^ ]+[[:space:]]+)?-[[:space:]]+(.*)$ ]] && n="${BASH_REMATCH[3]}"
+    [[ "$n" =~ ^AS[0-9]+[[:space:]]+(.*)$ ]] && n="${BASH_REMATCH[1]}"
+    [[ "$n" =~ ^(.*),[[:space:]]*[A-Z]{2}$ ]] && n="${BASH_REMATCH[1]}"
+    if [[ "$n" == *" "* ]]; then w="${n%% *}"; r="${n#* }"; [[ "${r,,}" == "${w,,}"* ]] && n="$r"; fi
+    [[ "$n" =~ ^[A-Za-z0-9]+(-[A-Za-z0-9]+)*-[Aa][Ss][0-9]*(-[A-Za-z]{2})?[[:space:]]+([^[:space:]].*)$ ]] && n="${BASH_REMATCH[3]}"
+    REPLY="$n"
+}
+own_clean() {    # "AS123 tanıtıcı - Ad, CC" → REPLY "AS123 Ad, CC" (mail, Slack, olay kaydının owner alanı; panel aynı kuralla kısaltır)
+    local s="$1" a n cc=""
+    [[ "$s" =~ ^(AS[0-9]+)\ (.+)$ ]] || { REPLY="$s"; return 0; }
+    a="${BASH_REMATCH[1]}"; n="${BASH_REMATCH[2]}"
+    [[ "$n" =~ ^(.*)(,[[:space:]]*[A-Z]{2})$ ]] && { n="${BASH_REMATCH[1]}"; cc="${BASH_REMATCH[2]}"; }
+    name_short "$n"; REPLY="$a $REPLY$cc"
+}
 owner_lookup() { # IP → OWN_LONG ("AS60729 ARTIKEL10, DE"), OWN_SHORT ("AS60729 DE"), OWN_ASN, OWN_CC; OWN_UNK=1 ise sorulamadı
     local p="${1%.*}" a b c d txt asn cc name
     OWN_UNK=0
@@ -1935,7 +1953,7 @@ owner_lookup() { # IP → OWN_LONG ("AS60729 ARTIKEL10, DE"), OWN_SHORT ("AS6072
         if [ "$RES_DNS" = 0 ] && [ -z "$RES_ASN" ]; then
             OWN_UNK=1
             # sorulamadı: eski kayıt varsa o kalır (silinmez, "—" olmaz)
-            [ -n "${OWN_L[$p]+x}" ] && { OWN_LONG="${OWN_L[$p]}"; OWN_SHORT="${OWN_S[$p]}"; OWN_ASN="${OWN_A[$p]}"; OWN_CC="${OWN_C[$p]}"; return; }
+            [ -n "${OWN_L[$p]+x}" ] && { own_clean "${OWN_L[$p]}"; OWN_LONG="$REPLY"; OWN_SHORT="${OWN_S[$p]}"; OWN_ASN="${OWN_A[$p]}"; OWN_CC="${OWN_C[$p]}"; return; }
             OWN_LONG=""; OWN_SHORT=""; OWN_ASN=""; OWN_CC=""; return
         fi
         # Cymru cevap vermediyse duyurulan aralık bilinmiyor: eski kaydınki kalır (yalnız CSF verisi tazelendi), kayıt eskimiş kalır
@@ -1944,7 +1962,7 @@ owner_lookup() { # IP → OWN_LONG ("AS60729 ARTIKEL10, DE"), OWN_SHORT ("AS6072
         own_set "$p" "$RES_ASN" "$RES_CC" "$RES_NAME"
         OWN_NEW[$p]=1
     fi
-    OWN_LONG="${OWN_L[$p]}"; OWN_SHORT="${OWN_S[$p]}"; OWN_ASN="${OWN_A[$p]}"; OWN_CC="${OWN_C[$p]}"
+    own_clean "${OWN_L[$p]}"; OWN_LONG="$REPLY"; OWN_SHORT="${OWN_S[$p]}"; OWN_ASN="${OWN_A[$p]}"; OWN_CC="${OWN_C[$p]}"
 }
 # Önbellek satırı: "a.b.c|ASN|CC|KURUM|zaman". Sorgulanıp bilgi çıkmayan blok da (boş ASN) saklanır,
 # her turda boşuna yeniden sorulmasın. OWNER_TTL_DAYS'ten eski kayıt da okunur ve gösterilir (OWN_OLD); tur onu yeniden sorar,
@@ -2112,7 +2130,7 @@ short_reason() { # "# lfd: (sshd) Failed SSH login from IP (CC/..): 5 in ... - S
         w="${BASH_REMATCH[1]}"; modsec_msg "$w"
         r="ModSecurity $w${REPLY:+: $REPLY}"
     fi
-    (( ${#r} > 100 )) && r="${r:0:97}..."
+    # sebep kesilmez (1.15.150, kullanıcı: "hiç kesmeyelim"; önce 100 karakterde "..." — panel, mail ve Slack aynı metni gösteriyor)
     REPLY="$r${rn:+ - $rn}"
 }
 ip_line() {      # IP NOTE WITH_OWNER(0|1) → REPLY = "   - IP  hostname  [ASN CC]  sebep"
@@ -4522,7 +4540,7 @@ inside_owner() { # taranan aralığın sahibi: önbellekte bilinen ilk /24 (sorg
     OWN_LONG=""; OWN_ASN=""; OWN_CC=""
     for x in "$@" "${IN_PFX[@]}"; do
         [ -n "$x" ] || continue
-        [ -n "${OWN_L[$x]}" ] && { OWN_LONG="${OWN_L[$x]}"; OWN_ASN="${OWN_A[$x]}"; OWN_CC="${OWN_C[$x]}"; return 0; }
+        [ -n "${OWN_L[$x]}" ] && { own_clean "${OWN_L[$x]}"; OWN_LONG="$REPLY"; OWN_ASN="${OWN_A[$x]}"; OWN_CC="${OWN_C[$x]}"; return 0; }
     done
     return 0
 }
@@ -4906,7 +4924,7 @@ obj_state1() {   # ANAHTAR → REPLY = json (tek nesne). st_prep ana kabukta: al
 }
 do_lookup() {
     local ip="$1" n host="" fwd=false txt asn="" pfx="" cc="" reg="" alloc="" asname="" a b c d i
-    local deny="" temp="" tdir="" wl="" rig="" pend="" ign="" line t tip port dir to note now
+    local deny="" temp="" tlsec="" tdir="" wl="" rig="" pend="" ign="" line t tip port dir to note now
     if ! [[ "$ip" =~ $IPV4_RE ]] || ! cidr_range "$ip"; then
         if [ "$JSON" = 1 ]; then jstr "$(m "$M_BAD_IP" "$ip")"; echo "{\"ok\":false,\"error\":$REPLY}"; else m "$M_BAD_IP" "$ip"; echo; fi
         return 2
@@ -4985,7 +5003,7 @@ do_lookup() {
     bkl_has "$ip" && covers+=("4294967300|{\"kind\":\"bkl\",\"what\":\"$REPLY\"}")    # CSF blok listesi (her port, gelen)
     cvj=$(printf '%s\n' "${covers[@]}" | grep . | sort -t'|' -k1,1n | cut -d'|' -f2- | paste -sd, -)
     if tb_cover "$n"; then                 # geçici liste: tek okuyucu (satır dosyadaysa ban duruyor; süresi dolmuşsa lfd kaldırıyor)
-        local tbi=$REPLY tleft=$(( TB_E[REPLY] - now ))
+        local tbi=$REPLY tleft=$(( TB_E[REPLY] - now )); tlsec=$tleft
         if [ "$tleft" -gt 0 ]; then tleft=$(m "$M_TMIN_LEFT" "$(( tleft / 60 ))"); else tleft="$M_TMIN_GONE"; fi
         temp="${TB_A[tbi]} · $tleft · ${TB_C[tbi]}"; tdir="${TB_D[tbi]}"
     fi
@@ -5030,6 +5048,7 @@ do_lookup() {
         for k in host asname pfx cc reg alloc asrc csrc cyerr deny temp wl wle rig pend ign ign_by; do
             v="${!k}"; jstr "$v"; o+=",\"$k\":$REPLY"
         done
+        [ -n "$temp" ] && [ "${tlsec:-0}" -gt 0 ] && o+=",\"tleft\":$tlsec"   # geçici banın kalan süresi (sn): kart "Kendi banı" satırında gösterir
         [ "$pfxc" = 1 ] && o+=",\"pfxc\":true"     # aralık önbellekten (Team Cymru şu an sorulamadı)
         # izin bütün portları açıyor mu: motorun ölçütü (wl_full_idx; ineff ve izinli saldırgan sayımıyla aynı). Panel ban / izin
         # düğmelerini ve sonucu buna göre çizer (önce etiketten kendisi tahmin ediyordu: Imunify etiketini tam izin sayıyordu)
@@ -6121,8 +6140,11 @@ abuse_text() {   # JSON (abuse_check) → REPLY = düz metin satırı: "puan 100
     f() { printf '%s' "$j" | sed -n "s/.*\"$1\":\(\"\([^\"]*\)\"\|\([0-9a-z]*\)\).*/\2\3/p"; }
     if [[ "$j" == *'"err"'* ]]; then REPLY=$(m "$M_AB_ERR" "$(f code)" "$(f err)"); return; fi
     if [[ "$j" == *'"lim"'* ]]; then REPLY=$(m "$M_AB_LIM" "$(f n)" "$(f lim)"); return; fi
-    local wd; wd=$(f w); [ -n "$wd" ] && [ "$wd" != 0 ] && wd=$(m "$M_AB_WIN" "$wd") || wd=""   # sayının penceresi (eski önbellekte yok)
-    REPLY=$(m "$M_AB_LINE" "$(f s)" "$(f r)" "$(f u)" "$wd" "$(f l | cut -c1-10)" "$(f ut)")
+    # sayı sorgu penceresini sayar (eski önbellekte pencere yok); sıfırsa "bildirim yok" (panelin abRep'i ile aynı)
+    local w r rp; w=$(f w); r=$(f r)
+    if [ "${r:-0}" = 0 ]; then { [ -n "$w" ] && [ "$w" != 0 ]; } && rp=$(m "$M_AB_NONE_W" "$w") || rp="$M_AB_NONE"
+    else { [ -n "$w" ] && [ "$w" != 0 ]; } && w=$(m "$M_AB_WIN" "$w") || w=""; rp=$(m "$M_AB_REP" "$r" "$(f u)" "$w"); fi
+    REPLY=$(m "$M_AB_LINE" "$(f s)" "$rp" "$(f l | cut -c1-10)" "$(f ut)")
     [ "$(f tor)" = true ] && REPLY+=" · Tor"
 }
 # Aralık (blok) sorgusu: check-block ucu. Belge (docs.abuseipdb.com, 2026-11-24 okundu): GET network=CIDR, maxAgeInDays (standart planda
@@ -7384,10 +7406,10 @@ asn_banned() {   # → ASB[ASN numarası]=all|ports, ASB_ORD: CSF'te şu an banl
 asn_name() {     # ASNNN → REPLY = sağlayıcının adı (CSF'in ASN verisinden bir kez okunur, önbellekte tutulur)
     local a="$1" cache geo="$CSF_VAR/Geo/ip2asn-combined.tsv"
     cache="$(dirname "$SAYAC_FILE")/services"
-    REPLY=$(grep -m1 "^$a|" "$cache/asn_names" 2>/dev/null | cut -d'|' -f2-)
+    REPLY=$(grep -m1 "^$a|" "$cache/asn_names2" 2>/dev/null | cut -d'|' -f2-)
     if [ -z "$REPLY" ] && [ -r "$geo" ]; then
-        REPLY=$(awk -F'\t' -v n="${a#AS}" '$3 == n { print $5; exit }' "$geo" | tr -d '|"\\' | cut -c1-80)
-        [ -n "$REPLY" ] && { mkdir -p "$cache"; printf '%s|%s\n' "$a" "$REPLY" >> "$cache/asn_names"; }
+        REPLY=$(awk -F'\t' -v n="${a#AS}" '$3 == n { print $5; exit }' "$geo" | tr -d '|"\\')   # ad kesilmez (1.15.150; önce 80 karakter)
+        [ -n "$REPLY" ] && { mkdir -p "$cache"; printf '%s|%s\n' "$a" "$REPLY" >> "$cache/asn_names2"; }
     fi
 }
 asn_setn() {     # ASNNN → REPLY = CSF'in yüklediği aralık sayısı (-1: ipset yok, bilinmiyor)

@@ -233,4 +233,30 @@ sr "# lfd: Tekrar ban (PERMBLOCK): son 72 saat içinde en az 4 geçici ban aldı
 sr "# lfd: (sshd) Failed SSH login from 1.2.3.4 (CN/China/-): 5 in the last 3600 secs - restored when 1.2.3.0/24 was removed - Thu Nov 27 10:00:00 2026" \
    "(sshd) Failed SSH login - restored when 1.2.3.0/24 was removed" "1.2.3.4"
 sr "# lfd: (sshd) Failed SSH login from 1.2.3.4 (CN/China/-): 5 in the last 3600 secs - Thu Nov 27 10:00:00 2026" "(sshd) Failed SSH login" "1.2.3.4"
+# sebep kesilmez (1.15.150; önce 100 karakterde "...")
+sr "# lfd: Elle eklenen uzun sebep: bu araliktan gelen yedek dosyasi taramalari ve eski kurulum dosyasi istekleri birkac gun boyunca surdu - Thu Nov 27 10:00:00 2026" "Elle eklenen uzun sebep: bu araliktan gelen yedek dosyasi taramalari ve eski kurulum dosyasi istekleri birkac gun boyunca surdu"
+# SAHİP ADI: motorun name_short / own_clean'i ile panelin shortName'i aynı ham adlarda aynı sonuç (1.15.150; ham adlar canlı sahip
+# haritasından: CSF'in ASN verisinde tanıtıcı tiresiz gelir — "M247 M247 Europe SRL", "TELLCOM-AS Superonline …")
+eval "$(awk '/^name_short\(\) \{/{f=1} f{print} f && /^}$/{f=0}' "$REPO/csf_autogroup.sh")"
+eval "$(awk '/^own_clean\(\) \{/{f=1} f{print} f && /^}$/{f=0}' "$REPO/csf_autogroup.sh")"
+NS_IN=$(mktemp); NS_JS=$(mktemp)
+printf '%s\n' 'AS28126 - BRISANET SERVICOS DE TELECOMUNICACOES S.A' 'AS47007 AS4-COLOAM - Colocation America Corporation, US' 'GOOGLE - Google LLC, US' \
+  'Clouvider Clouvider Limited' 'M247 M247 Europe SRL' 'SolidCore SolidCore Hosting LTD' 'TELLCOM-AS Superonline Iletisim Hizmetleri A.S.' \
+  'CHERRYSERVERS3-AS UAB "Cherry Servers"' 'Drei-K-Tech-GmbH 3xK Tech GmbH' 'SECFIREWALLAS F.N.S. HOLDINGS LIMITED' 'CONTABO' \
+  'GSLNETWORKS-AS-AP - GSL Networks Pty LTD' 'TTNet Turk Telekomunikasyon Anonim Sirketi' 'wczapkowicz-as Wojciech Czapkowicz' 'CHINANET Guangdong province network' > "$NS_IN"
+ns() { N=$((N + 1)); name_short "$1"; if [ "$REPLY" = "$2" ]; then echo "  ✓ name_short → $REPLY"; else F=$((F + 1)); echo "  ✗ name_short «$1» → «$REPLY» (beklenen «$2»)"; fi; }
+ns 'M247 M247 Europe SRL' 'M247 Europe SRL'
+ns 'TELLCOM-AS Superonline Iletisim Hizmetleri A.S.' 'Superonline Iletisim Hizmetleri A.S.'
+ns 'Drei-K-Tech-GmbH 3xK Tech GmbH' 'Drei-K-Tech-GmbH 3xK Tech GmbH'
+ns 'wczapkowicz-as Wojciech Czapkowicz' 'Wojciech Czapkowicz'
+N=$((N + 1)); own_clean 'AS9009 M247 M247 Europe SRL, RO'
+if [ "$REPLY" = 'AS9009 M247 Europe SRL, RO' ]; then echo "  ✓ own_clean → $REPLY"; else F=$((F + 1)); echo "  ✗ own_clean → «$REPLY»"; fi
+if command -v node >/dev/null 2>&1; then
+    N=$((N + 1))
+    node -e "var s=require('fs').readFileSync(process.argv[1],'utf8'); var m=/  function shortName\(n\) \{[^]*?; \}\n/.exec(s); eval(m[0].replace(/^  function shortName/, 'global.shortName = function')); require('fs').readFileSync(process.argv[2],'utf8').split('\n').filter(Boolean).forEach(function (l) { console.log(shortName(l)); });" "$REPO/whm/assets/ag.js" "$NS_IN" > "$NS_JS" 2>&1
+    nb=0; i=0
+    while IFS= read -r l; do i=$((i + 1)); name_short "$l"; [ "$REPLY" = "$(sed -n "${i}p" "$NS_JS")" ] || { nb=$((nb + 1)); echo "    fark: «$l» motor «$REPLY» panel «$(sed -n "${i}p" "$NS_JS")»"; }; done < "$NS_IN"
+    if [ "$nb" = 0 ] && [ "$i" -gt 0 ]; then echo "  ✓ sahip adı: motor ve panel aynı kural ($i ham ad)"; else F=$((F + 1)); echo "  ✗ sahip adı: motor ile panel farklı ($nb / $i)"; fi
+fi
+rm -f "$NS_IN" "$NS_JS"
 echo "Birim: $N durum, $F beklenmeyen"; [ "$F" -eq 0 ]

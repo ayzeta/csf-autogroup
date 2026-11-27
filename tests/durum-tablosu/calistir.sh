@@ -448,6 +448,8 @@ mcheck "geçici liste: doluluk satır sayısı (çok portlu satır bir) — duru
 # IP kartında "lfd kaldırıyor" der (eksi dakika değil); blok sayımında tur ve IP kartı aynı sayar
 mk tbexp; printf '%s\n' "$(( NOW - 7200 ))|151.80.7.9||in|3600|lfd: (sshd) Failed SSH login from 151.80.7.9" "$NOW|151.80.7.10||in|3600|lfd: (sshd) Failed SSH login from 151.80.7.10" >> "$T"
 mcheck "geçici liste: süresi dolmuş ama duran satır IP kartında 'lfd kaldırıyor' (eksi süre değil)" "run --lookup 151.80.7.9 --json 2>/dev/null | grep -q 'süresi doldu, lfd kaldırıyor'"
+# kalan süre ayrı alan (kart "Kendi banı: Geçici · N kaldı"; 1.15.150): süren banda saniye, süresi dolmuşta alan yok
+mcheck "geçici liste: IP kartı kalan süreyi alan olarak taşır (süren banda var, dolmuşta yok)" "run --lookup 151.80.7.10 --json 2>/dev/null | grep -qE '\"tleft\":(3[0-5][0-9][0-9]|3600)[,}]' && ! run --lookup 151.80.7.9 --json 2>/dev/null | grep -q '\"tleft\"'"
 # susturma tek ölçüt (ign_covers): IP'yi içine alan aralık susturulmuşsa Kontrol edilecekler'de de yok (önce yalnız birebir kayda
 # bakılıyordu: /24 susturulunca mail gelmiyor, IP satırı listede kalıyordu)
 mkl ignc; printf '151.80.7.9 # ofis\n' >> "$A"; lfdb 3600 151.80.7.9

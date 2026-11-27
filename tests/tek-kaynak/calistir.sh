@@ -133,6 +133,28 @@ if [ -n "$dm" ]; then echo "DÜŞTÜ: açılır bölüm işaretsiz: $dm"; F=$((F
 # csf.rignore"); sonuç cümlesi kaynak adını ilk ":"de kesiyordu ("csf.allow (tcp in d=1")
 w1=$(grep -c "fact(t('l_wl'), d.wl ? addrHtml(d.wl, cidr)" "$J"); w2=$(grep -c "String(d.wl || '').replace(/:\.\*\$/, '')" "$J"); w3=$(grep -c "wlKind(d.wl)" "$J")
 if [ "$w1" != 0 ] || [ "$w2" != 0 ] || [ "$w3" -lt 3 ]; then echo "DÜŞTÜ: izin / yoksayma ayrımı (ham satır $w1, ilk ':'de kesme $w2, wlKind $w3)"; F=$((F + 1)); else echo "GEÇTİ: kartlarda izin listesi yalnız izin kaydı; yoksayma ve doğrulanamayan ayrı"; fi
+# Veri metni kesilmez (1.15.150, kullanıcı: "hiç kesmeyelim uzun yazsın"; "Google …" yanında boşluk varken kesiliyordu): CSS'te "…" ile
+# kesen tek kural uygulama başlığı (.ag-title h1); panel kodunda metni "…" ile kısaltan yer yok
+el=$(grep -c "text-overflow: *ellipsis" "${J%.js}.css"); eh=$(grep -c "^  \.ag-title h1 {.*text-overflow: ellipsis" "${J%.js}.css"); ej=$(grep -cE "slice\(0, ?[0-9]+\) ?\+ ?'…'|\.slice\(0, ?[0-9]+\) \+ '\.\.\.'" "$J")
+if [ "$el" != 1 ] || [ "$eh" != 1 ] || [ "$ej" != 0 ]; then echo "DÜŞTÜ: veri metni kesiliyor (CSS ellipsis $el, başlık $eh, JS kesme $ej)"; F=$((F + 1)); else echo "GEÇTİ: veri metni kesilmez, sığmazsa alt satıra geçer"; fi
+# KART TUTARLILIĞI (1.15.150, canlı göz denetimi): (1) kart başlığında ve Ülke satırında ülke adıyla ("MY" ne?); (2) sahip kartta bir kez
+# (başlık; Kim → Sahip yalnız başlıkta yoksa); (3) kendi tam banıyla kapalı izlenen blokta "Kalıcı yap / İzlemeyi yeniden başlat" yok;
+# (4) AbuseIPDB bildirim sayısı tek metinden (sıfırda "son 90 günde bildirim yok"); (5) izlenen ama banlı olmayan blokta "Kalıcı yap"
+# değil "Bloğu kalıcı banla"; (6) elle ban ihlal sayılmaz ("yukarıdaki ihlallerin hepsi kesiliyor" demez)
+k1=$(grep -c "ownerHtml(ho, null, false, false, true)\|ownerHtml(so, null, false, false, true)" "$J"); k1b=$(grep -c "t('lv_cc'), ccTag(" "$J")
+k2=$(grep -c "fact(t('l_owner'), d.asn || ownerOf(ip + '/32').asn ? '' : owner)" "$J"); k2b=$(grep -c "var o = ownerOf(cidr); if (oa) return '';" "$J")
+k3=$(grep -c "if (watchHeld(p.prefix)) return \[MI.forget(p.prefix)\];" "$J")
+k4=$(grep -c "t('ab_rep'\|t('ab_rep_w'" "$J"); k4b=$(grep -c "abRep(a)" "$J")
+k5=$(grep -c "label: tempAt(pfx3 + '.0/24') ? t('promote') : t('ban24_perm')" "$J")
+k6=$(grep -c "Object.keys(A).filter(function (k) { return k !== 'manual'; })" "$J")
+# (7) sağlayıcı kartı: başlık öteki kartlar gibi (ülke adıyla), servis dağılımı bir kez, port listesi uyarısı yalnız banlıyken
+k7=$(grep -c "esc(t('asc_kind')) + (info.cc ? ' · <span class=\"ag-own-s\">' + ccTag(info.cc)" "$J"); k7b=$(grep -c "(top.svc ? '<div>' + esc(t('p_svc'" "$J")
+k7c=$(grep -c "known.length && !ctx.bk && (ctx.banned || !ctx.card)" "$J")
+# (8) geçici banın kalan süresi "Kendi banı" satırında (yalnız açılır CSF satırının içindeydi)
+[ "$(grep -c "statePill('temp', t('l_temp')) + (d.tleft > 0 ?" "$J")" = 1 ] || k7c=x
+if [ "$k1" != 2 ] || [ "$k1b" != 2 ] || [ "$k2" != 1 ] || [ "$k2b" != 1 ] || [ "$k3" != 1 ] || [ "$k4" != 1 ] || [ "$k4b" -lt 2 ] || [ "$k5" != 1 ] || [ "$k6" != 1 ] || [ "$k7" != 1 ] || [ "$k7b" != 0 ] || [ "$k7c" != 1 ]; then
+    echo "DÜŞTÜ: kart tutarlılığı (başlık ülke adı $k1, Ülke satırı $k1b, sahip tekrarı $k2/$k2b, banlı izleme $k3, AbuseIPDB metni $k4/$k4b, Kalıcı yap adı $k5, elle ban ihlal $k6, sağlayıcı kartı $k7/$k7b/$k7c)"; F=$((F + 1))
+else echo "GEÇTİ: kart tutarlılığı (ülke adıyla, sahip bir kez, banlı blokta izleme, AbuseIPDB sıfır bildirim, ban eylemi adı, elle ban ihlal değil)"; fi
 # SERVİS ↔ PORT HARİTASI (T-2, 1.15.148): panel portları motordan okur (durum JSON svcp / svcpu); kendi tablosu (SVC_TCP / SVC_UDP) yok.
 # Motorda kısmi banın UDP portları yalnız svc_wudp'de (part_ports'ta sabit 443 / 53 yok)
 pt=$(grep -cE "SVC_TCP|SVC_UDP" "$J"); pu=$(awk '/^part_ports\(\) \{/ { p = 1 } p { print } p && /^\}/ { exit }' "$SHF" | grep -cE '"(443|53)"|,\}443|,\}53')

@@ -1,5 +1,46 @@
 # Changelog
 
+## 1.15.150 — 2026-11-27
+
+- Names and reasons are no longer cut short with "…". Provider and owner
+  names, hostnames, "most frequent" reason lines, rule captions and the
+  second line of list rows wrap onto the next line when they don't fit;
+  before they were cut even where there was room beside them.
+- The ban reason kept in notifications and on the panel is no longer cut at
+  100 characters, and the reason shown for crawl / port findings is no
+  longer cut at 80.
+- Active bans: the description now says the list holds the plugin's range
+  bans and the range and single-IP bans set by hand from the panel (it
+  still said "range bans").
+- Owner names drop the network handle that CSF's ASN data puts in front of
+  the name: "M247 M247 Europe SRL" is now "M247 Europe SRL",
+  "TELLCOM-AS Superonline …" is "Superonline …". Panel, mail and Slack use
+  the same rule. The provider name read from CSF's ASN data is no longer
+  cut at 80 characters.
+- IP and range cards show the country with its name ("MY Malaysia") in the
+  card header and in the Country row; only the code was shown. The owner is
+  shown once (header) instead of again under "Who".
+- A watched block that is banned permanently on its own (for example by
+  hand, keeping the single bans inside) no longer says "x IPs within the
+  watch period and it gets banned" and no longer offers "Make permanent" or
+  "Restart watching": the card says the watch record is kept and goes on
+  only if the ban is removed.
+- A watched block with no ban offers "Ban the block permanently (/24)"
+  instead of "Make permanent" (there was nothing to make permanent).
+- A range whose only entry is a single IP banned by hand no longer says
+  "all violations above are cut"; a manual ban is not a violation.
+- Provider card: the header shows the country with its name like the IP and
+  range cards; the "Violations" line no longer repeats a service breakdown
+  that counted differently from the one above the IP table (per ban with the
+  earlier service vs. per IP as "banned again"); the hint about the shared
+  port list appears only when the provider is banned.
+- IP card of a temp-banned IP shows the time left next to "Temporary"
+  under its own ban; it was only inside the collapsed CSF line.
+- AbuseIPDB: with no reports in the query window the card says "no reports
+  in the last 90 days" instead of "0 reports (0 users)" next to an older
+  last-report date. The IP card, the ban window and the terminal lookup use
+  the same text.
+
 ## 1.15.149 — 2026-11-27
 
 - The health dot and the CSF / lfd / cron chips in the Overview status bar

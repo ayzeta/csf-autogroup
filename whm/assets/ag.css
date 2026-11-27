@@ -168,7 +168,7 @@
 .ag-item + .ag-item > .ag-row { border-top: 1px solid var(--ag-line-soft); }
 .ag-row-main { flex: 1; min-width: 0; }
 .ag-row-t { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 550; }
-.ag-row-s { font-size: 12.5px; color: var(--ag-text-3); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-row-s { font-size: 12.5px; color: var(--ag-text-3); margin-top: 2px; white-space: normal; overflow-wrap: break-word; }
 .ag-row-a { display: flex; gap: 6px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
 .ag-row-x { flex: none; font-size: 12.5px; color: var(--ag-text-3); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ag-cidr { font-family: var(--ag-mono); font-size: 13px; font-weight: 600; color: var(--ag-accent); cursor: pointer; text-decoration: underline; text-decoration-color: var(--ag-accent-line); text-underline-offset: 3px; }
@@ -202,7 +202,7 @@
 /* ── IP list (expand) ───────────────────────────────────────────── */
 /* satırın IP listesi: öteki IP tablolarıyla aynı bileşen (.ag-im-t, ipWhyCell); kutu yalnız çerçeve */
 .ag-ips { margin: 0 18px 12px; padding: 8px 12px 4px; border: 1px solid var(--ag-line-soft); border-radius: var(--ag-radius-sm); background: #fff; }
-.ag-ip-t .ag-ip-host { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-decoration: none; }
+.ag-ip-t .ag-ip-host { white-space: normal; overflow-wrap: break-word; text-decoration: none; }
 .ag-ip-own { font-size: 12.5px; margin: 0 0 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }   /* satırların ortak sahibi (B6) */
 .ag-im-t thead th { text-align: left; font-size: 11.5px; font-weight: 650; color: var(--ag-text-3); text-transform: uppercase; letter-spacing: .04em; padding: 0 10px 6px 0; white-space: nowrap; }
 .ag-im-t thead th.ag-im-st { text-align: right; padding-right: 0; }   /* durum sütunu (rozetler sağda); öteki son sütunlar içerikleri gibi sola */
@@ -246,6 +246,8 @@
 .ag-days { width: 72px; height: 4px; border-radius: 2px; background: var(--ag-neutral-soft); overflow: hidden; margin-top: 6px; }
 .ag-days i { display: block; height: 100%; background: var(--ag-accent); border-radius: 2px; }
 
+/* veri metni (kurum adı, sebep, hostname…) KESİLMEZ, sığmazsa alt satıra geçer (1.15.150, kullanıcı: "hiç kesmeyelim";
+   "Google …" yanında boşluk varken kesiliyordu). Kalan ellipsis: uygulama başlığı ve kısa rozet metni (.ag-pill-t) */
 /* ── Config summary ─────────────────────────────────────────────── */
 .ag-kv { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; padding: 14px 18px; font-size: 12.5px; }
 .ag-kv dt { color: var(--ag-text-3); margin: 0; }
@@ -291,6 +293,9 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 460px; max-width: 100vw; background: #fff; z-index: 99991; box-shadow: var(--ag-shadow-lg); display: flex; flex-direction: column; animation: ag-slide .2s cubic-bezier(.2, .8, .2, 1); }
 @keyframes ag-slide { from { transform: translateX(24px); opacity: 0; } }
 .ag-drawer-h { padding: 18px 22px; border-bottom: 1px solid var(--ag-line-soft); display: flex; align-items: flex-start; gap: 12px; }
+/* başlıktaki sahip (bayrak · ülke adı · AS · ad) kesilmez, sarar; sol blok daralır, kapat düğmesi yerinde kalır (1.15.150) */
+.ag-drawer-h > div:first-child { flex: 1 1 auto; min-width: 0; }
+.ag-drawer-h .ag-own-s { flex-wrap: wrap; white-space: normal; overflow: visible; row-gap: 2px; }
 .ag-drawer-h h3 { margin: 0; font-family: var(--ag-mono); font-size: 18px; font-weight: 650; letter-spacing: -.01em; color: var(--ag-text); }
 .ag-drawer-b { padding: 6px 22px 22px; overflow-y: auto; flex: 1; }
 .ag-drawer-f { padding: 14px 22px; border-top: 1px solid var(--ag-line-soft); display: flex; gap: 8px; flex-wrap: wrap; }
@@ -390,13 +395,13 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-th { overflow: hidden; white-space: nowrap; }
 .ag-td-own { display: flex; align-items: center; gap: 7px; overflow: hidden; white-space: nowrap; }
 .ag-own-s { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; margin-top: -2px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 12px; }   /* Susturulanlar: sahip satırın altında, kart genişliğinde */
-.ag-own-s .ag-org { overflow: hidden; text-overflow: ellipsis; }
+.ag-own-s .ag-org { white-space: normal; overflow-wrap: break-word; }
 .ag-own-s.ag-own-f { margin-top: 0; font-size: inherit; }   /* aralık kartı Sahip satırı */
 .ag-asn { font-family: var(--ag-mono); font-size: 11px; font-weight: 600; color: var(--ag-accent); background: var(--ag-accent-soft); padding: 2px 6px; border-radius: 5px; flex: none; }
 .ag-asn-l { cursor: pointer; }   /* tıklanır: sağlayıcı kartı (görünüm aynı, IP bağlantısı gibi üzerine gelince belirginleşir) */
 .ag-asn-l:hover, .ag-asn-l:focus-visible { background: var(--ag-accent); color: #fff; outline: none; }
 .ag-srcd.ag-srcd-card { margin: 0; padding: 10px 0 0; border: 0; background: none; }
-.ag-org { overflow: hidden; text-overflow: ellipsis; color: var(--ag-text); }
+.ag-org { white-space: normal; overflow-wrap: break-word; color: var(--ag-text); }
 /* sahip bileşeni (ownerHtml) tablo hücresinin "anywhere" bölmesini almaz: kurum adı sözcük aralarından, rozet hiç bölünmez */
 .ag-org { overflow-wrap: normal; } .ag-asn, .ag-flag { overflow-wrap: normal; white-space: nowrap; }
 /* sağa yaslı başlıkta sıralama oku metnin solunda: sağdaki boş ok yeri metni sayıların 12 px solunda bitiriyordu (canlıda ölçüldü) */
@@ -425,6 +430,7 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-tr-note:not(:has(div, .ag-own-n:not(:empty))) { padding-bottom: 5px; }
 .ag-tr-note .ag-row-n { margin-top: 2px; }
 .ag-flag-0 { visibility: hidden; }   /* ülkesi bilinmeyen sağlayıcı satırında bayrağın yeri: kardeş satırlar aynı hizada */
+.ag-ccn { margin: 0 6px 0 4px; color: var(--ag-text-2); }   /* kartta ülke adı rozetin yanında (sığmazsa alt satıra) */
 .ag-tr-note .ag-ub-l { margin-top: 2px; }   /* satırın ek durumunun (ban altında ihlal, açık servis) açıklaması; rozeti Durum sütununda */
 /* Durum sütunu satırın bütün durumlarını taşır (rvStates): alt alta, ana durum üstte */
 .ag-tr-r .ag-td-state { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
@@ -617,7 +623,7 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
   content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
 .ag-rules { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px 18px 16px; }
 .ag-rule { background: #fafbfd; border: 1px solid var(--ag-line-soft); border-radius: 10px; padding: 9px 12px; min-width: 0; }
-.ag-rule small { display: block; font-size: 11px; font-weight: 600; color: var(--ag-text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-rule small { display: block; font-size: 11px; font-weight: 600; color: var(--ag-text-3); white-space: normal; overflow-wrap: break-word; }
 .ag-rule b { font-size: 14.5px; font-weight: 700; }
 .ag-rule:last-child:nth-child(odd) { grid-column: 1 / -1; }
 
@@ -765,7 +771,7 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-cov-m { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--ag-text-3); font-size: 12px; }
 .ag-cov-m > span { flex: none; }
 .ag-cov-a { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: inherit; text-decoration: none; }
-.ag-cov-a .ag-org { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ag-text-2); }
+.ag-cov-a .ag-org { white-space: normal; overflow-wrap: break-word; color: var(--ag-text-2); }
 .ag-cov-a:hover .ag-org { text-decoration: underline; }
 .ag-impact.ag-why { margin-bottom: 8px; }
 .ag-infobox { margin: 0 0 10px; padding: 9px 12px; border: 1px solid var(--ag-line); border-left: 3px solid var(--ag-accent); border-radius: 8px; background: var(--ag-card); font-size: 12.5px; color: var(--ag-text-2); }
@@ -778,7 +784,7 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-bn { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 8px; border: 1px solid var(--ag-line); border-radius: 999px; background: var(--ag-bg-2, transparent); }
 button.ag-bn { cursor: pointer; font: inherit; color: inherit; }
 button.ag-bn:hover { border-color: var(--ag-accent); }
-.ag-bn .ag-org { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ag-text-2); }
+.ag-bn .ag-org { white-space: normal; overflow-wrap: break-word; color: var(--ag-text-2); }
 .ag-bn-how { font-weight: 600; color: var(--ag-text-2); white-space: nowrap; }
 .ag-bn-how.warn { color: var(--ag-warn, #b45309); }
 .ag-svc-last { font-weight: 600; color: var(--ag-text-2); }
@@ -803,7 +809,7 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
 .ag-prov-id { min-width: 0; }
 .ag-prov-nm { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .ag-prov-nm .ag-asn { flex: none; }
-.ag-prov-nm .ag-org { font-size: 12.5px; color: var(--ag-text-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-prov-nm .ag-org { font-size: 12.5px; color: var(--ag-text-2); min-width: 0; white-space: normal; overflow-wrap: break-word; }
 .ag-prov-st { margin-top: 5px; }
 .ag-prov-ctl { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
 @media (max-width: 600px) { .ag-prov-ah { grid-template-columns: minmax(0, 1fr); } .ag-prov-ctl { flex-wrap: wrap; } }
@@ -948,7 +954,7 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
   .ag-head { flex-wrap: wrap; align-items: center; }
   .ag-title { flex: 1; min-width: 0; }
   .ag-title h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .ag-title .ag-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .ag-title .ag-sub { white-space: normal; overflow-wrap: break-word; display: block; }
   .ag-head-actions { display: flex; flex-direction: row; flex-wrap: wrap; gap: 6px; width: 100%; margin-left: 0; }
   .ag-head-actions .ag-btn { flex: 1 1 30%; min-width: 0; height: 32px; padding: 0 8px; font-size: 12.5px; justify-content: center; white-space: nowrap; }
   .ag-head-actions .ag-head-help { margin-right: 0; }
@@ -1292,7 +1298,7 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-prow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--ag-line-soft); }
 .ag-prow:first-child { border-top: 0; }
 .ag-prow-nm { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.ag-prow-nm .ag-org { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ag-text-2); font-size: 12.5px; }
+.ag-prow-nm .ag-org { white-space: normal; overflow-wrap: break-word; color: var(--ag-text-2); font-size: 12.5px; }
 .ag-prow-st { font-size: 11.5px; white-space: nowrap; }
 .ag-prow-x { grid-column: 1 / -1; }
 .ag-ports { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -1322,12 +1328,12 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-grp-l { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 4px 20px 12px 66px; font-size: 12.5px; }
 .ag-grp-l .ag-cidr { cursor: pointer; }
 
-/* tablo: durum tek rozet (uzunsa üç noktayla kısalır, tamamı ipucunda), kapsama etiketi sahip sütununda */
+/* tablo: durum tek rozet (tek satır, kesilmez), kapsama etiketi sahip sütununda */
 .ag-td-state .ag-pill { white-space: nowrap; }   /* C3: durum rozeti tek satır; sütun en geniş etikete göre (etiket-olc.js: TR 150 / 137, EN 158 / 171 → kısaltıldı) */
 .ag-td-state .ag-pill-t { white-space: nowrap; overflow: visible; }
-.ag-pill-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ag-pill-t { white-space: nowrap; min-width: 0; }
 .ag-ctag { flex: none; font-size: 11px; font-weight: 600; color: var(--ag-text-2); background: var(--ag-neutral-soft); border: 1px solid var(--ag-line); border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
-.ag-asn-w { font-size: 11.5px; color: var(--ag-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.ag-asn-w { font-size: 11.5px; color: var(--ag-text-3); white-space: normal; overflow-wrap: break-word; margin-top: 1px; }
 .ag-pill-xs { height: 18px; padding: 0 7px; font-size: 10.5px; vertical-align: 1px; }
 .ag-chg-l { display: block; font-size: 12.5px; color: var(--ag-text-2); overflow-wrap: anywhere; }
 .ag-modal li .ag-mono { overflow-wrap: anywhere; word-break: break-word; }
@@ -1348,7 +1354,7 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 @media (max-width: 600px) { .ag-band-m { min-width: 0; } }   /* üç sütun telefonda sığsın; 120 px alt sınır hücreleri üst üste bindiriyordu */
 /* sahip hücresi: ad en az birkaç harf görünür; etiket de sığmazsa … ile kısalır (tam metni ipucunda) */
 .ag-td-own .ag-org { min-width: 56px; flex: 0 1 auto; white-space: nowrap; }
-.ag-td-own .ag-ctag { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ag-td-own .ag-ctag { flex: 0 1 auto; min-width: 0; white-space: normal; overflow-wrap: break-word; }
 .ag-fill .ag-days { width: 140px; }   /* CSF liste sınırları: doluluk çubuğu */
 
 /* Dar ekranda seçenek sıraları (ör. Ayarlar → Bildirim kanalları) kartın sağından taşmasın: satır kırılır */
@@ -1443,7 +1449,7 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-rg-ipt td.ag-im-st .ag-pill { margin: 0; }
 /* kaldırma penceresi: geri yüklenecek tekiller, IP ve sebep tek satırda (sığmayan sebep … ile, tamamı ipucunda) */
 .ag-clean > div { min-width: 0; }
-.ag-clean .ag-rs-l { display: block; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ag-clean .ag-rs-l { display: block; margin-top: 2px; white-space: normal; overflow-wrap: break-word; }
 .ag-clean .ag-rs-l span { display: inline; margin: 0; color: var(--ag-text-2); }
 /* tanımlı olmayan kanalın sütunu (Slack WHM'de yoksa) ve ana anahtarı kapalı ayarın bağlı alanları: soluk */
 .ag-chk.na { opacity: .35; cursor: not-allowed; }
