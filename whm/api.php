@@ -97,6 +97,24 @@ function ag_tempban_check(string $ip): void
              'ports' => $all ? '' : implode(',', array_unique($ports)), 'rows' => $rows]);
 }
 
+/**
+ * runstate — tur şu an çalışıyor mu (panelin "tur çalışıyor" göstergesi, cron tikinden sonra saniyede bir sorulur). Motor tur kilidini
+ * alınca /run/csf_autogroup.running'e "PID başlangıç" yazar, bırakırken siler (csf_autogroup.sh RUN_MARK). Burada kilit YOKLANMAZ:
+ * kilidi bir an tutan yoklama cron'un flock -n'ine denk gelirse tur atlanır. Motor çağrılmaz (durum çıktısı ~10 sn, tur ~6 sn: durum
+ * cevabı geldiğinde tur bitmiş olur). PID yaşamıyorsa (tur yarıda öldü) ya da başka bir sürece geçtiyse çalışmıyor sayılır.
+ */
+function ag_run_state(): array
+{
+    $f = ag_env('AG_RUN_MARK') ?: '/run/csf_autogroup.running';    // AG_RUN_MARK: yalnız test
+    $s = is_file($f) ? @file_get_contents($f) : false;
+    if ($s === false || !preg_match('/^(\d+) (\d+)\s*$/', $s, $m)) {
+        return ['ok' => true, 'running' => false];
+    }
+    $cmd = @file_get_contents('/proc/' . (int) $m[1] . '/cmdline');
+    $on = $cmd !== false && strpos($cmd, 'csf_autogroup') !== false;
+    return ['ok' => true, 'running' => $on, 'since' => $on ? (int) $m[2] : null];
+}
+
 ag_input_bootstrap();
 if (strtoupper(ag_env('REQUEST_METHOD') ?: 'GET') === 'GET' && (string) ($_GET['a'] ?? '') === 'tempban_check') {
     ag_guard();
@@ -109,6 +127,9 @@ ag_csrf_check();
 $a = (string) ($_POST['a'] ?? '');
 
 switch ($a) {
+
+    case 'runstate':
+        ag_json(ag_run_state());
 
     case 'status':
         $d = ag_run_json(['--status', '--json'], 60);

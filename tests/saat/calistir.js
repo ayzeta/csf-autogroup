@@ -10,14 +10,19 @@ const fs = require('fs'), path = require('path');
 let src = fs.readFileSync(path.join(__dirname, '../../whm/assets/ag.js'), 'utf8');
 const tail = src.lastIndexOf('})();');
 src = src.slice(0, tail) + `globalThis.__AG = { set: function (s, l) { S = s; LANG = l || 'tr'; CLOCK = s.now - Date.now() / 1000; tzSet(s); },
-  stamp: stamp, dayStr: dayStr, nextLeft: nextLeft, fmtDT: fmtDT, at: function (t) { CLOCK = t - Date.now() / 1000; } };\n` + src.slice(tail);
+  stamp: stamp, dayStr: dayStr, nextLeft: nextLeft, fmtDT: fmtDT, at: function (t) { CLOCK = t - Date.now() / 1000; },
+  isRun: typeof isRun === 'function' ? isRun : function () { return !!S.running; } };\n` + src.slice(tail);
 const el = () => new Proxy(function () {}, { get: (t, k) => k === 'length' ? 0 : k === Symbol.toPrimitive ? () => '' : el(), apply: () => el(), set: () => true });
 globalThis.window = { AG_BOOT: {}, addEventListener() {}, location: { search: '' }, matchMedia: () => ({ matches: false, addEventListener() {} }) };
 globalThis.document = { getElementById: () => el(), querySelector: () => el(), querySelectorAll: () => [], addEventListener() {}, createElement: el, body: el(), documentElement: el(), hidden: true };
 globalThis.location = window.location; globalThis.addEventListener = () => {};
 globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
 globalThis.navigator = { language: 'tr' };
-globalThis.fetch = () => new Promise(() => {});
+// runstate cevabı testten verilir (RS); öteki istekler hiç dönmez. Her istek gövdesiyle FETCHES'e yazılır
+const FETCHES = []; let RS = null;
+globalThis.fetch = (u, o) => { const b = String((o && o.body) || ''); FETCHES.push(b);
+  if (/(^|&)a=runstate(&|$)/.test(b) && RS) { const j = RS; return Promise.resolve({ status: 200, text: () => Promise.resolve(JSON.stringify(j)) }); }
+  return new Promise(() => {}); };
 const INTERVALS = [], TIMEOUTS = [];
 globalThis.setInterval = (f, ms) => { INTERVALS.push({ f, ms }); return 0; };
 globalThis.setTimeout = (f, ms) => { TIMEOUTS.push({ f, ms }); return 0; };
@@ -43,23 +48,36 @@ AG.set({ now: T, tz: 'Bilinmeyen/Yer', tzo: 10800, cron_min: '0', enabled: true 
 check('tarayıcının tanımadığı ad: sabit farka düşer (13:40)', AG.stamp(T) === '11.11 13:40', AG.stamp(T));
 AG.set({ now: T, tz: 'Europe/Istanbul', tzo: 10800, enabled: true }, 'en');
 check('İngilizce biçim de sunucu saatiyle', /13:40/.test(AG.stamp(T)), AG.stamp(T));
-// Tur anı yoklaması (1.15.155): panelin saniyelik sayacı gerçek nextLeft ile 13:44:55 → 13:45:10 ilerletilir; tikten sonra bir kez,
-// 3 sn sonra durum sorulmalı. 1.15.154'e kadar "left === 0" aranıyordu; nextLeft tikte 1'den 900'e atladığı için hiç kurulmuyordu.
+// Tur çalışıyor göstergesi (1.15.156): panelin saniyelik sayacı gerçek nextLeft ile 13:44:55 → 13:45:10 ilerletilir. Tik geçince
+// hafif runstate ucu bir kez sorulur (1.15.154'e kadar "left === 0" aranıyordu, nextLeft tikte 1'den 900'e atladığı için hiç sorulmadı);
+// "çalışıyor" cevabında şerit mavi, "çalışmıyor" cevabında mavi söner ve tam durum istenir. Durum çıktısı (~10 sn) turdan (~6 sn) uzun
+// olduğu için mavi bu uçtan gelir.
 const tickIv = INTERVALS.find(x => x.ms === 1000 && /nextLeft\(\)/.test(String(x.f)));
 check('saniyelik sayaç bulundu', !!tickIv);
-if (tickIv) {
-  AG.set({ now: T, tz: 'Europe/Istanbul', tzo: 10800, cron_min: '*/15', cron_interval: 900, enabled: true, running: false }, 'tr');
-  document.hidden = false;
-  const t0 = Date.UTC(2026, 10, 11, 10, 44, 55) / 1000;   // İstanbul 13:44:55
-  const probes = [];
-  for (let i = 0; i <= 15; i++) {
-    AG.at(t0 + i); const n = TIMEOUTS.length; tickIv.f();
-    TIMEOUTS.slice(n).forEach(x => { if (/refresh/.test(String(x.f))) probes.push({ at: i, ms: x.ms }); });
+const flush = () => new Promise(r => setImmediate(r));
+(async () => {
+  if (tickIv) {
+    AG.set({ now: T, tz: 'Europe/Istanbul', tzo: 10800, cron_min: '*/15', cron_interval: 900, enabled: true, running: false }, 'tr');
+    document.hidden = false;
+    RS = { ok: true, running: true, since: 1 };
+    const t0 = Date.UTC(2026, 10, 11, 10, 44, 55) / 1000;   // İstanbul 13:44:55
+    const asks = [];
+    for (let i = 0; i <= 15; i++) {
+      AG.at(t0 + i); const n = FETCHES.length; tickIv.f();
+      FETCHES.slice(n).forEach(b => { if (/a=runstate/.test(b)) asks.push(i); });
+    }
+    check('tik geçince tur durumu hemen ve bir kez sorulur (13:45:00)', asks.length === 1 && asks[0] === 5, JSON.stringify(asks));
+    await flush(); await flush(); await flush();
+    check('tur sürerken şerit "çalışıyor"', AG.isRun() === true);
+    const poll = TIMEOUTS.filter(x => x.ms === 1000 && /runstate/.test(String(x.f))).pop();
+    check('tur sürerken saniyede bir yeniden sorulur', !!poll);
+    if (poll) {
+      RS = { ok: true, running: false }; const n = FETCHES.length;
+      poll.f(); await flush(); await flush(); await flush();
+      check('tur bitince "çalışıyor" söner', AG.isRun() === false);
+      check('tur bitince tam durum istenir', FETCHES.slice(n).some(b => /a=status/.test(b)), FETCHES.slice(n).join(' | '));
+    }
   }
-  check('tik geçince bir kez yoklama kurulur (13:45:00, 3 sn sonra)', probes.length === 1 && probes[0].at === 5 && probes[0].ms === 3000, JSON.stringify(probes));
-  probes.length = 0; AG.at(t0 + 20); tickIv.f(); document.hidden = true; tickIv.f(); document.hidden = false;
-  AG.at(t0 + 300); tickIv.f();
-  check('gizli sekmeden dönüşte yanlış tik sayılmaz', TIMEOUTS.filter(x => /refreshNow/.test(String(x.f))).length === 1, String(TIMEOUTS.length));
-}
-console.log(`Saat: ${N} denetim, ${F} beklenmeyen`);
-process.exit(F ? 1 : 0);
+  console.log(`Saat: ${N} denetim, ${F} beklenmeyen`);
+  process.exit(F ? 1 : 0);
+})();

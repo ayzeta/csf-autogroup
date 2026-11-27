@@ -102,6 +102,25 @@ if [ -f csf_autogroup.sh ] && grep -q "case 'abuse_key'" "$W/api.php"; then
     ok "bkl: on / off dışı işlem reddedilir" "printf '%s' \"\$BODY\" | grep -q '\"error\":\"bad_input\"'"
     post "a=bkl&n=SPAMDROP&w=on"
     ok "bkl: CSRF anahtarı olmadan reddedilir" "printf '%s' \"\$BODY\" | grep -q '\"error\":\"session\"'"
+    # runstate (1.15.156): motorun tur işaretini (PID başlangıç) okur; kilit almaz, motoru çağırmaz. PID yaşamıyorsa ya da süreç
+    # csf_autogroup değilse çalışmıyor. Yaşayan "csf_autogroup" süreci: exec -a ile adlandırılmış sleep
+    rpost() {
+        OUT=$(cd "$W" && printf '%s' "$1" | env -i PATH="$PATH" REMOTE_USER=root REQUEST_METHOD=POST CONTENT_TYPE=application/x-www-form-urlencoded \
+            CONTENT_LENGTH=${#1} AG_RUN_MARK="$W/run.mark" "$PHP" -d display_errors=0 api.php 2>/dev/null)
+        BODY=$(printf '%s' "$OUT" | awk 'f { print } /^\r?$/ { f = 1 }')
+    }
+    rm -f "$W/run.mark"; rpost "a=runstate&csrf=$TOK"
+    ok "runstate: işaret yoksa çalışmıyor" "printf '%s' \"\$BODY\" | grep -q '\"ok\":true,\"running\":false'"
+    bash -c 'exec -a /root/csf-autogroup/csf_autogroup.sh sleep 20' & RSP=$!; sleep 0.3
+    printf '%s 1700000000\n' "$RSP" > "$W/run.mark"; rpost "a=runstate&csrf=$TOK"
+    ok "runstate: işaretin süreci yaşıyorsa çalışıyor (başlangıçla)" "printf '%s' \"\$BODY\" | grep -q '\"running\":true,\"since\":1700000000'"
+    kill "$RSP" 2>/dev/null; wait "$RSP" 2>/dev/null; rpost "a=runstate&csrf=$TOK"
+    ok "runstate: tur yarıda öldüyse (PID yok) çalışmıyor" "printf '%s' \"\$BODY\" | grep -q '\"running\":false'"
+    printf '%s 1700000000\n' "$$" > "$W/run.mark"; rpost "a=runstate&csrf=$TOK"
+    ok "runstate: PID başka bir sürece geçtiyse çalışmıyor" "printf '%s' \"\$BODY\" | grep -q '\"running\":false'"
+    rpost "a=runstate"
+    ok "runstate: CSRF anahtarı olmadan reddedilir" "printf '%s' \"\$BODY\" | grep -q '\"error\":\"session\"'"
+    rm -f "$W/run.mark"
 fi
 
 

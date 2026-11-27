@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.15.156 — 2026-11-28
+
+- "Run in progress" (blue dot) now comes from a small marker the run writes
+  while it holds its lock, read by a light request the panel sends once a
+  second after the cron tick. The full status reply takes longer than a
+  typical run, so it could only ever report a run that had already ended.
+  The marker is read without touching the run lock, so the check can never
+  make a cron run skip.
+
 ## 1.15.155 — 2026-11-28
 
 - The check at the cron tick now actually runs. The countdown jumps from

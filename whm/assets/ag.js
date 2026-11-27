@@ -789,7 +789,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       '<button class="ag-btn ag-btn-sm" onclick="location.reload()">' + esc(t('reload')) + '</button></div>' : '';
   }
   function head() {
-    var run = S.running;
+    var run = isRun();
     return verStale() + '<div class="ag-head"><div class="ag-mark">' + IC.shield + '</div>' +
       '<div class="ag-title"><h1>CSF Auto-Group</h1><div class="ag-sub">' + esc(location.hostname) + ' · v' + esc(S.version) + '</div></div>' +
       '<div class="ag-tabs" role="tablist">' + ['overview', 'history', 'prov', 'settings'].map(function (k) {
@@ -819,7 +819,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   // tur zamanı geldi mi: tik 2 dakikadan yeni ve son tur olayı tikten önce → tur bitince hemen görünsün diye sık yoklanır
   function runDue() {
     var left = nextLeft(), iv = S.cron_interval || 0, lr = S.last_run;
-    if (left < 0 || !(iv > 0) || S.running) return false;
+    if (left < 0 || !(iv > 0) || isRun()) return false;
     var since = iv - left;
     return since >= 0 && since < 120 && (!lr || nowSec() - lr.t > since);
   }
@@ -832,7 +832,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
       chip(t('hc_cron'), late ? 'bad' : noCron ? 'warn' : 'ok', t(late ? 'hc_cron_late' : noCron ? 'hc_cron_none' : 'hc_cron_ok')) + '</div>';
   }
   function statusBand() {
-    var lr = S.last_run, run = S.running, late = !run && overdue(), iv = S.cron_interval || 0;
+    var lr = S.last_run, run = isRun(), late = !run && overdue(), iv = S.cron_interval || 0;
     var R = S.runs || {}, L = R.list || [], ds = L.map(function (x) { return x[1] || 0; });
     var avg = ds.length ? Math.round(ds.reduce(function (a, b) { return a + b; }, 0) / ds.length) : 0;
     var exp = iv > 0 && R.first ? Math.max(1, Math.round(Math.min(86400, nowSec() - R.first) / iv)) : 0;
@@ -3107,10 +3107,12 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     // hesaplanınca panel sunucuyu ~10 sn geride sanıyor, tur anı yoklamasını geç yapıyor ve 6 sn'lik turu hiç yakalamıyordu (canlı 20:00
     // ölçümü: sunucu 20:00:01–07 running=true, panel hep yeşil)
     // Gönderim anı cevap anından geçen süre (performance.now, saat ayarından etkilenmez) çıkarılarak bulunur
-    var p0 = performance.now();
+    var p0 = performance.now(), w0 = Date.now();
     return api('status').then(function (d) {
       if (!d || d.ok === false) { throw new Error((d && (d.message || d.error)) || 'status'); }
       var sent = Date.now() / 1000 - (performance.now() - p0) / 1000;
+      // tur sırasında sorulan durum tur bittikten sonra gelir: runWatch bitişi gördüyse eski "çalışıyor" mavisi geri gelmesin
+      if (d.running && RUN_END && w0 < RUN_END) d.running = false;
       S = d; BACK = false; if (STALE !== 'work') STALE = false; LANG = d.lang === 'tr' ? 'tr' : 'en'; try { localStorage.setItem('ag-lang', LANG); } catch (e) {} CLOCK = d.now - sent; LAST_OK = d.now; tzSet(d); setConn(null); NET_FAIL = 0;
       if (SEEN0 === null) { SEEN0 = d.last_seen || 0; setTimeout(function () { api('seen').catch(function () {}); }, 1500); }
       document.documentElement.lang = LANG;
@@ -3149,12 +3151,34 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   var PREV_LEFT = -1;
   setInterval(function () {
     if (document.hidden || !S || BACK) { PREV_LEFT = -1; return; }
-    var el = document.getElementById('ag-next'); if (el && !S.running) el.textContent = nextIn() || '—';
+    var el = document.getElementById('ag-next'); if (el && !isRun()) el.textContent = nextIn() || '—';
     var left = nextLeft(), tick = tickPassed(PREV_LEFT, left); PREV_LEFT = left;
-    // tik: 60 sn'lik yoklamayı beklemeden 3 sn sonra sor, run olayı gelene kadar 5 sn'de bir sürer (runDue). Yoldaki isteği beklemez:
-    // o istek tikten önce sorulmuştur (tur çalışmıyor der) ve ~10 sn sürer; beklenirse tur (canlıda ~6 sn) yeni istek gitmeden biter
-    if (tick) setTimeout(function () { if (document.hidden) { HIDDEN_DUE = true; return; } if (REF_P) refreshNow(); else refresh(); }, 3000);
+    if (tick) runWatch();
   }, 1000);
+  // "Tur çalışıyor" (1.15.156): durum çıktısı ~10 sn sürer, cron turu ~6 sn — durumun running'i cevap geldiğinde hep eskimiştir (ya
+  // turu hiç göstermez ya tur bittikten sonra gösterir). Tikten sonra hafif runstate ucu (motorun tur işaretini okur, kilit almaz)
+  // saniyede bir sorulur: işaret durdukça mavi (LIVE), kalkınca tam durum istenir. 40 sn'de tur başlamadıysa bırakılır.
+  var LIVE = false, RW = false, RUN_END = 0;
+  function isRun() { return !!(S && (S.running || LIVE)); }
+  function redrawBand() {
+    var b = $app.querySelector('.ag-band'); if (b) b.outerHTML = statusBand();
+    var rb = $app.querySelector('.ag-head [data-act="run"]'); if (rb) rb.disabled = isRun();
+  }
+  function runWatch() {
+    if (RW) return;
+    RW = true; var t0 = Date.now(), seen = false;
+    function stop(live) { RW = false; if (LIVE) { LIVE = false; RUN_END = Date.now(); } redrawBand(); if (live) { if (REF_P) refreshNow(); else refresh(); } }   // yoldaki istek turdan önce sorulmuştur: beklenmez
+    (function poll() {
+      if (document.hidden) { stop(false); HIDDEN_DUE = true; return; }
+      api('runstate').then(function (r) {
+        if (!r || r.ok === false) { stop(false); return; }
+        if (r.running) { seen = true; if (!LIVE) { LIVE = true; redrawBand(); } }
+        else if (seen || Date.now() - t0 > 40000) { stop(seen); return; }
+        if (Date.now() - t0 > 900000) { stop(true); return; }      // 15 dk'dan uzun tur: tam duruma bırak
+        setTimeout(poll, 1000);
+      });
+    })();
+  }
   function schedule(ms) {
     clearTimeout(pollTimer);
     if (CONN === 'session') return;

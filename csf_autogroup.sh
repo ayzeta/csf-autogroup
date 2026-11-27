@@ -65,7 +65,7 @@ grep() { command grep -a "$@"; }
 # sayı, anahtar; Türkçe modda sıralama kuralı zaten C idi (LC_COLLATE=C)
 sort() { LC_ALL=C command sort "$@"; }
 
-VERSION="1.15.155"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.156"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -8725,6 +8725,11 @@ esac
 
 # Tek seferde tek çalışma: cron turu uzarsa ikinci kopya aynı bloğu tekrar eklemesin.
 take_lock || { log "$M_LOCKED"; exit 0; }
+# Tur işareti (1.15.156): panelin "tur çalışıyor" göstergesi bunu okur (api.php runstate). Kilit yoklanmaz: kilidi bir an tutan yoklama
+# cron'un flock -n'ine denk gelirse tur atlanır (yukarıdaki satır). Satır "PID başlangıç"; kilit bırakılırken silinir, tur yarıda ölürse
+# okuyucu PID'in yaşamadığını görür. /run tmpfs: açılışta temizlenir. Yazılamazsa gösterge yalnız durum çıktısının running'ine kalır.
+RUN_MARK="${RUN_MARK:-/run/csf_autogroup.running}"
+{ printf '%s %s\n' "$$" "$(date +%s)" > "$RUN_MARK.$$" && mv -f "$RUN_MARK.$$" "$RUN_MARK"; } 2>/dev/null || rm -f "$RUN_MARK.$$" 2>/dev/null
 [ "$DRY" = 1 ] && log "$M_DRY_ON"
 [ ${#SETS[@]} -gt 0 ] && log "$(m "$M_DRY_OVR" "${SETS[*]}")"
 declare -A TURN_B24=(); TURN_ADDED=(); RUN_T0=$(date +%s); RUN_LB=$(stat -c %s "$LOG_FILE" 2>/dev/null || echo 0)   # günlüğün tur başındaki boyu: araçların bu turdaki satırları
@@ -9153,6 +9158,7 @@ digest_maybe
 # Ban işleri bitti: ana kilit bırakılır. Aşağıdaki sahip ve Imunify sorguları ban kararlarına girmez
 # ve dakikalar sürebilir; o sırada paneldeki işlemler "meşgul" demesin, sıradaki cron turu atlanmasın.
 # Aynı anda iki zenginleştirme çalışmasın diye ayrı bir kilit (fd 8) kullanılır; tutuluyorsa atlanır.
+rm -f "$RUN_MARK" 2>/dev/null    # kilit elimizdeyken: işaret bu turundur (sonraki tur kilidi ancak bundan sonra alır)
 if command -v flock >/dev/null 2>&1; then flock -u 9 2>/dev/null; exec 9>&-; fi
 ENRICH=1
 if command -v flock >/dev/null 2>&1; then exec 8>"$LOCK_FILE.enrich"; flock -n 8 || ENRICH=0; fi
