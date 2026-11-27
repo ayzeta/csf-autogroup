@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.15.153 — 2026-11-27
+
+- A panel tab left open while the plugin was updated (from another tab, the
+  panel or the command line) now says so above the header and offers a
+  reload. Before, the header showed the new version number while the page
+  kept running the old screen files.
+
 ## 1.15.152 — 2026-11-27
 
 - Provider data read from CSF's own files no longer shifts when a field is

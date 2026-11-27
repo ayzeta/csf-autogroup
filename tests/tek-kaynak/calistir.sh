@@ -167,5 +167,9 @@ else echo "GEÇTİ: servis-port haritası motordan (svc_ports / svc_wudp → svc
 wc=$(grep -c 'SAYAC_RETENTION_DAYS days ago' "$SHF"); wa=$(grep -c 'ret - age >= 0' "$SHF")
 if [ "$wc" != 1 ] || [ "$wa" != 0 ]; then echo "DÜŞTÜ: izleme sınırı tek yerde değil (sınırı hesaplayan $wc yer, eski gün hesabı $wa)"; F=$((F + 1))
 else echo "GEÇTİ: izleme sınırı tek ölçüt (watch_cut)"; fi
+# SÜRÜM ŞERİDİ (1.15.152): sayfa eski dosyalarla açıkken (yüklenen sürüm BOOT.version ≠ sunucunun S.version) başlığın üstünde "yenile"
+# şeridi; önce başlık yeni sürümü yazıp ekran eski CSS / JS ile çalışıyordu
+if [ "$(grep -c "BOOT.version !== S.version" "$J")" != 1 ] || [ "$(grep -c "return verStale() + '<div class=\"ag-head\">" "$J")" != 1 ]; then echo "DÜŞTÜ: eski dosyalarla açık sayfa için sürüm şeridi yok"; F=$((F + 1))
+else echo "GEÇTİ: eski dosyalarla açık sayfa sürüm şeridiyle yenilenmeyi ister"; fi
 [ $F -eq 0 ] && echo "GEÇTİ: tek kaynak ($J)" || echo "DÜŞTÜ: $F kural"
 exit $F
