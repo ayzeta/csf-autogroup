@@ -65,7 +65,7 @@ grep() { command grep -a "$@"; }
 # sayı, anahtar; Türkçe modda sıralama kuralı zaten C idi (LC_COLLATE=C)
 sort() { LC_ALL=C command sort "$@"; }
 
-VERSION="1.15.156"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.157"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -252,6 +252,20 @@ done
 # İşlemi kimin yaptığı: WHM eklentisi AG_BY ile WHM kullanıcısını geçirir.
 AG_BY="${AG_BY:-root}"; [[ "$AG_BY" =~ ^[A-Za-z0-9._-]{1,32}$ ]] || AG_BY="root"
 
+# Tur işareti (panelin "tur çalışıyor" göstergesi; api.php runstate okur). 1.15.156 işareti tur kilidinden sonra yazıyordu: kilide kadar
+# betiğin yüklenmesi ve ayarlar sunucuda ~5–9 sn sürdü, mavi tikten o kadar geç yandı (kullanıcı gördü). Şimdi tur kipi anlaşılır
+# anlaşılmaz yazılır. Canlı bir işaret varsa (önceki tur sürüyor) yenisi yazılmaz; kilidi alamayan tur yalnız kendi işaretini siler,
+# kilit bırakılırken işaret silinir. Satır "PID başlangıç"; tur yarıda ölürse okuyucu PID'in yaşamadığını görür. /run tmpfs.
+RUN_MARK="${RUN_MARK:-/run/csf_autogroup.running}"; RUN_MARK_OWN=0
+run_mark_set() {
+    local p="" x=""
+    read -r p x 2>/dev/null < "$RUN_MARK"
+    [ -n "$p" ] && [ "$p" != "$$" ] && tr '\0' ' ' 2>/dev/null < "/proc/$p/cmdline" | grep -q csf_autogroup && return 1
+    { printf '%s %s\n' "$$" "$(date +%s)" > "$RUN_MARK.$$" && mv -f "$RUN_MARK.$$" "$RUN_MARK"; } 2>/dev/null && { RUN_MARK_OWN=1; return 0; }
+    rm -f "$RUN_MARK.$$" 2>/dev/null; return 1
+}
+[ "$MODE" = run ] && run_mark_set
+
 # ── Messages (printf templates; %s placeholders) ────────────────────────────
 tr_ctype() {     # Türkçe modda harf sınıfı (LC_CTYPE) Türkçe değil: tr_TR'de büyük I küçülünce noktasız ı olur (sunucuda ölçüldü:
     # awk tolower("IMAP") = "ımap", bash ${c,,} "IT" = "ıt"). Sebep sınıflaması ("Failed IMAP login", "[LF_DISTATTACK]"), ülke
@@ -327,7 +341,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_SVCN_web="Web"; M_SVCN_ssh="SSH"; M_SVCN_ftp="FTP"; M_SVCN_cp="cPanel · WHM · Webmail"; M_SVCN_min="Gelen posta"; M_SVCN_mout="Giden posta"; M_SVCN_wout="Giden web"
   M_SVCN_smtp="Posta gönderme (SMTP)"; M_SVCN_mread="Posta okuma (IMAP/POP)"; M_SVCN_sync="E-posta istemcisi"; M_SVCN_dns="DNS"; M_SVCN_scan="port taraması"; M_SVCN_repeat="tekrar banlanan"; M_SVCN_other="diğer"; M_SVCN_norec="sebebi kayıtlı değil"
   M_AVK_b="ban işlemiyor"; M_AVK_i="lfd yoksaydı"; M_AVK_y="yoksayılıyor"; M_AVK_s="sunucu IP'si"
-  M_POPEN_SUBJ="%s açık servis"; M_POPEN_BODY="Kısmi banın açık bıraktığı servislere eşik kadar ihlal geldi; ban değiştirilip onlar da kapatılabilir:"; M_POPEN_L="kapalı: %s · açık servislere %s IP ihlal etti"
+  M_POPEN_SUBJ="%s açık servis"; M_POPEN_BODY="Kısmi banın açık bıraktığı servislere eşik kadar ihlal geldi; ban değiştirilip onlar da kapatılabilir:"; M_POPEN_L="%s · açık servislere %s IP ihlal etti"
   M_UNDER="Ban altında ihlal (Geçmiş'e yazıldı): %s altında %s yeni IP"
   M_UNDER_SUBJ="%s ban altında ihlal"; M_UNDER_BODY="Bir ban ihlal edilen servisi kapatırken lfd'nin sonradan banladığı IP'ler (eşiklere sayılmaz); ban başına günde bir kez, yalnız yeni IP'ler:"
   M_UNDER_L="%s · başlangıç %s -> %s yeni IP"; M_UNDER_CSFR="   %s IP: banından önceki %s dk içinde CSF yeniden yüklendi (en son %s); yüklenirken güvenlik duvarı birkaç saniye açık kalır%s"
@@ -437,7 +451,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_A_RESTORED="%s · %s kayıt geri yüklendi"
   M_RESTORED_NOTE="%s kaldırılınca geri yüklendi"
   M_A_PCOMMENT="elle /%s kısmi ban (%s)"
-  M_A_PBANNED="%s: seçilen servisler kapatıldı (port %s)"
+  M_A_PBANNED="%s: kısmi ban · %s"
   M_A_PREMOVED="%s kısmi banı kaldırıldı"
   M_A_EXC="%s · seçilen servisler için %s izin satırı eklendi"
   M_A_NOSVC="En az bir servis seçilmeli"
@@ -480,10 +494,8 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_CLOUD_FAIL_BODY="Şu kiralık sunucu listeleri uyarı süresinden uzun süredir indirilemiyor: %s. Eski listeler kullanılıyor; adres Sağlayıcılar → Kiralık sunucular → Adres düğmesinden düzeltilebilir."
   M_CLOUD_FAIL_OK="Kiralık sunucu listeleri yeniden indirilebiliyor"
   M_DG_CLOUD="Kiralık sunucular: %s"
-  M_CL_ALL="her şey"
-  M_CL_EXC="her şey, açık kalan: %s"
-  M_CL_NONE="hiçbir şey"
-  M_ASN_REFRESH="CSF'in ASN verisi %s günlüktü; yenilensin diye lfd yeniden başlatıldı (ASN banı: %s)"
+  M_RULE_SVC="kapalı: %s"; M_RULE_ALL="her şey kapalı"; M_RULE_EXC="her şey kapalı, açık: %s"; M_RULE_NONE="hiçbir şey kapatılmıyor"
+      M_ASN_REFRESH="CSF'in ASN verisi %s günlüktü; yenilensin diye lfd yeniden başlatıldı (ASN banı: %s)"
   M_ASN_REFRESH_FAIL="CSF'in ASN verisi eski (%s gün) ama lfd yeniden başlatılamadı; ASN banı eski adreslerle çalışıyor"
   M_ASN_REFRESH_NODL="lfd CSF'in ASN verisini 12 saatte indirmedi; eski veri geri kondu, 12 saat sonra yeniden denenecek"
   M_ORPHANS="Banı CSF ekranından kaldırılmış %s eski kayıt temizlendi (kurtarma kopyası / izin satırı)"
@@ -491,7 +503,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_LIM_SUBJ="CSF %s blok banını sildi — liste sınırı"
   M_LIM_BODY="Bu blok banları csf.deny'den eklenti dışında kalktı: CSF'in liste sınırı (DENY_IP_LIMIT = %s; işaretsiz en eski satırlar silinir) ya da elle kaldırma. Bloklar izlemeye alındı; izleme süresinde geçici eşik kadar IP'si aynı anda geçici banlanırsa ya da kalıcı ban eşiği kadar kalıcı tekil birikirse silinmez kalıcı ban konur."
   M_A_TIME="Elle işlem süresi (%s): %s sn"
-  M_PART_NOTE="   Not: bu ağda kısmi ban var (%s · %s); yalnız seçilen servisler kapalı, diğer portlardan gelenler sürebilir"
+  M_PART_NOTE="   Not: bu ağda kısmi ban var (%s · %s); diğer portlardan gelenler sürebilir"
   M_SAME16="ATLANDI şüpheli %s: %s son uyarıdan beri yeni IP yok"
   M_FIX_UDP="%s: kısmi ban/istisnaya eksik UDP 443 satırı eklendi (HTTP/3)"
   M_A_UNBANFAIL="%s kaldırılamadı: %s"
@@ -626,7 +638,7 @@ else
   M_SVCN_web="Web"; M_SVCN_ssh="SSH"; M_SVCN_ftp="FTP"; M_SVCN_cp="cPanel · WHM · Webmail"; M_SVCN_min="Incoming mail"; M_SVCN_mout="Outgoing mail"; M_SVCN_wout="Outgoing web"
   M_SVCN_smtp="Mail sending (SMTP)"; M_SVCN_mread="Mail reading (IMAP/POP)"; M_SVCN_sync="Mail client"; M_SVCN_dns="DNS"; M_SVCN_scan="port scan"; M_SVCN_repeat="banned repeatedly"; M_SVCN_other="other"; M_SVCN_norec="reason not recorded"
   M_AVK_b="ban not working"; M_AVK_i="ignored by lfd"; M_AVK_y="ignored"; M_AVK_s="server IP"
-  M_POPEN_SUBJ="%s open services"; M_POPEN_BODY="The services a partial ban leaves open took violations up to the threshold; change the ban to close them too:"; M_POPEN_L="closed: %s · %s IPs hit the open services"
+  M_POPEN_SUBJ="%s open services"; M_POPEN_BODY="The services a partial ban leaves open took violations up to the threshold; change the ban to close them too:"; M_POPEN_L="%s · %s IPs hit the open services"
   M_UNDER="Violation under a ban (recorded in History): under %s, %s new IPs"
   M_UNDER_SUBJ="%s violations under a ban"; M_UNDER_BODY="IPs lfd banned later although a ban already closed the service they hit (not counted towards thresholds); once per ban per day, new IPs only:"
   M_UNDER_L="%s · since %s -> %s new IPs"; M_UNDER_CSFR="   %s IPs: CSF was reloaded in the %s min before their ban (last at %s); the firewall is open for a few seconds while it reloads%s"
@@ -736,7 +748,7 @@ else
   M_A_RESTORED="%s · %s entries restored"
   M_RESTORED_NOTE="restored when %s was removed"
   M_A_PCOMMENT="manual /%s partial ban (%s)"
-  M_A_PBANNED="%s: selected services blocked (ports %s)"
+  M_A_PBANNED="%s: partial ban · %s"
   M_A_PREMOVED="%s partial ban removed"
   M_A_EXC="%s · %s allow lines added for the selected services"
   M_A_NOSVC="Pick at least one service"
@@ -778,10 +790,8 @@ else
   M_CLOUD_FAIL_BODY="These rented-server lists haven't downloaded for longer than the warning period: %s. The old lists are still used; fix the address under Providers → Rented servers → the Address button."
   M_CLOUD_FAIL_OK="Rented-server lists download again"
   M_DG_CLOUD="Rented servers: %s"
-  M_CL_ALL="everything"
-  M_CL_EXC="everything, left open: %s"
-  M_CL_NONE="nothing"
-  M_ASN_REFRESH="CSF's ASN data was %s days old; lfd restarted to refresh it (ASN ban: %s)"
+  M_RULE_SVC="closed: %s"; M_RULE_ALL="everything closed"; M_RULE_EXC="everything closed, open: %s"; M_RULE_NONE="nothing closed"
+      M_ASN_REFRESH="CSF's ASN data was %s days old; lfd restarted to refresh it (ASN ban: %s)"
   M_ASN_REFRESH_FAIL="CSF's ASN data is old (%s days) but lfd couldn't be restarted; the ASN ban uses old addresses"
   M_ASN_REFRESH_NODL="lfd did not download CSF's ASN data within 12 hours; the old data is back in place and it is tried again in 12 hours"
   M_ORPHANS="Cleaned up %s leftover entries of bans removed outside the plugin (restore copies / allow lines)"
@@ -789,7 +799,7 @@ else
   M_LIM_SUBJ="CSF removed %s block ban(s) — list limit"
   M_LIM_BODY="These block bans left csf.deny without the plugin: CSF's list limit (DENY_IP_LIMIT = %s; the oldest unmarked lines are deleted) or a manual removal. The blocks are now watched; if, within the watch period, as many of their IPs as the temp threshold are temp-banned at the same time or permanent singles reach the permanent ban threshold, they get a permanent do-not-delete ban."
   M_A_TIME="Manual action time (%s): %s s"
-  M_PART_NOTE="   Note: this network has a partial ban (%s · %s); only the selected services are blocked, traffic to other ports can continue"
+  M_PART_NOTE="   Note: this network has a partial ban (%s · %s); traffic to other ports can continue"
   M_SAME16="SKIPPED suspicious %s: %s no new IPs since the last warning"
   M_FIX_UDP="%s: added the missing UDP 443 line to the partial ban/exception (HTTP/3)"
   M_A_UNBANFAIL="%s could not be removed: %s"
@@ -1322,7 +1332,7 @@ part_open_events() {
         # panelin satırıyla aynı: aralık, kapalı servisler, açık servislere ihlal (servis başına), sahibi
         local pos="" pk pn pcl
         while IFS=: read -r pk pn; do [ -n "$pk" ] || continue; svc_names "$pk"; pos+="${pos:+, }$REPLY $pn"; done < <(grep -oE '"[a-z0-9_]+":[0-9]+' <<< "$ps" | tr -d '"')
-        svc_names "${PB_S[$c]}"; pcl="$REPLY${PB_X[$c]:+, port ${PB_X[$c]}}"
+        svc_names "${PB_S[$c]}"; rule_text svc "$REPLY${PB_X[$c]:+, port ${PB_X[$c]}}"; pcl="$REPLY"
         PO_MAIL+=("$c -> $(m "$M_POPEN_L" "$pcl" "$aan")${pos:+ ($pos)}")
         owner_lookup "${c%/*}"; [ -n "$OWN_LONG" ] && PO_MAIL+=("$(m "$M_OWNER" "$OWN_LONG")")
     done
@@ -3222,15 +3232,23 @@ ports_names() {  # TCP UDP (virgüllü port listeleri) → REPLY = servis adlar�
     [ -n "$u" ] && out+="${out:+, }UDP ${u//,/, }"
     REPLY="$out"
 }
-cov_text() {     # ANAHTAR → REPLY = iletilerde kapsamanın adı ve kapattığı: "ülke banı FR (her şey)", "kısmi ban 1.2.3.0/24 (Web)"
+rule_text() {    # KİP LİSTE → REPLY = kural metni, panelin ruleText'i ile aynı sözler: "kapalı: Web" · "her şey kapalı" · "her şey kapalı,
+    # açık: SSH" (P4, 1.15.157). Kip all | exc | svc / ports; liste görünen adlar (ports_names / svc_names). Mail, Slack ve düz metin sorgu bundan.
+    case "$1" in
+        all) REPLY="$M_RULE_ALL" ;;
+        exc) if [ -n "$2" ]; then REPLY=$(m "$M_RULE_EXC" "$2"); else REPLY="$M_RULE_ALL"; fi ;;
+        *)   if [ -n "$2" ]; then REPLY=$(m "$M_RULE_SVC" "$2"); else REPLY="$M_RULE_NONE"; fi ;;
+    esac
+}
+cov_text() {     # ANAHTAR → REPLY = iletilerde kapsamanın adı ve kapattığı: "ülke banı FR · her şey kapalı", "kısmi ban 1.2.3.0/24 · kapalı: Web"
     local nm v p=""
     cov_parts "$1"; nm="$CVN"
     [ "$CVK" = cl ] && { cloud_label "$nm"; nm="$REPLY"; }
     case "$CVK" in ban|temp) ;; *)
         ports_names "$CVT" "$CVU"; p="$REPLY"       # panelin satırıyla aynı ad ("Web", "SSH, port 8080"): önce mail ham port yazıyordu
-        case "$CVM" in all) p="$M_CL_ALL" ;; exc) p=$(m "$M_CL_EXC" "${p:--}") ;; esac ;;
+        rule_text "$CVM" "$p"; p="$REPLY" ;;
     esac
-    v="M_UK_$CVK"; REPLY="$(m "${!v}" "$nm")${p:+ ($p)}"
+    v="M_UK_$CVK"; REPLY="$(m "${!v}" "$nm")${p:+ · $p}"
 }
 cov_parts() {    # ANAHTAR → CVK tür (ban|temp|part|asn|cc|cl|bk), CVN ad (CIDR, AS123, FR, liste adı), CVM kip (all | ports | svc | exc; ban /
     # temp'te all), CVT / CVU kapattığı TCP / UDP portları (exc'te açık kalanlar). Olay, Kontrol edilecekler satırı ve mail aynı alanları okur.
@@ -5125,7 +5143,7 @@ do_lookup() {
             # gelen yeni bağlantıya uygulanır; sunucunun o adrese giden bağlantısını kesmez
             *'"kind":"cloud"'*)  cloud_label "$(printf '%s' "$cv" | sed -n 's/.*"what":"\([^"]*\)".*/\1/p')"; local cln="$REPLY"
                                  cl_text "$(printf '%s' "$cv" | sed -n 's/.*"what":"\([^"]*\)".*/\1/p')"; printf '  %-18s %s\n' "$M_L_CLOUD" "$cln · $REPLY" ;;
-            *'"kind":"bkl"'*)    printf '  %-18s %s\n' "$M_L_BKL" "$(printf '%s' "$cv" | sed -n 's/.*"what":"\([^"]*\)".*/\1/p') · $M_CL_ALL" ;;
+            *'"kind":"bkl"'*)    printf '  %-18s %s\n' "$M_L_BKL" "$(printf '%s' "$cv" | sed -n 's/.*"what":"\([^"]*\)".*/\1/p') · $M_RULE_ALL" ;;
             *'"kind":"ccport"'*) printf '  %-18s %s\n' "$M_L_CCP" "$(printf '%s' "$cv" | sed -n 's/.*"what":"\([^"]*\)".*"tcp":"\([^"]*\)".*/\1 · tcp \2/p')" ;;
             *)                   printf '  %-18s %s\n' "$M_L_CCD" "$(printf '%s' "$cv" | sed -n 's/.*"what":"\([^"]*\)".*/\1/p')" ;;
         esac
@@ -5376,6 +5394,9 @@ own_partials_inside() { # LO HI → eklentinin bu aralıktaki kısmi banlarını
         adv_parse "$l" && cidr_range "$ADV_CIDR" && (( R_LO >= $1 && R_HI <= $2 )) && echo "$ADV_CIDR"
     done | sort -u
 }
+part_rule() {    # PORTLAR → kısmi banın kural metni ("kapalı: 80,443 · UDP 443"; işlem sonucu ve günlük)
+    rule_text svc "$(part_shown "$1")"; printf '%s' "$REPLY"
+}
 part_shown() {   # PORTLAR → iletide gösterilecek liste (CSF aralıkları 30000-35000 biçiminde; UDP olanlar " · UDP …")
     local x="$1${PART_RNG:+${1:+,}${PART_RNG// /,}}" u="$PART_UDPP${PART_URNG:+${PART_UDPP:+,}${PART_URNG// /,}}"
     [ -n "$u" ] && u=$(uniq_ports "${u//-/_}")
@@ -5400,10 +5421,10 @@ ban_partial() {  # CIDR BITS PORTLAR — yalnız seçilen servislere gelen bağl
     csf_run -r                                                        # gelişmiş satırı csf -d ekleyemez: yeniden yükle
     jstr "$WL_HIT"; jw="$REPLY"
     owners_load; inside_owner "${c%.0/24}"; owner_kv
-    log "$(m "$M_A_LOG" "$AG_BY" "$(m "$M_A_PBANNED" "$c" "$(part_shown "$pp")")")"
+    log "$(m "$M_A_LOG" "$AG_BY" "$(m "$M_A_PBANNED" "$c" "$(part_rule "$pp")")")"
     ev manual_ban "$c" "by=\"$AG_BY\"" "wl=$jw" "force=$([ "$FORCE" = 1 ] && echo true || echo false)" "${OKV[@]}" \
        "mode=\"svc\"" "svc=\"$BSVC\"" "extra=\"$BPORTS\"" "ports=\"$pp\"" "total=$IN_EVN" "ips=[$(IFS=,; echo "${IN_EVJ[*]}")]"
-    act_out 0 "$(m "$M_A_PBANNED" "$c" "$(part_shown "$pp")")"
+    act_out 0 "$(m "$M_A_PBANNED" "$c" "$(part_rule "$pp")")"
 }
 restore_save() { # CIDR SATIRLAR → kapsananların kopyası; ilk satırda banın zamanı (geri yüklemede yaş hesabı için)
     local rf
@@ -5534,7 +5555,7 @@ replace_full() { # CIDR BITS → eklentinin tam banının kipini değiştir. Ön
             RESTORE=1; unban_full_core "$c" || { act_out 1 "$UB_ERR"; return; }
             log "$(m "$M_A_LOG" "$AG_BY" "$(m "$M_A_CHANGED" "$c")")"
             ev manual_change "$c" "by=\"$AG_BY\"" "mode=\"svc\"" "svc=\"$BSVC\"" "extra=\"$BPORTS\"" "ports=\"$pp\"" "restored=$UB_RN"
-            msg="$(m "$M_A_PBANNED" "$c" "$(part_shown "$pp")")"
+            msg="$(m "$M_A_PBANNED" "$c" "$(part_rule "$pp")")"
             [ "$UB_RN" -gt 0 ] && msg="$(m "$M_A_RESTORED" "$msg" "$UB_RN")"
             act_out 0 "$msg" ;;
     esac
@@ -5954,10 +5975,10 @@ cl_svc_closed() { # AD SERVİS → 0: kural servisin bütün TCP ve UDP (svc_upo
 cl_desc() {      # AD → REPLY = JSON alanları: "mode","tcp","udp" (exc'te tcp / udp açık kalanlar)
     cl_pol "$1"; REPLY="\"mode\":\"$CP_K\",\"tcp\":\"$CP_T\",\"udp\":\"$CP_U\""
 }
-cl_text() {      # AD → REPLY = iletilerde kuralın kapattığı: "TCP 80, 443 · UDP 443" / "her şey" / "her şey, açık kalan: TCP 80"
+cl_text() {      # AD → REPLY = iletilerde kuralın kapattığı (rule_text): "kapalı: Web" / "her şey kapalı" / "her şey kapalı, açık: Web"
     local p; cl_pol "$1"
     ports_names "$CP_T" "$CP_U"; p="$REPLY"          # servis adıyla (panel ve cov_text ile aynı)
-    case "$CP_K" in all) REPLY="$M_CL_ALL" ;; exc) REPLY=$(m "$M_CL_EXC" "${p:--}") ;; svc) REPLY="$p" ;; *) REPLY="$M_CL_NONE" ;; esac
+    case "$CP_K" in all|exc|svc) rule_text "$CP_K" "$p" ;; *) rule_text svc "" ;; esac
 }
 cloud_has() {    # IP → 0: etkin bir bulut listesinde (REPLY = kaynak adı)
     local IFS=$' \t\n' x ip="$1" v
@@ -7130,7 +7151,7 @@ do_action() {    # NAME TARGET [DAYS]
             if [ "$BMODE" = svc ]; then
                 partial_write "$t" 32 "$pp" || { act_out 1 "$(m "$M_A_BANFAIL" "$t" "csf.deny")"; return; }
                 csf_run -r
-                cm="$(m "$M_A_PBANNED" "$t" "$(part_shown "$pp")")"
+                cm="$(m "$M_A_PBANNED" "$t" "$(part_rule "$pp")")"
             elif [ "$BTTL" -gt 0 ]; then
                 csf_run -td "$t" "$BTTL" -d inout "$(m "$M_A1_TCOMMENT" "$AG_BY")"
                 tb_present "$t" || { [ -n "$old1" ] && file_append_locked "$DENY_FILE" "$old1"$'\n'
@@ -8724,12 +8745,10 @@ esac
 [ "$MODE" = run ] || { echo "csf_autogroup: '$MODE' modu yarıda kaldı (beklenmeyen hata); tur çalıştırılmadı" >&2; exit 3; }
 
 # Tek seferde tek çalışma: cron turu uzarsa ikinci kopya aynı bloğu tekrar eklemesin.
-take_lock || { log "$M_LOCKED"; exit 0; }
-# Tur işareti (1.15.156): panelin "tur çalışıyor" göstergesi bunu okur (api.php runstate). Kilit yoklanmaz: kilidi bir an tutan yoklama
-# cron'un flock -n'ine denk gelirse tur atlanır (yukarıdaki satır). Satır "PID başlangıç"; kilit bırakılırken silinir, tur yarıda ölürse
-# okuyucu PID'in yaşamadığını görür. /run tmpfs: açılışta temizlenir. Yazılamazsa gösterge yalnız durum çıktısının running'ine kalır.
-RUN_MARK="${RUN_MARK:-/run/csf_autogroup.running}"
-{ printf '%s %s\n' "$$" "$(date +%s)" > "$RUN_MARK.$$" && mv -f "$RUN_MARK.$$" "$RUN_MARK"; } 2>/dev/null || rm -f "$RUN_MARK.$$" 2>/dev/null
+take_lock || { [ "$RUN_MARK_OWN" = 1 ] && rm -f "$RUN_MARK" 2>/dev/null; log "$M_LOCKED"; exit 0; }
+# Tur işareti betiğin başında yazıldı (run_mark_set); yazılamadıysa (önceki turun işareti duruyordu, o tur artık yok) şimdi.
+# Kilit yoklanmaz: kilidi bir an tutan yoklama cron'un flock -n'ine denk gelirse tur atlanır (yukarıdaki satır).
+[ "$RUN_MARK_OWN" = 1 ] || run_mark_set
 [ "$DRY" = 1 ] && log "$M_DRY_ON"
 [ ${#SETS[@]} -gt 0 ] && log "$(m "$M_DRY_OVR" "${SETS[*]}")"
 declare -A TURN_B24=(); TURN_ADDED=(); RUN_T0=$(date +%s); RUN_LB=$(stat -c %s "$LOG_FILE" 2>/dev/null || echo 0)   # günlüğün tur başındaki boyu: araçların bu turdaki satırları
@@ -9029,7 +9048,7 @@ level_warn() {
         b+="$(m "$M_WARN16_B" "${c%.0.0/16}" "$n" "$np" "$nt" "$ns")$NL"
     fi
     WL_HIT=""; wl_overlap "$lo" "$hi" && b+="$(m "$M_WL_NOTE" "$WL_HIT")$NL"
-    part_note "$lo" "$hi" && b+="$(m "$M_PART_NOTE" "${REPLY%%|*}" "${REPLY#*|}")$NL"
+    if part_note "$lo" "$hi"; then local pnc="${REPLY%%|*}"; svc_names "${REPLY#*|}"; rule_text svc "$REPLY"; b+="$(m "$M_PART_NOTE" "$pnc" "$REPLY")$NL"; fi
     ip_lines "$ips" mix 1; b+="$REPLY"
     LW_BODY="$b"; cnt_add "$key $TODAY"
     jstr "$WL_HIT"
@@ -9158,7 +9177,7 @@ digest_maybe
 # Ban işleri bitti: ana kilit bırakılır. Aşağıdaki sahip ve Imunify sorguları ban kararlarına girmez
 # ve dakikalar sürebilir; o sırada paneldeki işlemler "meşgul" demesin, sıradaki cron turu atlanmasın.
 # Aynı anda iki zenginleştirme çalışmasın diye ayrı bir kilit (fd 8) kullanılır; tutuluyorsa atlanır.
-rm -f "$RUN_MARK" 2>/dev/null    # kilit elimizdeyken: işaret bu turundur (sonraki tur kilidi ancak bundan sonra alır)
+[ "$RUN_MARK_OWN" = 1 ] && rm -f "$RUN_MARK" 2>/dev/null    # kilit elimizdeyken, işaret bu turunsa (sonraki tur kilidi ancak bundan sonra alır)
 if command -v flock >/dev/null 2>&1; then flock -u 9 2>/dev/null; exec 9>&-; fi
 ENRICH=1
 if command -v flock >/dev/null 2>&1; then exec 8>"$LOCK_FILE.enrich"; flock -n 8 || ENRICH=0; fi

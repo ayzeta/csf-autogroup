@@ -1206,7 +1206,7 @@ sed -i '/^151\.80\.7\.9 /d' "$D"
 mkdir -p "$R/var/lib/csf/Geo"; printf '151.80.0.0\t151.80.255.255\t16276\tFR\tOVH\n' > "$R/var/lib/csf/Geo/ip2asn-combined.tsv"   # src_rng: CSF'in ASN verisi (başlangıç, bitiş, ASN)
 mcheck "blok listesi: kaynak ayrıntısında (--src-ips) tekil banı kalkmış, listedeki IP'nin şu anki durumu blok listesi" "run --src-ips AS16276 --json 2>/dev/null | grep -q '\[\"151.80.7.9\",[^]]*{\"e\":\"ban\",\"k\":\[[^]]*\"t\":\"bk\",\"a\":\"SPAMDROP\"'"
 mkm cvbklm 1; bkl; quiet; cvback 172800; single 151.80.7.9 sshd "$(pdt now)"; quiet
-mcheck "blok listesi: ban altında ihlal maili kapsamanın adıyla (panelle aynı)" "mtext | grep -q 'blok listesi SPAMDROP (her şey)'"
+mcheck "blok listesi: ban altında ihlal maili kapsamanın adıyla (panelle aynı)" "mtext | grep -q 'blok listesi SPAMDROP · her şey kapalı'"
 # blok listesi aç / kapat (1.15.117; standart: yalnız panel işlemiyle, kapatma yalnız eklentinin açtığına). Açma / kapama biçimi WSL gerçek
 # CSF 16.33'te ölçüldü (satır başındaki "#", csf -ra); burada taklit csf çağrıyı kaydeder
 mk cvbklo; bkl; quiet
@@ -1384,11 +1384,11 @@ mk cvign; ccfr; quiet; cvback 172800; s5; quiet --action ignore 151.80.7.0/24 0;
 mcheck "ban altında ihlal: susturulan aralığın IP'leri olaya girmez (5 tekilin 2'si susturulmuş /24'te → 3 IP)" "grep -q '\"type\":\"under_ban\",\"ck\":\"cc\".*\"n\":3,' \"\$(EVF)\""
 mcheck "ban altında ihlal satırı: susturulan aralığın IP'lerinin satırı yok, ötekilerin var" "[ -z \"\$(rvrow 151.80.7.1)\" ] && rvrow 151.80.8.1 | grep -q '\"type\":\"under_ban\"'"
 mkm cvmail 1; ccfr; quiet; cvback 172800; s5; quiet
-mcheck "ban altında ihlal maili: kapsamanın adı ve kapattığı, IP satırları (e-posta sınıfı IE_REVIEW)" "mtext | grep -q 'ülke banı FR (her şey)' && mtext | grep -q '151.80.7.1 '"
+mcheck "ban altında ihlal maili: kapsamanın adı ve kapattığı, IP satırları (e-posta sınıfı IE_REVIEW)" "mtext | grep -q 'ülke banı FR · her şey kapalı' && mtext | grep -q '151.80.7.1 '"
 mkm cvpmail 1; pline 151.80.0.0/16 '-2 days'; s8; quiet
-mcheck "ban altında ihlal maili: kısmi banın kapattığı servis adıyla (panel satırıyla aynı: Web), ham port değil" "mtext | grep -q 'kısmi ban 151.80.0.0/16 (Web)'"
+mcheck "ban altında ihlal maili: kısmi banın kapattığı servis adıyla (panel satırıyla aynı: Web), ham port değil" "mtext | grep -q 'kısmi ban 151.80.0.0/16 · kapalı: Web'"
 mkm cvmdry 1; ccfr; quiet; cvback 172800; s5; run --dry-run > "$W/out/cvmdry.txt" 2>&1
-mcheck "deneme turu: ban altında ihlal bildirimini gösterir; olay ve işaret yazmaz" "grep -q 'ülke banı FR (her şey)' '$W/out/cvmdry.txt' && grep -q '151.80.7.1 ' '$W/out/cvmdry.txt' && [ \"\$(uev)\" = 0 ] && [ ! -s '$R/var/lib/csf_autogroup/under.seen' ]"
+mcheck "deneme turu: ban altında ihlal bildirimini gösterir; olay ve işaret yazmaz" "grep -q 'ülke banı FR · her şey kapalı' '$W/out/cvmdry.txt' && grep -q '151.80.7.1 ' '$W/out/cvmdry.txt' && [ \"\$(uev)\" = 0 ] && [ ! -s '$R/var/lib/csf_autogroup/under.seen' ]"
 mkm cvmail0 1; echo "IE_REVIEW=0" >> "$R/app/config.env"; ccfr; quiet; cvback 172800; s5; quiet
 mcheck "IE_REVIEW=0: ban altında ihlal mail yazmaz, Geçmiş'e yine yazılır" "[ ! -e '$R/mail_calls.log' ] && [ \"\$(uev)\" = 1 ]"
 ilerle "motor kuralları bitti ($MF ihlal); ekran tablosu (render.js)"

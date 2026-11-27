@@ -117,8 +117,12 @@
 .ag-commits code { font-family: var(--ag-mono); font-size: 12px; color: var(--ag-accent); margin-right: 8px; }
 
 /* ── KPI cards ──────────────────────────────────────────────────── */
-.ag-period { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin: 0 0 10px; }
-.ag-period-l { font-size: 12px; font-weight: 600; color: var(--ag-text-3); }
+.ag-period { display: flex; align-items: center; justify-content: flex-start; gap: 8px; margin: 0 0 10px; }
+.ag-period-l { font-size: 12px; font-weight: 600; color: var(--ag-text-2); }
+/* sayfa zemininde (kart dışında) seçici kenarlıklı ve kart zeminli; seçili dönem vurgu rengiyle — gri zemin sayfanın grisiyle aynıydı,
+   seçili çip yalnız hafif beyazla ayrılıyordu (kullanıcı: "seçici belirsiz") */
+.ag-period .ag-chips { background: var(--ag-card); border: 1px solid var(--ag-line); }
+.ag-period .ag-chip.on { background: var(--ag-accent-soft); color: var(--ag-accent); box-shadow: none; }
 .ag-period-n { font-size: 12px; color: var(--ag-text-3); }
 .ag-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 20px; }
 .ag-kpi { background: var(--ag-card); border: 1px solid var(--ag-line); border-radius: var(--ag-radius); padding: 16px 18px; box-shadow: var(--ag-shadow); min-width: 0;

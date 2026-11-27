@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.15.157 — 2026-11-28
+
+- What a ban or list closes is written the same way everywhere — every
+  panel screen, the Terms page, email, Slack and the plain-text lookup:
+  "closed: Web", "everything closed" or "everything closed, open: SSH",
+  next to the state it belongs to ("partial · closed: Web",
+  "provider ban · everything closed"). Before, the same rule appeared in
+  about twenty different forms ("partial · Web", "only Web blocked",
+  "provider ban: port list (Web)", "partial range ban · TCP 22").
+  Remaining time reads "5 h left" in the list badge too, and port lines
+  use service names instead of raw port numbers.
+- "Run in progress" lights up as soon as the run starts. The run marker was
+  written only after the run had loaded its settings and taken its lock,
+  several seconds after the cron tick. If a previous run is still going,
+  the new one leaves that run's marker alone.
+- The Overview period selector reads "Period [7 days | 30 days]", sits on
+  the left, and shows the selected period clearly.
+
 ## 1.15.156 — 2026-11-28
 
 - "Run in progress" (blue dot) now comes from a small marker the run writes

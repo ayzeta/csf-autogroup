@@ -176,5 +176,20 @@ else echo "GEÇTİ: eski dosyalarla açık sayfa sürüm şeridiyle yenilenmeyi 
 # hafif runstate ucundan (motorun tur işareti; durum çıktısı turdan uzun sürer). Davranış testi tests/saat (gerçek nextLeft ile tik).
 if [ "$(grep -c "CLOCK = d.now - sent;" "$J")" != 1 ] || [ "$(grep -c "CLOCK = d.now - Date.now()" "$J")" != 0 ] || [ "$(grep -c "if (REF_P) refreshNow(); else refresh();" "$J")" != 1 ] || [ "$(grep -c "api('runstate')" "$J")" != 1 ]; then echo "DÜŞTÜ: tur anı yoklaması saat kaymasına ya da yoldaki isteğe takılıyor"; F=$((F + 1))
 else echo "GEÇTİ: tur anı yoklaması doğru saatte, yoldaki isteği beklemeden"; fi
+# KURAL METNİ (P4, 1.15.157): bir banın / listenin neyi kapattığı panelde ruleText, motorda (mail, Slack, düz metin sorgu) rule_text —
+# aynı sözler: "kapalı: Web" · "her şey kapalı" · "her şey kapalı, açık: SSH". Önce ~20 biçim vardı ("kısmi · Web", "Kapalı: Web",
+# "yalnız Web kapalı", "sağlayıcı banı: port listesi (Web)", "kısmi aralık banı · TCP 22", "her şey, açık kalan: …"). Sözlükte (Terimler
+# dahil) kısa kural kalıbı yalnız rule_* anahtarlarında (kural-metni.js); t('rule_…') yalnız ruleText'te; motorda M_RULE_* yalnız rule_text'te
+# ve "kapalı: %s" yalnız M_RULE_SVC'de.
+E="$D/csf_autogroup.sh"
+rt=$(grep -cE "t\('rule_(svc|all|exc|none)'" "$J"); rtl=$(grep -nE "t\('rule_(svc|all|exc|none)'" "$J" | grep -vc "function ruleText\|return mode === 'all' || (mode === 'exc' && !list)")
+km=$(command -v node >/dev/null 2>&1 && node "$D/tests/tek-kaynak/kural-metni.js" "$J" >/dev/null 2>&1; echo $?)
+mr=$(grep -v '^\s*M_\|^\s*#' "$E" | grep -o 'M_RULE_[A-Z]*' | wc -l); mrl=$(awk '/^rule_text\(\) \{/ { f = 1 } f && /^\}/ { f = 0 } !f && !/^[[:space:]]*M_/ && !/^[[:space:]]*#/' "$E" | grep -c 'M_RULE_SVC\|M_RULE_EXC\|M_RULE_NONE')
+mk=$(grep -E '^\s*M_\w+=' "$E" | grep -v 'M_RULE_SVC=' | grep -cE '(kapalı|[Cc]losed|[Bb]locked): %s|açık kalan: %s|left open: %s')
+if [ "$rt" -lt 1 ] || [ "$rtl" != 0 ] || [ "$km" != 0 ] || [ "$mr" -lt 1 ] || [ "$mrl" != 0 ] || [ "$mk" != 0 ]; then
+  echo "DÜŞTÜ: kural metni tek kaynaktan değil (ruleText dışı t('rule_') $rtl; sözlükte eski kalıp: $([ "$km" = 0 ] && echo yok || echo var); motorda rule_text dışı M_RULE $mrl; eski kalıplı ileti $mk)"
+  [ "$km" != 0 ] && node "$D/tests/tek-kaynak/kural-metni.js" "$J" | sed 's/^/    /' | head -n 20
+  F=$((F + 1))
+else echo "GEÇTİ: kural metni panelde ruleText, mail / Slack'te rule_text — aynı sözler, Terimler dahil"; fi
 [ $F -eq 0 ] && echo "GEÇTİ: tek kaynak ($J)" || echo "DÜŞTÜ: $F kural"
 exit $F
