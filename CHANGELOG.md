@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.15.169 — 2026-11-28
+
+- The **Now** field reads naturally when a list, provider or country ban
+  covers the item: "inside blocklist SPAMDROP" (it said "inside the
+  blocklist SPAMDROP ban"). A covering range still reads "inside the
+  1.2.3.0/16 ban".
+
 ## 1.15.168 — 2026-11-28
 
 - Active bans and Watched follow the same row layout as History and Needs
