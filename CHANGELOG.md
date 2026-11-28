@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.15.163 — 2026-11-28
+
+- Counts say what they count: a number of bans reads "N single bans", a
+  number of addresses "N IPs" (the panel, email, the weekly summary and
+  the log said "N singles" in some places). Comments the plugin writes
+  to csf.deny keep their old wording, so existing lines still match.
+
 ## 1.15.162 — 2026-11-28
 
 - One name per thing, in the panel, the glossary, email and Slack:

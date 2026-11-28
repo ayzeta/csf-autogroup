@@ -70,6 +70,10 @@ for e in "${YASAK[@]}"; do
   [ -z "$hits" ] && continue
   bad=$((bad + 1)); echo "  ✗ «$old» yerine «$new»:"; printf '%s\n' "$hits" | cut -c1-140 | sed 's/^/      /'
 done
+# sayı kuralı (kullanıcı kararı 2026-11-28): ban sayan "N tekil ban" / "N single bans", adres sayan "N IP"; çıplak "N tekil" /
+# "N singles" yok. csf.deny'ye yazılan yorumlar (M_C24*, M_TC24*) sunucudaki eski satırlarla aynı kalsın diye dışarıda
+hits=$(texts | grep -vE '^M_T?C24' | grep -E "(%s|\{[0-9]\}) ((kalıcı|geçici) )?tekil($|[^ b]| [^b])|(%s|\{[0-9]\}) ((permanent|temp) )?singles?([^ ]| [^b]|$)")
+if [ -n "$hits" ]; then bad=$((bad + 1)); echo "  ✗ sayı + «tekil / single» «ban» olmadan (ban sayısı «N tekil ban», adres sayısı «N IP»):"; printf '%s\n' "$hits" | cut -c1-140 | sed 's/^/      /'; fi
 # tek terim "izin listesi" / "allow list" (kullanıcı kararı 2026-11-12; önce aynı pencerede "izin listesinde … IP kartı → Beyaz liste"
 # yazıyordu). "beyaz liste" / "whitelist" yalnız Imunify360'ın kendi listesini anlatan metinde (ürünün adı) kalır.
 hits=$(texts | grep -iE "beyaz list|white-?list" | grep -v "Imunify")
