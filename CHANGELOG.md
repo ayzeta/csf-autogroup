@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.15.159 — 2026-11-28
+
+- A ban's name is the same in a table cell and in its badge. The IP's own
+  ban reads as a state ("permanently banned", "temporarily banned · 5 h
+  left", "partially banned · closed: Web"); a ban that covers it reads by
+  name, as in email ("range ban 1.2.3.0/24", "temporary range ban
+  1.2.3.0/24 · 5 h left", "partial ban 1.2.0.0/16 · closed: SSH"). Before,
+  a cell said "range ban (1.2.3.0/24)" where the badge said "range
+  banned", and a cell left out the remaining time.
+
 ## 1.15.158 — 2026-11-28
 
 - Provider, country and rented-server-list states follow the same rule

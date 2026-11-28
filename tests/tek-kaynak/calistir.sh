@@ -191,5 +191,9 @@ if [ "$rt" -lt 1 ] || [ "$rtl" != 0 ] || [ "$km" != 0 ] || [ "$mr" -lt 1 ] || [ 
   [ "$km" != 0 ] && node "$D/tests/tek-kaynak/kural-metni.js" "$J" | sed 's/^/    /' | head -n 20
   F=$((F + 1))
 else echo "GEÇTİ: kural metni panelde ruleText, mail / Slack'te rule_text — aynı sözler, Terimler dahil"; fi
+# DURUM ADI (P4, 1.15.159): aynı kapatan kaydı için tablo hücresi (stText) = rozet (impState); ikisi de keyTok → tokText (durum-adi.js)
+if command -v node >/dev/null 2>&1; then
+  da=$(node "$D/tests/tek-kaynak/durum-adi.js" "$J" 2>&1); [ $? = 0 ] && echo "$da" | tail -n 1 || { echo "$da" | grep -E '✗|DÜŞTÜ' | head -n 15; F=$((F + 1)); }
+fi
 [ $F -eq 0 ] && echo "GEÇTİ: tek kaynak ($J)" || echo "DÜŞTÜ: $F kural"
 exit $F
