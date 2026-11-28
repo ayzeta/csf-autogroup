@@ -49,6 +49,9 @@ kural "eski \"şu an\" notu (stateNote) yok" "stateNote[(]" 'BU_DESEN_HICBIR_SAT
 # Geçmiş / Aralığın içi → Etkisini ölç → Kim); önce IP kartı "Bu IP · Üst seviyeler · Kim", aralık kartı başlıksızdı
 nds=$(grep -c "body.innerHTML = drSecs(" "$J")
 if [ "$nds" != 2 ]; then echo "DÜŞTÜ: IP kartı ve aralık kartı bölümleri drSecs'ten değil ($nds / 2)"; F=$((F + 1)); else echo "GEÇTİ: IP kartı ve aralık kartı bölüm sırası tek kaynaktan (drSecs)"; fi
+# sağlayıcı kartı da aynı sırada (1.15.171; önce "İhlal eden IP'ler ve etkisi" başlığının altında ölçüm tablonun dibindeydi)
+if awk '/^  function asnCardBody/ { f = 1 } f && /return drSecs[(]/ { ok = 1 } f && /^  }/ { exit } END { exit !ok }' "$J"; then echo "GEÇTİ: sağlayıcı kartı bölümleri drSecs'ten"; else echo "DÜŞTÜ: sağlayıcı kartı bölümleri drSecs'ten değil"; F=$((F + 1)); fi
+kural "AbuseIPDB site bağlantısı yalnız abLink'te" "abuseipdb[.]com/check" "href=\"https://www[.]abuseipdb[.]com/' [+] [(]b === 32"
 kural "sıralama başlığı yalnız ltTh'de" "data-act=\"[a-z]*sort\"" "data-act=\"lsort\" data-k=\"' [+] esc[(]id[)]"
 kural "öğe eylemi düğmesi elle yazılmaz (MI.* + miBtn: menü, aralık kartı, IP kartı aynı öğeler)" 'data-(act|dr)="(unban|promote|forget|rewatch|chg|ban|ban16|ban24|banpfx|banforce)"' 'BU_DESEN_HICBIR_SATIRA_UYMAZ'
 kural "kapsayan banın adı covName'den: ham CSF ayar adı (CC_DENY …) cümleye eklenmez" "'[ (]*CC_DENY(_PORTS)? '" 'BU_DESEN_HICBIR_SATIRA_UYMAZ'
@@ -128,7 +131,8 @@ ml=$(grep -cE '#(b91c1c|dc2626|7c3aed|0d9488|2563eb|db2777|047857)' "$SHF")
 # renksiz (gri) yapılmıştı, çalışan koruma "durmuş" diye okundu (kullanıcı). Sağlayıcılar'daki katmanın "Açık" rozeti de aynı sınıf (gri
 # "Açık" kapalıyla karışıyordu) → yeşil. "Bakılacak bir şey yok" çubuğu (okbar) bilgi: renksiz kalır
 # Yeşil = izinli ya da iyi. Değişim oku (▲ / ▼) ve ban özetindeki "Açık kalır" bilgi: yeşil / amber değil (azalan ban "iyi" değil)
-ns=$(grep -c "addrPill(noteSt(c), txt" "$J"); okc=$(grep -cE '^\.ag-okbar .*--ag-ok\b|^\.ag-kpi-d\.(up|dn)[^}]*color: (#|var\(--ag-(ok|warn)\))|^\.ag-sum-k\.ok \{[^}]*--ag-ok\b' "${J%.js}.css")
+# 1.15.171: çip nowHtml'de (sağlayıcının "şu an"ı da aynı bileşen); nesnenin rengi yine noteSt'ten
+ns=$(( $(grep -c "return nowHtml(noteSt(c), txt, c)" "$J") * $(grep -c "addrPill(st, txt, t('st_tip')" "$J") )); okc=$(grep -cE '^\.ag-okbar .*--ag-ok\b|^\.ag-kpi-d\.(up|dn)[^}]*color: (#|var\(--ag-(ok|warn)\))|^\.ag-sum-k\.ok \{[^}]*--ag-ok\b' "${J%.js}.css")
 hg=$(grep -cE '^\.ag-pulse i \{.*background: var\(--ag-ok\).*animation: ag-pulse|^\.st-bad \.ag-pulse \{.*\.ag-pulse i \{.*animation: none|^\.ag-hc\.ok \{.*color: var\(--ag-ok\)|^\.ag-st\.on \{ color: var\(--ag-ok\)' "${J%.js}.css")
 [ "$ns" = 1 ] && [ "$okc" = 0 ] && [ "$hg" = 4 ] || ml=$((ml + 1000))
 if [ "$ev" != 0 ] || [ "$sc" != 1 ] || [ "$sk" != 0 ] || [ "$rd" != "part perm prom temp " ] || [ "$ml" != 0 ]; then

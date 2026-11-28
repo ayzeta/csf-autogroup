@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.15.171 — 2026-11-28
+
+- The provider card uses the same sections as the IP and range cards:
+  **Now**, **History** (violations and offending IPs) and **Measure
+  impact** in its own section (it sat at the bottom of the offending IPs
+  table). A provider whose violations are all on a rented list now shows
+  the list's name (it was empty).
+- The provider ranking shows **Now** on every row: banned, partly banned
+  (port list) or not banned. The note about violations on the services
+  the port list leaves open is a separate line; it used to share one
+  badge with the state.
+- **Muted** rows show **Now** too.
+- A partly banned or allowed **Now** badge keeps its state colour (it was
+  grey, unlike the same state elsewhere).
+- The range card (`/24` or narrower) has an AbuseIPDB button that opens
+  the range's page on the AbuseIPDB site, like the IP card.
+
 ## 1.15.170 — 2026-11-28
 
 - The IP card and the range card use the same sections in the same

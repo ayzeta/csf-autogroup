@@ -129,8 +129,9 @@ settings, with no prompts. `config.env` is left untouched.
 - **Activity** — a daily chart of block bans, blocks made permanent, temp block
   bans, suspicious networks and allow list skips, for the chosen period. Hover a day
   for its breakdown; click a total to open History filtered to that kind and period.
-- **Provider card** — every AS badge opens it: CSF provider ban state,
-  violations, offending IPs and **Measure impact**.
+- **Provider card** — every AS badge opens it, with the same sections as
+  the IP and range cards: **Now** (CSF provider ban state), **History**
+  (violations, offending IPs) and **Measure impact**.
 - **Colors** — colour is used for two things only, the same everywhere (badges,
   icons, chart, emails). The *state* of an address: red filled = blocked
   (permanent or temporary; red only ever means blocked), red outline = partly
@@ -675,7 +676,9 @@ range has no score of its own). The answer is cached for 24 hours like an
 IP's, so opening the same card again does not ask again, and it is also
 shown in the range's ban window. A free account has 100 block checks a day
 (`ABUSE_BLK_MAX`); when they are used up the card says so. AbuseIPDB's
-standard plan checks ranges up to `/24`, so wider ranges are not checked. AbuseIPDB has no
+standard plan checks ranges up to `/24`, so wider ranges are not checked. The
+card's AbuseIPDB button opens the range's page on the AbuseIPDB site, as the
+IP card's opens the IP's page. AbuseIPDB has no
 check by provider (ASN) or country, so provider and country views have no
 AbuseIPDB part. The score is shown as a badge coloured by its value: grey for
 0, amber (attention) for 1–49 and dark orange (serious) for 50 and above.

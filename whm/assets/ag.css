@@ -219,6 +219,9 @@
 .ag-thead.ag-tr-i .ag-th { cursor: default; }
 .ag-thead.ag-tr-i .ag-th:hover { color: var(--ag-text-3); }
 .ag-tr-i .ag-td-until { font-size: 12.5px; color: var(--ag-text-2); text-align: right; min-width: 0; }
+/* Susturulanlar "Şu an" (Faz B): kendi satırında, kart genişliğinde; başlıkta sütunu yok → "Şu an" etiketi görünür */
+.ag-tr-i > .ag-td-now { grid-column: 1 / -1; }
+.ag-tr-i > .ag-td-now .ag-now-l { display: inline; }
 .ag-ip-more { padding: 6px 0; font-size: 12px; border-top: 1px solid var(--ag-line-soft); }
 
 /* ── Inputs / chips ─────────────────────────────────────────────── */
@@ -1191,7 +1194,9 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-rule-t { font-size: 12px; color: var(--ag-text-2); overflow-wrap: anywhere; }
 .ag-td-now .ag-now { white-space: normal; max-width: 100%; }
 .ag-td-now .ag-pill { white-space: normal; max-width: 100%; }   /* "1.2.3.0/24 banının içinde" sütuna sığmazsa sarar, kesilmez */
-.ag-ev-st:not(.ag-pill-ban):not(.ag-pill-prom):not(.ag-pill-temp):not(.ag-pill-leak):not(.ag-pill-bad) { color: var(--ag-text-2); }
+/* durum rengi olan rozet (dolu, kısmi çerçeve, izinli yeşil) kendi rengini korur: "aynı durum aynı renk" (1.15.171; Şu an çipindeki
+   "kısmi banlı" gri yazılıydı, Banlı sağlayıcılar'daki "kapalı: Web" kırmızı) */
+.ag-ev-st:not(.ag-pill-ban):not(.ag-pill-prom):not(.ag-pill-temp):not(.ag-pill-leak):not(.ag-pill-bad):not(.ag-pill-part):not(.ag-pill-ok) { color: var(--ag-text-2); }
 
 /* ── Sağlayıcılar sekmesi: katman kutuları ve aynı kalıpta kartlar ── */
 .ag-lay { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 20px; }

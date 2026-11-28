@@ -456,6 +456,14 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
         ips: ['198.18.7.1', '198.18.7.2', '198.18.8.1', '198.18.8.2', '198.18.9.1'].map(ip => uip(ip, '(sshd) Failed SSH login', 'ssh')),
         ub: { ck: 'part', cn: '198.18.0.0/16', cm: 'ports', tcp: '80,443', udp: '443', since: d0, n: 2, last: d1, csfr: 0, total: 2,
           ips: ['198.18.20.1', '198.18.21.1'].map(ip => uip(ip, 'mod_security (id:2008) triggered', 'web')) } });
+      // sağlayıcı listeleri (1.15.171, Faz B "Şu an"): test makinesinde ASN verisi yok, sıralama ve Banlı sağlayıcılar boş kalıyordu →
+      // üç belgeleme ASN'si: port listesiyle banlı, her şey banlı, banlı değil (öneri eşiğinde)
+      if (!(j.asn_top || []).length) j.asn_top = [
+        { asn: '64501', name: 'TEST-PORTS - Example Ports, NL', cc: 'NL', singles: 7, groups: 2, last: d1, svc: 'mread:4,ssh:3', denied: 1, w: 15 },
+        { asn: '64502', name: 'TEST-ALL - Example All, US', cc: 'US', singles: 3, groups: 1, last: d1, svc: 'ssh:3', denied: 1, w: 7 },
+        { asn: '64503', name: 'TEST-NONE - Example None, DE', cc: 'DE', singles: 5, groups: 5, last: d1, svc: 'web:5', w: 25 }];
+      // test makinesinin CSF'inde başka sağlayıcı banı olabilir (ilk sürüm yalnız boşsa ekliyordu, hiç eklenmedi): belgeleme ASN'leri eklenir
+      if (!(j.asn_banned || []).some(b => /^6450[12]$/.test(String(b.asn)))) j.asn_banned = (j.asn_banned || []).concat([{ asn: '64501', name: 'TEST-PORTS - Example Ports, NL', how: 'ports', n: 4 }, { asn: '64502', name: 'TEST-ALL - Example All, US', how: 'all', n: 2 }]);
     }
     // gövde açıkça verilir: { response, json } birlikte verilince özgün gövde gidiyordu (enjeksiyon hiç işlemiyordu; ölçüldü)
     return route.fulfill({ status: r.status(), contentType: 'application/json', body: JSON.stringify(j) });
@@ -942,6 +950,9 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
     await page.waitForSelector('.ag-drawer .ag-ab-t', { timeout: 15000 }).catch(() => {});
     const q0 = await page.evaluate(() => !!document.querySelector('.ag-drawer #ag-ab-blk button:not([data-dr="aball"])'));
     check('AbuseIPDB aralık: kart açılınca kendiliğinden sorulur (tek istek), sorgu düğmesi yok', !q0 && abCalls === 1, 'düğme ' + q0 + ', istek ' + abCalls);
+    // sitedeki aralık sayfası (1.15.171; kullanıcının tarayıcısında /24 ölçüldü): IP kartıyla aynı bileşen (abLink), kartın alt çubuğunda
+    const abL = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-drawer .ag-drawer-f a')).map(a => a.getAttribute('href')).filter(h => /abuseipdb/.test(h)));
+    check('AbuseIPDB aralık: alt çubukta sitedeki aralık sayfası (check-block/198.51.100.0/24)', abL.length === 1 && abL[0] === 'https://www.abuseipdb.com/check-block/198.51.100.0/24', JSON.stringify(abL));
     if (abCalls === 1) {
       const ab = await page.evaluate(() => { const b = document.querySelector('.ag-drawer #ag-ab-blk'); if (!b) return null;
         const rows = Array.from(b.querySelectorAll('.ag-ab-t tbody tr')).filter(r => !r.hidden);
@@ -960,8 +971,8 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
     await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('.ag-drawer'), null, { timeout: 5000 }).catch(() => {});
     await page.fill('#ag-lk-ip', '198.51.0.0/16'); await page.press('#ag-lk-ip', 'Enter');
     await page.waitForSelector('.ag-drawer .ag-verdict', { timeout: 30000 }).catch(() => {});
-    const w16 = await page.evaluate(() => { const b = document.querySelector('.ag-drawer #ag-ab-blk'); return b ? { btn: !!b.querySelector('button'), t: b.innerText } : null; });
-    check('AbuseIPDB aralık: /24\'ten geniş aralıkta düğme yok, standart planın sınırını söyler', !!w16 && !w16.btn && /\/24/.test(w16.t) && abCalls === 1, JSON.stringify(w16));
+    const w16 = await page.evaluate(() => { const b = document.querySelector('.ag-drawer #ag-ab-blk'); return b ? { btn: !!b.querySelector('button'), t: b.innerText, site: !!document.querySelector('.ag-drawer .ag-drawer-f a[href*="abuseipdb"]') } : null; });
+    check('AbuseIPDB aralık: /24\'ten geniş aralıkta düğme ve site bağlantısı yok, standart planın sınırını söyler', !!w16 && !w16.btn && !w16.site && /\/24/.test(w16.t) && abCalls === 1, JSON.stringify(w16));
     await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('.ag-drawer'), null, { timeout: 5000 }).catch(() => {});
     await page.unroute('**/api.php', abr);
   }
@@ -1184,12 +1195,16 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
     const untilOf = () => page.evaluate(c => { const r = document.querySelector(`.ag-item[data-row="${c}"] .ag-td-until`); return r ? r.textContent : ''; }, c);
     const openIm = async () => { await page.click(`[data-act="menu"][data-key="im:${c}"]`); await page.waitForTimeout(400); };
     if (listed) {
-      // satırın bitişi, ⋯ düğmesi ve sahibi kartın içinde (sahip uzun adla; 1.15.59'da kartın dışına itiliyordu)
+      // Faz B (1.15.171): satırda "Şu an" çipi (tek durum kaydı gelince), "susturuldu" eki yok (liste zaten susturulanlar)
+      await page.waitForSelector(`.ag-item[data-row="${c}"] .ag-td-now .ag-now`, { timeout: 15000 }).catch(() => {});
+      const sn = await page.evaluate(c => { const n = document.querySelector(`.ag-item[data-row="${c}"] .ag-td-now .ag-now`); return n ? n.innerText : ''; }, c);
+      check('Susturulanlar satırında Şu an çipi, susturma eki yok', /Şu an/i.test(sn) && !/sustur/i.test(sn), sn);
+      // satırın bitişi, ⋯ düğmesi, sahibi ve Şu an'ı kartın içinde (sahip uzun adla; 1.15.59'da kartın dışına itiliyordu)
       for (const w of [1280, 390]) {
         await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(300);
         const ic = await page.evaluate(async c => { const it = document.querySelector(`.ag-item[data-row="${c}"]`); if (!it) return 'satır yok';
           const card = it.closest('.ag-card').getBoundingClientRect(), bad = [];
-          [['bitiş', '.ag-td-until'], ['⋯', '[data-act="menu"]'], ['sahip', '.ag-own-s']].forEach(([n, s]) => { const e = it.querySelector(s); if (!e) { bad.push(n + ' yok'); return; }
+          [['bitiş', '.ag-td-until'], ['⋯', '[data-act="menu"]'], ['sahip', '.ag-own-s'], ['şu an', '.ag-td-now .ag-now']].forEach(([n, s]) => { const e = it.querySelector(s); if (!e) { bad.push(n + ' yok'); return; }
             const r = e.getBoundingClientRect(); if (r.width < 1 || r.right > card.right + 1 || r.left < card.left - 1) bad.push(`${n} ${Math.round(r.left)}–${Math.round(r.right)} (kart ${Math.round(card.left)}–${Math.round(card.right)})`); });
           return bad.length ? bad.join(', ') : 'ok'; }, c);
         check(`Susturulanlar satırı kartın içinde (bitiş, ⋯, sahip) · ${w} px`, ic === 'ok', ic);
@@ -1319,6 +1334,24 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.click('.ag-tabs [data-tab="prov"]');
   await page.waitForSelector('#ag-cloud-card', { timeout: 30000 }).catch(() => {});   // sekme ayarları yeniden yükler (sabit bekleme yetmiyordu)
+  // Faz B (1.15.171): sağlayıcı sıralamasında her satırda "Şu an" çipi, kaynağı Banlı sağlayıcılar verisi (enjekte üç ASN). Önce yalnız
+  // port listesiyle banlıda durum ve bulgu tek rozette ("Web banlı; açık servislere ihlal sürüyor"), ötekilerde durum yoktu
+  {
+    const an = await page.evaluate(() => { const o = {}; document.querySelectorAll('#ag-lb-asn .ag-asn-r').forEach(r => { const a = r.querySelector('[data-act="asncard"]'), n = r.querySelector('.ag-now');
+      if (a) o[a.getAttribute('data-v')] = { now: n ? n.innerText.replace(/\s+/g, ' ').trim() : '', eski: /banlı; açık servislere/.test(r.innerText), not: /açık bıraktığı servislere/.test(r.innerText) }; }); return o; });
+    const A = an.AS64501, B = an.AS64502, C = an.AS64503;
+    check('Sağlayıcı sıralaması: her satırda Şu an (port listesi → kısmi banlı + açık servis notu, her şey → banlı, banlı değil)',
+      !!A && /kısmi banlı/i.test(A.now) && A.not && !A.eski && !!B && /banlı$/i.test(B.now) && !/kısmi|değil/i.test(B.now) && !B.not && !!C && /banlı değil/i.test(C.now) && !C.not, JSON.stringify(an));
+    // sağlayıcı kartı: IP ve aralık kartıyla aynı bölüm sırası (drSecs): Şu an → Geçmiş → Etkisini ölç; ölçüm kendi bölümünde
+    await tik(page, '#ag-lb-asn [data-act="asncard"][data-v="AS64501"]');
+    await page.waitForSelector('.ag-drawer[data-asncard] .ag-dr-sec', { timeout: 15000 }).catch(() => {});
+    const ac = await page.evaluate(() => { const d = document.querySelector('.ag-drawer[data-asncard]'); if (!d) return null;
+      return { sec: Array.from(d.querySelectorAll('.ag-dr-sec')).map(x => x.textContent.trim()), imp: !!d.querySelector('.ag-dr-imp [data-act="asnimpact"]'), eski: !!d.querySelector('.ag-srcd-w') }; });
+    check('Sağlayıcı kartı: bölümler ortak sırada (Şu an, Geçmiş, Etkisini ölç), ölçüm kendi bölümünde', !!ac && ac.sec.join('|') === 'Şu an|Geçmiş|Etkisini ölç' && ac.imp && !ac.eski, JSON.stringify(ac));
+    for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(250); await layoutChecks(page, 'saglayici-karti', w); }
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('.ag-drawer'), null, { timeout: 5000 }).catch(() => {});
+  }
   {
     const ac = async (k) => { await tik(page, `[data-act="cfgchip"][data-k="${k}"][data-v="1"]`); await page.waitForTimeout(400); };
     await ac('CLOUD_BAN'); await ac('SVC_ALLOW');
