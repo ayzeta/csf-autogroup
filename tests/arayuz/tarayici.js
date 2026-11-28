@@ -504,6 +504,14 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
       if (await tik(page, `.ag-tabs [data-tab="${tab}"]`)) await sakin(page);
       await layoutChecks(page, tab, width);
       await shot(`${tab}-${width}`);
+      if (tab === 'overview') {
+        // Faz B: Kontrol edilecekler sütun adı "Bulgu" (satırın bulgusu), ayrıca "Şu an" sütunu; her satırda Şu an hücresi
+        const rv = await page.evaluate(() => { const s = document.getElementById('ag-sec-review'); if (!s) return null;
+          const th = Array.from(s.querySelectorAll('.ag-thead .ag-th')).map(x => x.textContent.trim().toLowerCase());
+          const rows = s.querySelectorAll('.ag-tr.ag-tr-r'), now = s.querySelectorAll('.ag-tr.ag-tr-r > .ag-td-now');
+          return { th, rows: rows.length, now: now.length }; });
+        check(`${width} px · Kontrol edilecekler: Bulgu ve Şu an sütunu, her satırda Şu an hücresi`, rv === null || (rv.th.some(x => /^(bulgu|finding)$/.test(x)) && rv.th.some(x => /^(şu an|now)$/.test(x)) && rv.rows > 0 && rv.now === rv.rows), JSON.stringify(rv));
+      }
       if (width === 390 && tab === 'overview') {
         // başlık düğmeleri telefonda tek sırada (sağda alt alta dizilince başlık iki kat yükseliyordu)
         const tops = await page.$$eval('.ag-head-actions .ag-btn', L => L.map(b => Math.round(b.getBoundingClientRect().top)));
@@ -532,6 +540,13 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
         check('1280: Geçmiş satırlarında zaman sütunu ve tarih metni aynı hizada, her satırda menü hücresi', r === null || (r.spread <= 1 && r.textSpread <= 1 && r.noMenu === 0), r ? JSON.stringify(r) : 'olay yok, atlandı');
         // Geçmiş araması (1.15.165): motor bütün olay kaydında arar; IP yazılınca o IP'nin olayı ve onu içeren /24'ün olayı gelir,
         // başkası gelmez; kutu odağını korur; temizleyince liste geri gelir (calistir.sh 21 + 1 olay ekler)
+        // Faz B "Şu an" alanı (nowChip): adresin yalnız en yeni satırında, başlık satırında olay rozetinin ardında; açıklama metninin
+        // içinde not yok (eski stateNote)
+        const now = await page.evaluate(() => { const L = Array.from(document.querySelectorAll('#ag-events .ag-ev')); const seen = {}, cift = [], yer = [];
+          L.forEach(x => { const n = x.querySelector('.ag-now'); if (!n) return; const a = (x.querySelector('.ag-ev-t [data-ip], .ag-ev-t .ag-cidr') || {}).textContent;
+            if (seen[a]) cift.push(a); seen[a] = 1; if (!n.parentElement.classList.contains('ag-ev-t') || !(n.previousElementSibling && n.previousElementSibling.classList.contains('ag-pill'))) yer.push(a); });
+          return { n: Object.keys(seen).length, cift, yer, dNot: document.querySelectorAll('#ag-events .ag-ev-d .ag-ev-st').length }; });
+        check('Geçmiş: "Şu an" alanı adres başına bir kez, başlıkta olay rozetinin ardında; açıklamada not yok', now.cift.length === 0 && now.yer.length === 0 && now.dNot === 0, JSON.stringify(now));
         const QB = '.ag-lq[data-l="ev"]', qb = !!(await page.$(QB));   // seçiciyle (sonuç gelince sayfa yeniden çizilir, tutamak kopar)
         check('Geçmiş: arama kutusu var (liste bir sayfadan uzun)', qb);
         if (qb) {

@@ -256,8 +256,12 @@ settings, with no prompts. `config.env` is left untouched.
   page.
 - **History actions** — every row has a **⋯** menu with what can be done with
   that item *now* (ban, change, remove, mute, show in Overview, IP card), and
-  the newest row of each item says its current state ("banned now", "in To
-  review", "no longer banned").
+  the newest row of each item has a **Now** field right after the event
+  name with the item's state today: *banned*, *partially banned*,
+  *allowed*, *inside the … ban* or *not banned* (plus *watched* or
+  *muted*). Needs review has the same **Now** column next to its
+  **Finding** column, so a finding and the item's current protection are
+  never mixed up.
 - **Look up an IP** — hostname (forward-confirmed), owner, announced prefix,
   registry, and **every** level at which CSF blocks it: the single ban, the
   covering `/24`, `/16` or other range (with its state, date and main ban

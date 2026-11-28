@@ -41,6 +41,10 @@ kural "liste arama kutusu yalnız ltSearch'te" "type=\"search\"" "class=\"ag-inp
 # ortak arama kutusunun kimliği yok, odak data-l ile bulunur: FKEYS'te değilse sayfanın kendi yenilemesi (dakikalık durum yoklaması)
 # yazarken odağı düşürür (1.15.164 gerilemesi; eski #ag-gq'nin kimliği vardı)
 if grep -q "function ltSearch" "$J" && ! grep -E "var FKEYS = \[" "$J" | grep -q "'data-l'"; then echo "DÜŞTÜ: liste arama kutusu (data-l) yeniden çizimde odağını korumuyor (FKEYS)"; F=$((F + 1)); else echo "GEÇTİ: liste arama kutusu yeniden çizimde odağını korur (FKEYS data-l)"; fi
+# Faz B (2026-11-28): "Şu an" alanı tek bileşen (nowChip) — Geçmiş satırı ve Kontrol edilecekler sütunu aynı işlev; eski açıklama
+# sonundaki "şu an banlı" notu (stateNote) yok
+kural "\"Şu an\" alanı yalnız nowChip'te" "class=\"ag-now\"" "return '<span class=\"ag-now\"><span class=\"ag-now-l\">"
+kural "eski \"şu an\" notu (stateNote) yok" "stateNote[(]" 'BU_DESEN_HICBIR_SATIRA_UYMAZ'
 kural "sıralama başlığı yalnız ltTh'de" "data-act=\"[a-z]*sort\"" "data-act=\"lsort\" data-k=\"' [+] esc[(]id[)]"
 kural "öğe eylemi düğmesi elle yazılmaz (MI.* + miBtn: menü, aralık kartı, IP kartı aynı öğeler)" 'data-(act|dr)="(unban|promote|forget|rewatch|chg|ban|ban16|ban24|banpfx|banforce)"' 'BU_DESEN_HICBIR_SATIRA_UYMAZ'
 kural "kapsayan banın adı covName'den: ham CSF ayar adı (CC_DENY …) cümleye eklenmez" "'[ (]*CC_DENY(_PORTS)? '" 'BU_DESEN_HICBIR_SATIRA_UYMAZ'
@@ -120,7 +124,7 @@ ml=$(grep -cE '#(b91c1c|dc2626|7c3aed|0d9488|2563eb|db2777|047857)' "$SHF")
 # renksiz (gri) yapılmıştı, çalışan koruma "durmuş" diye okundu (kullanıcı). Sağlayıcılar'daki katmanın "Açık" rozeti de aynı sınıf (gri
 # "Açık" kapalıyla karışıyordu) → yeşil. "Bakılacak bir şey yok" çubuğu (okbar) bilgi: renksiz kalır
 # Yeşil = izinli ya da iyi. Değişim oku (▲ / ▼) ve ban özetindeki "Açık kalır" bilgi: yeşil / amber değil (azalan ban "iyi" değil)
-ns=$(grep -c "addrPill(noteSt(e.cidr), note" "$J"); okc=$(grep -cE '^\.ag-okbar .*--ag-ok\b|^\.ag-kpi-d\.(up|dn)[^}]*color: (#|var\(--ag-(ok|warn)\))|^\.ag-sum-k\.ok \{[^}]*--ag-ok\b' "${J%.js}.css")
+ns=$(grep -c "addrPill(noteSt(c), txt" "$J"); okc=$(grep -cE '^\.ag-okbar .*--ag-ok\b|^\.ag-kpi-d\.(up|dn)[^}]*color: (#|var\(--ag-(ok|warn)\))|^\.ag-sum-k\.ok \{[^}]*--ag-ok\b' "${J%.js}.css")
 hg=$(grep -cE '^\.ag-pulse i \{.*background: var\(--ag-ok\).*animation: ag-pulse|^\.st-bad \.ag-pulse \{.*\.ag-pulse i \{.*animation: none|^\.ag-hc\.ok \{.*color: var\(--ag-ok\)|^\.ag-st\.on \{ color: var\(--ag-ok\)' "${J%.js}.css")
 [ "$ns" = 1 ] && [ "$okc" = 0 ] && [ "$hg" = 4 ] || ml=$((ml + 1000))
 if [ "$ev" != 0 ] || [ "$sc" != 1 ] || [ "$sk" != 0 ] || [ "$rd" != "part perm prom temp " ] || [ "$ml" != 0 ]; then

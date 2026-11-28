@@ -424,7 +424,7 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
   .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) .ag-num-c, .ag-thead:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) .ag-num-c { display: none; }
 }
 /* kontrol edilecekler: ağ · durum · neden · sahip · işaretlendi · öneri düğmesi · menü */
-.ag-thead.ag-tr-r, .ag-tr.ag-tr-r { grid-template-columns: 150px 172px minmax(0, 1fr) minmax(0, 1.2fr) 100px 36px; }   /* İşaretlendi başlığı 98 px (ölçüldü) */
+.ag-thead.ag-tr-r, .ag-tr.ag-tr-r { grid-template-columns: 150px 172px 132px minmax(0, 1fr) minmax(0, 1.2fr) 100px 36px; }   /* Şu an sütunu 132 px (Faz B) */   /* İşaretlendi başlığı 98 px (ölçüldü) */
 .ag-tr.ag-tr-r { padding-top: 9px; padding-bottom: 4px; min-height: 40px; }
 .ag-tr-r .ag-td-why { min-width: 0; overflow-wrap: anywhere; }
 /* satırın notları: Durum sütunu hizasından başlar (18 + 150 + 12 px), satırla aynı zemin */
@@ -448,7 +448,7 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-tr-r .ag-td-main { display: flex; align-items: center; gap: 6px; min-width: 0; }
 /* dar kart (sağ sütunun yanında): sahip sütunu kalkar, not satırının başına geçer */
 @container agtbl (max-width: 860px) {
-  .ag-thead.ag-tr-r, .ag-tr.ag-tr-r { grid-template-columns: 140px 172px minmax(0, 1fr) 100px 32px; gap: 10px; }
+  .ag-thead.ag-tr-r, .ag-tr.ag-tr-r { grid-template-columns: 140px 172px 124px minmax(0, 1fr) 100px 32px; gap: 10px; }
   .ag-tr-r .ag-td-own { display: none; }
   .ag-tr-note { padding-left: 168px; }
   .ag-own-n { display: flex; align-items: center; gap: 6px; color: var(--ag-text-2); margin-bottom: 2px; }
@@ -1028,12 +1028,14 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
   .ag-tr.ag-tr-p .ag-left .ag-days { width: auto; flex: 1 1 64px; max-width: 64px; min-width: 24px; }
   .ag-td-own .ag-flag { width: 22px; height: 22px; font-size: 10.5px; }
   /* kontrol edilecekler: 1) ağ · durum · menü  2) neden  3) sahip  4) işaretlendi (eylemler menüde) */
-  .ag-tbl > .ag-item > .ag-tr.ag-tr-r { grid-template-columns: minmax(0, 1fr) auto 32px; grid-template-areas: "main state act" "why why why" "own own own" "when when when";
+  .ag-tbl > .ag-item > .ag-tr.ag-tr-r { grid-template-columns: minmax(0, 1fr) auto 32px; grid-template-areas: "main state act" "now now now" "why why why" "own own own" "when when when";
     column-gap: 8px; row-gap: 6px; padding: 10px 10px 10px 16px; }
   .ag-tr.ag-tr-r .ag-td-main { grid-area: main; }
   .ag-tr.ag-tr-r .ag-td-state { grid-area: state; }
   .ag-tr.ag-tr-r .ag-td-act { grid-area: act; }
   .ag-tr.ag-tr-r .ag-td-why { grid-area: why; }
+  .ag-tr.ag-tr-r .ag-td-now { grid-area: now; }
+  .ag-tr.ag-tr-r .ag-td-now .ag-now-l { display: inline; }   /* telefonda başlık satırı yok: "Şu an" etiketi görünür */
   .ag-tr.ag-tr-r .ag-td-own { grid-area: own; display: flex; font-size: 12px; }
   .ag-tr.ag-tr-r .ag-when { grid-area: when; display: block; font-size: 12px; text-align: left; }
   .ag-tr.ag-tr-r .ag-td-why { white-space: normal; }
@@ -1042,7 +1044,7 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
 }
 /* çok dar ekranda adres ile durum rozeti aynı satıra sığmıyor: adres kesiliyordu (320 px'te ölçüldü) → rozet adresin altında */
 @media (max-width: 360px) {
-  .ag-tbl > .ag-item > .ag-tr.ag-tr-r { grid-template-columns: minmax(0, 1fr) 32px; grid-template-areas: "main act" "state state" "why why" "own own" "when btn"; }
+  .ag-tbl > .ag-item > .ag-tr.ag-tr-r { grid-template-columns: minmax(0, 1fr) 32px; grid-template-areas: "main act" "state state" "now now" "why why" "own own" "when btn"; }
   .ag-tr.ag-tr-r .ag-td-state { justify-self: start; }
 }
 /* başlıkta yalnız bir bağlantı varsa (ör. Kurallar · Düzenle) telefonda da sağda kalsın */
@@ -1177,6 +1179,13 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 /* Geçmiş'teki "şu an" rozeti: soluk yazı yalnız dolgusuz rozette. Dolu rozetler (engelli, kalıcıya alınan, geçici, ban altında ihlal,
    ciddi) beyaz yazılı kalır — önce bu kural onların yazısını da griye çekiyordu, kırmızı üstünde okunmuyordu (kullanıcı, 2026-11-28) */
 .ag-ev-st { font-weight: 600; }
+/* "Şu an" alanı (nowChip; Geçmiş başlık satırı, Kontrol edilecekler sütunu): soluk küçük etiket + durum çipi, bölünmez */
+.ag-now { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.ag-now-l { font-size: 11px; font-weight: 600; color: var(--ag-text-3); text-transform: uppercase; letter-spacing: .03em; }
+.ag-td .ag-now-l { display: none; }   /* tablo sütununda başlık zaten "Şu an" */
+.ag-td-now { min-width: 0; }
+.ag-td-now .ag-now { white-space: normal; max-width: 100%; }
+.ag-td-now .ag-pill { white-space: normal; max-width: 100%; }   /* "1.2.3.0/24 banının içinde" sütuna sığmazsa sarar, kesilmez */
 .ag-ev-st:not(.ag-pill-ban):not(.ag-pill-prom):not(.ag-pill-temp):not(.ag-pill-leak):not(.ag-pill-bad) { color: var(--ag-text-2); }
 
 /* ── Sağlayıcılar sekmesi: katman kutuları ve aynı kalıpta kartlar ── */

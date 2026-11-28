@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.15.167 — 2026-11-28
+
+- History and Needs review show an item's state today in one place, the
+  **Now** field: *banned*, *partially banned*, *allowed*, *inside the …
+  ban* or *not banned* (plus *watched* or *muted*). In History it sits on
+  the newest row of each item, right after the event name (it was a note
+  at the end of the text). Needs review gets a **Now** column, and its
+  *State* column is now called **Finding**: what the row reports and how
+  the item is protected today are no longer in one column.
+
 ## 1.15.166 — 2026-11-28
 
 - History: the "banned now" badge (solid red) had grey text that could
