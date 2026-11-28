@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.15.158 — 2026-11-28
+
+- Provider, country and rented-server-list states follow the same rule
+  wording: "<what covers it> · <what it closes>", for example
+  "provider ban AS16509 · closed: Web" or "rented-server list AWS ·
+  closed: port 443, UDP 443". Before, the same state read "provider ban ·
+  everything", "country ban (FR) · port list only", "rented-server list
+  (AWS)" or "AWS list", depending on the screen.
+- Port lists inside a state no longer break it apart (a state covering
+  ports 80 and 443 was split at the comma).
+
 ## 1.15.157 — 2026-11-28
 
 - What a ban or list closes is written the same way everywhere — every
