@@ -32,6 +32,13 @@ kural "kapsayan ban etiketi yalnız coverTag'de" "class=\"ag-ctag" "^  function 
 kural "kart sayı rozeti yalnız countBadge'de (sayı num() ile)" "class=\"ag-count" "^  function countBadge"
 kural "sağlayıcı satırı yalnız asnRow'da (1.15.87: Banlı sağlayıcılar kendi kopyasıydı)" "class=\"ag-asn-r\"" "^    return '<div class=\"ag-asn-r\">"
 kural "sayfa çubuğu yalnız pagerHtml'de (sayılar num() ile)" "class=\"ag-pager" "^    return '<div class=\"ag-pager\">"
+# liste düzeni tek bileşen (1.15.164, kullanıcı kararı 2026-11-28): her liste ltPage'in sayfa çubuğuyla ('lpage'; Geçmiş 'evpage',
+# eski kayıtları sunucudan yükler), arama kutusu ltSearch, sıralama başlığı ltTh. Önce "Daha fazla / Hepsini göster / Daralt" (lim,
+# limFoot) dokuz listede, sayfa çubuğu dört listede, arama ve sıralama yalnız Aktif aralık banlarında kendi kopyasıyla
+kural "liste sayfası yalnız ltPage'den (pagerHtml 'lpage'; Geçmiş 'evpage')" "pagerHtml[(]'" "pagerHtml[(]'(lpage|evpage)'|function pagerHtml"
+kural "\"Daha fazla / Hepsini göster\" kısaltması yok (lim / limFoot)" "(limFoot|[^a-zA-Z_.]lim)[(]|data-act=\"lim" 'BU_DESEN_HICBIR_SATIRA_UYMAZ'
+kural "liste arama kutusu yalnız ltSearch'te" "type=\"search\"" "class=\"ag-input ag-gq ag-lq\" type=\"search\" data-l="
+kural "sıralama başlığı yalnız ltTh'de" "data-act=\"[a-z]*sort\"" "data-act=\"lsort\" data-k=\"' [+] esc[(]id[)]"
 kural "öğe eylemi düğmesi elle yazılmaz (MI.* + miBtn: menü, aralık kartı, IP kartı aynı öğeler)" 'data-(act|dr)="(unban|promote|forget|rewatch|chg|ban|ban16|ban24|banpfx|banforce)"' 'BU_DESEN_HICBIR_SATIRA_UYMAZ'
 kural "kapsayan banın adı covName'den: ham CSF ayar adı (CC_DENY …) cümleye eklenmez" "'[ (]*CC_DENY(_PORTS)? '" 'BU_DESEN_HICBIR_SATIRA_UYMAZ'
 kural "olay rozetinin adı evName'den (elle ban: türü yazıda da; renk tek başına okunmuyordu)" 'statePill[(]evSt[(]e[)], t[(]' 'BU_DESEN_HICBIR_SATIRA_UYMAZ'
@@ -72,7 +79,7 @@ lv=$(grep -c "function svcLiveUdp(k)" "$J")
 if [ -n "$out" ] || [ "$lv" != 1 ]; then echo "DÜŞTÜ: servis portu kuralı kopyası (UDP 443 sabit ya da SSH '22'):"; echo "$out" | head -4; F=$((F + 1)); else echo "GEÇTİ: servis kapalı mı UDP kuralı tek yerde (svcLiveUdp), SSH portu sunucudan"; fi
 # kartın altındaki düğme listeyi değiştirince (sayfa çubuğu, "Daha az") kart başı görünür olur (1.15.133: Aktif aralık banları, İzlenenler,
 # sağlayıcı listesi sayfası kullanıcıyı sayfanın altında boşlukta bırakıyordu). pagerHtml'e verilen her eylem ve limless cardTop çağırır
-acts=$(grep -oE "pagerHtml\('[a-z]+'" "$J" | sed "s/pagerHtml('//; s/'//" | sort -u; echo limless)
+acts=$(grep -oE "pagerHtml\('[a-z]+'" "$J" | sed "s/pagerHtml('//; s/'//" | sort -u)
 miss=""; for a in $acts; do awk -v a="$a" '$0 ~ "^    " a ": function" { p = 1 } p { print; if (/^    [a-z0-9_]+: function/ && $0 !~ "^    " a ":") exit; if (++n > 12) exit }' "$J" | grep -q 'cardTop(el)' || miss+=" $a"; done
 if [ -n "$miss" ]; then echo "DÜŞTÜ: listeyi değiştiren düğme kart başını göstermiyor (cardTop yok):$miss"; F=$((F + 1)); else echo "GEÇTİ: sayfa / kısaltma eylemleri kart başına döner ($(echo $acts))"; fi
 # TEK DURUM (1.15.136): bir adresin şu anki durumu motorda yalnız obj_state'te (AWK_ST). Etkisini ölç'ün eski kendi hesabı (ipst),

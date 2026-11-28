@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.15.164 — 2026-11-28
+
+- Every long list pages the same way: **‹ ›** under the list with
+  "1–10 of 43". Needs review, Muted, the provider rankings, Banned
+  providers and the lists inside cards used *Show more / Show all /
+  Collapse* instead.
+- Watched can be sorted by any column like Active bans; when a list is
+  longer than one page it gets the same search box (address, AS number,
+  name or country). The provider ranking on the Providers tab is 10 per
+  page and searchable.
+- History has no search box: the panel holds only the newest part of the
+  event log, so a search there would miss older entries. An IP's card
+  shows that IP's own ban history.
+
 ## 1.15.163 — 2026-11-28
 
 - Counts say what they count: a number of bans reads "N single bans", a

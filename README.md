@@ -197,7 +197,7 @@ settings, with no prompts. `config.env` is left untouched.
   the panel (lfd's single bans are not listed): a sortable, paged table with
   each entry's owner, searchable by CIDR, AS number or organisation. Filters
   show their counts (*Single IP* shows the single-IP bans).
-  Watched blocks that reached the temp threshold again are tagged *came back,
+  Watched blocks that reached the temp threshold again are tagged *made
   permanent*; temp block bans show their time left. **⋯ → IPs** lists the IPs
   and ban reasons behind any block (from the event log). The
   *Old* filter lists automatic block bans older than the old-block limit (default 365
@@ -207,7 +207,8 @@ settings, with no prompts. `config.env` is left untouched.
   outside the plugin (CSF's list limit, by hand). If, within the watch period,
   as many of its IPs as the temp threshold are temp-banned at the same time (temp
   bans that come and go one by one do not add up), or the block's permanent
-  singles reach the block threshold, it becomes permanent + `do not delete`. Sorted by days left; **⋯ → IPs** shows the IPs
+  singles reach the block threshold, it becomes permanent + `do not delete`. Sorted by days left (any column
+  header sorts it; a list longer than one page also gets a search box); **⋯ → IPs** shows the IPs
   and reasons behind the temp block ban.
 - **History** (its own tab) — every ban, promotion, skip, warning and manual
   action, and once a day the findings in Needs review that are otherwise
@@ -289,8 +290,13 @@ settings, with no prompts. `config.env` is left untouched.
   (and the weekly summary's). A provider banned with the port list only comes
   back to *Violations* while violations continue on services that list leaves open.
 
-  Each list shows the first 5 with the total in its header; *More* and
-  *Show all* open the rest, *Collapse* closes them again.
+  Each list shows 5 per page with the total in its header; on the
+  Providers tab the ranking is 10 per page and, when longer than a page,
+  searchable by AS number, name or country.
+
+  Every long list in the panel pages the same way (**‹ ›** under the list
+  with "1–10 of 43"); none of them is cut short behind a *Show more*
+  button.
 - **Terms** (header button) — a short glossary of the words the panel uses
   (single, block, watched, partial, provider ban, rented-server list…).
 - **Since your last visit** — what happened since you last opened the page; new

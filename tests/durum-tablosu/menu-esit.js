@@ -26,9 +26,16 @@ for (const f of fs.readdirSync(DIR).filter(f => f.endsWith('.json')).sort()) {
   let st; try { st = JSON.parse(fs.readFileSync(path.join(DIR, f), 'utf8')); } catch (e) { continue; }
   if (!st || !st.review) continue;
   AG.set(st, 'tr');
-  AG.UI.lim = { rv: 1e6 }; AG.UI.gp = 0; AG.UI.pp = 0;
+  // bütün satırlar: ortak sayfa çubuğunun (ltPage) her sayfası çizilir; yeni menü gelmeyince durur (son sayfa yinelenir)
   const menus = {}; globalThis.__MENU = (k, items) => { menus[k] = items; };
-  try { AG.review(); AG.groupRows(); AG.pending(); } catch (e) { console.log('  ✗ ' + f + ': çizim hatası ' + e.message); fails++; continue; }
+  let bad = false;
+  for (let p = 0; p < 500; p++) {
+    const n0 = Object.keys(menus).length;
+    AG.UI.L = { rv: { q: '', s: '', d: -1, p }, g: { q: '', s: 'added', d: -1, p }, p: { q: '', s: 'left', d: 1, p } };
+    try { AG.review(); AG.groupRows(); AG.pending(); } catch (e) { console.log('  ✗ ' + f + ': çizim hatası ' + e.message); fails++; bad = true; break; }
+    if (p > 0 && Object.keys(menus).length === n0) break;
+  }
+  if (bad) continue;
   Object.keys(menus).forEach(k => {
     const kind = k.slice(0, 3), c = kind === 'pm:' ? k.slice(3) + '.0/24' : k.slice(3);
     if (!/^(rm|gm|pm):$/.test(kind)) return;

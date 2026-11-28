@@ -423,8 +423,6 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
   .ag-thead:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i), .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) { grid-template-columns: 156px 152px minmax(0, 1fr) 104px 36px; }
   .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) .ag-num-c, .ag-thead:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) .ag-num-c { display: none; }
 }
-.ag-thead.ag-tr-p .ag-th { cursor: default; }
-.ag-thead.ag-tr-p .ag-th:hover { color: var(--ag-text-3); }
 /* kontrol edilecekler: ağ · durum · neden · sahip · işaretlendi · öneri düğmesi · menü */
 .ag-thead.ag-tr-r, .ag-tr.ag-tr-r { grid-template-columns: 150px 172px minmax(0, 1fr) minmax(0, 1.2fr) 100px 36px; }   /* İşaretlendi başlığı 98 px (ölçüldü) */
 .ag-tr.ag-tr-r { padding-top: 9px; padding-bottom: 4px; min-height: 40px; }
@@ -1342,9 +1340,6 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-pill-xs { height: 18px; padding: 0 7px; font-size: 10.5px; vertical-align: 1px; }
 .ag-chg-l { display: block; font-size: 12.5px; color: var(--ag-text-2); overflow-wrap: anywhere; }
 .ag-modal li .ag-mono { overflow-wrap: anywhere; word-break: break-word; }
-.ag-limf { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-start; }
-.ag-limf .ag-muted { font-size: 12px; margin-right: auto; }
-.ag-limf-b { display: inline-flex; gap: 8px; flex-wrap: nowrap; margin-left: auto; }
 .ag-intro { margin: 0 0 12px; font-size: 13px; color: var(--ag-text-2); }
 .ag-prow-n { font-size: 12px; color: var(--ag-warn); margin-top: -2px; }
 .ag-prow-m { font-size: 12px; color: var(--ag-text-3); margin-top: -2px; }

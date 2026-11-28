@@ -121,7 +121,7 @@ const ROLES = {
   'adres bağlantısı': '.ag-cidr',
   'düğme': '.ag-btn:not(.ag-btn-sm)',
   'küçük düğme': '.ag-btn.ag-btn-sm',
-  'kart altı metni': '.ag-limf > .ag-muted, .ag-pager > span',
+  'kart altı metni': '.ag-pager > span',
   'boş durum': '.ag-empty',
 };
 // bilinçli istisnalar (seçici: gerekçe) — o rolde sayılmaz
