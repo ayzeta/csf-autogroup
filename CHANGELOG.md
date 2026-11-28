@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.15.160 — 2026-11-28
+
+- Internal: which event types put a ban in place, carry the ban's IPs,
+  raise a review finding or count as "new" is defined once in the engine;
+  the panel reads it from the status output instead of keeping its own
+  lists.
+
 ## 1.15.159 — 2026-11-28
 
 - A ban's name is the same in a table cell and in its badge. The IP's own

@@ -65,7 +65,7 @@ grep() { command grep -a "$@"; }
 # sayı, anahtar; Türkçe modda sıralama kuralı zaten C idi (LC_COLLATE=C)
 sort() { LC_ALL=C command sort "$@"; }
 
-VERSION="1.15.159"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.160"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -1234,6 +1234,14 @@ jstr() {         # dizgi → REPLY = JSON dizgisi (tırnaklı, kaçışlı)
 # yazılan ban altında ihlal / açık servis kaydının IP'leri banın IP'leri değildir. Önce dört yerde dört ayrı liste vardı ve
 # ev_ips_of türe hiç bakmıyordu: ihlal kaydından sonra "kaldır + geri yükle" ihlal eden IP'leri csf.deny'ye yazabiliyordu
 EV_BAN_TYPES="add24|promote|temp24|manual_ban|manual_change"
+# Öteki olay türü kümeleri de burada — TEK TANIM (T-3, 1.15.160); panel durum çıktısındaki "evtypes"tan okur (önce panelde ayrı
+# BAN_TYPES / BAN_IPS_TYPES / NEW_TYPES dizileri, motorda uyarı türleri üç yerde elle yazılıydı):
+#   EV_IPS_TYPES  banın IP'lerini taşıyanlar (koyan + kaldıran: kaldırma kaydı banın IP'lerini kopyalar)
+#   EV_WARN_TYPES Kontrol edilecekler'e satır açan tespit uyarıları
+#   EV_NEW_TYPES  panelin "yeni" noktası (son ziyaretten beri gelen ban / tespit)
+EV_IPS_TYPES="$EV_BAN_TYPES|manual_unban|expire|limit_gone"
+EV_WARN_TYPES="warnpfx|warn16|warn16t|skip_wl"
+EV_NEW_TYPES="add24|promote|temp24|$EV_WARN_TYPES|manual_ban|limit_gone|allow_viol|part_open|under_ban"
 ev_ips_of() {    # CIDR → REPLY = olay kaydında o aralığın banını koyduran son kaydın IP listesi (JSON dizisi "[…]", yoksa boş). Ban kaldırılırken
     # kaldırma olayına kopyalanır: asıl ban kaydı, ban artık durmadığı için saklama süresinde silinir; "neden banlanmıştı"
     # sorusunun cevabı kaldırma kaydında kalsın. JSON dizgileri içindeki köşeli parantez ve kaçışlar sayılmaz.
@@ -3788,10 +3796,11 @@ do_status() {
             END { for (p in c) print p, c[p] }' "$SAYAC_FILE")
     fi
     if [ -r "$EVENTS_FILE" ]; then
+        local wre="\"type\":\"($EV_WARN_TYPES)\""   # uyarı türleri tek tanımdan (EV_WARN_TYPES)
         while IFS= read -r line; do
             [[ "$line" =~ ^\{\"t\":([0-9]+),.*\}$ ]] || continue; t="${BASH_REMATCH[1]}"   # yarım satırlar atlanır
             [ "$t" -lt $(( now - REVIEW_DAYS * 86400 )) ] && break
-            [[ "$line" =~ \"type\":\"(warnpfx|warn16|warn16t|skip_wl)\" ]] || continue; ty="${BASH_REMATCH[1]}"
+            [[ "$line" =~ $wre ]] || continue; ty="${BASH_REMATCH[1]}"
             [[ "$line" =~ \"cidr\":\"([0-9./]+)\" ]] || continue; c="${BASH_REMATCH[1]}"
             pc "rv_ev satır"; pa "rv_ev okuma"
             [ -n "${seen[$c]}" ] && continue; seen[$c]=1
@@ -3841,7 +3850,7 @@ do_status() {
             review+=("${line%\}},\"drop\":$(( t + REVIEW_DAYS * 86400 ))}")   # düşme tarihi (P15): satır zamanı + kontrol süresi
             rtext+=("$(printf '%-18s %s · %s' "$c" "$ty" "$(date -d "@$t" '+%d.%m %H:%M')")")
             pa "rv_ev rtext"
-        done < <(LC_ALL=C grep -E '"type":"(warnpfx|warn16|warn16t|skip_wl)"' "$EVENTS_FILE" | tac)   # yalnız bu türler, önce süzülür sonra ters çevrilir
+        done < <(LC_ALL=C grep -E "\"type\":\"($EV_WARN_TYPES)\"" "$EVENTS_FILE" | tac)   # yalnız bu türler, önce süzülür sonra ters çevrilir
     fi
     prof review_events
     # Olay kaydı başlamadan önceki uyarılar ve atlamalar sayaçta tarihiyle duruyor (IP ayrıntısı yok)
@@ -4043,9 +4052,9 @@ do_status() {
     rv_win() {   # A B → [A, B) aralığında işaretlenen farklı blok/ağ sayısı (olay kaydı + sayaçtaki eski kayıtlar)
         local rw1="$1" rw2="$2" rs1 rs2
         printf -v rs1 '%(%Y-%m-%d)T' "$rw1"; printf -v rs2 '%(%Y-%m-%d)T' "$rw2"
-        { [ -r "$EVENTS_FILE" ] && awk -v a="$rw1" -v b="$rw2" '
+        { [ -r "$EVENTS_FILE" ] && awk -v a="$rw1" -v b="$rw2" -v wt="\"type\":\"($EV_WARN_TYPES)\"" '
                    match($0, /"t":[0-9]+/) { t = substr($0, RSTART + 4, RLENGTH - 4) + 0 }
-                   t >= a && t < b && /"type":"(warnpfx|warn16|warn16t|skip_wl)"/ && match($0, /"cidr":"[0-9.\/]+"/) { print substr($0, RSTART + 8, RLENGTH - 9) }' "$EVENTS_FILE"
+                   t >= a && t < b && $0 ~ wt && match($0, /"cidr":"[0-9.\/]+"/) { print substr($0, RSTART + 8, RLENGTH - 9) }' "$EVENTS_FILE"
                [ -r "$SAYAC_FILE" ] && awk -v a="$rs1" -v b="$rs2" '$2 >= a && $2 < b {
                    k = $1
                    if (k ~ /^WARN16_/)           { sub(/^WARN16_/, "", k);      print k ".0.0/16" }
@@ -4219,7 +4228,7 @@ do_status() {
             "$(num "$SVC_FAIL_DAYS")" "$(num "$CLOUD_FAIL_DAYS")" "$(num "$BLOCK_ACTIVE_DAYS")"
         printf '"usage":{"perm":[%s,%s],"temp":[%s,%s]},' "$(num "$pc")" "$limit" "$(num "$tc")" "$tlimit"
         printf '"last_run":%s,' "${last:-null}"
-        jstr "$cronm"; printf '"cron_min":%s,"runs":%s,' "$REPLY" "$runsj"
+        jstr "$cronm"; printf '"cron_min":%s,"runs":%s,"evtypes":{"ban":"%s","ips":"%s","warn":"%s","new":"%s"},' "$REPLY" "$runsj" "$EV_BAN_TYPES" "$EV_IPS_TYPES" "$EV_WARN_TYPES" "$EV_NEW_TYPES"
         local wq=0; web_quic && wq=1       # panelin "Web kapalı mı" kararı motorla aynı ölçütle (UDP 443 yalnız HTTP/3 dinleniyorsa)
         # servis → TCP portları TEK TANIMDAN (svc_ports; T-2, 1.15.148): panelin kendi port tablosu (SVC_TCP) kalktı, bütün servisler
         # buradan. ssh / smtp / mread sunucudan okunur (sshd -T, Exim / Dovecot'un dinlediği portlar); eski anahtarlar (min, sync, mout,
