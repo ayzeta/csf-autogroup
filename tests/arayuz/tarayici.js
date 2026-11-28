@@ -477,7 +477,7 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
   // Tur süresi ipucu: calistir.sh'nin olay kaydına eklediği tur (motorun durum çıktısından): kısmen inen liste "indirilemedi" der
   const tips = await page.$$eval('.ag-spark i', L => L.map(i => i.title));
   check('Tur süresi ipucu turu uzatan işleri yazar (yenilenen, inemeyen, csf -r)', tips.some(x => /izinli servis listeleri yenilendi/.test(x) &&
-    /kiralık sunucu listeleri: 7\/8 yenilendi, 1 indirilemedi/.test(x) && /csf -r 1× \(4 sn\)/.test(x)), tips.slice(-2).join(' | '));
+    /kiralık listeler: 7\/8 yenilendi, 1 indirilemedi/.test(x) && /csf -r 1× \(4 sn\)/.test(x)), tips.slice(-2).join(' | '));
   // sekmeler, iki genişlikte
   for (const tab of ['overview', 'history', 'prov', 'settings']) {
     for (const width of [1280, 390]) {
@@ -702,7 +702,7 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
     await page.waitForSelector(sxc, { timeout: 20000 }).catch(async () => console.log('  [tanı] birleşik dosya kartı 20 sn\'de çizilmedi · istekler: ' + apiSon(6)));
     const sx0 = await page.evaluate((q) => { const c = document.querySelector(q); return c ? { rl: !!c.querySelector('.ag-bagli.off [data-k="SVC_EXPORT_RELOAD"]'), ref: !!c.querySelector('[data-k="SVC_REFRESH_DAYS"]') } : null; }, sxc);
     await page.click(sxc + ' [data-act="cfgchip"][data-k="SVC_EXPORT"][data-v="1"]').catch(() => {}); await page.waitForTimeout(400);
-    const sx1 = await page.evaluate((q) => { const c = document.querySelector(q); return c ? { rl: !!c.querySelector('.ag-bagli:not(.off) [data-k="SVC_EXPORT_RELOAD"]'), yol: /services-all\.txt/.test(c.innerText), not: /restartsrv_httpd --graceful/.test(c.innerText), nosvc: /(Sağlayıcılar sekmesinde kapalı|off on the Providers tab)/.test(c.innerText) } : null; }, sxc);
+    const sx1 = await page.evaluate((q) => { const c = document.querySelector(q); return c ? { rl: !!c.querySelector('.ag-bagli:not(.off) [data-k="SVC_EXPORT_RELOAD"]'), yol: /services-all\.txt/.test(c.innerText), not: /restartsrv_httpd --graceful/.test(c.innerText), nosvc: /(Sağlayıcılar sekmesinde devre dışı|off on the Providers tab)/.test(c.innerText) } : null; }, sxc);
     check('Ayarlar: birleşik servis dosyası izinli servis listelerinin kartında (yenileme ayarlarıyla; açınca yeniden yükleme seçeneği etkin, dosya yolu, izinli servisler kapalı notu)', !!sx0 && sx0.rl && sx0.ref && !!sx1 && sx1.rl && sx1.yol && sx1.not && sx1.nosvc, JSON.stringify([sx0, sx1]));
     for (const w of [1280, 390]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(250); await layoutChecks(page, 'svc-birlesik', w); await shot('svc-birlesik-' + w); }
     await page.setViewportSize({ width: 1280, height: 900 });

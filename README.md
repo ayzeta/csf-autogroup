@@ -133,7 +133,7 @@ settings, with no prompts. `config.env` is left untouched.
   violations, offending IPs and **Measure impact**.
 - **Colors** — colour is used for two things only, the same everywhere (badges,
   icons, chart, emails). The *state* of an address: red filled = blocked
-  (permanent or timed; red only ever means blocked), red outline = partly
+  (permanent or temporary; red only ever means blocked), red outline = partly
   blocked, green = allowed, plain = not banned. The *importance* of a finding,
   detection or health state: green = fine (protection running, nothing to
   review, safe to ban), amber = attention, dark orange filled = serious.
@@ -292,7 +292,7 @@ settings, with no prompts. `config.env` is left untouched.
   Each list shows the first 5 with the total in its header; *More* and
   *Show all* open the rest, *Collapse* closes them again.
 - **Terms** (header button) — a short glossary of the words the panel uses
-  (single, block, watched, partial, provider ban, rented servers…).
+  (single, block, watched, partial, provider ban, rented-server list…).
 - **Since your last visit** — what happened since you last opened the page; new
   rows carry a dot, and so does a *Needs review* row that got a new record
   (its *Flagged* time stays the first record).
@@ -314,12 +314,12 @@ end (a csf.allow line, with an optional note) or for 1 hour to 7 days (CSF's
 temporary allows, both directions). The allow comes before every ban; the
 rented-server lists and the ban guard pick it up right away. With no end, CSF
 deletes the IP's permanent single ban from csf.deny (a `do not delete` line
-stays but no longer works); a timed allow leaves csf.deny alone, so that ban
+stays but no longer works); a temporary allow leaves csf.deny alone, so that ban
 works again when the allow ends. **Remove allow** deletes the IP's own csf.allow
 line or temporary allow; allows from included files are removed in those files.
 
-Range bans (`/24`, `/16`, announced range) can be timed too (*Everything*, 1
-hour to 7 days). A timed ban does not remove what is inside the range, so the
+Range bans (`/24`, `/16`, announced range) can be temporary too (*Everything*, 1
+hour to 7 days). A temporary ban does not remove what is inside the range, so the
 range is back to how it was when the time is up; it is listed as a manual ban
 with the time left.
 
@@ -772,7 +772,7 @@ tab. Key options:
 
 ## Uninstall
 
-First turn off **Provider ban**, **Rented servers** and **Allowed services** in
+First turn off **Provider ban**, **Rented-server lists** and **Allowed services** in
 the Providers tab and pause the plugin (Settings → General): that removes what
 the plugin added to CSF, including the block counter (`ag_hits`) and the ban
 guard (`AG_GUARD`). Without the panel, `bash tools/block-hits.sh --remove` and
@@ -961,7 +961,7 @@ server lists have the same two settings in their card.
 `tools/services-allow.sh` does the downloading; the plugin runs it. It also
 works by hand (`--check` shows what would change, `--remove` takes it out).
 
-**Rented servers (experimental).** Cloud providers publish the addresses they
+**Rented-server lists (experimental).** Cloud providers publish the addresses they
 rent out to anyone (virtual servers); the Providers tab can block those:
 Google Cloud, AWS (EC2), Azure, Oracle Cloud, DigitalOcean, Linode and Vultr.
 **What to block** is set per box with the same picker as a manual range ban:

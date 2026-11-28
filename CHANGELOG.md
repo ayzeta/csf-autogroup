@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.15.162 — 2026-11-28
+
+- One name per thing, in the panel, the glossary, email and Slack:
+  - The rented-server section and its lists are "Rented-server lists"
+    everywhere (it was also "Rented servers"; in Turkish three names).
+  - A watched block that is banned for good is "Made permanent" in
+    History, the glossary, email and the summary, and the button is
+    "Make permanent" (it was also "Came back, permanent").
+  - A ban or allow added from the panel for a chosen time is a
+    "temporary" ban / allow, as in CSF (it was also "timed").
+  - Turkish: on / off switches for layers and settings say "Etkin /
+    Devre dışı", so "kapalı" only ever means a port a rule closes
+    ("kapalı: Web").
+- The weekly summary's provider-ban table shows the same rule text as the
+  panel ("closed: Web", "everything closed") instead of raw port numbers.
+- Glossary fixes found by checking it with the same term rules as the
+  rest of the panel.
+
 ## 1.15.161 — 2026-11-28
 
 - Email, Slack and the plain-text lookup now use the panel's words for the

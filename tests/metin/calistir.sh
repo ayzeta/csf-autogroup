@@ -9,9 +9,32 @@ H="$(cd "$(dirname "$0")" && pwd)"; REPO="$(cd "$H/../.." && pwd)"
 JS="$REPO/whm/assets/ag.js"; SH="${AG_SH:-$REPO/csf_autogroup.sh}"   # AG_SH: eski motorla sınama
 YASAK=(
   "Dikkat edilecekler|Kontrol edilecekler"
-  "Bulut listeleri|Kiralık sunucular"
-  "Bulut listesi|kiralık sunucu listesi"
-  "bulut listesi|kiralık sunucu listesi"
+  "Bulut listeleri|Kiralık listeler"
+  "Bulut listesi|kiralık liste"
+  "bulut listesi|kiralık liste"
+  # 2026-11-28 terim kararları (kullanıcı): tek ad "kiralık liste" (kutunun açıklamasındaki "kiralık sunucular (EC2)" listenin
+  # içeriği, kalır); katman / ayar anahtarı "Etkin / Devre dışı" ("kapalı" yalnız kuralın kestiği port: "kapalı: Web");
+  # kalıcıya alma tek ad; elle süreli ban / izin "geçici" (CSF'te ikisi de csf -td / -ta)
+  "Kiralık sunucular|Kiralık listeler"
+  "kiralık sunucu liste|kiralık liste"
+  "Kiralık sunucu liste|Kiralık liste"
+  "kiralık sunucu banı|kiralık listeler"
+  "Kiralık sunucu banı|Kiralık listeler"
+  "Rented servers|Rented-server lists"
+  "on: 'Açık'|on: 'Etkin'"
+  "off: 'Kapalı'|off: 'Devre dışı'"
+  "Kapalıyken|Devre dışıyken"
+  "Kapalıysa|Devre dışıysa"
+  "Açıksa|Etkinse"
+  "açıksa|etkinse"
+  "Tekrar geldi, kalıcı|Kalıcıya alındı"
+  "tekrar geldi, kalıcı|kalıcıya alındı"
+  "Came back, permanent|Made permanent"
+  "Kalıcı yap|Kalıcıya al"
+  "Süreli|Geçici"
+  "süreli|geçici"
+  "timed allow|temporary allow"
+  "timed ban|temporary ban"
   "Diğer bloklar|Elle eklenenler"
   "grup banı|blok banı"
   "cloud list|rented-server list"
@@ -37,6 +60,7 @@ YASAK=(
 # kullanıcıya görünen metinler: ag.js sözlüğündeki 'anahtar: "metin"' değerleri ve motorun M_* değişkenleri
 texts() {
   grep -oE "[a-z_0-9]+: '([^'\\\\]|\\\\.)*'" "$JS"
+  grep -E '^ *var TERMS = ' "$JS" | grep -oE "'([^'\\\\]|\\\\.)*'" | sed 's/^/TERMS: /'   # Terimler sayfası ayrı dizi (2026-11-28'e kadar taranmıyordu: eski adlar orada kalmıştı)
   grep -oE 'M_[A-Z0-9_]+="[^"]*"' "$SH"   # satırdaki bütün tanımlar (önce yalnız satır başındaki: aynı satırdaki sonrakiler denetim dışıydı)
 }
 bad=0

@@ -65,7 +65,7 @@ grep() { command grep -a "$@"; }
 # sayı, anahtar; Türkçe modda sıralama kuralı zaten C idi (LC_COLLATE=C)
 sort() { LC_ALL=C command sort "$@"; }
 
-VERSION="1.15.161"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.162"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -378,7 +378,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_MAILWL_BODY="Aşağıdaki bloklar ban eşiğine ulaştı ama CSF izin listeleriyle çakıştığı için banlanmadı.\nTekil banlar yerinde duruyor:"
   M_MAILWL_SUBJ="%s blok atlandı (izin listesi)"
   M_CC_NOLOOKUP="UYARI: csf.rignore tanımlı ama DNS sorgusu yapılamıyor (LOOKUP=0 ya da dig/host yok); ters DNS denetimi atlandı"
-  M_LOOKUP_OFF="UYARI: DNS sorguları art arda başarısız oldu (%s), bu turda kapatıldı"
+  M_LOOKUP_OFF="UYARI: DNS sorguları art arda başarısız oldu (%s), bu turda devre dışı bırakıldı"
   M_CYMRU_OFF="UYARI: Team Cymru sorguları art arda başarısız oldu (sunucunun DNS çözücüsü: %s); duyurulan aralık bu turda sorulmuyor, sahip ve ülke CSF verisinden, önbellekteki aralıklar korunuyor"
   M_CLEANCNT="Sayaç temizliği yapıldı (%s günden eski kayıtlar silindi)"
   M_LOGTRIM="Günlükten %s günden eski satırlar silindi (%s satır)"
@@ -487,13 +487,13 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_ASN_SELF="Sağlayıcı banı uygulanmadı: %s bu sunucunun kendi sağlayıcısı"
   M_C24_CLOSED="%s.0/24 banlanmadı: %s tekilin yalnız %s tanesi açık bir servise; ötekilerin servisi zaten kapalı (sağlayıcı banı, kiralık liste, ülke ya da kısmi ban)"
   M_ASN_NOSELF="Sağlayıcı banı uygulanmadı: %s — sunucunun kendi sağlayıcısı öğrenilemedi (DNS ve CSF'in ASN verisi yok); kendi sağlayıcısını banlamamak için yeni sağlayıcı eklenmiyor"
-  M_SVC_REMOVED="İzinli servisler kapatıldı; csf.allow'daki Include satırı ve liste kaldırıldı"
-  M_PAUSED="CSF Auto-Group duraklatıldı: yeni ban ve bildirim yok; sağlayıcı banı, kiralık sunucu banı, blok sayacı ve ban koruması kaldırıldı (Ayarlar → Genel'den açılır)"
-  M_CLOUD_REMOVED="Kiralık sunucu banı kapatıldı; kural, adres kümesi ve csfpost.sh satırı kaldırıldı"
-  M_CLOUD_FAIL_SUBJ="kiralık sunucu listesi indirilemiyor (%s)"
-  M_CLOUD_FAIL_BODY="Şu kiralık sunucu listeleri uyarı süresinden uzun süredir indirilemiyor: %s. Eski listeler kullanılıyor; adres Sağlayıcılar → Kiralık sunucular → Adres düğmesinden düzeltilebilir."
-  M_CLOUD_FAIL_OK="Kiralık sunucu listeleri yeniden indirilebiliyor"
-  M_DG_CLOUD="Kiralık sunucular: %s"
+  M_SVC_REMOVED="İzinli servisler devre dışı bırakıldı; csf.allow'daki Include satırı ve liste kaldırıldı"
+  M_PAUSED="CSF Auto-Group duraklatıldı: yeni ban ve bildirim yok; sağlayıcı banı, kiralık listeler, blok sayacı ve ban koruması kaldırıldı (Ayarlar → Genel'den açılır)"
+  M_CLOUD_REMOVED="Kiralık listeler devre dışı bırakıldı; kural, adres kümesi ve csfpost.sh satırı kaldırıldı"
+  M_CLOUD_FAIL_SUBJ="kiralık liste indirilemiyor (%s)"
+  M_CLOUD_FAIL_BODY="Şu kiralık listeler uyarı süresinden uzun süredir indirilemiyor: %s. Eski listeler kullanılıyor; adres Sağlayıcılar → Kiralık listeler → Adres düğmesinden düzeltilebilir."
+  M_CLOUD_FAIL_OK="Kiralık listeler yeniden indirilebiliyor"
+  M_DG_CLOUD="Kiralık listeler: %s"
   M_RULE_SVC="kapalı: %s"; M_RULE_ALL="her şey kapalı"; M_RULE_EXC="her şey kapalı, açık: %s"; M_RULE_NONE="hiçbir şey kapatılmıyor"
       M_ASN_REFRESH="CSF'in ASN verisi %s günlüktü; yenilensin diye lfd yeniden başlatıldı (ASN banı: %s)"
   M_ASN_REFRESH_FAIL="CSF'in ASN verisi eski (%s gün) ama lfd yeniden başlatılamadı; ASN banı eski adreslerle çalışıyor"
@@ -520,7 +520,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_L_HOST="Hostname"; M_L_FWD="ileri yönde doğrulandı"; M_L_NOFWD="ileri yönde doğrulanamadı"
   M_L_OWNER="Sahip"; M_L_PREFIX="Duyurulan aralık"; M_L_REG="Kayıt"; M_L_DENY="csf.deny"
   M_L_TEMP="Geçici liste"; M_L_WL="İzin listesi"; M_L_CLOUD="Kiralık liste"; M_L_BKL="Blok listesi"; M_AB_LINE="puan %s/100 · %s · son bildirim %s · %s"; M_AB_REP="%s bildirim (%s kişi%s)"; M_AB_WIN=", son %s günde"; M_AB_NONE="bildirim yok"; M_AB_NONE_W="son %s günde bildirim yok"; M_AB_LIM="bugünkü sorgu sınırı doldu (%s/%s)"; M_AB_ERR="sorgulanamadı (HTTP %s): %s"; M_AB_BAD="AbuseIPDB anahtarı yalnız harf ve rakam olmalı (20–200 karakter)"; M_L_PENDING="İzleniyor"; M_L_IGN="Susturuldu"; M_L_ACCT="Denemeler"
-  M_BKL_BAD="Liste adı ya da işlem geçersiz (beklenen: AD on|off)"; M_BKL_NONE="%s listesi csf.blocklists dosyasında yok"; M_BKL_NOTMINE="%s listesini eklenti açmadı; elle açılan listeyi eklenti kapatmaz (csf.blocklists dosyasından kapatılır)"; M_BKL_ON="%s blok listesi açıldı; csf ve lfd yeniden başladı, lfd listeyi indiriyor"; M_BKL_OFF="%s blok listesi kapatıldı; csf ve lfd yeniden başladı"
+  M_BKL_BAD="Liste adı ya da işlem geçersiz (beklenen: AD on|off)"; M_BKL_NONE="%s listesi csf.blocklists dosyasında yok"; M_BKL_NOTMINE="%s listesini eklenti etkinleştirmedi; elle etkinleştirilen listeyi eklenti devre dışı bırakmaz (csf.blocklists dosyasından kaldırılır)"; M_BKL_ON="%s blok listesi etkinleştirildi; csf ve lfd yeniden başladı, lfd listeyi indiriyor"; M_BKL_OFF="%s blok listesi devre dışı bırakıldı; csf ve lfd yeniden başladı"
   M_SVCX_WROTE="Birleşik servis dosyası yazıldı: %s IP / aralık (%s)"; M_SVCX_SHRINK="Birleşik servis dosyası yazılmadı: yeni liste %s IP / aralık, öncekinin (%s) yarısından az (%s)"; M_SVCX_FAIL="Birleşik servis dosyası yazılamadı (%s)"; M_SVCX_RELOAD="Web sunucusu yeniden yüklendi: %s"; M_SVCX_RELOADF="Web sunucusu yeniden yüklenemedi: %s (çıkış %s): %s"; M_SVCX_BAD="Birleşik servis dosyası yazılmadı: Apache yeni listeyi (%s adres) ModSecurity kuralında kabul etmedi, önceki dosya korunuyor (%s): %s"
   M_H_NOREASON="geçici ban (günlükte sebep yok)"
   M_CFG_BAD="Geçersiz değer: %s = %s (%s olmalı)"
@@ -570,8 +570,8 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_H_NEWT="Yeni blok banları"; M_H_BLOCK="Blok"; M_H_OWNER="Sahip"; M_H_STATE="Durum"
   M_H_K_add24="kalıcı"; M_H_K_promote="tekrar gelen"; M_H_K_manual_ban="elle"
   M_H_TOPT="CSF'in en çok engellediği sağlayıcılar"; M_H_TOPS="csf.deny'deki blok banlarına ve tekil banlara göre · banlı sağlayıcılar hariç"
-  M_H_PBT="Sağlayıcı banı"; M_H_PBS="Bu sağlayıcılar CSF'te banlı; sıralamalarda gösterilmez"; M_H_PBK="Kapalı"; M_H_PBR="Aralık"
-  M_H_PBALL="her şey"; M_H_PBNL="CSF henüz yüklemedi"
+  M_H_PBT="Sağlayıcı banı"; M_H_PBS="Bu sağlayıcılar CSF'te banlı; sıralamalarda gösterilmez"; M_H_PBK="Kural"; M_H_PBR="Aralık"
+  M_H_PBNL="CSF henüz yüklemedi"
   M_H_SVC="İzinli servisler: csf.allow'da %s IP / aralık · son indirme %s"; M_H_SVCF="uyarı süresinden uzun süredir indirilemiyor: %s"
   M_DG_PBH="Sağlayıcı banı (sıralamalarda gösterilmez):"; M_DG_PBL="   %-9s %-44s %s"
   M_H_PROV="Sağlayıcı"; M_H_BLK="Blok"; M_H_SGL="Tekil"; M_H_OTH="CSF Auto-Group dışı"; M_H_OTHV="+%s blok"
@@ -787,9 +787,9 @@ else
   M_PAUSED="CSF Auto-Group is paused: no new bans or notifications; the provider ban, the rented-server ban, the block counter and the ban guard are removed (turn it back on in Settings → General)"
   M_CLOUD_REMOVED="Rented-server ban turned off; the rule, the address set and the csfpost.sh line were removed"
   M_CLOUD_FAIL_SUBJ="rented-server list can't be downloaded (%s)"
-  M_CLOUD_FAIL_BODY="These rented-server lists haven't downloaded for longer than the warning period: %s. The old lists are still used; fix the address under Providers → Rented servers → the Address button."
+  M_CLOUD_FAIL_BODY="These rented-server lists haven't downloaded for longer than the warning period: %s. The old lists are still used; fix the address under Providers → Rented-server lists → the Address button."
   M_CLOUD_FAIL_OK="Rented-server lists download again"
-  M_DG_CLOUD="Rented servers: %s"
+  M_DG_CLOUD="Rented-server lists: %s"
   M_RULE_SVC="closed: %s"; M_RULE_ALL="everything closed"; M_RULE_EXC="everything closed, open: %s"; M_RULE_NONE="nothing closed"
       M_ASN_REFRESH="CSF's ASN data was %s days old; lfd restarted to refresh it (ASN ban: %s)"
   M_ASN_REFRESH_FAIL="CSF's ASN data is old (%s days) but lfd couldn't be restarted; the ASN ban uses old addresses"
@@ -866,8 +866,8 @@ else
   M_H_NEWT="New block bans"; M_H_BLOCK="Block"; M_H_OWNER="Owner"; M_H_STATE="State"
   M_H_K_add24="permanent"; M_H_K_promote="repeat offender"; M_H_K_manual_ban="manual"
   M_H_TOPT="Providers CSF blocks most"; M_H_TOPS="by block bans and single bans in csf.deny · banned providers left out"
-  M_H_PBT="Provider ban"; M_H_PBS="These providers are banned in CSF; the rankings leave them out"; M_H_PBK="Blocked"; M_H_PBR="Ranges"
-  M_H_PBALL="everything"; M_H_PBNL="not loaded by CSF yet"
+  M_H_PBT="Provider ban"; M_H_PBS="These providers are banned in CSF; the rankings leave them out"; M_H_PBK="Rule"; M_H_PBR="Ranges"
+  M_H_PBNL="not loaded by CSF yet"
   M_H_SVC="Allowed services: %s IPs / ranges in csf.allow · last download %s"; M_H_SVCF="Not downloaded for longer than the warning period: %s"
   M_DG_PBH="Provider ban (left out of the rankings):"; M_DG_PBL="   %-9s %-44s %s"
   M_H_PROV="Provider"; M_H_BLK="Blocks"; M_H_SGL="Singles"; M_H_OTH="Not from CSF Auto-Group"; M_H_OTHV="+%s blocks"
@@ -8365,7 +8365,8 @@ digest_build() { # → DG_SUBJ, DG_BODY
     asn_banned
     local pt pu pk svl="" svf="" stf
     pt=$(conf_val CC_DENY_PORTS_TCP | tr -cd '0-9,:'); pu=$(conf_val CC_DENY_PORTS_UDP | tr -cd '0-9,:')
-    pk="${pt:+TCP ${pt//,/, }}${pt:+${pu:+ · }}${pu:+UDP ${pu//,/, }}"
+    ports_names "$pt" "$pu"; rule_text ports "$REPLY"; pk="$REPLY"     # panelin satırıyla aynı söz ("kapalı: Web"); önce ham "TCP 80, 443"
+    rule_text all; local pka="$REPLY"
     stf="$(dirname "$SAYAC_FILE")/services/status"
     if [ "$SVC_ALLOW" = 1 ] && [ -r "$stf" ]; then
         local sn st se sf stot=0 slast=0
@@ -8385,7 +8386,7 @@ digest_build() { # → DG_SUBJ, DG_BODY
         DG_BODY+="$M_DG_PBH$NL"
         for a in "${ASB_A[@]}"; do
             asn_name "AS$a"; owner="$REPLY"; asn_setn "AS$a"; b="$REPLY"
-            hv="$([ "${ASB[$a]}" = all ] && echo "$M_H_PBALL" || echo "${pk:--}")"
+            hv="$([ "${ASB[$a]}" = all ] && echo "$pka" || echo "$pk")"
             DG_BODY+="$(m "$M_DG_PBL" "AS$a" "${owner:0:44}" "$hv$([ "$b" -ge 0 ] && echo " · $([ "$b" -gt 0 ] && echo "$b $M_H_PBR" || echo "$M_H_PBNL")")")$NL"
             h_esc "$owner"; hi=$((hi + 1)); line="$REPLY"; h_esc "$hv"
             hr+="<tr$([ $((hi % 2)) = 0 ] && echo ' bgcolor="#f7f8fa" style="background:#f7f8fa;"')><td style=\"padding:8px 8px 8px 18px;\"><b style=\"font-family:$H_MONO;color:#4338ca;\">AS$a</b> $line</td><td style=\"padding:8px;color:#4b5563;\">$REPLY</td>"

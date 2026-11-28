@@ -937,6 +937,10 @@ run --digest > "$W/out/dgsay.txt" 2>&1; run --status --json > "$W/out/dgsay.json
 mcheck "haftalık özet listesi: elle banın satırında başka kaydın IP'leri yok; elle tek IP banı listede yok" "grep -q '151.80.9.0/24' '$W/out/dgsay.txt' && ! grep '151.80.9.0/24' '$W/out/dgsay.txt' | grep -q 'Failed SSH' && ! grep -q '151.80.10.5' '$W/out/dgsay.txt'"
 mcheck "haftalık özet: blok banı sayısı grafikle aynı kuralla (2 blok banı, 1 geçici blok banı, 2 elle işlem)" "grep -q '2 blok banı · 1 geçici blok banı' '$W/out/dgsay.txt' && grep -q ' 2 elle işlem' '$W/out/dgsay.txt'"
 mcheck "Etkinlik grafiği: aynı veride bugünün blok banı 2 (elle tek IP banı sayılmaz), geçici 1" "grep -qE '\"A\":\[[0-9,]*,2\],\"T\":\[[0-9,]*,1\]' '$W/out/dgsay.json'"
+# haftalık özetin sağlayıcı banı satırı panelin kural metniyle (1.15.162; önce ham "TCP 80, 443", sütun başlığı "Kapalı")
+mk dgpb; printf '%s\n' 'CC_DENY_PORTS = "AS64500"' 'CC_DENY_PORTS_TCP = "80,443"' 'CC_DENY_PORTS_UDP = "443"' 'CC_DENY = "AS64501"' >> "$R/etc/csf/csf.conf"
+run --digest > "$W/out/dgpb.txt" 2>&1
+mcheck "haftalık özet: sağlayıcı banı satırı kural metniyle (port listesi 'kapalı: Web', CC_DENY 'her şey kapalı'), ham port yok" "grep 'AS64500' '$W/out/dgpb.txt' | grep -q 'kapalı: Web' && grep 'AS64501' '$W/out/dgpb.txt' | grep -q 'her şey kapalı' && ! grep -q 'TCP 80' '$W/out/dgpb.txt'"
 mk daily; printf '%s\n' "CLOUD_BAN=1" "CLOUD_SOURCES=aws" >> "$R/app/config.env"; quiet
 mcheck "yenileme: kiralık sunucu yenilemesi çalışamazsa .refreshed yazılmaz (sonraki tur yeniden dener)" "[ ! -e '$R/var/lib/csf_autogroup/cloud/.refreshed' ]"
 # CSF'in ASN verisi ayardaki gün kadar eskiyse yenilenir (önce find -mtime +25 kullanılıyordu: 25 gün ayarında 26. günde);
