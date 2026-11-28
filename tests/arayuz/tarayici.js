@@ -830,7 +830,10 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
   // "yok" diye düşüyordu (2026-11-24, dört koşunun birinde). Enjekte satır her koşuda var → onu bekle
   await page.waitForSelector('.ag-item[data-row="198.51.100.200"] .ag-tr-r', { timeout: 20000 }).catch(async () => console.log('  [tanı] Kontrol edilecekler 20 sn\'de çizilmedi · sekme ' +
     await page.evaluate(() => { const a = document.querySelector('.ag-tabs .on, .ag-tabs [aria-selected="true"], .ag-tabs .active'); return (a ? a.getAttribute('data-tab') || a.textContent.trim() : '?') +
-      ' · Kaydet çubuğu ' + !!document.querySelector('.ag-savebar') + ' · satır ' + document.querySelectorAll('.ag-item[data-row]').length; }) + await taniDurum(page, Date.now())));
+      ' · Kaydet çubuğu ' + !!document.querySelector('.ag-savebar') + ' · satır ' + document.querySelectorAll('.ag-item[data-row]').length +
+      // 2026-11-28 tanı genişletildi (Faz B'den sonra üç koşunun ikisinde düştü): Kontrol kartı / boş çubuk / kart sayısı / kartın metni
+      ' · Kontrol kartı ' + !!document.getElementById('ag-sec-review') + ' · boş çubuk ' + !!document.querySelector('.ag-okbar') +
+      ' · kart ' + document.querySelectorAll('#ag-app .ag-card').length + ' · «' + ((document.getElementById('ag-sec-review') || document.querySelector('.ag-okbar') || {}).innerText || '').slice(0, 120).replace(/\n/g, ' ') + '»'; }) + await taniDurum(page, Date.now())));
   const rows =await page.evaluate(() => Array.from(document.querySelectorAll('.ag-item[data-row] .ag-tr-r')).map(r => ({
     cidr: r.closest('.ag-item').getAttribute('data-row'), ip: (r.querySelector('.ag-cidr') || {}).getAttribute ? r.querySelector('.ag-cidr').getAttribute('data-ip') : '' })));
   console.log(`  Kontrol edilecekler: ${rows.length} satır`);
@@ -935,15 +938,15 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
     await page.waitForSelector('.ag-drawer .ag-verdict', { timeout: 30000 }).catch(() => {});
     // aralık kartında da IP kartıyla aynı Etkisini ölç bölümü (anahtar aralığın kendisi)
     check('aralık kartı: Etkisini ölç bölümü (anahtar net:aralık, IP kartıyla aynı bileşen)', !!(await page.$('.ag-drawer [data-impbox="net:198.51.100.0/24"] [data-act="asnimpact"]')));
-    const q0 = await page.evaluate(() => !!document.querySelector('.ag-drawer #ag-ab-blk [data-dr="abq"]'));
-    check('AbuseIPDB aralık: kart açılınca sorgu gitmez, "AbuseIPDB\'de sor" düğmesi var', q0 && abCalls === 0, 'düğme ' + q0 + ', istek ' + abCalls);
-    if (q0) {
-      await page.click('.ag-drawer [data-dr="abq"]');
-      await page.waitForSelector('.ag-drawer .ag-ab-t', { timeout: 10000 }).catch(() => {});
+    // 1.15.170 (kullanıcı: "fazladan bir adım"): kart açılınca kendiliğinden tek istek, düğme yok (önce "AbuseIPDB'de sor" düğmesiyle)
+    await page.waitForSelector('.ag-drawer .ag-ab-t', { timeout: 15000 }).catch(() => {});
+    const q0 = await page.evaluate(() => !!document.querySelector('.ag-drawer #ag-ab-blk button:not([data-dr="aball"])'));
+    check('AbuseIPDB aralık: kart açılınca kendiliğinden sorulur (tek istek), sorgu düğmesi yok', !q0 && abCalls === 1, 'düğme ' + q0 + ', istek ' + abCalls);
+    if (abCalls === 1) {
       const ab = await page.evaluate(() => { const b = document.querySelector('.ag-drawer #ag-ab-blk'); if (!b) return null;
         const rows = Array.from(b.querySelectorAll('.ag-ab-t tbody tr')).filter(r => !r.hidden);
         return { n: rows.length, first: rows[0] ? rows[0].cells[0].textContent.trim() : '', link: !!(rows[0] && rows[0].querySelector('[data-ip]')), all: !!b.querySelector('[data-dr="aball"]'), txt: b.innerText.split('\n')[0] }; });
-      check('AbuseIPDB aralık: düğmeyle tek istek; özet, puana göre ilk 12 adres, IP kartına bağlı, "hepsini göster"', !!ab && abCalls === 1 && ab.n === 12 && ab.first === '198.51.100.3' && ab.link && ab.all && /14/.test(ab.txt) && /100\/100/.test(ab.txt), JSON.stringify(ab) + ' istek ' + abCalls);
+      check('AbuseIPDB aralık: tek istek; özet, puana göre ilk 12 adres, IP kartına bağlı, "hepsini göster"', !!ab && abCalls === 1 && ab.n === 12 && ab.first === '198.51.100.3' && ab.link && ab.all && /14/.test(ab.txt) && /100\/100/.test(ab.txt), JSON.stringify(ab) + ' istek ' + abCalls);
       await page.click('.ag-drawer [data-dr="aball"]').catch(() => {}); await page.waitForTimeout(200);
       const n2 = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-drawer .ag-ab-t tbody tr')).filter(r => !r.hidden).length);
       check('AbuseIPDB aralık: "hepsini göster" 14 adres', n2 === 14, String(n2));
@@ -957,7 +960,7 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
     await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('.ag-drawer'), null, { timeout: 5000 }).catch(() => {});
     await page.fill('#ag-lk-ip', '198.51.0.0/16'); await page.press('#ag-lk-ip', 'Enter');
     await page.waitForSelector('.ag-drawer .ag-verdict', { timeout: 30000 }).catch(() => {});
-    const w16 = await page.evaluate(() => { const b = document.querySelector('.ag-drawer #ag-ab-blk'); return b ? { btn: !!b.querySelector('[data-dr="abq"]'), t: b.innerText } : null; });
+    const w16 = await page.evaluate(() => { const b = document.querySelector('.ag-drawer #ag-ab-blk'); return b ? { btn: !!b.querySelector('button'), t: b.innerText } : null; });
     check('AbuseIPDB aralık: /24\'ten geniş aralıkta düğme yok, standart planın sınırını söyler', !!w16 && !w16.btn && /\/24/.test(w16.t) && abCalls === 1, JSON.stringify(w16));
     await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('.ag-drawer'), null, { timeout: 5000 }).catch(() => {});
     await page.unroute('**/api.php', abr);
@@ -975,8 +978,12 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
       const rows = Array.from(d.querySelectorAll('.ag-lv-t tbody tr')).map(tr => ({ l: tr.cells[0].textContent.trim(), c: !!tr.cells[1].querySelector('[data-ip]'), b: Array.from(tr.querySelectorAll('[data-act]')).map(b => b.getAttribute('data-act')).join(',') }));
       return { sec, rows, eski: /Bloğun durumu|Bu IP'yi kapsayan banlar/.test(d.innerText), th: d.querySelectorAll('.ag-lv-t thead th').length }; });
     const r24 = kd && kd.rows.filter(r => r.l === 'Blok')[0], r16 = kd && kd.rows.filter(r => r.l === 'Ağ')[0];
-    check('IP kartı düzeni: Bu IP · Üst seviyeler · Kim; tabloda Blok ve Ağ satırı, aralık tıklanır, Bloğu / Ağı banla kendi satırında; eski bölümler yok',
-      !!kd && kd.sec[0] === 'Bu IP' && kd.sec.indexOf('Üst seviyeler') > 0 && kd.sec.indexOf('Kim') > kd.sec.indexOf('Üst seviyeler') && kd.th === 3 &&
+    // Faz B kart bölüm sırası (drSecs): Şu an → Açık bulgular → Kapsayanlar ve kurallar (üst seviyeler tablosu burada) → Geçmiş →
+    // Etkisini ölç → Kim; boş bölüm yok. Önce "Bu IP · Üst seviyeler · Kim"
+    const ORD = ['Şu an', 'Açık bulgular', 'Kapsayanlar ve kurallar', 'Geçmiş', 'Etkisini ölç', 'Kim'];
+    const ix = kd ? kd.sec.map(s => ORD.indexOf(s)) : [];
+    check('IP kartı düzeni: bölümler ortak sırada (Şu an ilk, Kapsayanlar ve kurallar, Kim); tabloda Blok ve Ağ satırı, aralık tıklanır, Bloğu / Ağı banla kendi satırında; eski bölümler yok',
+      !!kd && ix[0] === 0 && ix.every((v, i) => v >= 0 && (i === 0 || v > ix[i - 1])) && ix.indexOf(2) > 0 && ix.indexOf(5) > 0 && kd.th === 3 &&
       !!r24 && r24.c && r24.b === 'ban24' && !!r16 && r16.c && r16.b === 'ban16' && !kd.eski, JSON.stringify(kd));
     // /16'dan geniş duyurulan aralık (/12) da banlanabilir: satırı ağın altında, kendi düğmesiyle (önce düğme yoktu; kullanıcı sordu)
     const rpw = kd && kd.rows.filter(r => r.l === 'Duyurulan aralık')[0];

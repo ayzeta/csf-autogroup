@@ -45,6 +45,10 @@ if grep -q "function ltSearch" "$J" && ! grep -E "var FKEYS = \[" "$J" | grep -q
 # sonundaki "şu an banlı" notu (stateNote) yok
 kural "\"Şu an\" alanı yalnız nowChip'te" "class=\"ag-now\"" "return '<span class=\"ag-now\"><span class=\"ag-now-l\">"
 kural "eski \"şu an\" notu (stateNote) yok" "stateNote[(]" 'BU_DESEN_HICBIR_SATIRA_UYMAZ'
+# Faz B kart bölüm sırası tek kaynak: IP kartı ve aralık kartı gövdesi drSecs ile (Şu an → Açık bulgular → Kapsayanlar ve kurallar →
+# Geçmiş / Aralığın içi → Etkisini ölç → Kim); önce IP kartı "Bu IP · Üst seviyeler · Kim", aralık kartı başlıksızdı
+nds=$(grep -c "body.innerHTML = drSecs(" "$J")
+if [ "$nds" != 2 ]; then echo "DÜŞTÜ: IP kartı ve aralık kartı bölümleri drSecs'ten değil ($nds / 2)"; F=$((F + 1)); else echo "GEÇTİ: IP kartı ve aralık kartı bölüm sırası tek kaynaktan (drSecs)"; fi
 kural "sıralama başlığı yalnız ltTh'de" "data-act=\"[a-z]*sort\"" "data-act=\"lsort\" data-k=\"' [+] esc[(]id[)]"
 kural "öğe eylemi düğmesi elle yazılmaz (MI.* + miBtn: menü, aralık kartı, IP kartı aynı öğeler)" 'data-(act|dr)="(unban|promote|forget|rewatch|chg|ban|ban16|ban24|banpfx|banforce)"' 'BU_DESEN_HICBIR_SATIRA_UYMAZ'
 kural "kapsayan banın adı covName'den: ham CSF ayar adı (CC_DENY …) cümleye eklenmez" "'[ (]*CC_DENY(_PORTS)? '" 'BU_DESEN_HICBIR_SATIRA_UYMAZ'

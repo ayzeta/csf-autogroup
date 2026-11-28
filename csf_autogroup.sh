@@ -65,7 +65,7 @@ grep() { command grep -a "$@"; }
 # sayı, anahtar; Türkçe modda sıralama kuralı zaten C idi (LC_COLLATE=C)
 sort() { LC_ALL=C command sort "$@"; }
 
-VERSION="1.15.169"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.170"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"

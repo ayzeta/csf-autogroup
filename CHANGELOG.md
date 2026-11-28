@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.15.170 — 2026-11-28
+
+- The IP card and the range card use the same sections in the same
+  order: **Now** (the verdict and what can be done), **Open findings**
+  (Needs review, mute), **Covering bans and rules** (allow entry, lfd
+  ignore lists, the upper levels table), **History** (ban history, tried
+  accounts; on the range card **Inside the range**), **Measure impact**,
+  **Who**. Empty sections are left out. The IP card used to mix the
+  verdict, allow entry, mute, Needs review, ban history and the impact
+  measurement under "This IP"; the range card had no sections.
+- The range card asks AbuseIPDB by itself when it opens (`/24` or
+  narrower), like the IP card; the "Check on AbuseIPDB" button is gone.
+  It is one block check per range, cached for 24 hours; when the day's
+  block checks are used up the card says so.
+- AbuseIPDB texts no longer address the reader ("your server", "open a
+  block and check it").
+
 ## 1.15.169 — 2026-11-28
 
 - The **Now** field reads naturally when a list, provider or country ban

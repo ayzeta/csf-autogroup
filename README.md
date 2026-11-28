@@ -667,14 +667,15 @@ does not ban on it. The key is stored in its own root-only file (not in
 `config.env`), is handed to the engine on standard input, and only its last
 four characters appear in the panel, the log and the settings history.
 
-The range card of a `/24` or narrower range has a "Check on AbuseIPDB"
-button. It uses AbuseIPDB's block check and lists the addresses in the
+The range card of a `/24` or narrower range asks AbuseIPDB when it opens,
+with one block check (not one check per IP). It lists the addresses in the
 range that were reported in the last 30 days, with their score, number of
 reports and last report, plus how many there are and the highest score (a
-range has no score of its own). A free account has 100 block checks a day,
-so the card never asks by itself when it opens; the answer is cached like an
-IP's and also shown in the range's ban window. AbuseIPDB's standard plan
-checks ranges up to `/24`, so wider ranges show no button. AbuseIPDB has no
+range has no score of its own). The answer is cached for 24 hours like an
+IP's, so opening the same card again does not ask again, and it is also
+shown in the range's ban window. A free account has 100 block checks a day
+(`ABUSE_BLK_MAX`); when they are used up the card says so. AbuseIPDB's
+standard plan checks ranges up to `/24`, so wider ranges are not checked. AbuseIPDB has no
 check by provider (ASN) or country, so provider and country views have no
 AbuseIPDB part. The score is shown as a badge coloured by its value: grey for
 0, amber (attention) for 1–49 and dark orange (serious) for 50 and above.
