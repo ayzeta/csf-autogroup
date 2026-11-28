@@ -510,6 +510,15 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
           const th = Array.from(s.querySelectorAll('.ag-thead .ag-th')).map(x => x.textContent.trim().toLowerCase());
           const rows = s.querySelectorAll('.ag-tr.ag-tr-r'), now = s.querySelectorAll('.ag-tr.ag-tr-r > .ag-td-now');
           return { th, rows: rows.length, now: now.length }; });
+        // Faz B nesne satırları: Aktif aralık banlarında "Şu an" sütunu (kural düz yazı, kapsayan ban çipin eki — Sahip sütununda
+        // kapsama etiketi yok); İzlenenler'de her satırda Şu an hücresi
+        const ob = await page.evaluate(() => { const g = document.getElementById('ag-sec-groups');
+          const gth = g ? Array.from(g.querySelectorAll('.ag-thead .ag-th')).map(x => x.textContent.replace(/[↑↓]/g, '').trim().toLowerCase()) : null;
+          const ownTag = g ? g.querySelectorAll('.ag-td-own .ag-ctag, .ag-td-own .ag-pill').length : 0;
+          const p = Array.from(document.querySelectorAll('.ag-card')).find(c => c.querySelector('.ag-tr-p'));
+          return { gth, ownTag, prow: p ? p.querySelectorAll('.ag-tr.ag-tr-p').length : 0, pnow: p ? p.querySelectorAll('.ag-tr.ag-tr-p > .ag-td-now').length : 0 }; });
+        check(`${width} px · Aktif aralık banları "Şu an" sütunu, Sahip'te kapsama etiketi yok; İzlenenler her satırda Şu an`,
+          (!ob.gth || !ob.gth.length || ob.gth.some(x => /^(şu an|now)$/.test(x))) && ob.ownTag === 0 && ob.pnow === ob.prow, JSON.stringify(ob));   // boş listede başlık yok
         check(`${width} px · Kontrol edilecekler: Bulgu ve Şu an sütunu, her satırda Şu an hücresi`, rv === null || (rv.th.some(x => /^(bulgu|finding)$/.test(x)) && rv.th.some(x => /^(şu an|now)$/.test(x)) && rv.rows > 0 && rv.now === rv.rows), JSON.stringify(rv));
       }
       if (width === 390 && tab === 'overview') {
@@ -1137,8 +1146,9 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
       check('aralık banı: süreli /24 banından sonra kartın Blok satırı kalan süreyi gösterir', /(Blok|Block)[^\n]*\n?[^\n]*(kaldı|left)/.test(lvTxt), lvTxt.slice(0, 300));
       await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('.ag-drawer'), null, { timeout: 5000 }).catch(() => {});
       const gr = '198.51.100.0/24', gm = await page.$(`.ag-item[data-row="${gr}"] [data-act="menu"]`);
-      const pill = await page.evaluate(c => { const r = document.querySelector(`.ag-item[data-row="${c}"] .ag-td-state`); return r ? r.textContent.trim() : ''; }, gr);
-      check('aralık banı: Aktif banlar satırı "elle · kalan süre", menüde Banı değiştir yok', /^(elle|manual) · \d/.test(pill), pill);
+      const pill = await page.evaluate(c => { const r = document.querySelector(`.ag-item[data-row="${c}"] .ag-td-state`); return r ? Array.from(r.children).map(x => x.textContent.trim()).join(' | ') : ''; }, gr);
+      // Faz B: Şu an hücresinde "elle" rozeti, altında kural / kalan süre düz yazı (önce ikisi tek rozette "elle · 59 dk kaldı")
+      check('aralık banı: Aktif banlar Şu an hücresi "elle" rozeti, altında kalan süre; menüde Banı değiştir yok', /^(elle|manual) \| \d.*(kaldı|left)/.test(pill), pill);
       if (gm) {
         await tik(page, `.ag-item[data-row="${gr}"] [data-act="menu"]`); await page.waitForTimeout(400);
         const acts = await page.evaluate(c => Array.from(document.querySelectorAll(`.ag-item[data-row="${c}"] .ag-menu [data-act]`)).map(b => b.getAttribute('data-act')), gr);

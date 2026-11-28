@@ -418,7 +418,7 @@ html:has(body > .ag-scrim), body:has(> .ag-scrim) { overflow: hidden; }
 .ag-gq { width: 180px; }
 .ag-msort { display: none; height: 32px; }
 /* izlenenler tablosu: blok · sahip · başlangıç · kalan · menü */
-.ag-tr-p { grid-template-columns: 176px minmax(0, 1fr) 92px 104px 36px; }
+.ag-tr-p { grid-template-columns: 176px 150px minmax(0, 1fr) 92px 104px 36px; }   /* Şu an sütunu 150 px (Faz B) */
 @container agtbl (max-width: 760px) {
   .ag-thead:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i), .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) { grid-template-columns: 156px 152px minmax(0, 1fr) 104px 36px; }
   .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) .ag-num-c, .ag-thead:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) .ag-num-c { display: none; }
@@ -1016,12 +1016,14 @@ details.ag-urls li.ag-url-r { padding: 6px 0; border-top: 1px solid var(--ag-lin
   .ag-tbl > .ag-item > .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) .ag-num-0 + .ag-when { grid-column: 1 / -1; }
   .ag-tbl > .ag-item > .ag-tr:not(.ag-tr-p):not(.ag-tr-r):not(.ag-tr-i) .ag-mob { display: inline; }
   /* izlenenler: 1) adres ····· kalan gün · menü  2) ülke · ASN · kurum (tam satır; çubukla aynı satırdayken ad "UAB _Cherry…" kesiliyordu) */
-  .ag-tbl > .ag-item > .ag-tr.ag-tr-p { grid-template-columns: max-content minmax(0, 1fr) 32px; grid-template-areas: "main left act" "own own own";
+  .ag-tbl > .ag-item > .ag-tr.ag-tr-p { grid-template-columns: max-content minmax(0, 1fr) 32px; grid-template-areas: "main left act" "now now now" "own own own";
     column-gap: 8px; row-gap: 5px; padding: 10px 10px 10px 16px; }
   .ag-tr.ag-tr-p .ag-td-stack { grid-area: main; padding: 0; }
   .ag-tr.ag-tr-p .ag-td-act { grid-area: act; }
   .ag-tr.ag-tr-p .ag-td-own { grid-area: own; display: flex; font-size: 12px; }
   .ag-tr.ag-tr-p .ag-td-left { grid-area: left; }
+  .ag-tr.ag-tr-p .ag-td-now { grid-area: now; }
+  .ag-tr.ag-tr-p .ag-td-now .ag-now-l { display: inline; }   /* telefonda başlık satırı yok */
   .ag-tr.ag-tr-p .ag-td-since { display: none; }
   .ag-tr.ag-tr-p .ag-left { flex-direction: row; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; }
   /* adres tam kalır (max-content), kalan gün çubuğu kalan yere sığar: 340 px'te adres kesiliyordu */
@@ -1184,6 +1186,9 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-now-l { font-size: 11px; font-weight: 600; color: var(--ag-text-3); text-transform: uppercase; letter-spacing: .03em; }
 .ag-td .ag-now-l { display: none; }   /* tablo sütununda başlık zaten "Şu an" */
 .ag-td-now { min-width: 0; }
+/* nesne satırının Şu an hücresi (Aktif aralık banları, İzlenenler): durum çipi, altında kural düz yazı, kapsayan ban eki — alt alta */
+.ag-tr:not(.ag-tr-r) > .ag-td-state { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+.ag-rule-t { font-size: 12px; color: var(--ag-text-2); overflow-wrap: anywhere; }
 .ag-td-now .ag-now { white-space: normal; max-width: 100%; }
 .ag-td-now .ag-pill { white-space: normal; max-width: 100%; }   /* "1.2.3.0/24 banının içinde" sütuna sığmazsa sarar, kesilmez */
 .ag-ev-st:not(.ag-pill-ban):not(.ag-pill-prom):not(.ag-pill-temp):not(.ag-pill-leak):not(.ag-pill-bad) { color: var(--ag-text-2); }
@@ -1366,7 +1371,7 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 @media (max-width: 600px) { .ag-band-m { min-width: 0; } }   /* üç sütun telefonda sığsın; 120 px alt sınır hücreleri üst üste bindiriyordu */
 /* sahip hücresi: ad en az birkaç harf görünür; etiket de sığmazsa … ile kısalır (tam metni ipucunda) */
 .ag-td-own .ag-org { min-width: 56px; flex: 0 1 auto; white-space: nowrap; }
-.ag-td-own .ag-ctag { flex: 0 1 auto; min-width: 0; white-space: normal; overflow-wrap: break-word; }
+.ag-td-own .ag-ctag, .ag-td-state .ag-ctag { flex: 0 1 auto; min-width: 0; white-space: normal; overflow-wrap: break-word; }
 .ag-fill .ag-days { width: 140px; }   /* CSF liste sınırları: doluluk çubuğu */
 
 /* Dar ekranda seçenek sıraları (ör. Ayarlar → Bildirim kanalları) kartın sağından taşmasın: satır kırılır */

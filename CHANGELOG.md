@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.15.168 — 2026-11-28
+
+- Active bans and Watched follow the same row layout as History and Needs
+  review: a **Now** column. In Active bans it shows the ban's state badge,
+  the rule under it as plain text ("closed: Web") and the wider ban that
+  covers it ("inside the /16 ban", provider, country or rented-server
+  list), which used to sit in the Owner column. In Watched it shows a
+  temporary block ban with its time left, the ban that covers the block,
+  or *not banned*; that used to be squeezed under the address.
+
 ## 1.15.167 — 2026-11-28
 
 - History and Needs review show an item's state today in one place, the
