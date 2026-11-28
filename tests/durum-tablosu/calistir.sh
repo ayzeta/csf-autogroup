@@ -1391,6 +1391,10 @@ mkm cvmdry 1; ccfr; quiet; cvback 172800; s5; run --dry-run > "$W/out/cvmdry.txt
 mcheck "deneme turu: ban altında ihlal bildirimini gösterir; olay ve işaret yazmaz" "grep -q 'ülke banı FR · her şey kapalı' '$W/out/cvmdry.txt' && grep -q '151.80.7.1 ' '$W/out/cvmdry.txt' && [ \"\$(uev)\" = 0 ] && [ ! -s '$R/var/lib/csf_autogroup/under.seen' ]"
 mkm cvmail0 1; echo "IE_REVIEW=0" >> "$R/app/config.env"; ccfr; quiet; cvback 172800; s5; quiet
 mcheck "IE_REVIEW=0: ban altında ihlal mail yazmaz, Geçmiş'e yine yazılır" "[ ! -e '$R/mail_calls.log' ] && [ \"\$(uev)\" = 1 ]"
+# Düz metin sorgu (1.15.161): ülke / sağlayıcı banı panelin seviye satırıyla aynı sözle — kapsayan adı + kural metni; önce ham
+# "CC_DENY FR" / "CC_DENY_PORTS AS16276 · tcp 80,443" basıyordu. Duyurulan aralık "Duyurulan blok" değil (blok = /24).
+mk lkcc; printf '%s\n' 'CC_DENY = "FR"' 'CC_DENY_PORTS = "AS16276"' 'CC_DENY_PORTS_TCP = "80,443"' 'CC_DENY_PORTS_UDP = "443"' >> "$R/etc/csf/csf.conf"
+mcheck "düz metin sorgu: ülke ve sağlayıcı banı kapsayan adı ve kural metniyle, ham CC_DENY ve 'Duyurulan blok' yok" "run --lookup 151.80.7.5 2>/dev/null > '$W/out/lkcc.txt'; grep -qE 'Ülke +ülke banı FR · her şey kapalı' '$W/out/lkcc.txt' && grep -qE 'Sağlayıcı +sağlayıcı banı AS16276 · kapalı: Web' '$W/out/lkcc.txt' && ! grep -qE 'CC_DENY|Duyurulan blok' '$W/out/lkcc.txt'"
 ilerle "motor kuralları bitti ($MF ihlal); ekran tablosu (render.js)"
 if [ -n "${AG_KOK:-}" ]; then              # süzgeçli koşu: ekran tablosu ve K7 bütün kökleri ister; yalnız süzgeçteki köklerin işleri
     RC=0

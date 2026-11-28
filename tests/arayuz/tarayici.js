@@ -783,7 +783,7 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
         nb: document.querySelectorAll('.ag-item[data-row="198.18.0.0/16"]').length };
     });
     check('ban altında ihlal satırı: rozet ve not (kapatan: kiralık liste AWS, kapattığı Web; sebepler: CSF yeniden yüklenmesi + kiralık liste yalnız yeni bağlantı, CDN arkasındaki site ve "other" çevrilmiş)',
-      /^(Ban altında ihlal|Violation under a ban) \| .*AWS.*\(.*Web.*\).*(CSF yeniden yüklendi|CSF was reloaded).*(kiralık liste kuralı yalnız yeni|rented-server rule cuts new).*(CDN arkasında: www\.site-c\.example \(başka adres\)|behind a CDN: www\.site-c\.example \(another address\))/.test(ub.a), ub.a);
+      /^(Ban altında ihlal|Violation under a ban) \| .*AWS · (kapalı|closed): Web.*(CSF yeniden yüklendi|CSF was reloaded).*(kiralık liste kuralı yalnız yeni|rented-server rule cuts new).*(CDN arkasında: www\.site-c\.example \(başka adres\)|behind a CDN: www\.site-c\.example \(another address\))/.test(ub.a), ub.a);
     check('ban altında ihlal eki: şüpheli ağ satırının Durum sütununda ikinci rozet, notta açıklaması (2 IP, kısmi ban), tek satır', /^(Şüpheli ağ|Suspicious network) ?(Ban altında ihlal|Violation under a ban) \| (Ban altında ihlal|Violation under a ban): 2 IP/.test(ub.b) && ub.nb === 1, ub.b + ' · satır ' + ub.nb);
     // tek kural (rvStates): satırın bütün durumları Durum sütununda rozet; not bölümü yalnız açıklama — rozet taşımaz
     const np = await page.evaluate(() => Array.from(document.querySelectorAll('.ag-tbl .ag-tr-note [data-st], .ag-tbl .ag-tr-note .ag-pill')).map(e => e.textContent.trim()).join(', '));

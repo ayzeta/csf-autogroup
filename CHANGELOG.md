@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.15.161 — 2026-11-28
+
+- Email, Slack and the plain-text lookup now use the panel's words for the
+  same things:
+  - The lookup shows country and provider bans as "country ban FR ·
+    everything closed" and "provider ban AS16276 · closed: Web" instead
+    of raw "CC_DENY" / "CC_DENY_PORTS" lines with port numbers.
+  - The lookup says "Announced range" (not "announced block"), "Owner"
+    and "Last run", and shows remaining time as "12 h left" (not
+    "720 min" or "12h").
+  - "Violations under a ban" lines name the covering ban the same way as
+    email ("provider ban AS1 · everything closed, open: Web").
+  - The list-limit email no longer claims CSF deleted the bans; like its
+    body and the panel, it says they were removed outside the plugin.
+  - The weekly summary counts "suspicious ranges / networks" (both were
+    counted, only one was named), "lfd is not running" matches the panel,
+    and the open-service line says the violations came after the ban.
+  - The panel names the allowed-service list when it cannot be
+    downloaded.
+- Plain-text lookup labels with Turkish letters line up with the others.
+
 ## 1.15.160 — 2026-11-28
 
 - Internal: which event types put a ban in place, carry the ban's IPs,

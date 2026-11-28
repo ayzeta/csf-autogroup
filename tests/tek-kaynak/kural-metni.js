@@ -19,7 +19,7 @@ const BAD = [
   /\bkapalı: \{\d\}/i, /\b(closed|blocked): \{\d\}/i, /banı: (her şey|everything)\b/i, /\bban: everything\b/i,
   /port listesi \(\{\d\}\)/, /port list \(\{\d\}\)/, /yalnız \{\d\} kapalı/, /only \{\d\} (blocked|closed)/i,
   /kapalı: her şey/, /(blocked|closed): everything/i,
-  /· (her şey|everything)$/i, /yalnız port listesi\b/i, /port list only\b/i,
+  /· (her şey|everything)$/i, /her şey, açık( kalan)?: /i, /everything, (left )?open: /i, /yalnız port listesi\b/i, /port list only\b/i,
 ];
 let n = 0;
 for (const L of ['tr', 'en']) for (const [k, v] of Object.entries(D[L])) {
