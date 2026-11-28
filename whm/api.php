@@ -178,7 +178,13 @@ switch ($a) {
         }
         $t = max(0, (int) ($_POST['t'] ?? 0));
         $n = max(1, min(1000, (int) ($_POST['n'] ?? 300)));
-        ag_json(ag_run_json(['--events', $m, (string) $t, (string) $n], 30));
+        // q: Geçmiş araması (1.15.165; motor bütün olay kaydında arar). Tırnak, ters bölü, kontrol karakteri ve baştaki "-" (seçenek
+        // sanılmasın) yok; en çok 64 karakter. Motor da aynı denetimi yapar
+        $q = trim((string) ($_POST['q'] ?? ''));
+        if ($q !== '' && (mb_strlen($q, 'UTF-8') > 64 || !preg_match('/^[^-"\\\\`$\x00-\x1f\x7f][^"\\\\`$\x00-\x1f\x7f]*$/u', $q))) {
+            ag_json(['ok' => false, 'error' => 'bad_input']);
+        }
+        ag_json(ag_run_json($q === '' ? ['--events', $m, (string) $t, (string) $n] : ['--events', $m, (string) $t, (string) $n, $q], 30));
 
     case 'states':                                  // tek durum kaydı (motor obj_state): Geçmiş'in "şu an" notu; IP ya da CIDR, en çok 300
         // adresler tek tek denetlenir: tek ifadede iç içe grubun 299 kez tekrarı PCRE'de derlenmiyordu ("Internal error"; 1.15.140 canlıda

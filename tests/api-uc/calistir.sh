@@ -102,6 +102,16 @@ if [ -f csf_autogroup.sh ] && grep -q "case 'abuse_key'" "$W/api.php"; then
     ok "bkl: on / off dışı işlem reddedilir" "printf '%s' \"\$BODY\" | grep -q '\"error\":\"bad_input\"'"
     post "a=bkl&n=SPAMDROP&w=on"
     ok "bkl: CSRF anahtarı olmadan reddedilir" "printf '%s' \"\$BODY\" | grep -q '\"error\":\"session\"'"
+    # events q (1.15.165, Geçmiş araması): tırnak, ters bölü, baştaki "-" (motor seçeneği sanılmasın) ve 64 karakterden uzunu motora
+    # gitmeden reddedilir; geçerli arama (boşluk, Türkçe harf, aralık) motora gider
+    post "a=events&m=latest&t=0&n=10&q=a%22b&csrf=$TOK"
+    ok "events: tırnaklı arama reddedilir" "printf '%s' \"\$BODY\" | grep -q '\"error\":\"bad_input\"'"
+    post "a=events&m=latest&t=0&n=10&q=--status&csrf=$TOK"
+    ok "events: '-' ile başlayan arama reddedilir" "printf '%s' \"\$BODY\" | grep -q '\"error\":\"bad_input\"'"
+    post "a=events&m=latest&t=0&n=10&q=$(printf 'x%.0s' $(seq 65))&csrf=$TOK"
+    ok "events: 64 karakterden uzun arama reddedilir" "printf '%s' \"\$BODY\" | grep -q '\"error\":\"bad_input\"'"
+    post "a=events&m=latest&t=0&n=10&q=T%C3%BCrk%20Telekom&csrf=$TOK"
+    ok "events: boşluklu / Türkçe harfli arama motora gider" "printf '%s' \"\$BODY\" | grep -q '\"ok\":true'"
     # runstate (1.15.156): motorun tur işaretini (PID başlangıç) okur; kilit almaz, motoru çağırmaz. PID yaşamıyorsa ya da süreç
     # csf_autogroup değilse çalışmıyor. Yaşayan "csf_autogroup" süreci: exec -a ile adlandırılmış sleep
     rpost() {

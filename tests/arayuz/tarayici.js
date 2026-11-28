@@ -511,6 +511,21 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
           const T = rows.map(x => { const t = x.querySelector('.ag-ev-time'); if (!t || !t.firstChild || t.firstChild.nodeType !== 3) return -1; const rg = document.createRange(); rg.selectNodeContents(t.firstChild); return Math.round(rg.getBoundingClientRect().right); }).filter(v => v > 0);
           return { n: rows.length, spread: Math.max(...R) - Math.min(...R), textSpread: T.length ? Math.max(...T) - Math.min(...T) : 0, noMenu: rows.filter(x => !x.querySelector('.ag-ev-m')).length }; });
         check('1280: Geçmiş satırlarında zaman sütunu ve tarih metni aynı hizada, her satırda menü hücresi', r === null || (r.spread <= 1 && r.textSpread <= 1 && r.noMenu === 0), r ? JSON.stringify(r) : 'olay yok, atlandı');
+        // Geçmiş araması (1.15.165): motor bütün olay kaydında arar; IP yazılınca o IP'nin olayı ve onu içeren /24'ün olayı gelir,
+        // başkası gelmez; kutu odağını korur; temizleyince liste geri gelir (calistir.sh 21 + 1 olay ekler)
+        const QB = '.ag-lq[data-l="ev"]', qb = !!(await page.$(QB));   // seçiciyle (sonuç gelince sayfa yeniden çizilir, tutamak kopar)
+        check('Geçmiş: arama kutusu var (liste bir sayfadan uzun)', qb);
+        if (qb) {
+          await page.fill(QB, '192.0.2.110');
+          await page.waitForFunction(() => { const L = document.querySelectorAll('#ag-events .ag-ev'); return L.length > 0 && L.length <= 5 && !/aranıyor|Searching/.test(document.querySelector('#ag-events').innerText); }, null, { timeout: 15000 }).catch(() => {});
+          const s = await page.evaluate(() => ({ adr: Array.from(document.querySelectorAll('#ag-events .ag-ev .ag-ev-t')).map(x => (x.querySelector('[data-ip],.ag-cidr') || x).textContent.trim()),
+            odak: document.activeElement && document.activeElement.getAttribute('data-l') }));
+          const a = s.adr.join(' ');
+          check('Geçmiş araması: IP\'nin olayı ve onu içeren /24 olayı gelir, başkası gelmez; kutu odakta', s.adr.length === 2 && /192\.0\.2\.110\b/.test(a) && /192\.0\.2\.0\/24/.test(a) && s.odak === 'ev', JSON.stringify(s));
+          await page.fill(QB, '');
+          await page.waitForFunction(() => document.querySelectorAll('#ag-events .ag-ev').length > 5, null, { timeout: 15000 }).catch(() => {});
+          check('Geçmiş araması: kutu temizlenince liste geri gelir', await page.$$eval('#ag-events .ag-ev', L => L.length) > 5);
+        }
       }
       if (width === 390 && tab === 'history') {
         // Geçmiş satırı: zaman ayrıntı metninin içinde (başlıktaki gizli), ⋯ üst satırın sağında; zaman hiçbir satırda tek başına
@@ -521,9 +536,13 @@ function apiSon(n) {      // son n API isteği: "a=… başladı +ms, süre ms |
             return tt.getBoundingClientRect().left - dd.getBoundingClientRect().left < 8; }).length;
           // uzun adres (10.255.255.254) ile tür rozeti sığmayınca rozet alta geçer: o satırda bir satır fazlası olağan (125 px)
           const tall = L.filter(x => { if (x.querySelector('.ag-ev-st')) return false;
-            const tt = x.querySelector('.ag-ev-t'), a = tt && tt.firstElementChild, p = tt && tt.querySelector('.ag-pill');
+            // adres öğesi kendi seçicisiyle: "yeni" noktalı satırda ilk öğe nokta (1.15.165'te yeni test olaylarıyla ortaya çıktı)
+            const tt = x.querySelector('.ag-ev-t'), a = tt && (tt.querySelector('[data-ip], .ag-cidr') || tt.firstElementChild), p = tt && tt.querySelector('.ag-pill');
             const wr = a && p && p.getBoundingClientRect().top >= a.getBoundingClientRect().bottom - 2;
-            return x.getBoundingClientRect().height > (wr ? 125 : 100); }).map(x => Math.round(x.getBoundingClientRect().height));
+            // sahip bloğu (.ag-ev-o) sayılmaz: uzun ad kesilmeden alt satırlara kayar (kimlik kesilmez kuralı; canlıda "AS9121 TTNet Turk
+            // Telekomunikasyon…" 56 px, satır 104 px). Sınır başlık + ayrıntı + saat içindir
+            const oh = (y => { const o = y.querySelector('.ag-ev-o'); return o ? o.getBoundingClientRect().height : 0; });
+            return x.getBoundingClientRect().height - oh(x) > (wr ? 125 : 100); }).map(x => Math.round(x.getBoundingClientRect().height));
           return { ok: !!(d && t2) && d.contains(t2) && t2.getBoundingClientRect().height > 0 && (!t || t.getBoundingClientRect().height === 0),
             menuTop: m ? Math.round(m.getBoundingClientRect().top - b.getBoundingClientRect().top) : 0, alone, tall }; });
         check('390: Geçmiş satırında zaman ayrıntıda ve tek başına kalmıyor, menü üstte, rozetsiz satır ≤ 100 px', r === null || (r.ok && r.menuTop <= 6 && r.alone === 0 && r.tall.length === 0), r ? JSON.stringify(r) : 'olay yok, atlandı');

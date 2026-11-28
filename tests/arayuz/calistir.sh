@@ -25,6 +25,10 @@ W="$(mktemp -d)"; PORT="${PORT:-8098}"
 EVF=/var/lib/csf_autogroup/events.jsonl; mkdir -p /var/lib/csf_autogroup; NOWT=$(date +%s)
 printf '{"t":%s,"type":"run","dur":3,"arayuz_testi":1}\n{"t":%s,"type":"run","dur":35,"jobs":"svc:14/14,cloud:7/8","csfr":1,"csfr_ms":4200,"lfdr":0,"csfr_t":0,"arayuz_testi":1}\n' \
     $((NOWT - 120)) $((NOWT - 60)) >> "$EVF"
+# Geçmiş araması (1.15.165): kutu liste bir sayfadan (20) uzunsa görünür → 21 susturma kaldırma olayı (192.0.2.100–120) ve onları
+# içeren /24'ün ban kaldırması; motor "192.0.2.110" için ikisini bulmalı (IP kesişmesi). Sonda silinir (arayuz_testi)
+for i in $(seq 100 120); do printf '{"t":%s,"type":"manual_unignore","cidr":"192.0.2.%s","by":"root","arayuz_testi":1}\n' $((NOWT - 3000 + i)) "$i"; done >> "$EVF"
+printf '{"t":%s,"type":"manual_unban","cidr":"192.0.2.0/24","by":"root","arayuz_testi":1}\n' $((NOWT - 4000)) >> "$EVF"
 # susturulmuş bir IP (sahibi tarayici.js enjekte eder): Susturulanlar satırı iki satırlı (adres + sahip) her ekranda denetlensin.
 # Önce test başında susturma yoktu; masaüstünde satırın kenara yapışması (1.15.87, kullanıcı ekranı) testte hiç çizilmedi. Sonda silinir
 IGF=/var/lib/csf_autogroup/ignored

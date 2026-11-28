@@ -23,7 +23,7 @@
 #   csf_autogroup.sh --dry-run            show what a run WOULD do; changes nothing
 #   csf_autogroup.sh --status [--json]    groups, watched blocks, items to review
 #   csf_autogroup.sh --lookup IP [--json] who is this IP? (owner, hostname, lists)
-#   csf_autogroup.sh --events latest|after|before [T] [N]   event log page as JSON (History tab)
+#   csf_autogroup.sh --events latest|after|before [T] [N] [Q]   event log page as JSON (History tab; Q: search)
 #   csf_autogroup.sh --inside A.B.0.0/16|A.B.C.0/24 [--json]  what a manual ban would cover
 #   csf_autogroup.sh --action ban16|ban24 TARGET [--keep]    manual ban; covered entries are removed unless --keep
 #   csf_autogroup.sh --action banpfx A.B.C.D/N …             same for an announced prefix, /8–/23 except /16 (all ban16 options)
@@ -65,7 +65,7 @@ grep() { command grep -a "$@"; }
 # sayı, anahtar; Türkçe modda sıralama kuralı zaten C idi (LC_COLLATE=C)
 sort() { LC_ALL=C command sort "$@"; }
 
-VERSION="1.15.164"   # sürüm — başlangıç log satırında görünür
+VERSION="1.15.165"   # sürüm — başlangıç log satırında görünür
 
 SELF_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 [ -f "$SELF_DIR/config.env" ] && . "$SELF_DIR/config.env"
@@ -331,7 +331,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_AVIOL="İzinli IP'den ihlal (Geçmiş'e yazıldı): %s → %s, son 24 saatte %s kez"
   M_POPEN="Açık servis (Geçmiş'e yazıldı): %s kısmi banından sonra açık kalan servislere %s IP ihlal etti"
   M_AVIOL_SUBJ="%s izinli IP'den ihlal"; M_AVIOL_BODY="lfd'nin ban eşiğine ulaşan ama banlanmayan ya da banı işlemeyen IP'ler (izinli, yoksayılan ya da sunucunun kendi adresi); IP başına günde bir kez:"
-  M_AV_N="%s kez"; M_AV_SRC="kayıt: %s"; M_AV_LAST="son: %s (%s)"
+  M_AV_N="%s kez"; M_AV_SRC="izin kaydı: %s"; M_AV_LAST="son: %s (%s)"
   # günlüklerde denenenler (acct_text; panelde ac_*)
   M_ACCT_mail="denenen posta hesapları: %s"; M_ACCT_ssh="denenen SSH kullanıcıları: %s"; M_ACCT_ftp="denenen FTP hesapları: %s"
   M_ACCT_cp="denenen cPanel/WHM girişleri: %s"; M_ACCT_htp="denenen web şifresi kullanıcıları: %s"; M_ACCT_web="hedef: %s"; M_ACCT_N="hatalı giriş"; M_ACCT_NW="engellendi"
@@ -344,7 +344,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_POPEN_SUBJ="%s açık servis"; M_POPEN_BODY="Kısmi banın açık bıraktığı servislere eşik kadar ihlal geldi; ban değiştirilip onlar da kapatılabilir:"; M_POPEN_L="%s · açık servislere bandan sonra %s IP ihlal etti"
   M_UNDER="Ban altında ihlal (Geçmiş'e yazıldı): %s altında %s yeni IP"
   M_UNDER_SUBJ="%s ban altında ihlal"; M_UNDER_BODY="Bir ban ihlal edilen servisi kapatırken lfd'nin sonradan banladığı IP'ler (eşiklere sayılmaz); ban başına günde bir kez, yalnız yeni IP'ler:"
-  M_UNDER_L="%s · başlangıç %s -> %s yeni IP"; M_UNDER_CSFR="   %s IP: banından önceki %s dk içinde CSF yeniden yüklendi (en son %s); yüklenirken güvenlik duvarı birkaç saniye açık kalır%s"
+  M_UNDER_L="%s · %s tarihinden beri yürürlükte -> %s yeni IP"; M_UNDER_CSFR="   %s IP: banından önceki %s dk içinde CSF yeniden yüklendi (en son %s); yüklenirken güvenlik duvarı birkaç saniye açık kalır%s"
   M_UNDER_CSFR_CL="; kiralık liste kuralı yalnız yeni bağlantıyı keser, o arada açılan bağlantı sürer"
   M_UNDER_CDN="   %s IP: hedeflediği site CDN arkasında: %s; güvenlik duvarı ziyaretçiyi değil CDN'i görür, ban bu istekleri kesemez"
   M_CDN_OTHER="başka adres"
@@ -355,8 +355,8 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_TCLEAN="Temizlendi: %s (kalıcı ban kapsamında)"
   M_TSKIP24="ATLANDI geçici blok: %s.0/24 zaten kalıcı banlı"
   M_TC24_PERM="Auto-grouped from temp /24: %s geçici tekil, 2. kez grup ihlali nedeniyle kalıcı banlandı - do not delete"
-  M_TOK24_PERM="KALICIYA ALINDI: %s.0/24 (%s geçici tekil ban) [2. kez geldi - do not delete]"
-  M_TB24_PERM="%s.0/24 -> %s geçici tekil ban, 2. kez geldi, kalıcı blok banı [do not delete]"
+  M_TOK24_PERM="KALICIYA ALINDI: %s.0/24 (%s geçici tekil ban) [2. kez - do not delete]"
+  M_TB24_PERM="%s.0/24 -> %s geçici tekil ban, 2. kez, kalıcıya alındı [do not delete]"
   M_TADD24_FAIL="HATA blok kalıcıya alınamadı: %s.0/24"
   M_TOK24="GEÇİCİ BLOK BANI: %s.0/24 (%s geçici tekil ban) [12 saat, ilk kez]"
   M_TB24="%s.0/24 -> %s geçici tekil ban, 12 saatlik geçici blok banı (ilk kez)"
@@ -517,7 +517,7 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_S_REVIEW="Kontrol edilecekler (%s gün)"; M_S_PENDING="İzlenenler"
   M_S_GROUPS="Aktif banlar"; M_S_IGNORED="Susturulanlar"; M_S_RECENT="Son işlemler"
   M_S_NONE="yok"; M_S_DAYSLEFT="%s gün kaldı"; M_S_TTL="geçici ban · %s kaldı"
-  M_L_HOST="Hostname"; M_L_FWD="ileri yönde doğrulandı"; M_L_NOFWD="ileri yönde doğrulanamadı"
+  M_L_HOST="Hostname"; M_L_FWD="ad bu IP'ye geri çözülüyor (doğrulandı)"; M_L_NOFWD="ad bu IP'ye geri çözülmüyor (doğrulanamadı)"
   M_L_OWNER="Sahip"; M_L_PREFIX="Duyurulan aralık"; M_L_REG="Kayıt"; M_L_DENY="csf.deny"
   M_L_TEMP="Geçici liste"; M_L_WL="İzin listesi"; M_L_CLOUD="Kiralık liste"; M_L_BKL="Blok listesi"; M_AB_LINE="puan %s/100 · %s · son bildirim %s · %s"; M_AB_REP="%s bildirim (%s kişi%s)"; M_AB_WIN=", son %s günde"; M_AB_NONE="bildirim yok"; M_AB_NONE_W="son %s günde bildirim yok"; M_AB_LIM="bugünkü sorgu sınırı doldu (%s/%s)"; M_AB_ERR="sorgulanamadı (HTTP %s): %s"; M_AB_BAD="AbuseIPDB anahtarı yalnız harf ve rakam olmalı (20–200 karakter)"; M_L_PENDING="İzleniyor"; M_L_IGN="Susturuldu"; M_L_ACCT="Denemeler"
   M_BKL_BAD="Liste adı ya da işlem geçersiz (beklenen: AD on|off)"; M_BKL_NONE="%s listesi csf.blocklists dosyasında yok"; M_BKL_NOTMINE="%s listesini eklenti etkinleştirmedi; elle etkinleştirilen listeyi eklenti devre dışı bırakmaz (csf.blocklists dosyasından kaldırılır)"; M_BKL_ON="%s blok listesi etkinleştirildi; csf ve lfd yeniden başladı, lfd listeyi indiriyor"; M_BKL_OFF="%s blok listesi devre dışı bırakıldı; csf ve lfd yeniden başladı"
@@ -546,14 +546,14 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_DG_USAGE="Kalıcı liste: %s / %s satır (%%%s) · 7 gün önce: %s"
   M_DG_TUSAGE="Geçici liste: %s / %s satır"
   M_DG_NEW="Yeni blok banları:"
-  M_DG_TOP="CSF'in en çok engellediği sağlayıcılar (ASN; blok banları ve tekil banlara göre):"
+  M_DG_TOP="En çok engellenen sağlayıcılar (ASN; blok banları ve tekil banlara göre):"
   M_DG_TOPL="   %-9s %-44s %s"
   M_DG_PG="%s blok"; M_DG_PB="+%s blok CSF Auto-Group dışından"; M_DG_PT="%s tekil ban"
   M_DG_EXP="14 gün içinde izlemesi bitecek bloklar (o zamana kadar geçici eşik kadar IP'si aynı anda geçici banlanırsa ya da blok eşiği kadar kalıcı tekil ban birikirse kalıcı olurlar):"
   M_DG_EXPL="   %-18s %s gün"
   M_DG_RUNS="Tur sağlığı: son 7 günde %s tur çalıştı (%s çalıştığı için beklenen ~%s)"
   M_DG_RUNS0="Tur sağlığı: son 7 günde %s tur çalıştı"; M_IV_MIN="%s dakikada bir"; M_IV_HOUR="saatte bir"; M_IV_HOURS="%s saatte bir"
-  M_DG_IM="Imunify360'ın en çok engellediği sağlayıcılar (sunucunun kendi kara listesi, %s IP):"
+  M_DG_IM="En çok engellenen sağlayıcılar · Imunify360 (sunucunun kendi kara listesi, %s IP):"
   M_DG_IML="   %-9s %-44s %s IP%s"
   M_DG_NONE="   yok"
   M_DG_SENT="Haftalık özet gönderildi: %s"
@@ -569,13 +569,13 @@ if [ "$MSG_LANG" = "tr" ]; then
   M_H_CNT="blok banı|geçici blok banı|kalıcıya alındı|şüpheli aralık / ağ|atlandı|elle işlem|ayar değişikliği"
   M_H_NEWT="Yeni blok banları"; M_H_BLOCK="Blok"; M_H_OWNER="Sahip"; M_H_STATE="Durum"
   M_H_K_add24="kalıcı"; M_H_K_promote="tekrar gelen"; M_H_K_manual_ban="elle"
-  M_H_TOPT="CSF'in en çok engellediği sağlayıcılar"; M_H_TOPS="csf.deny'deki blok banlarına ve tekil banlara göre · banlı sağlayıcılar hariç"
-  M_H_PBT="Sağlayıcı banı"; M_H_PBS="Bu sağlayıcılar CSF'te banlı; sıralamalarda gösterilmez"; M_H_PBK="Kural"; M_H_PBR="Aralık"
+  M_H_TOPT="En çok engellenen sağlayıcılar"; M_H_TOPS="csf.deny'deki blok banlarına ve tekil banlara göre · banlı sağlayıcılar hariç"
+  M_H_PBT="Banlı sağlayıcılar"; M_H_PBS="Bu sağlayıcılar CSF'te banlı; sıralamalarda gösterilmez"; M_H_PBK="Kural"; M_H_PBR="Aralık"
   M_H_PBNL="CSF henüz yüklemedi"
   M_H_SVC="İzinli servisler: csf.allow'da %s IP / aralık · son indirme %s"; M_H_SVCF="uyarı süresinden uzun süredir indirilemiyor: %s"
-  M_DG_PBH="Sağlayıcı banı (sıralamalarda gösterilmez):"; M_DG_PBL="   %-9s %-44s %s"
+  M_DG_PBH="Banlı sağlayıcılar (sıralamalarda gösterilmez):"; M_DG_PBL="   %-9s %-44s %s"
   M_H_PROV="Sağlayıcı"; M_H_BLK="Blok"; M_H_SGL="Tekil"; M_H_OTH="CSF Auto-Group dışı"; M_H_OTHV="+%s blok"
-  M_H_IMT="Imunify360'ın en çok engellediği sağlayıcılar"; M_H_IMS="Sunucunun kendi kara listesi · %s IP"; M_H_IPS="IP"; M_H_RSN="Sebep"
+  M_H_IMT="En çok engellenen sağlayıcılar · Imunify360"; M_H_IMS="Sunucunun kendi kara listesi · %s IP"; M_H_IPS="IP"; M_H_RSN="Sebep"
   M_H_EXPT="İzlemesi bitecek bloklar"; M_H_EXPS="14 gün içinde; o zamana kadar geçici eşik aynı anda yeniden dolarsa ya da blok eşiği kadar kalıcı tekil birikirse kalıcı olurlar"; M_H_DAYS="%s gün"; M_H_NONE_S="Yok"
   M_H_RUNS="Tur sağlığı"; M_H_RUNSS="son 7 gün"; M_H_RUNSV="%s tur · beklenen ~%s"
   M_H_GLOSS="tekil = tek IP banı · blok = /24 · ağ = /16 · do not delete = CSF liste dolsa da silmez"
@@ -630,7 +630,7 @@ else
   M_AVIOL="Violation from allowed IP (recorded in History): %s → %s, %s times in the last 24 hours"
   M_POPEN="Open service (recorded in History): after the partial ban on %s, %s IPs hit the services it leaves open"
   M_AVIOL_SUBJ="%s violations from allowed IPs"; M_AVIOL_BODY="IPs that reached lfd's ban threshold but were not banned or whose ban does not work (allowed, ignored or the server's own address); once per IP per day:"
-  M_AV_N="%s times"; M_AV_SRC="entry: %s"; M_AV_LAST="last: %s (%s)"
+  M_AV_N="%s times"; M_AV_SRC="allow entry: %s"; M_AV_LAST="last: %s (%s)"
   M_ACCT_mail="mail accounts tried: %s"; M_ACCT_ssh="SSH users tried: %s"; M_ACCT_ftp="FTP accounts tried: %s"
   M_ACCT_cp="cPanel/WHM logins tried: %s"; M_ACCT_htp="web password users tried: %s"; M_ACCT_web="targets: %s"; M_ACCT_N="failed"; M_ACCT_NW="blocked"
   M_PERMB="Repeat ban (PERMBLOCK): in the last %s, at least %s temp bans, made permanent"; M_PB_SVC="earlier ban: %s"
@@ -641,7 +641,7 @@ else
   M_POPEN_SUBJ="%s open services"; M_POPEN_BODY="The services a partial ban leaves open took violations up to the threshold; change the ban to close them too:"; M_POPEN_L="%s · %s IPs hit the open services since the ban"
   M_UNDER="Violation under a ban (recorded in History): under %s, %s new IPs"
   M_UNDER_SUBJ="%s violations under a ban"; M_UNDER_BODY="IPs lfd banned later although a ban already closed the service they hit (not counted towards thresholds); once per ban per day, new IPs only:"
-  M_UNDER_L="%s · since %s -> %s new IPs"; M_UNDER_CSFR="   %s IPs: CSF was reloaded in the %s min before their ban (last at %s); the firewall is open for a few seconds while it reloads%s"
+  M_UNDER_L="%s · in force since %s -> %s new IPs"; M_UNDER_CSFR="   %s IPs: CSF was reloaded in the %s min before their ban (last at %s); the firewall is open for a few seconds while it reloads%s"
   M_UNDER_CSFR_CL="; the rented-server rule cuts new connections only, so a connection opened meanwhile stays up"
   M_UNDER_CDN="   %s IPs: the site they hit is behind a CDN: %s; the firewall sees the CDN, not the visitor, so the ban cannot cut these requests"
   M_CDN_OTHER="another address"
@@ -652,8 +652,8 @@ else
   M_TCLEAN="Cleaned: %s (covered by a permanent ban)"
   M_TSKIP24="SKIPPED temp block: %s.0/24 already permanently banned"
   M_TC24_PERM="Auto-grouped from temp /24: %s temp singles, 2nd group violation -> permanent ban - do not delete"
-  M_TOK24_PERM="MADE PERMANENT: %s.0/24 (%s temp single bans) [came back - do not delete]"
-  M_TB24_PERM="%s.0/24 -> %s temp single bans, came back, permanent block ban [do not delete]"
+  M_TOK24_PERM="MADE PERMANENT: %s.0/24 (%s temp single bans) [2nd time - do not delete]"
+  M_TB24_PERM="%s.0/24 -> %s temp single bans, 2nd time, made permanent [do not delete]"
   M_TADD24_FAIL="ERROR could not make block permanent: %s.0/24"
   M_TOK24="TEMP BLOCK BAN: %s.0/24 (%s temp single bans) [12h, first time]"
   M_TB24="%s.0/24 -> %s temp single bans, 12-hour temp block ban (first time)"
@@ -813,7 +813,7 @@ else
   M_S_REVIEW="Needs review (%s days)"; M_S_PENDING="Watched"
   M_S_GROUPS="Active bans"; M_S_IGNORED="Muted"; M_S_RECENT="Recent actions"
   M_S_NONE="none"; M_S_DAYSLEFT="%s days left"; M_S_TTL="temp ban · %s left"
-  M_L_HOST="Hostname"; M_L_FWD="forward-confirmed"; M_L_NOFWD="not forward-confirmed"
+  M_L_HOST="Hostname"; M_L_FWD="the name resolves back to this IP (confirmed)"; M_L_NOFWD="the name does not resolve back to this IP (not confirmed)"
   M_L_OWNER="Owner"; M_L_PREFIX="Announced range"; M_L_REG="Registry"; M_L_DENY="csf.deny"
   M_L_TEMP="Temp list"; M_L_WL="Allow list"; M_L_CLOUD="Rented-server list"; M_L_BKL="Blocklist"; M_AB_LINE="score %s/100 · %s · last report %s · %s"; M_AB_REP="%s reports (%s users%s)"; M_AB_WIN=", last %s days"; M_AB_NONE="no reports"; M_AB_NONE_W="no reports in the last %s days"; M_AB_LIM="daily query limit reached (%s/%s)"; M_AB_ERR="could not query (HTTP %s): %s"; M_AB_BAD="The AbuseIPDB key must be letters and digits only (20–200 characters)"; M_L_PENDING="Watched"; M_L_IGN="Muted"; M_L_ACCT="Attempts"
   M_BKL_BAD="Invalid list name or action (expected: NAME on|off)"; M_BKL_NONE="List %s is not in csf.blocklists"; M_BKL_NOTMINE="List %s was not turned on by the plugin; the plugin does not turn off a list turned on by hand (turn it off in csf.blocklists)"; M_BKL_ON="Blocklist %s turned on; csf and lfd restarted, lfd is downloading the list"; M_BKL_OFF="Blocklist %s turned off; csf and lfd restarted"
@@ -842,14 +842,14 @@ else
   M_DG_USAGE="Permanent list: %s / %s lines (%s%%) · 7 days ago: %s"
   M_DG_TUSAGE="Temp list: %s / %s lines"
   M_DG_NEW="New block bans:"
-  M_DG_TOP="Providers CSF blocks most (ASN; by block bans and single bans):"
+  M_DG_TOP="Most blocked providers (ASN; by block bans and single bans):"
   M_DG_TOPL="   %-9s %-44s %s"
   M_DG_PG="%s blocks"; M_DG_PB="+%s blocks not from CSF Auto-Group"; M_DG_PT="%s single bans"
   M_DG_EXP="Watched blocks expiring within 14 days (become permanent if, before then, as many of their IPs as the temp threshold are temp-banned at the same time or as many permanent single bans as the block threshold pile up):"
   M_DG_EXPL="   %-18s %s days"
   M_DG_RUNS="Run health: %s runs in the last 7 days (about %s expected, running %s)"
   M_DG_RUNS0="Run health: %s runs in the last 7 days"; M_IV_MIN="every %s minutes"; M_IV_HOUR="every hour"; M_IV_HOURS="every %s hours"
-  M_DG_IM="Providers Imunify360 blocks most (this server's own blacklist, %s IPs):"
+  M_DG_IM="Most blocked providers · Imunify360 (this server's own blacklist, %s IPs):"
   M_DG_IML="   %-9s %-44s %s IPs%s"
   M_DG_NONE="   none"
   M_DG_SENT="Weekly summary sent: %s"
@@ -865,13 +865,13 @@ else
   M_H_CNT="block bans|temp block bans|made permanent|suspicious ranges / networks|skipped|manual actions|settings changes"
   M_H_NEWT="New block bans"; M_H_BLOCK="Block"; M_H_OWNER="Owner"; M_H_STATE="State"
   M_H_K_add24="permanent"; M_H_K_promote="repeat offender"; M_H_K_manual_ban="manual"
-  M_H_TOPT="Providers CSF blocks most"; M_H_TOPS="by block bans and single bans in csf.deny · banned providers left out"
-  M_H_PBT="Provider ban"; M_H_PBS="These providers are banned in CSF; the rankings leave them out"; M_H_PBK="Rule"; M_H_PBR="Ranges"
+  M_H_TOPT="Most blocked providers"; M_H_TOPS="by block bans and single bans in csf.deny · banned providers left out"
+  M_H_PBT="Banned providers"; M_H_PBS="These providers are banned in CSF; the rankings leave them out"; M_H_PBK="Rule"; M_H_PBR="Ranges"
   M_H_PBNL="not loaded by CSF yet"
   M_H_SVC="Allowed services: %s IPs / ranges in csf.allow · last download %s"; M_H_SVCF="Not downloaded for longer than the warning period: %s"
-  M_DG_PBH="Provider ban (left out of the rankings):"; M_DG_PBL="   %-9s %-44s %s"
+  M_DG_PBH="Banned providers (left out of the rankings):"; M_DG_PBL="   %-9s %-44s %s"
   M_H_PROV="Provider"; M_H_BLK="Blocks"; M_H_SGL="Singles"; M_H_OTH="Not from CSF Auto-Group"; M_H_OTHV="+%s blocks"
-  M_H_IMT="Providers Imunify360 blocks most"; M_H_IMS="This server's own blacklist · %s IPs"; M_H_IPS="IPs"; M_H_RSN="Reason"
+  M_H_IMT="Most blocked providers · Imunify360"; M_H_IMS="This server's own blacklist · %s IPs"; M_H_IPS="IPs"; M_H_RSN="Reason"
   M_H_EXPT="Watched blocks expiring"; M_H_EXPS="within 14 days; they become permanent if, before then, the temp threshold is reached at the same time again or permanent singles reach the block threshold"; M_H_DAYS="%s days"; M_H_NONE_S="None"
   M_H_RUNS="Run health"; M_H_RUNSS="last 7 days"; M_H_RUNSV="%s runs · ~%s expected"
   M_H_GLOSS="single = one-IP ban · block = /24 · network = /16 · do not delete = CSF keeps it even when the list is full"
@@ -4360,13 +4360,34 @@ ev_strip_ips() {
 #   before T     → zamanı ≤ T olan son N olay; more = daha eskisi var mı
 #   after T      → zamanı ≥ T olan olaylar (en çok N); more = N'den fazlaydı (panel baştan yükler)
 # Sınır saniyesi iki sayfada da yer alır (aynı saniyedeki olaylar kaybolmasın); panel tekrarı ayıklar.
+# 4. değer Q (isteğe bağlı, 1.15.165 Geçmiş araması): yalnız eşleşen olaylar, bütün olay kaydında (panel yalnız son sayfaları tutar).
+#   Eşleşme: satırda geçen metin (IP, aralık, AS numarası, sahip adı, ülke, sebep; büyük-küçük harf ayırmaz) ya da Q bir IP / CIDR ise
+#   olayın herhangi bir adresiyle ("cidr", "ip") kesişmesi: 1.2.3.4 → 1.2.3.0/24 banı da, 1.2.3.0/24 → içindeki tekil olaylar da.
 do_events() {
-    local mode="${1:-latest}" t="${2:-0}" n="${3:-300}"
-    if ! [[ "$mode" =~ ^(latest|after|before)$ ]] || ! [[ "$t" =~ ^[0-9]{1,12}$ ]] || ! [[ "$n" =~ ^[0-9]{1,4}$ ]] || [ "$n" -lt 1 ] || [ "$n" -gt 1000 ]; then
+    local mode="${1:-latest}" t="${2:-0}" n="${3:-300}" q="${4:-}"
+    if ! [[ "$mode" =~ ^(latest|after|before)$ ]] || ! [[ "$t" =~ ^[0-9]{1,12}$ ]] || ! [[ "$n" =~ ^[0-9]{1,4}$ ]] || [ "$n" -lt 1 ] || [ "$n" -gt 1000 ] ||
+       [ "${#q}" -gt 256 ] || [[ "$q" == *[\"\\\`\$]* ]] || [[ "$q" =~ [[:cntrl:]] ]]; then
         echo '{"ok":false,"error":"bad_input"}'; return 2
     fi
     { [ -r "$EVENTS_FILE" ] && grep -v '"type":"run"' "$EVENTS_FILE" | grep -E '^\{"t":[0-9]+,.*\}$'; } |
-    awk -v m="$mode" -v T="$t" -v N="$n" '
+    AG_EVQ="$q" awk -v m="$mode" -v T="$t" -v N="$n" '
+        function ipn(s,  p) { split(s, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
+        function rng(s,  r, b) { split(s, r, "/"); b = (r[2] == "" ? 32 : r[2] + 0); LO = ipn(r[1]); LO -= LO % 2 ^ (32 - b); HI = LO + 2 ^ (32 - b) - 1 }
+        function hit(line,  s, x) {
+            if (Q == "") return 1
+            if (index(tolower(line), Q)) return 1
+            if (!QIP) return 0
+            s = line
+            while (match(s, /"(cidr|ip)":"[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+(\/[0-9]+)?"/)) {
+                x = substr(s, RSTART, RLENGTH); sub(/^"(cidr|ip)":"/, "", x); sub(/"$/, "", x)
+                rng(x); if (LO <= QHI && HI >= QLO) return 1
+                s = substr(s, RSTART + RLENGTH)
+            }
+            return 0
+        }
+        BEGIN { Q = tolower(ENVIRON["AG_EVQ"]); gsub(/^ +| +$/, "", Q)
+                if (Q ~ /^[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+(\/([0-9]|[12][0-9]|3[0-2]))?$/) { rng(Q); QLO = LO; QHI = HI; QIP = 1 } }
+        !hit($0) { next }
         { match($0, /^\{"t":[0-9]+/); et = substr($0, 6, RLENGTH - 5) + 0
           if (m == "before" && et > T) next
           if (m == "after" && et < T) next
@@ -5141,7 +5162,7 @@ do_lookup() {
         echo "$o"; return 0
     fi
     echo "$ip"
-    lk_row "$M_L_HOST" "${host:--}$([ -n "$host" ] && { [ "$fwd" = true ] && echo " ($M_L_FWD)" || echo " ($M_L_NOFWD)"; })"
+    lk_row "$M_L_HOST" "${host:--}$([ -n "$host" ] && { [ "$fwd" = true ] && echo " · $M_L_FWD" || echo " · $M_L_NOFWD"; })"
     [ -n "$asn" ] && lk_row "$M_L_OWNER" "AS$asn ${asname:-?}"
     if abuse_pub "$ip" && abuse_check "$ip"; then abuse_text "$REPLY"; lk_row "AbuseIPDB" "$REPLY"; fi
     [ -n "$pfx" ] && lk_row "$M_L_PREFIX" "$pfx ($cc)"
@@ -8740,7 +8761,7 @@ case "$MODE" in
         cidr_range "${ARGS[0]:-}" && [[ "${ARGS[0]}" == */* ]] && [ "${ARGS[0]#*/}" -ge 16 ] && [ "${ARGS[0]#*/}" -le 31 ] &&
             ip2int "${ARGS[0]%/*}" && [ "$REPLY" -eq "$R_LO" ] || { echo '{"ok":false,"error":"bad_input"}'; exit 2; }
         abuse_block "${ARGS[0]}"; echo "{\"ok\":true,\"abuse\":$REPLY}"; exit 0 ;;
-    events) LOG_MODE=quiet; do_events "${ARGS[0]}" "${ARGS[1]}" "${ARGS[2]}"; exit $? ;;
+    events) LOG_MODE=quiet; do_events "${ARGS[0]}" "${ARGS[1]}" "${ARGS[2]}" "${ARGS[3]}"; exit $? ;;
     inside) LOG_MODE=quiet
         [ -z "$IMP_STATES" ] || [[ "$IMP_STATES" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}(,[0-9]{1,3}(\.[0-9]{1,3}){3}){0,299}$ ]] || { echo '{"ok":false,"error":"bad_states"}'; exit 2; }
         do_inside "${ARGS[0]}"; exit $? ;;

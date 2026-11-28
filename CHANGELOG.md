@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.15.165 — 2026-11-28
+
+- History has a search box. It searches the whole event log on the server,
+  not only the entries the page has loaded: an address, a range, an AS
+  number or an owner's name, upper or lower case. An IP also finds the
+  range bans that contain it, and a range finds the events of the
+  addresses inside it. Results page like the list itself, and the filter
+  chips still apply. (1.15.164 left History without search.)
+- `csf-autogroup --events MODE T N Q` takes the same search as its fourth
+  value.
+- Email, Slack and the plain-text lookup use the panel's words in a few
+  more places: "Allow entry" for the allow-list record (it was also
+  "allowed by", "allow list:" and "entry:"), the weekly summary's card
+  names ("Most blocked providers", "Banned providers"), "in force since"
+  for violations under a ban, "made permanent" in the log, and one
+  wording for a hostname that resolves back to the IP.
+
 ## 1.15.164 — 2026-11-28
 
 - Every long list pages the same way: **‹ ›** under the list with

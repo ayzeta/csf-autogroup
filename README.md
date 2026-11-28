@@ -216,7 +216,11 @@ settings, with no prompts. `config.env` is left untouched.
   violations under a ban), so
   they stay after the review row is gone; back to the start of the event log:
   20 per page, like the other lists; the last page's **›** loads older entries
-  from the event log. Work from before the event log existed is
+  from the event log. The search box searches the whole event log on the
+  server, not only the entries already loaded: an address, a range, an AS
+  number or an owner's name. An IP also finds the range bans that contain
+  it (`1.2.3.4` finds the ban of `1.2.3.0/24`), and a range finds the
+  events of the addresses inside it. Work from before the event log existed is
   filled in from the log. Click an address to open its IP card, or a range
   (/16, /24) to open its range card: whether the range itself is banned, which
   services hit are still open for it, and every IP in it with its state now.

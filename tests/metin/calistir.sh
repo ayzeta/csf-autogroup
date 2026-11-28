@@ -35,6 +35,13 @@ YASAK=(
   "süreli|geçici"
   "timed allow|temporary allow"
   "timed ban|temporary ban"
+  # izin kaydının etiketi tek ("İzin kaydı" / "Allow entry"; önce panelde "İzin:", "izin listesi:", mailde "kayıt:")
+  "'İzin: {|'İzin kaydı: {"
+  "izin listesi: {0}|izin kaydı: {0}"
+  "M_AV_SRC=\"kayıt:|M_AV_SRC=\"izin kaydı:"
+  "'Allowed by: {|'Allow entry: {"
+  "2. kez geldi|2. kez, kalıcıya alındı"
+  "came back|made permanent"
   "Diğer bloklar|Elle eklenenler"
   "grup banı|blok banı"
   "cloud list|rented-server list"

@@ -941,6 +941,13 @@ mcheck "Etkinlik grafiği: aynı veride bugünün blok banı 2 (elle tek IP ban�
 mk dgpb; printf '%s\n' 'CC_DENY_PORTS = "AS64500"' 'CC_DENY_PORTS_TCP = "80,443"' 'CC_DENY_PORTS_UDP = "443"' 'CC_DENY = "AS64501"' >> "$R/etc/csf/csf.conf"
 run --digest > "$W/out/dgpb.txt" 2>&1
 mcheck "haftalık özet: sağlayıcı banı satırı kural metniyle (port listesi 'kapalı: Web', CC_DENY 'her şey kapalı'), ham port yok" "grep 'AS64500' '$W/out/dgpb.txt' | grep -q 'kapalı: Web' && grep 'AS64501' '$W/out/dgpb.txt' | grep -q 'her şey kapalı' && ! grep -q 'TCP 80' '$W/out/dgpb.txt'"
+# Geçmiş araması (1.15.165): motor bütün olay kaydında arar; IP / aralık kesişmesi, AS ve ad metni, sayfa (before + more)
+mk evq; EV="$R/var/lib/csf_autogroup/events.jsonl"
+printf '{"t":%s,"type":"add24","cidr":"151.80.7.0/24","n":3,"owner":"AS16276 OVH - OVH SAS, FR","asn":"16276","ips":[{"ip":"151.80.7.5","why":"x"}]}\n{"t":%s,"type":"manual_ban","cidr":"203.0.113.9","by":"root","kind":"ip"}\n{"t":%s,"type":"run","n":1}\n{"t":%s,"type":"manual_unban","cidr":"151.80.7.0/24","by":"root"}\n' $(( NOW - 300 )) $(( NOW - 200 )) $(( NOW - 150 )) $(( NOW - 100 )) >> "$EV"
+evq() { run --events "$@" 2>/dev/null; }
+mcheck "Geçmiş araması: olayda geçmeyen IP onu içeren /24 banını ve kaldırılışını bulur, başka olayı ve tur kaydını getirmez" "evq latest 0 300 151.80.7.200 | grep -q '\"type\":\"add24\"' && evq latest 0 300 151.80.7.200 | grep -q '\"type\":\"manual_unban\"' && ! evq latest 0 300 151.80.7.200 | grep -qE '203.0.113.9|\"type\":\"run\"'"
+mcheck "Geçmiş araması: aralık içindeki tekil olayı, AS numarası ve sahip adı (büyük-küçük harf ayırmadan) bulur" "evq latest 0 300 203.0.113.0/24 | grep -q '203.0.113.9' && evq latest 0 300 AS16276 | grep -q add24 && evq latest 0 300 'ovh sas' | grep -q add24 && evq latest 0 300 zzqq | grep -q '\"events\":\[\]'"
+mcheck "Geçmiş araması: sayfa (n=1 → more, before ile önceki eşleşme); tırnaklı girdi reddedilir" "evq latest 0 1 151.80.7.0/24 | grep -q '\"more\":true.*manual_unban' && evq before $(( NOW - 101 )) 1 151.80.7.0/24 | grep -q add24 && evq latest 0 300 'a\"b' | grep -q bad_input"
 mk daily; printf '%s\n' "CLOUD_BAN=1" "CLOUD_SOURCES=aws" >> "$R/app/config.env"; quiet
 mcheck "yenileme: kiralık sunucu yenilemesi çalışamazsa .refreshed yazılmaz (sonraki tur yeniden dener)" "[ ! -e '$R/var/lib/csf_autogroup/cloud/.refreshed' ]"
 # CSF'in ASN verisi ayardaki gün kadar eskiyse yenilenir (önce find -mtime +25 kullanılıyordu: 25 gün ayarında 26. günde);
