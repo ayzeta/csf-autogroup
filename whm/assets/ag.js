@@ -659,11 +659,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     (list || []).forEach(function (e) { var k = JSON.stringify(e); if (EVQ.K[k]) return; EVQ.K[k] = 1; EVQ.L.push(e); });
     EVQ.L.sort(function (a, b) { return a.t - b.t; });
   }
-  function evqRender() {      // sonuç gelince sayfa yeniden çizilir; arama kutusu odağını ve imleç yerini korur
-    var a = document.activeElement, keep = a && a.getAttribute && a.getAttribute('data-l') === 'ev', pos = keep ? a.selectionStart : 0;
-    render();
-    if (keep) { var n = document.querySelector('.ag-lq[data-l="ev"]'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (e) { /* type=search seçimi */ } } }
-  }
+  function evqRender() { render(); }   // odak ve imleç yerini render korur (FKEYS data-l)
   function evSearch() {       // yazmayı bitirince (350 ms) bir istek; eski isteğin geç gelen cevabı yok sayılır
     clearTimeout(EVQ_T);
     var q = evqQ();
@@ -3075,7 +3071,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
     var dOpen = {}; $app.querySelectorAll('details').forEach(function (d) { dOpen[detKey(d)] = d.open; });
     var y = window.scrollY, ae = document.activeElement, fsel = ae && $app.contains(ae) ? focusSel(ae) : '', s0 = null, s1 = null;
     var mw = fsel && ae.closest ? ae.closest('.ag-menu-wrap') : null, fmenu = mw ? focusSel(mw.querySelector('[data-act="menu"]')) : '';   // menü kapanırsa odak düğmesine
-    try { if (fsel && ae.id && ae.selectionStart !== undefined) { s0 = ae.selectionStart; s1 = ae.selectionEnd; } } catch (e) { s0 = null; }
+    try { if (fsel && ae.selectionStart != null) { s0 = ae.selectionStart; s1 = ae.selectionEnd; } } catch (e) { s0 = null; }
     var body = UI.tab === 'settings' ? settingsView()
       : UI.tab === 'prov' ? provTab()
       : UI.tab === 'history' ? '<div class="ag-history">' + events() + '</div>'
@@ -3106,7 +3102,7 @@ ip_unban_lfd: 'lfd set this ban; if lfd sees the same violation again after remo
   }
 
   /* Odak: öğe yeniden çizilince aynı niteliklerle bulunup odak geri verilir */
-  var FKEYS = ['data-act', 'data-key', 'data-f', 'data-t', 'data-d', 'data-c', 'data-k', 'data-tab', 'data-ip', 'data-v', 'data-s'];
+  var FKEYS = ['data-act', 'data-key', 'data-f', 'data-t', 'data-d', 'data-c', 'data-k', 'data-tab', 'data-ip', 'data-v', 'data-s', 'data-l'];   // data-l: ortak liste arama kutusu (ltSearch; kimliği yok — 1.15.164'te dakikalık yenileme odağı düşürüyordu)
   function focusSel(el) {
     if (!el || el === document.body || !el.getAttribute) return '';
     if (el.id) return '#' + CSS.escape(el.id);

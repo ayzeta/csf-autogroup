@@ -209,6 +209,25 @@ async function layoutChecks(page, label, width) {
   const gor = await page.evaluate(() => window.agGorunmez(document.getElementById('ag-app')));
   const bas = await page.evaluate(() => window.agBasliksiz(document.getElementById('ag-app')));
   check(`${label} · ${width} px · tablolar başlıklı`, bas.length === 0, bas.slice(0, 3).join(' | '));
+  // rozet okunur: yazı (içindeki adres bağlantısı dahil) ile rozet zemini arasında karşıtlık ≥ 3 (2026-11-28 kullanıcı: Geçmiş'teki
+  // dolu kırmızı "şu an banlı" rozetinde yazı griye çekilmişti, okunmuyordu — .ag-ev-st beyaz yazıyı eziyordu)
+  const kars = await page.evaluate(() => {
+    const rgb = s => (s.match(/[\d.]+/g) || []).map(Number);
+    const lum = c => { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
+    const oran = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+    const out = [];
+    document.querySelectorAll('#ag-app .ag-pill').forEach(p => {
+      if (!p.offsetParent) return;
+      const bg = rgb(getComputedStyle(p).backgroundColor); if (bg.length < 3 || (bg.length > 3 && bg[3] < 0.5)) return;   // saydam zemin: sayfa zemini
+      [p].concat(Array.from(p.querySelectorAll('*'))).forEach(e => {
+        if (!e.childNodes.length || !Array.from(e.childNodes).some(n => n.nodeType === 3 && n.textContent.trim())) return;
+        const r = oran(rgb(getComputedStyle(e).color), bg);
+        if (r < 3) out.push(p.textContent.trim().slice(0, 30) + ' ' + r.toFixed(1));
+      });
+    });
+    return out;
+  });
+  check(`${label} · ${width} px · rozet yazısı zeminiyle okunur (karşıtlık ≥ 3)`, kars.length === 0, kars.slice(0, 4).join(' | '));
   const ulke = await page.evaluate(() => window.agUlkeTekrar(document.getElementById('ag-app')));
   check(`${label} · ${width} px · ülke kodu rozetin yanında yinelenmiyor`, ulke.length === 0, ulke.slice(0, 3).join(' | '));
   const ipb = await page.evaluate(() => [].concat(window.agIpBagsiz(document.getElementById('ag-app')), ...Array.from(document.querySelectorAll('.ag-drawer, .ag-modal')).map(x => window.agIpBagsiz(x))));

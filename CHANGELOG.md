@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.15.166 — 2026-11-28
+
+- History: the "banned now" badge (solid red) had grey text that could
+  not be read; it is white again, like every solid badge, and so is the
+  address link inside it.
+- List search boxes keep the cursor when the page refreshes itself every
+  minute (since 1.15.164 the refresh dropped it while typing).
+
 ## 1.15.165 — 2026-11-28
 
 - History has a search box. It searches the whole event log on the server,

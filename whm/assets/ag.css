@@ -1174,7 +1174,10 @@ details.ag-raw .ag-mono { margin-top: 3px; word-break: break-all; }
 .ag-mode-hint .ag-link, .ag-modal-b .ag-warnbox .ag-link { font-size: inherit; }
 .ag-rules > .ag-rule:last-child:nth-child(odd) { grid-column: 1 / -1; }   /* tek kalan kutu satırı doldursun */
 .ag-ev-m { flex: none; margin: -3px -6px 0 0; }
-.ag-ev-st { color: var(--ag-text-2); font-weight: 600; }
+/* Geçmiş'teki "şu an" rozeti: soluk yazı yalnız dolgusuz rozette. Dolu rozetler (engelli, kalıcıya alınan, geçici, ban altında ihlal,
+   ciddi) beyaz yazılı kalır — önce bu kural onların yazısını da griye çekiyordu, kırmızı üstünde okunmuyordu (kullanıcı, 2026-11-28) */
+.ag-ev-st { font-weight: 600; }
+.ag-ev-st:not(.ag-pill-ban):not(.ag-pill-prom):not(.ag-pill-temp):not(.ag-pill-leak):not(.ag-pill-bad) { color: var(--ag-text-2); }
 
 /* ── Sağlayıcılar sekmesi: katman kutuları ve aynı kalıpta kartlar ── */
 .ag-lay { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 20px; }

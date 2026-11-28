@@ -38,6 +38,9 @@ kural "sayfa çubuğu yalnız pagerHtml'de (sayılar num() ile)" "class=\"ag-pag
 kural "liste sayfası yalnız ltPage'den (pagerHtml 'lpage'; Geçmiş 'evpage')" "pagerHtml[(]'" "pagerHtml[(]'(lpage|evpage)'|function pagerHtml"
 kural "\"Daha fazla / Hepsini göster\" kısaltması yok (lim / limFoot)" "(limFoot|[^a-zA-Z_.]lim)[(]|data-act=\"lim" 'BU_DESEN_HICBIR_SATIRA_UYMAZ'
 kural "liste arama kutusu yalnız ltSearch'te" "type=\"search\"" "class=\"ag-input ag-gq ag-lq\" type=\"search\" data-l="
+# ortak arama kutusunun kimliği yok, odak data-l ile bulunur: FKEYS'te değilse sayfanın kendi yenilemesi (dakikalık durum yoklaması)
+# yazarken odağı düşürür (1.15.164 gerilemesi; eski #ag-gq'nin kimliği vardı)
+if grep -q "function ltSearch" "$J" && ! grep -E "var FKEYS = \[" "$J" | grep -q "'data-l'"; then echo "DÜŞTÜ: liste arama kutusu (data-l) yeniden çizimde odağını korumuyor (FKEYS)"; F=$((F + 1)); else echo "GEÇTİ: liste arama kutusu yeniden çizimde odağını korur (FKEYS data-l)"; fi
 kural "sıralama başlığı yalnız ltTh'de" "data-act=\"[a-z]*sort\"" "data-act=\"lsort\" data-k=\"' [+] esc[(]id[)]"
 kural "öğe eylemi düğmesi elle yazılmaz (MI.* + miBtn: menü, aralık kartı, IP kartı aynı öğeler)" 'data-(act|dr)="(unban|promote|forget|rewatch|chg|ban|ban16|ban24|banpfx|banforce)"' 'BU_DESEN_HICBIR_SATIRA_UYMAZ'
 kural "kapsayan banın adı covName'den: ham CSF ayar adı (CC_DENY …) cümleye eklenmez" "'[ (]*CC_DENY(_PORTS)? '" 'BU_DESEN_HICBIR_SATIRA_UYMAZ'
